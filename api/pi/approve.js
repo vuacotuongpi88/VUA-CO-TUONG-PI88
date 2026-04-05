@@ -20,3 +20,6 @@ export async function POST(request) {
     return Response.json({ ok: false, error: err.message }, { status: 500 });
   }
 }
+console.log("APPROVE HIT");
+console.log("HAS_KEY:", !!process.env.PI_API_KEY);
+console.log("KEY_PREFIX:", (process.env.PI_API_KEY || "").slice(0, 6));
