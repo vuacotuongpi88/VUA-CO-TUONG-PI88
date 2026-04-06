@@ -2257,77 +2257,14 @@ color: white;
     border-radius: 12px;
     font-weight: 800;
 }
-/* Màn hình chờ bao phủ toàn bộ */
-#landing-page {
-    position: fixed;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    background: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), url('images/nen_rung_tre.jpg') center/cover;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    z-index: 9999; /* Luôn nằm trên cùng */
-}
-
-/* Các bảng đăng nhập/đăng ký */
-.auth-modal {
-    display: none; /* Mặc định ẩn */
-    background: rgba(0, 0, 0, 0.9);
-    border: 2px solid #55efc4;
-    padding: 25px;
-    border-radius: 15px;
-    width: 300px;
-    text-align: center;
-    box-shadow: 0 0 20px #55efc4;
-}
-
-.auth-modal input {
-    width: 100%; padding: 10px; margin: 10px 0;
-    background: #222; border: 1px solid #55efc4; color: white;
-}
-
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
-Pi.init({ version: "2.0", sandbox: true });
+  Pi.init({ version: "2.0" });
 </script>
 </head>
 <body>
-<div id="landing-page">
-    <div style="text-align: center;">
-        <h1 style="color:#55efc4; font-size: 3rem; text-shadow: 2px 2px 10px #000;">CỜ TƯỚNG ONLINE MC</h1>
-        <p style="font-style: italic;">Trúc Lâm Tiên Cảnh - Kỳ Đài Hội Tụ</p>
-        
-        <div style="margin-top: 30px; text-align: left; background: rgba(0,0,0,0.5); padding: 15px; border-radius: 10px; font-size: 13px;">
-            <strong style="color:#55efc4;">CHÍNH SÁCH NHÀ PHÁT TRIỂN:</strong><br>
-            • Bảo mật thông tin người dùng tuyệt đối.<br>
-            • Giao dịch Pi minh bạch qua Pi SDK.<br>
-            • Cam kết môi trường chơi game công bằng.
-        </div>
-    </div>
-
-    <button onclick="openModal('login-modal')" style="position: absolute; top: 20px; left: 20px; background:#55efc4; padding: 10px 20px; border:none; font-weight:bold; cursor:pointer;">LOGIN TÀI KHOẢN</button>
     
-    <a href="#" onclick="openModal('register-modal')" style="position: absolute; bottom: 20px; left: 20px; color:#55efc4; text-decoration:none;">Đăng ký tài khoản mới</a>
-
-    <div id="login-modal" class="auth-modal" style="position: absolute;">
-        <h2 style="color:#55efc4;">ĐĂNG NHẬP</h2>
-        <input type="text" id="login-user" placeholder="Tên đăng nhập">
-        <input type="password" id="login-pass" placeholder="Mật khẩu">
-        <button onclick="handleLogin()" style="width:100%; padding:10px; background:#55efc4; font-weight:bold; border:none; cursor:pointer;">VÀO SẢNH GAME</button>
-        <p onclick="closeModal()" style="cursor:pointer; font-size:12px; margin-top:10px;">[ Đóng ]</p>
-    </div>
-
-    <div id="register-modal" class="auth-modal" style="position: absolute;">
-        <h2 style="color:#55efc4;">ĐĂNG KÝ</h2>
-        <input type="text" id="reg-user" placeholder="Tên đăng nhập mới">
-        <input type="password" id="reg-pass" placeholder="Mật khẩu">
-        <button onclick="handleRegister()" style="width:100%; padding:10px; background:#55efc4; font-weight:bold; border:none; cursor:pointer;">HOÀN TẤT</button>
-        <p onclick="closeModal()" style="cursor:pointer; font-size:12px; margin-top:10px;">[ Quay lại ]</p>
-    </div>
-</div>
-
 <div id="edit-profile-modal" class="modal" style="display:none;">
     <div class="modal-content">
         <span class="close" onclick="closeEditProfile()">&times;</span>
@@ -3713,19 +3650,23 @@ if (amount === null) return;
 }
 
 async function openWallet(type) {
-  if (type === "nap") {
-    if (!piAuth) {
-      const auth = await loginPi();
-      if (!auth) return;
+    if (type === "nap") {
+        const napSo = prompt("Nhập số Pi muốn nạp:");
+        if (napSo === null) return;
+
+        const amount = Number(napSo);
+        if (!Number.isFinite(amount) || amount <= 0) {
+            alert("Số Pi nạp không hợp lệ.");
+            return;
+        }
+
+        await startPiDeposit(amount);
+        return;
     }
 
-    await startPiDeposit(10);
-    return;
-  }
-
-  if (type === "rut") {
-    await processWithdraw();
-  }
+    if (type === "rut") {
+        await processWithdraw();
+    }
 }
 // Dòng 708: Hàm mở bảng chỉnh sửa
 function openEditProfile() {
@@ -4331,14 +4272,13 @@ async function loginPi() {
     }
 }
 
-async function startPiDeposit(amount = 10) {
+async function startPiDeposit(amount = 1) {
   try {
     if (!window.Pi) {
-      alert("Nút này chỉ chạy trong Pi Browser.");
+      alert("Nạp Pi chỉ chạy trong Pi Browser.");
       return;
     }
 
-    // BẮT BUỘC xin quyền payments trước khi tạo payment
     if (!piAuth) {
       const auth = await loginPi();
       if (!auth) return;
@@ -4350,114 +4290,63 @@ async function startPiDeposit(amount = 10) {
       return;
     }
 
-    const paymentData = {
-      amount: napSo,
-      memo: `Nạp ${napSo} Pi test`,
-      metadata: {
-        type: "deposit",
+    window.Pi.createPayment(
+      {
         amount: napSo,
-        time: Date.now()
-      }
-    };
-
-    const paymentCallbacks = {
-      onReadyForServerApproval: async function (paymentId) {
-        const res = await fetch("/api/pi/approve", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ paymentId })
-        });
-
-        const data = await res.json().catch(() => ({}));
-        console.log("APPROVE RESPONSE:", data);
-
-        if (!res.ok || !data.ok) {
-          throw new Error(
-            data?.data?.error ||
-            data?.error ||
-            JSON.stringify(data) ||
-            "Approve payment thất bại"
-          );
+        memo: `Nạp ${napSo} Pi vào game`,
+        metadata: {
+          type: "deposit",
+          amount: napSo,
+          time: Date.now()
         }
       },
+      {
+        onReadyForServerApproval: async function (paymentId) {
+          const res = await fetch("/api/pi/approve", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ paymentId })
+          });
 
-      onReadyForServerCompletion: async function (paymentId, txid) {
-        const res = await fetch("/api/pi/complete", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ paymentId, txid })
-        });
+          const data = await res.json();
+          if (!res.ok || !data.ok) {
+            throw new Error("Approve payment thất bại");
+          }
+        },
 
-        const data = await res.json().catch(() => ({}));
-        console.log("COMPLETE RESPONSE:", data);
+        onReadyForServerCompletion: async function (paymentId, txid) {
+          const res = await fetch("/api/pi/complete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ paymentId, txid })
+          });
 
-        if (!res.ok || !data.ok) {
-          throw new Error(
-            data?.data?.error ||
-            data?.error ||
-            JSON.stringify(data) ||
-            "Complete payment thất bại"
-          );
+          const data = await res.json();
+          if (!res.ok || !data.ok) {
+            throw new Error("Complete payment thất bại");
+          }
+
+          const currentBalance = getPiBalance();
+          setPiBalance(currentBalance + napSo);
+
+          alert(`Nạp thành công ${napSo} Pi test.`);
+        },
+
+        onCancel: function () {
+          alert("Người chơi đã hủy nạp Pi.");
+        },
+
+        onError: function (error) {
+          console.error("Pi payment lỗi:", error);
+          alert("Nạp Pi lỗi.");
         }
-
-        const currentBalance = getPiBalance();
-        setPiBalance(currentBalance + napSo);
-        alert(`Nạp thành công ${napSo} Pi test.`);
-      },
-
-      onCancel: function (paymentId) {
-        console.log("PAYMENT CANCEL:", paymentId);
-        alert("Người dùng đã hủy thanh toán.");
-      },
-
-      onError: function (error, payment) {
-        console.error("PAYMENT ERROR:", error, payment);
-        alert(error?.message || "Thanh toán bị lỗi.");
       }
-    };
-
-    const payment = await window.Pi.createPayment(paymentData, paymentCallbacks);
-    console.log("PAYMENT CREATED:", payment);
-
-  } catch (error) {
-    console.error("CREATE PAYMENT ERROR:", error);
-    alert(error?.message || "Không tạo được thanh toán.");
+    );
+  } catch (err) {
+    console.error(err);
+    alert(err.message || "Không nạp Pi được.");
   }
 }
-function openModal(id) {
-    document.querySelectorAll('.auth-modal').forEach(m => m.style.display = 'none');
-    document.getElementById(id).style.display = 'block';
-}
-function closeModal() {
-    document.querySelectorAll('.auth-modal').forEach(m => m.style.display = 'none');
-}
-
-function handleRegister() {
-    const u = document.getElementById('reg-user').value;
-    const p = document.getElementById('reg-pass').value;
-    if(u && p) {
-        localStorage.setItem('game_user', u);
-        localStorage.setItem('game_pass', p);
-        alert("Đăng ký xong rồi đó! Giờ đăng nhập đi.");
-        openModal('login-modal');
-    }
-}
-
-function handleLogin() {
-    const u = document.getElementById('login-user').value;
-    const p = document.getElementById('login-pass').value;
-    const saveU = localStorage.getItem('game_user');
-    const saveP = localStorage.getItem('game_pass');
-
-    if(u === saveU && p === saveP && u !== null) {
-        // ĐĂNG NHẬP ĐÚNG -> XÓA MÀN HÌNH CHỜ ĐỂ LỘ RA SẢNH GAME
-        document.getElementById('landing-page').style.display = 'none';
-        alert("Đã vào sảnh Trúc Lâm!");
-    } else {
-        alert("Sai tài khoản rồi mậy!");
-    }
-}
-
 </script>
 </body>
 
