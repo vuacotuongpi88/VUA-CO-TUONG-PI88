@@ -2260,7 +2260,7 @@ color: white;
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
-  Pi.init({ version: "2.0" });
+Pi.init({ version: "2.0", sandbox: true });
 </script>
 </head>
 <body>
@@ -3651,16 +3651,10 @@ if (amount === null) return;
 
 async function openWallet(type) {
     if (type === "nap") {
-        const napSo = prompt("Nhập số Pi muốn nạp:");
-        if (napSo === null) return;
+        const ok = confirm("Xác nhận nạp cố định 10 Pi?");
+        if (!ok) return;
 
-        const amount = Number(napSo);
-        if (!Number.isFinite(amount) || amount <= 0) {
-            alert("Số Pi nạp không hợp lệ.");
-            return;
-        }
-
-        await startPiDeposit(amount);
+        await startPiDeposit(10);
         return;
     }
 
@@ -4302,44 +4296,49 @@ async function startPiDeposit(amount = 1) {
       },
       {
         onReadyForServerApproval: async function (paymentId) {
-          const res = await fetch("/api/pi/approve", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ paymentId })
-          });
+  const res = await fetch("/api/pi/approve", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paymentId })
+  });
 
-          const data = await res.json();
-          if (!res.ok || !data.ok) {
-            throw new Error("Approve payment thất bại");
-          }
-        },
+  const data = await res.json().catch(() => ({}));
+  console.log("APPROVE RESPONSE:", data);
 
-        onReadyForServerCompletion: async function (paymentId, txid) {
-          const res = await fetch("/api/pi/complete", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ paymentId, txid })
-          });
+  if (!res.ok || !data.ok) {
+    throw new Error(
+      data?.data?.error ||
+      data?.error ||
+      JSON.stringify(data) ||
+      "Approve payment thất bại"
+    );
+  }
+},
 
-          const data = await res.json();
-          if (!res.ok || !data.ok) {
-            throw new Error("Complete payment thất bại");
-          }
+       onReadyForServerCompletion: async function (paymentId, txid) {
+  const res = await fetch("/api/pi/complete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paymentId, txid })
+  });
 
-          const currentBalance = getPiBalance();
-          setPiBalance(currentBalance + napSo);
+  const data = await res.json().catch(() => ({}));
+  console.log("COMPLETE RESPONSE:", data);
 
-          alert(`Nạp thành công ${napSo} Pi test.`);
-        },
+  if (!res.ok || !data.ok) {
+    throw new Error(
+      data?.data?.error ||
+      data?.error ||
+      JSON.stringify(data) ||
+      "Complete payment thất bại"
+    );
+  }
 
-        onCancel: function () {
-          alert("Người chơi đã hủy nạp Pi.");
-        },
+  const currentBalance = getPiBalance();
+  setPiBalance(currentBalance + napSo);
 
-        onError: function (error) {
-          console.error("Pi payment lỗi:", error);
-          alert("Nạp Pi lỗi.");
-        }
+  alert(`Nạp thành công ${napSo} Pi test.`);
+},
       }
     );
   } catch (err) {
