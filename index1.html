@@ -3328,9 +3328,11 @@ if (timeDen <= 0) endGame("HẾT GIỜ", "ĐỎ THẮNG");
 
 function endGame(main, sub) {
     isGameOver = true;
-    clearInterval(interval);
-    sounds.bgm.pause();
-    sounds.heartbeat.pause();
+   clearInterval(interval);
+sounds.bgm.pause();
+sounds.bgm.currentTime = 0;
+sounds.heartbeat.pause();
+sounds.heartbeat.currentTime = 0;
 
     if (sub.includes("ĐỎ THẮNG")) playSnd('win');
     else playSnd('lose');
