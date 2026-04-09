@@ -4582,11 +4582,8 @@ function showReadyOverlay(mode) {
     startReadyCountdown();
 }
 
-function setReady(side) {
-    if (!currentRoomId) return;
-    if (side !== mySide) return;
-
-    db.ref("matches/" + currentRoomId + "/ready/" + side).set(true);
+function setReady() {
+    toggleReadyOnline();
 }
 function updateReadyButtonUI() {
     const btn = document.getElementById("ready-main-btn");
