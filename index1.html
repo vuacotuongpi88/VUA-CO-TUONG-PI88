@@ -4579,6 +4579,11 @@ function updateReadyUI() {
         denBtn.innerText = readyDen ? "ĐEN ĐÃ SẴN SÀNG" : "ĐEN SẴN SÀNG";
     }
 }
+    function closeReadyOverlay() {
+    const overlay = document.getElementById("ready-overlay");
+    if (overlay) overlay.style.display = "none";
+    clearInterval(readyInterval);
+}
 function failReadyAndBackHome() {
     closeReadyOverlay();
     showHomeUI();
