@@ -3112,19 +3112,21 @@ function switchAccount() {
 
 // --- HỆ THỐNG ÂM THANH (KHỚP VỚI HÌNH THƯ MỤC CỦA MÀY) ---
 const sounds = {
-welcome: new Audio('sounds/welcome.mp3'),
-click: new Audio('sounds/click.mp3'),
-capture: new Audio('sounds/capture.mp3'),
-start: new Audio('sounds/start.mp3'),
-win: new Audio('sounds/win.mp3'),
-lose: new Audio('sounds/lose.mp3'),
-heartbeat: new Audio('sounds/heartbeat.mp3'),
-timeout: new Audio('sounds/timeout.mp3'),
-bgm: new Audio('sounds/bgm.mp3')
+    welcome: new Audio('sounds/welcome.mp3'),
+    click: new Audio('sounds/click.mp3'),
+    capture: new Audio('sounds/capture.mp3'),
+    check: new Audio('sounds/check.mp3'),   // chiếu tướng
+    start: new Audio('sounds/start.mp3'),   // bắt đầu trận
+    win: new Audio('sounds/win.mp3'),
+    lose: new Audio('sounds/lose.mp3'),
+    heartbeat: new Audio('sounds/heartbeat.mp3'),
+    timeout: new Audio('sounds/timeout.mp3'),
+    bgm: new Audio('sounds/bgm.mp3')        // nhạc nền
 };
+
 sounds.bgm.loop = true;
 sounds.bgm.volume = 0.4;
-sounds.heartbeat.loop = true; 
+sounds.heartbeat.loop = true;
 function unlockAllSounds() {
     Object.values(sounds).forEach(a => {
         try {
