@@ -3608,8 +3608,8 @@ document.querySelectorAll('.piece').forEach(p => p.classList.remove('is-chieu'))
 
 // 2. Check xem có bị chiếu không
 if (laBiChieu(luotDi, taoMaTran())) {
-playSnd('check');
-playSnd('heartbeat');
+    playSnd('start');
+    playSnd('heartbeat');
 
 // 3. Tìm quân Tướng và gắn hiệu ứng
 const pieces = document.querySelectorAll('.piece');
