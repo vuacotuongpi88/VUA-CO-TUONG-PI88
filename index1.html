@@ -3125,7 +3125,23 @@ bgm: new Audio('sounds/bgm.mp3')
 sounds.bgm.loop = true;
 sounds.bgm.volume = 0.4;
 sounds.heartbeat.loop = true; 
+function unlockAllSounds() {
+    Object.values(sounds).forEach(a => {
+        try {
+            a.muted = true;
+            a.play().then(() => {
+                a.pause();
+                a.currentTime = 0;
+                a.muted = false;
+            }).catch(() => {
+                a.muted = false;
+            });
+        } catch (_) {}
+    });
+}
 
+document.addEventListener("click", unlockAllSounds, { once: true });
+document.addEventListener("touchstart", unlockAllSounds, { once: true });
 function playSnd(name) {
 if (sounds[name]) {
 sounds[name].currentTime = 0;
