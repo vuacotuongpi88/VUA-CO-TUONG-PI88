@@ -3903,13 +3903,17 @@ function bindRoom(roomId) {
         renderPlayersFromRoom(room);
         updateReadyUI();
 
-        if (room.players?.do && room.players?.den && room.status === "waiting") {
-            showReadyOverlay(room.mode);
-        }
+                if (room.players?.do && room.players?.den) {
+            if (room.status === "waiting") {
+                showReadyOverlay(room.mode);
 
-        if (room.status === "playing") {
-    closeReadyOverlay();
-}
+                if (readyDo && readyDen && mySide === "do") {
+                    await maybeStartRoomFromHost(room);
+                }
+            } else if (room.status === "playing") {
+                closeReadyOverlay();
+            }
+        }
 
         const newBoardHash = JSON.stringify(room.board || []);
         if (newBoardHash && newBoardHash !== lastRoomBoardHash) {
