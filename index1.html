@@ -3883,9 +3883,11 @@ async function maybeStartRoomFromHost(room) {
 function bindRoom(roomId) {
     cleanupRoomListeners();
 
-    currentRoomId = roomId;
-    roomValueRef = db.ref("matches/" + roomId);
-    roomChatRef = db.ref("matches/" + roomId + "/chat");
+    const listeningRoomId = roomId;
+
+    currentRoomId = listeningRoomId;
+    roomValueRef = db.ref("matches/" + listeningRoomId);
+    roomChatRef = db.ref("matches/" + listeningRoomId + "/chat");
 
     const content = document.getElementById("match-content-popup");
     if (content) {
