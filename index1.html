@@ -3894,7 +3894,9 @@ function bindRoom(roomId) {
         content.innerHTML = '<p style="color:#55efc4;">Hệ thống: Đang ghép phòng...</p>';
     }
 
-    roomValueRef.on("value", async (snap) => {
+        roomValueRef.on("value", async (snap) => {
+        if (currentRoomId !== listeningRoomId) return;
+
         const room = snap.val();
         if (!room) return;
 
