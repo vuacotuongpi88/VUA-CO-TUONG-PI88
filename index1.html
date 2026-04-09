@@ -3236,10 +3236,11 @@ async function backToMenu() {
 
     showHomeUI();
     document.getElementById("game-arena").style.display = "none";
-    clearInterval(interval);
-    clearInterval(readyInterval);
-    sounds.bgm.pause();
-    sounds.heartbeat.pause();
+  clearInterval(interval);
+sounds.bgm.pause();
+sounds.bgm.currentTime = 0;
+sounds.heartbeat.pause();
+sounds.heartbeat.currentTime = 0;
 
     const overlay = document.getElementById("ready-overlay");
     if (overlay) overlay.style.display = "none";
