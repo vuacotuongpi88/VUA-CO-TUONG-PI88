@@ -5078,6 +5078,44 @@ function checkStartGame(players) {
         }
     }
 }
+    // HÀM LẮNG NGHE TRẠNG THÁI CỦA 2 NGƯỜI CHƠI
+function listenToPlayers() {
+    if (!roomRef) return;
+
+    roomRef.child('players').on('value', (snapshot) => {
+        const players = snapshot.val();
+        if (!players) return;
+
+        const pIds = Object.keys(players);
+        
+        // Hiển thị danh sách người chơi (nếu mày có hàm này rồi)
+        if (typeof updatePlayerList === 'function') {
+            updatePlayerList(players);
+        }
+
+        // KIỂM TRA ĐIỀU KIỆN VÀO TRẬN
+        if (pIds.length === 2) {
+            const p1 = players[pIds[0]];
+            const p2 = players[pIds[1]];
+
+            // Nếu cả hai đều bấm Sẵn Sàng (ready: true)
+            if (p1.ready === true && p2.ready === true) {
+                console.log("Cả hai đã SS! Đang vào trận...");
+                
+                // 1. Tắt Menu SS
+                const menu = document.getElementById('home-menu');
+                if (menu) menu.style.display = 'none';
+                
+                // 2. Hiện bàn cờ
+                const gameContainer = document.getElementById('game-container');
+                if (gameContainer) gameContainer.style.display = 'flex';
+
+                // 3. Phát âm thanh (nếu mày đã thêm hàm playSound ở bước trước)
+                if (typeof playSound === 'function') playSound('start');
+            }
+        }
+    });
+}
 </script>
 </body>
 
