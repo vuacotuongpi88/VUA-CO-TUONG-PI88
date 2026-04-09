@@ -3668,8 +3668,8 @@ clearMoveHints();
 };
 
 function resetToStartup() {
-clearInterval(interval);
-playSnd('welcome'); playSnd('bgm');
+playSnd('start');
+playSnd('bgm');
 isGameOver = false; luotDi = 'do'; timeDo = 540; timeDen = 540;
 document.getElementById("victory-wrap").style.transform = "translate(-50%, -50%) scale(0)";
 document.querySelectorAll(".piece").forEach(p => p.remove());
