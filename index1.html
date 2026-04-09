@@ -7,7 +7,6 @@
 <title>Cờ Tướng Online MC - Trúc Lâm Tiên Cảnh</title>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
 <style>
 
@@ -2125,8 +2124,16 @@ cursor: pointer;
 }
 }
 #ready-overlay {
-    pointer-events: auto;
+position: fixed;
+inset: 0;
+background: rgba(0, 0, 0, 0.55);
+display: none;
+align-items: center;
+justify-content: center;
+z-index: 20000;
+pointer-events: none;
 }
+
 #ready-box {
 width: min(90vw, 360px);
 background: rgba(15, 15, 15, 0.96);
@@ -2180,31 +2187,7 @@ display: flex;
 gap: 10px;
 justify-content: center;
 }
-#ready-main-btn {
-    width: 100%;
-    padding: 12px;
-    font-size: 16px;
-    font-weight: bold;
-    border-radius: 10px;
-}
-.ready-do {
-    background: #d63031 !important;
-    color: white;
-}
 
-.ready-den {
-    background: #2d3436 !important;
-    color: white;
-}
-.ready-do {
-    background: #d63031;
-    color: white;
-}
-
-.ready-den {
-    background: #2d3436;
-    color: white;
-}
 #ready-do-btn,
 #ready-den-btn {
 flex: 1;
@@ -2789,8 +2772,14 @@ color: white;
 <div id="ready-title">SẴN SÀNG</div>
 <div id="ready-countdown">30</div>
 
+<div id="ready-status-row">
+<div id="ready-do-status">ĐỎ: CHƯA SẴN SÀNG</div>
+<div id="ready-den-status">ĐEN: CHƯA SẴN SÀNG</div>
+</div>
+
 <div id="ready-button-row">
-    <button id="ready-main-btn" onclick="setReady()">SẴN SÀNG</button>
+<button id="ready-do-btn" onclick="setReady('do')">ĐỎ SẴN SÀNG</button>
+<button id="ready-den-btn" onclick="setReady('den')">ĐEN SẴN SÀNG</button>
 </div>
 </div>
 </div>
@@ -2977,16 +2966,7 @@ appId: "1:818801429743:web:27ed0c854b8be5c8a95f1a"
 };
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
-const db = firebase.database();
 const provider = new firebase.auth.GoogleAuthProvider();
-
-let currentRoomId = null;
-let currentRoomMode = null;
-let mySide = null;
-let roomValueRef = null;
-let roomChatRef = null;
-let lastRoomBoardHash = "";
-let lastDrawRequestAt = 0;
 
 provider.setCustomParameters({
     prompt: 'select_account'
@@ -3242,27 +3222,21 @@ function selectGame(mode) {
     isCoUp = (mode === 'co-up');
     hideHomeUI();
     document.getElementById("game-arena").style.display = "block";
+    resetToStartup();
 }
+function backToMenu() {
+    if (confirm("Thoát ván đấu này?")) {
+        showHomeUI();
+        document.getElementById("game-arena").style.display = "none";
+        clearInterval(interval);
+        clearInterval(readyInterval);
+        sounds.bgm.pause();
+        sounds.heartbeat.pause();
 
-async function backToMenu() {
-    if (!confirm("Thoát ván đấu này?")) return;
-
-    await leaveRealtimeMatch();
-
-    showHomeUI();
-    document.getElementById("game-arena").style.display = "none";
-    clearInterval(interval);
-    clearInterval(readyInterval);
-    sounds.bgm.pause();
-    sounds.heartbeat.pause();
-
-    const overlay = document.getElementById("ready-overlay");
-    if (overlay) overlay.style.display = "none";
-
-    const chatContent = document.getElementById("match-content-popup");
-    if (chatContent) {
-        chatContent.innerHTML = '<p style="color:#55efc4;">Hệ thống: Vào việc đi mậy!</p>';
+        const overlay = document.getElementById("ready-overlay");
+        if (overlay) overlay.style.display = "none";
     }
+
 }
 function shuffle(array) {
 let currentIndex = array.length, randomIndex;
@@ -3284,10 +3258,9 @@ let selectedPiece = null, luotDi = 'do', isGameOver = false, timeDo = 30, timeDe
 let isCoUp = false;
 let lastMoveFrom = null;
 let lastMoveTo = null;
-let viewSide = 'do'; // 'do' = góc nhìn đỏ, 'den' = góc nhìn đen
 
 let pendingGameMode = 'co-tuong';
-let readyDo = false; 
+let readyDo = false;
 let readyDen = false;
 let readyTime = 30;
 let readyInterval = null;
@@ -3531,7 +3504,6 @@ const overlay = document.getElementById("ready-overlay");
 if (overlay && getComputedStyle(overlay).display !== "none") return;
 
 if (isGameOver) return;
-if (currentRoomId && mySide && luotDi !== mySide) return;
 if (sounds.bgm.paused) playSnd('bgm');
 const rect = board.getBoundingClientRect();
 const fX = columns.reduce((p, c) => Math.abs(c - ((e.clientX - rect.left) / rect.width) * 100) < Math.abs(p - ((e.clientX - rect.left) / rect.width) * 100) ? c : p);
@@ -3628,9 +3600,6 @@ if (checkMate(luotDi)) endGame("CHIẾU BÍ", `BÊN ${luotDi === 'do' ? 'ĐEN' :
 if (sounds.heartbeat) sounds.heartbeat.pause();
 }
 }, 200);
-if (currentRoomId) {
-    syncRoomFromBoard();
-}
 
 } else {
 selectedPiece.classList.remove("selected");
@@ -3669,331 +3638,6 @@ posDen.forEach((p, i) => createPiece(p.c, p.r, den_pieces[i], isCoUp));
 posDo.forEach((p, i) => createPiece(p.c, p.r, do_pieces[i], isCoUp));
 
 startTimer();
-}
-function getCurrentPlayerProfile() {
-    const user = auth.currentUser;
-    return {
-        uid: user?.uid || ("guest_" + (localStorage.getItem("user-name-display") || "guest")),
-        name: localStorage.getItem("user-name-display") || user?.displayName || "Người chơi",
-        photo: localStorage.getItem("user-photo") || user?.photoURL || "images/do_tuong.png"
-    };
-}
-
-function updateTurnUIOnly() {
-    turnBox.innerText = `Lượt: ${luotDi === 'do' ? 'ĐỎ' : 'ĐEN'}`;
-    timerDoEl.className = "timer-box timer-inline";
-    timerDenEl.className = "timer-box timer-inline";
-
-    if (luotDi === 'do') {
-        timerDoEl.classList.add("active-do");
-    } else {
-        timerDenEl.classList.add("active-den");
-    }
-}
-
-function exportBoardState() {
-    return Array.from(document.querySelectorAll(".piece")).map(p => ({
-        c: columns.indexOf(parseFloat(p.style.left)),
-        r: rows.indexOf(parseFloat(p.style.top)),
-        side: p.dataset.side,
-        type: p.dataset.type,
-        isUp: p.dataset.isUp === "true",
-        src: p.getAttribute("src") || p.src
-    }));
-}
-
-function applyBoardStateFromRoom(pieces) {
-    document.querySelectorAll(".piece").forEach(p => p.remove());
-    clearMoveHints();
-    clearLastMoveMarks();
-    selectedPiece = null;
-
-    (pieces || []).forEach(item => {
-        const img = document.createElement("img");
-        img.className = "piece";
-        img.dataset.side = item.side;
-        img.dataset.type = item.type;
-        img.dataset.isUp = item.isUp ? "true" : "false";
-        img.src = item.src;
-        img.style.left = columns[item.c] + "%";
-        img.style.top = rows[item.r] + "%";
-        board.appendChild(img);
-    });
-}
-
-function renderPlayersFromRoom(room) {
-    const doPlayer = room?.players?.do || {};
-    const denPlayer = room?.players?.den || {};
-
-    const doName = document.getElementById("player-do-name");
-    const denName = document.getElementById("player-den-name");
-    const doAvatar = document.getElementById("player-do-avatar");
-    const denAvatar = document.getElementById("player-den-avatar");
-
-    if (doName) doName.innerText = doPlayer.name || "BÊN ĐỎ";
-    if (denName) denName.innerText = denPlayer.name || "ĐANG CHỜ...";
-    if (doAvatar) doAvatar.src = doPlayer.photo || "images/do_tuong.png";
-    if (denAvatar) denAvatar.src = denPlayer.photo || "images/do_tuong.png";
-}
-
-function cleanupRoomListeners() {
-    if (roomValueRef) roomValueRef.off();
-    if (roomChatRef) roomChatRef.off();
-    roomValueRef = null;
-    roomChatRef = null;
-    lastRoomBoardHash = "";
-}
-
-async function leaveRealtimeMatch() {
-    const roomId = currentRoomId;
-    const side = mySide;
-    const mode = currentRoomMode;
-    const me = getCurrentPlayerProfile();
-
-    cleanupRoomListeners();
-
-    currentRoomId = null;
-    mySide = null;
-    currentRoomMode = null;
-    readyDo = false;
-    readyDen = false;
-
-    if (!roomId) return;
-
-    try {
-        if (mode) {
-            const waitingRef = db.ref("waitingRooms/" + mode);
-            const waitingSnap = await waitingRef.once("value");
-            const waiting = waitingSnap.val();
-            if (waiting && waiting.roomId === roomId && waiting.uid === me.uid) {
-                await waitingRef.remove();
-            }
-        }
-
-        if (side) {
-            await db.ref("matches/" + roomId + "/players/" + side).remove();
-            await db.ref("matches/" + roomId + "/ready/" + side).remove();
-        }
-    } catch (err) {
-        console.error("Rời phòng lỗi:", err);
-    }
-}
-
-function syncRoomFromBoard(extra = {}) {
-    if (!currentRoomId) return;
-
-    db.ref("matches/" + currentRoomId).update({
-        board: exportBoardState(),
-        turn: luotDi,
-        isCoUp,
-        timeDo,
-        timeDen,
-        lastMoveFrom: lastMoveFrom || null,
-        lastMoveTo: lastMoveTo || null,
-        updatedAt: firebase.database.ServerValue.TIMESTAMP,
-        ...extra
-    });
-}
-
-async function maybeStartRoomFromHost(room) {
-    if (mySide !== "do") return;
-    if (room.status !== "waiting") return;
-    if (!room.players?.do || !room.players?.den) return;
-    if (!(room.ready?.do && room.ready?.den)) return;
-    if (Array.isArray(room.board) && room.board.length) return;
-
-    isCoUp = room.mode === "co-up";
-    resetToStartup();
-
-    const freshBoard = exportBoardState();
-
-    await db.ref("matches/" + currentRoomId).update({
-        status: "playing",
-        isCoUp,
-        board: freshBoard,
-        turn: "do",
-        timeDo: 540,
-        timeDen: 540,
-        lastMoveFrom: null,
-        lastMoveTo: null,
-        winner: null,
-        winReason: null,
-        drawRequest: null
-    });
-}
-
-function bindRoom(roomId) {
-    cleanupRoomListeners();
-
-    currentRoomId = roomId;
-    roomValueRef = db.ref("matches/" + roomId);
-    roomChatRef = db.ref("matches/" + roomId + "/chat");
-
-    const content = document.getElementById("match-content-popup");
-    if (content) {
-        content.innerHTML = '<p style="color:#55efc4;">Hệ thống: Đang ghép phòng...</p>';
-    }
-
-    roomValueRef.on("value", async (snap) => {
-        const room = snap.val();
-        if (!room) return;
-
-        currentRoomMode = room.mode || currentRoomMode;
-        readyDo = !!room.ready?.do;
-        readyDen = !!room.ready?.den;
-
-        renderPlayersFromRoom(room);
-        updateReadyUI();
-
-        if (room.players?.do && room.players?.den && room.status === "waiting") {
-            showReadyOverlay(room.mode);
-        }
-
-        if (room.status === "playing") {
-            const overlay = document.getElementById("ready-overlay");
-            if (overlay) overlay.style.display = "none";
-        }
-
-        const newBoardHash = JSON.stringify(room.board || []);
-        if (newBoardHash && newBoardHash !== lastRoomBoardHash) {
-            lastRoomBoardHash = newBoardHash;
-
-            applyBoardStateFromRoom(room.board || []);
-            isCoUp = !!room.isCoUp;
-            luotDi = room.turn || "do";
-            timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
-            timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
-
-            timerDoEl.innerText = formatTime(timeDo);
-            timerDenEl.innerText = formatTime(timeDen);
-
-            lastMoveFrom = room.lastMoveFrom || null;
-            lastMoveTo = room.lastMoveTo || null;
-
-            updateTurnUIOnly();
-
-            if (lastMoveFrom && lastMoveTo) {
-                drawLastMoveMarks();
-            }
-
-            startTimer();
-        }
-
-        if (room.drawRequest && room.drawRequest.from !== mySide && room.drawRequest.at !== lastDrawRequestAt) {
-            lastDrawRequestAt = room.drawRequest.at;
-
-            const ok = confirm("Đối thủ xin hòa. Đồng ý không?");
-            if (ok) {
-                await db.ref("matches/" + roomId).update({
-                    winner: "hoa",
-                    winReason: "hoa",
-                    drawRequest: null
-                });
-            } else {
-                await db.ref("matches/" + roomId + "/drawRequest").remove();
-            }
-        }
-
-        if (room.winner && !isGameOver) {
-            if (room.winner === "hoa") {
-                endGame("HÒA CỜ", "2 BÊN HÒA");
-            } else {
-                endGame(
-                    room.winReason === "dauhang" ? "ĐẦU HÀNG" : "CHIẾU BÍ",
-                    `BÊN ${room.winner === "do" ? "ĐỎ" : "ĐEN"} THẮNG`
-                );
-            }
-        }
-
-        await maybeStartRoomFromHost(room);
-    });
-
-    roomChatRef.on("child_added", (snap) => {
-        const data = snap.val();
-        const content = document.getElementById("match-content-popup");
-        if (!data || !content) return;
-
-        const mine = data.side === mySide;
-        const msg = document.createElement("div");
-        msg.style.marginBottom = "6px";
-        msg.innerHTML = `<b style="color:${mine ? "#55efc4" : "#ffeaa7"};">${mine ? "Mầy" : (data.name || "Đối thủ")}:</b> <span style="word-break:break-word;">${data.text || ""}</span>`;
-        content.appendChild(msg);
-        content.scrollTop = content.scrollHeight;
-    });
-}
-
-async function joinOrCreateRealtimeMatch(mode) {
-    hideHomeUI();
-    document.getElementById("game-arena").style.display = "block";
-
-    const chatPopup = document.getElementById("match-chat-popup");
-    const chatBtn = document.getElementById("match-chat-btn");
-
-    if (window.innerWidth <= 600) {
-        if (chatPopup) chatPopup.style.display = "none";
-        if (chatBtn) chatBtn.style.display = "flex";
-    } else {
-        if (chatPopup) chatPopup.style.display = "flex";
-        if (chatBtn) chatBtn.style.display = "none";
-    }
-
-    const me = getCurrentPlayerProfile();
-    currentRoomMode = mode;
-
-    const waitingRef = db.ref("waitingRooms/" + mode);
-    const waitingSnap = await waitingRef.once("value");
-    const waiting = waitingSnap.val();
-
-    if (waiting && waiting.uid !== me.uid) {
-        mySide = "den";
-        currentRoomId = waiting.roomId;
-
-        await db.ref("matches/" + currentRoomId + "/players/den").set(me);
-        await db.ref("matches/" + currentRoomId + "/ready/den").set(false);
-        await waitingRef.remove();
-
-        bindRoom(currentRoomId);
-    } else {
-        const newRoomRef = db.ref("matches").push();
-        currentRoomId = newRoomRef.key;
-        mySide = "do";
-
-        await newRoomRef.set({
-            mode,
-            status: "waiting",
-            turn: "do",
-            isCoUp: mode === "co-up",
-            timeDo: 540,
-            timeDen: 540,
-            createdAt: firebase.database.ServerValue.TIMESTAMP,
-            players: {
-                do: me,
-                den: null
-            },
-            ready: {
-                do: false,
-                den: false
-            },
-            board: null,
-            lastMoveFrom: null,
-            lastMoveTo: null,
-            winner: null,
-            winReason: null,
-            drawRequest: null
-        });
-
-        await waitingRef.set({
-            roomId: currentRoomId,
-            uid: me.uid,
-            name: me.name,
-            createdAt: firebase.database.ServerValue.TIMESTAMP
-        });
-
-        bindRoom(currentRoomId);
-    }
-
-    showReadyOverlay(mode);
-    updateReadyUI();
 }
 function toggleProfileMenu(event) {
     event.stopPropagation();
@@ -4415,33 +4059,25 @@ wrap.style.transform = "translate(-50%, -50%) scale(1)";
 }
 
 function handleMatchAction(type) {
-    closeActionMenu();
+closeActionMenu();
 
-    if (type === "thoat") {
-        backToMenu();
-        return;
-    }
+if (type === "thoat") {
+backToMenu();
+return;
+}
 
-    if (!currentRoomId || !mySide) return;
+if (type === "dauhang") {
+if (confirm("Đầu hàng ván này?")) {
+endGame("ĐẦU HÀNG", `BÊN ${luotDi === 'do' ? 'ĐEN' : 'ĐỎ'} THẮNG`);
+}
+return;
+}
 
-    if (type === "dauhang") {
-        if (confirm("Đầu hàng ván này?")) {
-            db.ref("matches/" + currentRoomId).update({
-                winner: mySide === "do" ? "den" : "do",
-                winReason: "dauhang"
-            });
-        }
-        return;
-    }
-
-    if (type === "hoa") {
-        if (confirm("Gửi xin hòa cho đối thủ?")) {
-            db.ref("matches/" + currentRoomId + "/drawRequest").set({
-                from: mySide,
-                at: Date.now()
-            });
-        }
-    }
+if (type === "hoa") {
+if (confirm("Xử hòa ván này?")) {
+hoaTran();
+}
+}
 }
 
 document.addEventListener("click", function (e) {
@@ -4490,36 +4126,29 @@ if (menu) {
 }
 }
 function updateReadyUI() {
-    const countdown = document.getElementById("ready-countdown");
-    const doStatus = document.getElementById("ready-do-status");
-    const denStatus = document.getElementById("ready-den-status");
-    const doBtn = document.getElementById("ready-do-btn");
-    const denBtn = document.getElementById("ready-den-btn");
+const countdown = document.getElementById("ready-countdown");
+const doStatus = document.getElementById("ready-do-status");
+const denStatus = document.getElementById("ready-den-status");
 
-    if (countdown) countdown.innerText = readyTime;
+if (countdown) countdown.innerText = readyTime;
 
-    if (doStatus) {
-        doStatus.innerText = readyDo ? "ĐỎ: ĐÃ SẴN SÀNG" : "ĐỎ: CHƯA SẴN SÀNG";
-        doStatus.classList.toggle("ready-ok", readyDo);
-    }
-
-    if (denStatus) {
-        denStatus.innerText = readyDen ? "ĐEN: ĐÃ SẴN SÀNG" : "ĐEN: CHƯA SẴN SÀNG";
-        denStatus.classList.toggle("ready-ok", readyDen);
-    }
-
-    if (doBtn) {
-        doBtn.style.display = mySide === "do" ? "block" : "none";
-        doBtn.disabled = mySide !== "do" || readyDo;
-        doBtn.innerText = readyDo ? "ĐỎ ĐÃ SẴN SÀNG" : "ĐỎ SẴN SÀNG";
-    }
-
-    if (denBtn) {
-        denBtn.style.display = mySide === "den" ? "block" : "none";
-        denBtn.disabled = mySide !== "den" || readyDen;
-        denBtn.innerText = readyDen ? "ĐEN ĐÃ SẴN SÀNG" : "ĐEN SẴN SÀNG";
-    }
+if (doStatus) {
+doStatus.innerText = readyDo ? "ĐỎ: ĐÃ SẴN SÀNG" : "ĐỎ: CHƯA SẴN SÀNG";
+doStatus.classList.toggle("ready-ok", readyDo);
 }
+
+if (denStatus) {
+denStatus.innerText = readyDen ? "ĐEN: ĐÃ SẴN SÀNG" : "ĐEN: CHƯA SẴN SÀNG";
+denStatus.classList.toggle("ready-ok", readyDen);
+}
+}
+
+function closeReadyOverlay() {
+const overlay = document.getElementById("ready-overlay");
+if (overlay) overlay.style.display = "none";
+clearInterval(readyInterval);
+}
+
 function failReadyAndBackHome() {
     closeReadyOverlay();
     showHomeUI();
@@ -4543,7 +4172,7 @@ function getCurrentMode() {
     return isCoUp ? 'co-up' : 'co-tuong';
 }
 
-async function changeMatch() {
+function changeMatch() {
     closeActionMenu();
 
     if (!confirm("Đổi sang bàn mới để tìm đối thủ khác?")) return;
@@ -4557,11 +4186,7 @@ async function changeMatch() {
     selectedPiece = null;
 
     document.getElementById("victory-wrap").style.transform = "translate(-50%, -50%) scale(0)";
-
-    const oldMode = currentRoomMode || getCurrentMode();
-
-    await leaveRealtimeMatch();
-    await joinOrCreateRealtimeMatch(oldMode);
+    showReadyOverlay(getCurrentMode());
 }
 
 function autoResetNextMatch() {
@@ -4570,9 +4195,10 @@ function autoResetNextMatch() {
         showReadyOverlay(getCurrentMode());
     }, 5000);
 }
-
 function showReadyOverlay(mode) {
     pendingGameMode = mode;
+    readyDo = false;
+    readyDen = false;
     readyTime = 30;
 
     const overlay = document.getElementById("ready-overlay");
@@ -4582,31 +4208,36 @@ function showReadyOverlay(mode) {
     startReadyCountdown();
 }
 
-    function setReady() {
-    document.getElementById("ready-overlay").style.display = "none";
+function setReady(side) {
+if (side === "do") readyDo = true;
+if (side === "den") readyDen = true;
+
+updateReadyUI();
+
+if (readyDo && readyDen) {
+clearInterval(readyInterval);
+closeReadyOverlay();
+selectGame(pendingGameMode);
 }
 }
-function updateReadyButtonUI() {
-    const btn = document.getElementById("ready-main-btn");
-    if (!btn) return;
+function batDauTranDau(loai) {
+    hideHomeUI();
 
-    btn.classList.remove("ready-do", "ready-den");
+    const gameArena = document.getElementById('game-arena');
+    if (gameArena) gameArena.style.display = 'block';
 
-    if (onlineState.side === "do") {
-        btn.classList.add("ready-do");
-        btn.textContent = "ĐỎ SẴN SÀNG";
-    } else if (onlineState.side === "den") {
-        btn.classList.add("ready-den");
-        btn.textContent = "ĐEN SẴN SÀNG";
+    const chatPopup = document.getElementById('match-chat-popup');
+    const chatBtn = document.getElementById('match-chat-btn');
+
+    if (window.innerWidth <= 600) {
+        if (chatPopup) chatPopup.style.display = 'none';
+        if (chatBtn) chatBtn.style.display = 'flex';
     } else {
-        btn.textContent = "SẴN SÀNG";
+        if (chatPopup) chatPopup.style.display = 'flex';
+        if (chatBtn) chatBtn.style.display = 'none';
     }
-}
-async function batDauTranDau(loai) {
-    const mode = loai === 'up' ? 'co-up' : 'co-tuong';
-    await joinOrCreateRealtimeMatch(mode);
-    updateReadyButtonUI();
-document.getElementById("ready-overlay").style.display = "flex";
+
+    showReadyOverlay(loai === 'up' ? 'co-up' : 'co-tuong');
 }
 
 // Thêm sự kiện nhấn phím Enter để gửi
@@ -4659,23 +4290,20 @@ document.addEventListener("click", function (e) {
 }
 
 function sendMatchChat() {
-    const input = document.getElementById("match-input-popup");
-    if (!input) return;
+const input = document.getElementById("match-input-popup");
+const content = document.getElementById("match-content-popup");
+if (!input || !content) return;
 
-    const text = input.value.trim();
-    if (text === "") return;
-    if (!currentRoomId || !mySide) return;
+const text = input.value.trim();
+if (text === "") return;
 
-    const me = getCurrentPlayerProfile();
+const msg = document.createElement("div");
+msg.style.marginBottom = "5px";
+msg.innerHTML = `<b style="color:#55efc4;">Mầy:</b> <span style="word-break:break-word;">${text}</span>`;
+content.appendChild(msg);
 
-    db.ref("matches/" + currentRoomId + "/chat").push({
-        name: me.name,
-        side: mySide,
-        text,
-        at: firebase.database.ServerValue.TIMESTAMP
-    });
-
-    input.value = "";
+content.scrollTop = content.scrollHeight;
+input.value = "";
 }
 
 document.getElementById("match-input-popup")?.addEventListener("keypress", function(e) {
@@ -4916,6 +4544,7 @@ async function startPiDeposit(amount = 1) {
       alert("Nạp Pi chỉ chạy trong Pi Browser.");
       return;
     }
+
     if (!piAuth) {
       const auth = await loginPi();
       if (!auth) return;
