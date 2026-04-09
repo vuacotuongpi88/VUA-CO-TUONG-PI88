@@ -3111,46 +3111,23 @@ function switchAccount() {
 
 
 // --- HỆ THỐNG ÂM THANH (KHỚP VỚI HÌNH THƯ MỤC CỦA MÀY) ---
-const sounds = {
-    welcome: new Audio('sounds/welcome.mp3'),
-    click: new Audio('sounds/click.mp3'),
-    capture: new Audio('sounds/capture.mp3'),
-    check: new Audio('sounds/check.mp3'),   // chiếu tướng
-    start: new Audio('sounds/start.mp3'),   // bắt đầu trận
-    win: new Audio('sounds/win.mp3'),
-    lose: new Audio('sounds/lose.mp3'),
-    heartbeat: new Audio('sounds/heartbeat.mp3'),
-    timeout: new Audio('sounds/timeout.mp3'),
-    bgm: new Audio('sounds/bgm.mp3')        // nhạc nền
+// Thêm đoạn này vào đầu thẻ <script>
+const gameSounds = {
+    move: new Audio('sounds/move.mp3'),      // Tiếng đi quân
+    capture: new Audio('sounds/capture.mp3'),// Tiếng ăn quân
+    check: new Audio('sounds/check.mp3'),    // Tiếng chiếu tướng
+    start: new Audio('sounds/start.mp3'),    // Tiếng bắt đầu
+    win: new Audio('sounds/win.mp3'),        // Tiếng thắng
+    lose: new Audio('sounds/lose.mp3')       // Tiếng thua
 };
 
-sounds.bgm.loop = true;
-sounds.bgm.volume = 0.4;
-sounds.heartbeat.loop = true;
-function unlockAllSounds() {
-    Object.values(sounds).forEach(a => {
-        try {
-            a.muted = true;
-            a.play().then(() => {
-                a.pause();
-                a.currentTime = 0;
-                a.muted = false;
-            }).catch(() => {
-                a.muted = false;
-            });
-        } catch (_) {}
-    });
+// Hàm bổ trợ để phát âm thanh không bị chồng chéo
+function playSound(name) {
+    if (gameSounds[name]) {
+        gameSounds[name].currentTime = 0; 
+        gameSounds[name].play().catch(e => console.warn("Lỗi phát âm thanh:", e));
+    }
 }
-
-document.addEventListener("click", unlockAllSounds, { once: true });
-document.addEventListener("touchstart", unlockAllSounds, { once: true });
-function playSnd(name) {
-if (sounds[name]) {
-sounds[name].currentTime = 0;
-sounds[name].play().catch(e => console.log("Chờ tương tác để phát nhạc..."));
-}
-}
-
 function sendMessage() {
 // 1. Tìm ô nhập liệu
 var input = document.getElementById('match-input');
