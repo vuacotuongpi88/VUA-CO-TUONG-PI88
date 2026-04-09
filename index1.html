@@ -5055,6 +5055,29 @@ async function startPiDeposit(amount = 1) {
     alert(err.message || "Không nạp Pi được.");
   }
 }
+    // Dán cái này vào cuối phần script để làm nhiệm vụ kiểm tra 2 bên
+function checkStartGame(players) {
+    if (!players) return;
+    const pIds = Object.keys(players);
+    
+    // Nếu đủ 2 người trong phòng
+    if (pIds.length === 2) {
+        const p1 = players[pIds[0]];
+        const p2 = players[pIds[1]];
+
+        // Nếu cả hai đều đã bấm Sẵn Sàng (ready === true)
+        if (p1.ready === true && p2.ready === true) {
+            console.log("Cả hai đã SS -> Tắt bảng!");
+            
+            // Lệnh quan trọng nhất để tắt Menu và hiện Bàn Cờ
+            document.getElementById('home-menu').style.display = 'none';
+            document.getElementById('game-container').style.display = 'flex';
+            
+            // Nếu mày đã thêm âm thanh theo tao chỉ lúc nãy thì nó sẽ kêu ở đây
+            if (typeof playSound === 'function') playSound('start');
+        }
+    }
+}
 </script>
 </body>
 
