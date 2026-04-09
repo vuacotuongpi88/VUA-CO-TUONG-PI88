@@ -3944,18 +3944,20 @@ function bindRoom(roomId) {
             startTimer();
         }
 
-        if (room.drawRequest && room.drawRequest.from !== mySide && room.drawRequest.at !== lastDrawRequestAt) {
+               if (room.drawRequest && room.drawRequest.from !== mySide && room.drawRequest.at !== lastDrawRequestAt) {
             lastDrawRequestAt = room.drawRequest.at;
 
             const ok = confirm("Đối thủ xin hòa. Đồng ý không?");
+            if (currentRoomId !== listeningRoomId) return;
+
             if (ok) {
-                await db.ref("matches/" + roomId).update({
+                await db.ref("matches/" + listeningRoomId).update({
                     winner: "hoa",
                     winReason: "hoa",
                     drawRequest: null
                 });
             } else {
-                await db.ref("matches/" + roomId + "/drawRequest").remove();
+                await db.ref("matches/" + listeningRoomId + "/drawRequest").remove();
             }
         }
 
