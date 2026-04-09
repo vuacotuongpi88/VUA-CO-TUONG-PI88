@@ -4588,7 +4588,22 @@ function setReady(side) {
 
     db.ref("matches/" + currentRoomId + "/ready/" + side).set(true);
 }
+function updateReadyButtonUI() {
+    const btn = document.getElementById("ready-main-btn");
+    if (!btn) return;
 
+    btn.classList.remove("ready-do", "ready-den");
+
+    if (onlineState.side === "do") {
+        btn.classList.add("ready-do");
+        btn.textContent = "ĐỎ SẴN SÀNG";
+    } else if (onlineState.side === "den") {
+        btn.classList.add("ready-den");
+        btn.textContent = "ĐEN SẴN SÀNG";
+    } else {
+        btn.textContent = "SẴN SÀNG";
+    }
+}
 async function batDauTranDau(loai) {
     const mode = loai === 'up' ? 'co-up' : 'co-tuong';
     await joinOrCreateRealtimeMatch(mode);
