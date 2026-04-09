@@ -4585,6 +4585,15 @@ function showReadyOverlay(mode) {
 
 function setReady() {
     toggleReadyOnline();
+    const btn = document.getElementById("ready-main-btn");
+
+if (mySide === "do") {
+    btn.classList.remove("ready-den");
+    btn.classList.add("ready-do");
+} else {
+    btn.classList.remove("ready-do");
+    btn.classList.add("ready-den");
+}
 }
 function updateReadyButtonUI() {
     const btn = document.getElementById("ready-main-btn");
