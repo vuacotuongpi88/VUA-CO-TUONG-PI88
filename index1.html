@@ -4613,6 +4613,7 @@ function updateReadyButtonUI() {
 async function batDauTranDau(loai) {
     const mode = loai === 'up' ? 'co-up' : 'co-tuong';
     await joinOrCreateRealtimeMatch(mode);
+    document.getElementById("ready-overlay").style.display = "flex";
 }
 
 // Thêm sự kiện nhấn phím Enter để gửi
