@@ -4643,13 +4643,19 @@ function autoResetNextMatch() {
 
 function showReadyOverlay(mode) {
     pendingGameMode = mode;
-    readyTime = 30;
 
     const overlay = document.getElementById("ready-overlay");
-    if (overlay) overlay.style.display = "flex";
+    if (!overlay) return;
+
+    const isHidden = getComputedStyle(overlay).display === "none";
+
+    if (isHidden) {
+        readyTime = 30;
+        overlay.style.display = "flex";
+        startReadyCountdown();
+    }
 
     updateReadyUI();
-    startReadyCountdown();
 }
 
 function setReady(side) {
