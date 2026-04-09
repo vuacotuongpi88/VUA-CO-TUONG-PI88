@@ -4582,8 +4582,9 @@ function showReadyOverlay(mode) {
     startReadyCountdown();
 }
 
-function setReady() {
-    alert("đã bấm sẵn sàng");
+    function setReady() {
+    document.getElementById("ready-overlay").style.display = "none";
+}
 }
 function updateReadyButtonUI() {
     const btn = document.getElementById("ready-main-btn");
