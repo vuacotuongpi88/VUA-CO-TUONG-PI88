@@ -7,7 +7,6 @@
 <title>Cờ Tướng Online MC - Trúc Lâm Tiên Cảnh</title>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
 <style>
 
@@ -275,204 +274,14 @@ font-size: 1rem;
 }
 
 #login-screen {
-    position: fixed;
-    inset: 0;
-    z-index: 9999;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    align-items: stretch;
-    background:
-        linear-gradient(rgba(0,0,0,0.58), rgba(0,0,0,0.72)),
-        url('images/nen_rung_tre.jpg') center/cover no-repeat;
-    overflow: hidden;
-}
-
-.welcome-login-corner {
-    position: absolute;
-    top: max(12px, env(safe-area-inset-top, 0px) + 8px);
-    right: 12px;
-    z-index: 10001;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    align-items: flex-end;
-}
-
-.welcome-login-corner button {
-    min-width: 122px;
-    padding: 8px 12px;
-    font-size: 12px;
-    font-weight: 800;
-    border-radius: 999px;
-    border: 1px solid rgba(236, 221, 7, 0.911);
-    box-shadow: 0 6px 16px rgba(9, 0, 24, 0.932);
-}
-
-#welcome-google-btn {
-    background: linear-gradient(180deg, #ffffffec, #ecd504dc);
-    color: #eb0707;
-}
-
-#welcome-pi-btn {
-    background: linear-gradient(180deg, #a604e6, #4b2ca3);
-    color: #ebdb07;
-}
-
-.welcome-wrap {
-    width: min(980px, 100%);
-    height: 100%;
-    margin: 0 auto;
-    padding: 78px 16px 18px;
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    overflow: hidden;
-}
-
-.welcome-hero {
-    text-align: center;
-    margin-bottom: 14px;
-    flex-shrink: 0;
-}
-
-.welcome-hero h1 {
-    margin: 0;
-    font-size: clamp(28px, 5vw, 54px);
-    letter-spacing: 3px;
-    color: #b508e0;
-    text-shadow: 0 0 14px rgba(85,239,196,0.22);
-}
-
-.welcome-hero p {
-    margin: 8px 0 0;
-    font-size: clamp(13px, 2.5vw, 18px);
-    color: #ebdb07;
-    font-weight: 700;
-}
-
-.welcome-commit-box {
-    width: min(100%, 920px);
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    background: rgb(5, 5, 5);
-    border: 2px solid #f5f5f5;
-    border-radius: 20px;
-    padding: 18px 16px 22px;
-    box-sizing: border-box;
-    box-shadow: 0 0 24px rgb(253, 251, 251);
-    backdrop-filter: blur(4px);
-}
-
-.welcome-commit-title {
-    text-align: center;
-    font-size: 20px;
-    color: #f00505;
-    font-weight: 900;
-    letter-spacing: 1px;
-    margin-bottom: 14px;
-}
-
-.welcome-commit-list {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 10px;
-}
-
-.welcome-commit-item {
-    display: flex;
-    gap: 10px;
-    align-items: flex-start;
-    background: rgba(10, 10, 10, 0.945);
-    border: 1px solid rgba(240, 5, 5, 0.22);
-    border-radius: 14px;
-    padding: 12px;
-}
-
-.welcome-commit-no {
-    width: 28px;
-    height: 28px;
-    min-width: 28px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #be04f7;
-    color: #fdfdff;
-    font-weight: 900;
-    font-size: 13px;
-}
-
-.welcome-commit-text strong {
-    display: block;
-    color: #b406e9;
-    font-size: 14px;
-    margin-bottom: 4px;
-}
-
-.welcome-commit-text span {
-    display: block;
-    color: #ffffff;
-    font-size: 12px;
-    line-height: 1.5;
-}
-
-.welcome-bottom-note {
-    margin-top: 12px;
-    text-align: center;
-    font-size: 12px;
-    color: #e0d20a;
-}
-
-@media (max-width: 600px) {
-    .welcome-wrap {
-        padding: 70px 10px 12px;
-    }
-
-    .welcome-login-corner {
-        top: max(10px, env(safe-area-inset-top, 0px) + 6px);
-        right: 10px;
-        gap: 6px;
-    }
-
-    .welcome-login-corner button {
-        min-width: 106px;
-        padding: 7px 10px;
-        font-size: 11px;
-    }
-
-    .welcome-hero h1 {
-        font-size: 28px;
-        letter-spacing: 2px;
-    }
-
-    .welcome-hero p {
-        font-size: 12px;
-    }
-
-    .welcome-commit-box {
-        padding: 12px 10px 16px;
-        border-radius: 16px;
-    }
-
-    .welcome-commit-title {
-        font-size: 16px;
-    }
-
-    .welcome-commit-item {
-        padding: 10px;
-        border-radius: 12px;
-    }
-
-    .welcome-commit-text strong {
-        font-size: 13px;
-    }
-
-    .welcome-commit-text span {
-        font-size: 11px;
-    }
+position: fixed;
+inset: 0;
+background: rgba(0, 0, 0, 0.95);
+display: flex;
+flex-direction: column;
+justify-content: center;
+align-items: center;
+z-index: 9999;
 }
 
 /* Container dời qua trái */
@@ -2448,14 +2257,77 @@ color: white;
     border-radius: 12px;
     font-weight: 800;
 }
+/* Màn hình chờ bao phủ toàn bộ */
+#landing-page {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), url('images/nen_rung_tre.jpg') center/cover;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999; /* Luôn nằm trên cùng */
+}
+
+/* Các bảng đăng nhập/đăng ký */
+.auth-modal {
+    display: none; /* Mặc định ẩn */
+    background: rgba(0, 0, 0, 0.9);
+    border: 2px solid #55efc4;
+    padding: 25px;
+    border-radius: 15px;
+    width: 300px;
+    text-align: center;
+    box-shadow: 0 0 20px #55efc4;
+}
+
+.auth-modal input {
+    width: 100%; padding: 10px; margin: 10px 0;
+    background: #222; border: 1px solid #55efc4; color: white;
+}
+
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
-  Pi.init({ version: "2.0" });
+Pi.init({ version: "2.0", sandbox: true });
 </script>
 </head>
 <body>
+<div id="landing-page">
+    <div style="text-align: center;">
+        <h1 style="color:#55efc4; font-size: 3rem; text-shadow: 2px 2px 10px #000;">CỜ TƯỚNG ONLINE MC</h1>
+        <p style="font-style: italic;">Trúc Lâm Tiên Cảnh - Kỳ Đài Hội Tụ</p>
+        
+        <div style="margin-top: 30px; text-align: left; background: rgba(0,0,0,0.5); padding: 15px; border-radius: 10px; font-size: 13px;">
+            <strong style="color:#55efc4;">CHÍNH SÁCH NHÀ PHÁT TRIỂN:</strong><br>
+            • Bảo mật thông tin người dùng tuyệt đối.<br>
+            • Giao dịch Pi minh bạch qua Pi SDK.<br>
+            • Cam kết môi trường chơi game công bằng.
+        </div>
+    </div>
+
+    <button onclick="openModal('login-modal')" style="position: absolute; top: 20px; left: 20px; background:#55efc4; padding: 10px 20px; border:none; font-weight:bold; cursor:pointer;">LOGIN TÀI KHOẢN</button>
     
+    <a href="#" onclick="openModal('register-modal')" style="position: absolute; bottom: 20px; left: 20px; color:#55efc4; text-decoration:none;">Đăng ký tài khoản mới</a>
+
+    <div id="login-modal" class="auth-modal" style="position: absolute;">
+        <h2 style="color:#55efc4;">ĐĂNG NHẬP</h2>
+        <input type="text" id="login-user" placeholder="Tên đăng nhập">
+        <input type="password" id="login-pass" placeholder="Mật khẩu">
+        <button onclick="handleLogin()" style="width:100%; padding:10px; background:#55efc4; font-weight:bold; border:none; cursor:pointer;">VÀO SẢNH GAME</button>
+        <p onclick="closeModal()" style="cursor:pointer; font-size:12px; margin-top:10px;">[ Đóng ]</p>
+    </div>
+
+    <div id="register-modal" class="auth-modal" style="position: absolute;">
+        <h2 style="color:#55efc4;">ĐĂNG KÝ</h2>
+        <input type="text" id="reg-user" placeholder="Tên đăng nhập mới">
+        <input type="password" id="reg-pass" placeholder="Mật khẩu">
+        <button onclick="handleRegister()" style="width:100%; padding:10px; background:#55efc4; font-weight:bold; border:none; cursor:pointer;">HOÀN TẤT</button>
+        <p onclick="closeModal()" style="cursor:pointer; font-size:12px; margin-top:10px;">[ Quay lại ]</p>
+    </div>
+</div>
+
 <div id="edit-profile-modal" class="modal" style="display:none;">
     <div class="modal-content">
         <span class="close" onclick="closeEditProfile()">&times;</span>
@@ -2481,98 +2353,27 @@ color: white;
 </div>
 
 <div id="login-screen">
-    <div class="welcome-login-corner">
-        <button id="welcome-pi-btn" onclick="loginPi()" style="display:none;">ĐĂNG NHẬP PI</button>
-        <button id="welcome-google-btn" onclick="loginGoogle()">ĐĂNG NHẬP</button>
-    </div>
+    <h1 style="color:#55efc4; letter-spacing:5px;">core team</h1>
+    <h2 style="color:#fff; margin-bottom:24px;">TRÚC LÂM TIÊN CẢNH</h2>
 
-    <div class="welcome-wrap">
-        <div class="welcome-hero">
-            <h1>TRÚC LÂM ĐỘC TÔN</h1>
-            <p>Đọc cam kết trước khi vào sảnh chơi, chúc các bạn sớm là 1 vị VUA CỜ TƯỚNG PINETWORK</p>
-        </div>
+    <div style="display:flex; flex-direction:column; gap:12px; align-items:center;">
+        <button id="pi-login-btn"
+                onclick="loginPi()"
+                style="background:#6c5ce7; padding:15px 40px; font-size:1.05rem; min-width:240px; display:none;">
+            ĐĂNG NHẬP PI
+        </button>
 
-        <div class="welcome-commit-box">
-            <div class="welcome-commit-title">9 CAM KẾT CỘNG ĐỒNG</div>
+        <button id="google-login-btn"
+                onclick="loginGoogle()"
+                style="background:#ea4335; padding:15px 40px; font-size:1.05rem; min-width:240px;">
+            ĐĂNG NHẬP GOOGLE
+        </button>
 
-            <div class="welcome-commit-list">
-                <div class="welcome-commit-item">
-                    <div class="welcome-commit-no">1</div>
-                    <div class="welcome-commit-text">
-                        <strong>Về đồng Pi của các bạn:</strong>
-                        <span>Đồng Pi của các bạn là mồ hôi công sức, đội ngũ cam kết giữ gìn minh bạch 100%. Mọi giao dịch đều đi qua cổng Pi SDK chính thức, hiện rõ trên Blockchain để các bạn tự mình kiểm tra. Không có chuyện 'mất hút' hay mập mờ ở đây."</span>
-                    </div>
-                </div>
-
-                <div class="welcome-commit-item">
-                    <div class="welcome-commit-no">2</div>
-                    <div class="welcome-commit-text">
-                        <strong>Chuyện bảo mật là trên hết:</strong>
-                        <span>Thông tin của các bạn, đội ngũ giữ kỹ như giữ bí kíp cờ thế. Mọi dữ liệu đều được khóa chặt trên Firebase bằng mã hóa xịn. Cam kết không bao giờ đem bán hay tiết lộ cho bất kỳ ai. các bạn cứ yên tâm mà cầm quân</span>
-                    </div>
-                </div>
-
-                <div class="welcome-commit-item">
-                    <div class="welcome-commit-no">3</div>
-                    <div class="welcome-commit-text">
-                        <strong>Cờ sạch, cờ đẹp:</strong>
-                        <span>Trúc Lâm Tiên Cảnh là nơi so trình trí tuệ, không phải chỗ cho máy móc (Engine) tung hoành. đội ngũ cam kết quét gian lận liên tục. ai dùng phần mềm can thiệp là đội ngũ cho 'ra đảo' vĩnh viễn, trả lại sự công bằng cho các bạn kỳ thủ chân chính</span>
-                    </div>
-                </div>
-
-                <div class="welcome-commit-item">
-                    <div class="welcome-commit-no">4</div>
-                    <div class="welcome-commit-text">
-                        <strong>Sống và chơi theo pháp luật:</strong>
-                        <span>Game này lập ra để mình giao lưu, giải trí trí tuệ lúc thảnh thơi. đội ngũ cam kết tuân thủ đúng luật pháp, chỉ chơi cờ giải trí, không tổ chức cờ bạc, sát phạt tiền nong trái phép dưới mọi hình thức</span>
-                    </div>
-                </div>
-
-                <div class="welcome-commit-item">
-                    <div class="welcome-commit-no">5</div>
-                    <div class="welcome-commit-text">
-                        <strong>Tài sản là của bạn:</strong>
-                        <span>Dù là số dư Pi hay những vật phẩm mày cày cuốc được trong game, đó là tài sản của bạn. đội ngũ cam kết không bao giờ tự ý thu hồi hay làm khó dễ. bạn chơi được, bạn giữ được</span>
-                    </div>
-                </div>
-
-                <div class="welcome-commit-item">
-                    <div class="welcome-commit-no">6</div>
-                    <div class="welcome-commit-text">
-                        <strong>Có lỗi là có đội ngũ hỗ trợ:</strong>
-                        <span>Làm app không tránh khỏi lúc trục trặc, nhưng đội ngũ cam kết không bỏ rơi bạn. Gặp lỗi nạp Pi hay bàn cờ bị lag, cứ hú một tiếng, đội ngũ sẽ trực chiến xử lý ngay lập tức để ván cờ không bị gián đoạn</span>
-                    </div>
-                </div>
-
-                <div class="welcome-commit-item">
-                    <div class="welcome-commit-no">7</div>
-                    <div class="welcome-commit-text">
-                        <strong>Sân chơi văn minh:</strong>
-                        <span>Chơi cờ là nét đẹp văn hóa. đội ngũ cam kết giữ cho phòng chat luôn sạch sẽ, không để những lời lẽ thiếu văn hóa làm ảnh hưởng đến tinh thần các bạn. Ai vô văn hóa, đội ngũ mời ra ngoài ngay để giữ chất 'Tiên Cảnh</span>
-                    </div>
-                </div>
-
-                <div class="welcome-commit-item">
-                    <div class="welcome-commit-no">8</div>
-                    <div class="welcome-commit-text">
-                        <strong>Nâng cấp không ngừng:</strong>
-                        <span>đội ngũ không để cái app này dậm chân tại chỗ. Cam kết dồn tâm huyết để nâng cấp server mỗi ngày, thêm tính năng mới cho bạn trãi nghiệm cho sướng. Game ngày càng mượt, giao diện ngày càng đẹp là lời hứa danh dự của đội ngũ</span>
-                    </div>
-                </div>
-
-                <div class="welcome-commit-item">
-                    <div class="welcome-commit-no">9</div>
-                    <div class="welcome-commit-text">
-                        <strong>Trách nhiệm tới cùng:</strong>
-                        <span>Nếu có bất kỳ tranh chấp hay hiểu lầm nào, đội ngũ cam kết sẽ ngồi lại phân xử dựa trên dữ liệu thật của hệ thống. Luônủa anh em  đặt quyền lợi chính đáng clên hàng đầu để đảm bảo sự công tâm, không thiên vị bất cứ ai</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="welcome-bottom-note">
-                phiên bản : 1.00
-            </div>
-        </div>
+        <button id="guest-login-btn"
+                onclick="loginGuest()"
+                style="background:#00b894; padding:12px 40px; font-size:0.98rem; min-width:240px;">
+            VÀO TEST GIAO DIỆN
+        </button>
     </div>
 </div>
 
@@ -2967,16 +2768,7 @@ appId: "1:818801429743:web:27ed0c854b8be5c8a95f1a"
 };
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
-const db = firebase.database();
 const provider = new firebase.auth.GoogleAuthProvider();
-
-let currentRoomId = null;
-let currentRoomMode = null;
-let mySide = null;
-let roomValueRef = null;
-let roomChatRef = null;
-let lastRoomBoardHash = "";
-let lastDrawRequestAt = 0;
 
 provider.setCustomParameters({
     prompt: 'select_account'
@@ -3010,20 +2802,15 @@ function applyLoggedInUI(displayName, photoURL) {
 }
 
 function showLoginChoices() {
-    const piBtn = document.getElementById("welcome-pi-btn");
-    const googleBtn = document.getElementById("welcome-google-btn");
-    const oldPiBtn = document.getElementById("pi-login-btn");
-    const oldGoogleBtn = document.getElementById("google-login-btn");
+    const piBtn = document.getElementById("pi-login-btn");
+    const googleBtn = document.getElementById("google-login-btn");
     const guestBtn = document.getElementById("guest-login-btn");
 
     const isPi = !!window.Pi;
 
-    if (piBtn) piBtn.style.display = isPi ? "inline-flex" : "none";
-    if (googleBtn) googleBtn.style.display = "inline-flex";
-
-    if (oldPiBtn) oldPiBtn.style.display = "none";
-    if (oldGoogleBtn) oldGoogleBtn.style.display = "none";
-    if (guestBtn) guestBtn.style.display = "none";
+    if (piBtn) piBtn.style.display = isPi ? "inline-block" : "none";
+    if (googleBtn) googleBtn.style.display = "inline-block";
+    if (guestBtn) guestBtn.style.display = "inline-block";
 }
 
 function loginGuest() {
@@ -3111,23 +2898,28 @@ function switchAccount() {
 
 
 // --- HỆ THỐNG ÂM THANH (KHỚP VỚI HÌNH THƯ MỤC CỦA MÀY) ---
-// Thêm đoạn này vào đầu thẻ <script>
-const gameSounds = {
-    move: new Audio('sounds/move.mp3'),      // Tiếng đi quân
-    capture: new Audio('sounds/capture.mp3'),// Tiếng ăn quân
-    check: new Audio('sounds/check.mp3'),    // Tiếng chiếu tướng
-    start: new Audio('sounds/start.mp3'),    // Tiếng bắt đầu
-    win: new Audio('sounds/win.mp3'),        // Tiếng thắng
-    lose: new Audio('sounds/lose.mp3')       // Tiếng thua
+const sounds = {
+welcome: new Audio('sounds/welcome.mp3'),
+click: new Audio('sounds/click.mp3'),
+capture: new Audio('sounds/capture.mp3'),
+check: new Audio('sounds/check.mp3'),
+win: new Audio('sounds/win.mp3'),
+lose: new Audio('sounds/lose.mp3'),
+heartbeat: new Audio('sounds/heartbeat.mp3'),
+timeout: new Audio('sounds/timeout.mp3'),
+bgm: new Audio('sounds/bgm.mp3')
 };
+sounds.bgm.loop = true;
+sounds.bgm.volume = 0.4;
+sounds.heartbeat.loop = true; 
 
-// Hàm bổ trợ để phát âm thanh không bị chồng chéo
-function playSound(name) {
-    if (gameSounds[name]) {
-        gameSounds[name].currentTime = 0; 
-        gameSounds[name].play().catch(e => console.warn("Lỗi phát âm thanh:", e));
-    }
+function playSnd(name) {
+if (sounds[name]) {
+sounds[name].currentTime = 0;
+sounds[name].play().catch(e => console.log("Chờ tương tác để phát nhạc..."));
 }
+}
+
 function sendMessage() {
 // 1. Tìm ô nhập liệu
 var input = document.getElementById('match-input');
@@ -3227,28 +3019,21 @@ function selectGame(mode) {
     isCoUp = (mode === 'co-up');
     hideHomeUI();
     document.getElementById("game-arena").style.display = "block";
+    resetToStartup();
 }
+function backToMenu() {
+    if (confirm("Thoát ván đấu này?")) {
+        showHomeUI();
+        document.getElementById("game-arena").style.display = "none";
+        clearInterval(interval);
+        clearInterval(readyInterval);
+        sounds.bgm.pause();
+        sounds.heartbeat.pause();
 
-async function backToMenu() {
-    if (!confirm("Thoát ván đấu này?")) return;
-
-    await leaveRealtimeMatch();
-
-    showHomeUI();
-    document.getElementById("game-arena").style.display = "none";
-  clearInterval(interval);
-sounds.bgm.pause();
-sounds.bgm.currentTime = 0;
-sounds.heartbeat.pause();
-sounds.heartbeat.currentTime = 0;
-
-    const overlay = document.getElementById("ready-overlay");
-    if (overlay) overlay.style.display = "none";
-
-    const chatContent = document.getElementById("match-content-popup");
-    if (chatContent) {
-        chatContent.innerHTML = '<p style="color:#55efc4;">Hệ thống: Vào việc đi mậy!</p>';
+        const overlay = document.getElementById("ready-overlay");
+        if (overlay) overlay.style.display = "none";
     }
+
 }
 function shuffle(array) {
 let currentIndex = array.length, randomIndex;
@@ -3270,14 +3055,13 @@ let selectedPiece = null, luotDi = 'do', isGameOver = false, timeDo = 30, timeDe
 let isCoUp = false;
 let lastMoveFrom = null;
 let lastMoveTo = null;
-let historyMoveNo = 0;
-let viewSide = 'do'; // 'do' = góc nhìn đỏ, 'den' = góc nhìn đen
 
 let pendingGameMode = 'co-tuong';
-let readyDo = false; 
+let readyDo = false;
 let readyDen = false;
 let readyTime = 30;
 let readyInterval = null;
+let readyStarting = false;
 function formatTime(s) {
     const m = Math.floor(s / 60);
     const sec = s % 60;
@@ -3306,11 +3090,9 @@ if (timeDen <= 0) endGame("HẾT GIỜ", "ĐỎ THẮNG");
 
 function endGame(main, sub) {
     isGameOver = true;
-   clearInterval(interval);
-sounds.bgm.pause();
-sounds.bgm.currentTime = 0;
-sounds.heartbeat.pause();
-sounds.heartbeat.currentTime = 0;
+    clearInterval(interval);
+    sounds.bgm.pause();
+    sounds.heartbeat.pause();
 
     if (sub.includes("ĐỎ THẮNG")) playSnd('win');
     else playSnd('lose');
@@ -3319,7 +3101,7 @@ sounds.heartbeat.currentTime = 0;
     document.getElementById("main-result").innerText = main;
     document.getElementById("sub-result").innerText = sub;
     wrap.style.transform = "translate(-50%, -50%) scale(1)";
-saveMatchResultToSeparateHistory(main, sub);
+
     autoResetNextMatch();
 }
 
@@ -3520,7 +3302,6 @@ const overlay = document.getElementById("ready-overlay");
 if (overlay && getComputedStyle(overlay).display !== "none") return;
 
 if (isGameOver) return;
-if (currentRoomId && mySide && luotDi !== mySide) return;
 if (sounds.bgm.paused) playSnd('bgm');
 const rect = board.getBoundingClientRect();
 const fX = columns.reduce((p, c) => Math.abs(c - ((e.clientX - rect.left) / rect.width) * 100) < Math.abs(p - ((e.clientX - rect.left) / rect.width) * 100) ? c : p);
@@ -3556,15 +3337,7 @@ if (laBiChieu(luotDi, mt)) {
 alert("Không được để Tướng bị chiếu!");
 return;
 }
-const movedPieceSide = selectedPiece.dataset.side;
-const movedPieceType = selectedPiece.dataset.type;
-const wasUpBeforeMove = selectedPiece.dataset.isUp === "true";
 
-const capturedInfo = target ? {
-    side: target.dataset.side,
-    type: target.dataset.type,
-    isUp: target.dataset.isUp === "true"
-} : null;
 if (target) {
 target.remove();
 playSnd('capture');
@@ -3606,7 +3379,7 @@ document.querySelectorAll('.piece').forEach(p => p.classList.remove('is-chieu'))
 
 // 2. Check xem có bị chiếu không
 if (laBiChieu(luotDi, taoMaTran())) {
-   playSnd('check');
+playSnd('check');
 playSnd('heartbeat');
 
 // 3. Tìm quân Tướng và gắn hiệu ứng
@@ -3625,19 +3398,6 @@ if (checkMate(luotDi)) endGame("CHIẾU BÍ", `BÊN ${luotDi === 'do' ? 'ĐEN' :
 if (sounds.heartbeat) sounds.heartbeat.pause();
 }
 }, 200);
-if (currentRoomId) {
-    pushMoveToSeparateHistory({
-        side: movedPieceSide,
-        piece: movedPieceType,
-        from: { c: c1, r: r1 },
-        to: { c: c2, r: r2 },
-        captured: capturedInfo,
-        revealed: isCoUp && wasUpBeforeMove,
-        nextTurn: luotDi
-    });
-
-    syncRoomFromBoard();
-}
 
 } else {
 selectedPiece.classList.remove("selected");
@@ -3648,8 +3408,8 @@ clearMoveHints();
 };
 
 function resetToStartup() {
-playSnd('start');
-playSnd('bgm');
+clearInterval(interval);
+playSnd('welcome'); playSnd('bgm');
 isGameOver = false; luotDi = 'do'; timeDo = 540; timeDen = 540;
 document.getElementById("victory-wrap").style.transform = "translate(-50%, -50%) scale(0)";
 document.querySelectorAll(".piece").forEach(p => p.remove());
@@ -3676,391 +3436,6 @@ posDen.forEach((p, i) => createPiece(p.c, p.r, den_pieces[i], isCoUp));
 posDo.forEach((p, i) => createPiece(p.c, p.r, do_pieces[i], isCoUp));
 
 startTimer();
-}
-function getCurrentPlayerProfile() {
-    const user = auth.currentUser;
-    return {
-        uid: user?.uid || ("guest_" + (localStorage.getItem("user-name-display") || "guest")),
-        name: localStorage.getItem("user-name-display") || user?.displayName || "Người chơi",
-        photo: localStorage.getItem("user-photo") || user?.photoURL || "images/do_tuong.png"
-    };
-}
-
-function updateTurnUIOnly() {
-    turnBox.innerText = `Lượt: ${luotDi === 'do' ? 'ĐỎ' : 'ĐEN'}`;
-    timerDoEl.className = "timer-box timer-inline";
-    timerDenEl.className = "timer-box timer-inline";
-
-    if (luotDi === 'do') {
-        timerDoEl.classList.add("active-do");
-    } else {
-        timerDenEl.classList.add("active-den");
-    }
-}
-
-function exportBoardState() {
-    return Array.from(document.querySelectorAll(".piece")).map(p => ({
-        c: columns.indexOf(parseFloat(p.style.left)),
-        r: rows.indexOf(parseFloat(p.style.top)),
-        side: p.dataset.side,
-        type: p.dataset.type,
-        isUp: p.dataset.isUp === "true",
-        src: p.getAttribute("src") || p.src
-    }));
-}
-
-function applyBoardStateFromRoom(pieces) {
-    document.querySelectorAll(".piece").forEach(p => p.remove());
-    clearMoveHints();
-    clearLastMoveMarks();
-    selectedPiece = null;
-
-    (pieces || []).forEach(item => {
-        const img = document.createElement("img");
-        img.className = "piece";
-        img.dataset.side = item.side;
-        img.dataset.type = item.type;
-        img.dataset.isUp = item.isUp ? "true" : "false";
-        img.src = item.src;
-        img.style.left = columns[item.c] + "%";
-        img.style.top = rows[item.r] + "%";
-        board.appendChild(img);
-    });
-}
-
-function renderPlayersFromRoom(room) {
-    const doPlayer = room?.players?.do || {};
-    const denPlayer = room?.players?.den || {};
-
-    const doName = document.getElementById("player-do-name");
-    const denName = document.getElementById("player-den-name");
-    const doAvatar = document.getElementById("player-do-avatar");
-    const denAvatar = document.getElementById("player-den-avatar");
-
-    if (doName) doName.innerText = doPlayer.name || "BÊN ĐỎ";
-    if (denName) denName.innerText = denPlayer.name || "ĐANG CHỜ...";
-    if (doAvatar) doAvatar.src = doPlayer.photo || "images/do_tuong.png";
-    if (denAvatar) denAvatar.src = denPlayer.photo || "images/do_tuong.png";
-}
-
-function cleanupRoomListeners() {
-    if (roomValueRef) roomValueRef.off();
-    if (roomChatRef) roomChatRef.off();
-    roomValueRef = null;
-    roomChatRef = null;
-    lastRoomBoardHash = "";
-}
-
-async function leaveRealtimeMatch() {
-    const roomId = currentRoomId;
-    const side = mySide;
-    const mode = currentRoomMode;
-    const me = getCurrentPlayerProfile();
-
-    cleanupRoomListeners();
-
-    currentRoomId = null;
-    mySide = null;
-    currentRoomMode = null;
-    readyDo = false;
-    readyDen = false;
-
-    if (!roomId) return;
-
-    try {
-        if (mode) {
-            const waitingRef = db.ref("waitingRooms/" + mode);
-            const waitingSnap = await waitingRef.once("value");
-            const waiting = waitingSnap.val();
-            if (waiting && waiting.roomId === roomId && waiting.uid === me.uid) {
-                await waitingRef.remove();
-            }
-        }
-
-        if (side) {
-            await db.ref("matches/" + roomId + "/players/" + side).remove();
-            await db.ref("matches/" + roomId + "/ready/" + side).remove();
-        }
-    } catch (err) {
-        console.error("Rời phòng lỗi:", err);
-    }
-}
-
-function syncRoomFromBoard(extra = {}) {
-    if (!currentRoomId) return;
-
-    db.ref("matches/" + currentRoomId).update({
-        board: exportBoardState(),
-        turn: luotDi,
-        isCoUp,
-        timeDo,
-        timeDen,
-        lastMoveFrom: lastMoveFrom || null,
-        lastMoveTo: lastMoveTo || null,
-        updatedAt: firebase.database.ServerValue.TIMESTAMP,
-        ...extra
-    });
-}
-function getHistoryRef(roomId = currentRoomId) {
-    return db.ref("matchHistories/" + roomId);
-}
-
-async function resetSeparateHistory(roomId = currentRoomId) {
-    if (!roomId) return;
-
-    historyMoveNo = 0;
-
-    const roomSnap = await db.ref("matches/" + roomId).once("value");
-    const room = roomSnap.val() || {};
-
-    await getHistoryRef(roomId).set({
-        roomId,
-        mode: room.mode || currentRoomMode || getCurrentMode(),
-        players: room.players || null,
-        createdAt: firebase.database.ServerValue.TIMESTAMP,
-        endedAt: null,
-        winner: null,
-        winReason: null,
-        moves: {}
-    });
-}
-
-function pushMoveToSeparateHistory(payload) {
-    if (!currentRoomId) return Promise.resolve();
-
-    historyMoveNo += 1;
-
-    return db.ref("matchHistories/" + currentRoomId + "/moves").push({
-        moveNo: historyMoveNo,
-        ...payload,
-        at: firebase.database.ServerValue.TIMESTAMP
-    });
-}
-
-function saveMatchResultToSeparateHistory(main, sub) {
-    if (!currentRoomId) return Promise.resolve();
-
-    let winner = null;
-    if (sub.includes("ĐỎ THẮNG")) winner = "do";
-    else if (sub.includes("ĐEN THẮNG")) winner = "den";
-    else if (main.includes("HÒA") || sub.includes("HÒA")) winner = "hoa";
-
-    return getHistoryRef(currentRoomId).update({
-        endedAt: firebase.database.ServerValue.TIMESTAMP,
-        winner,
-        winReason: main,
-        resultText: sub
-    });
-}
-async function maybeStartRoomFromHost(room) {
-    if (mySide !== "do") return;
-    if (room.status !== "waiting") return;
-    if (!room.players?.do || !room.players?.den) return;
-    if (!(room.ready?.do && room.ready?.den)) return;
-    if (Array.isArray(room.board) && room.board.length) return;
-
-    isCoUp = room.mode === "co-up";
-    resetToStartup();
-
-    const freshBoard = exportBoardState();
-
-    await db.ref("matches/" + currentRoomId).update({
-        status: "playing",
-        isCoUp,
-        board: freshBoard,
-        turn: "do",
-        timeDo: 540,
-        timeDen: 540,
-        lastMoveFrom: null,
-        lastMoveTo: null,
-        winner: null,
-        winReason: null,
-        drawRequest: null
-    });
-    await resetSeparateHistory(currentRoomId);
-}
-
-function bindRoom(roomId) {
-    cleanupRoomListeners();
-
-    const listeningRoomId = roomId;
-
-    currentRoomId = listeningRoomId;
-    roomValueRef = db.ref("matches/" + listeningRoomId);
-    roomChatRef = db.ref("matches/" + listeningRoomId + "/chat");
-
-    const content = document.getElementById("match-content-popup");
-    if (content) {
-        content.innerHTML = '<p style="color:#55efc4;">Hệ thống: Đang ghép phòng...</p>';
-    }
-
-        roomValueRef.on("value", async (snap) => {
-        if (currentRoomId !== listeningRoomId) return;
-
-        const room = snap.val();
-        if (!room) return;
-
-        currentRoomMode = room.mode || currentRoomMode;
-        readyDo = !!room.ready?.do;
-        readyDen = !!room.ready?.den;
-
-        renderPlayersFromRoom(room);
-        updateReadyUI();
-
-                if (room.players?.do && room.players?.den) {
-            if (room.status === "waiting") {
-                showReadyOverlay(room.mode);
-
-                if (readyDo && readyDen && mySide === "do") {
-                    await maybeStartRoomFromHost(room);
-                }
-            } else if (room.status === "playing") {
-                closeReadyOverlay();
-            }
-        }
-
-        const newBoardHash = JSON.stringify(room.board || []);
-        if (newBoardHash && newBoardHash !== lastRoomBoardHash) {
-            lastRoomBoardHash = newBoardHash;
-
-            applyBoardStateFromRoom(room.board || []);
-            isCoUp = !!room.isCoUp;
-            luotDi = room.turn || "do";
-            timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
-            timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
-
-            timerDoEl.innerText = formatTime(timeDo);
-            timerDenEl.innerText = formatTime(timeDen);
-
-            lastMoveFrom = room.lastMoveFrom || null;
-            lastMoveTo = room.lastMoveTo || null;
-
-            updateTurnUIOnly();
-
-            if (lastMoveFrom && lastMoveTo) {
-                drawLastMoveMarks();
-            }
-
-            startTimer();
-        }
-
-               if (room.drawRequest && room.drawRequest.from !== mySide && room.drawRequest.at !== lastDrawRequestAt) {
-            lastDrawRequestAt = room.drawRequest.at;
-
-            const ok = confirm("Đối thủ xin hòa. Đồng ý không?");
-            if (currentRoomId !== listeningRoomId) return;
-
-            if (ok) {
-                await db.ref("matches/" + listeningRoomId).update({
-                    winner: "hoa",
-                    winReason: "hoa",
-                    drawRequest: null
-                });
-            } else {
-                await db.ref("matches/" + listeningRoomId + "/drawRequest").remove();
-            }
-        }
-
-        if (room.winner && !isGameOver) {
-            if (room.winner === "hoa") {
-                endGame("HÒA CỜ", "2 BÊN HÒA");
-            } else {
-                endGame(
-                    room.winReason === "dauhang" ? "ĐẦU HÀNG" : "CHIẾU BÍ",
-                    `BÊN ${room.winner === "do" ? "ĐỎ" : "ĐEN"} THẮNG`
-                );
-            }
-        }
-
-        await maybeStartRoomFromHost(room);
-    });
-
-    roomChatRef.on("child_added", (snap) => {
-        const data = snap.val();
-        const content = document.getElementById("match-content-popup");
-        if (!data || !content) return;
-
-        const mine = data.side === mySide;
-        const msg = document.createElement("div");
-        msg.style.marginBottom = "6px";
-        msg.innerHTML = `<b style="color:${mine ? "#55efc4" : "#ffeaa7"};">${mine ? "Mầy" : (data.name || "Đối thủ")}:</b> <span style="word-break:break-word;">${data.text || ""}</span>`;
-        content.appendChild(msg);
-        content.scrollTop = content.scrollHeight;
-    });
-}
-
-async function joinOrCreateRealtimeMatch(mode) {
-    hideHomeUI();
-    document.getElementById("game-arena").style.display = "block";
-
-    const chatPopup = document.getElementById("match-chat-popup");
-    const chatBtn = document.getElementById("match-chat-btn");
-
-    if (window.innerWidth <= 600) {
-        if (chatPopup) chatPopup.style.display = "none";
-        if (chatBtn) chatBtn.style.display = "flex";
-    } else {
-        if (chatPopup) chatPopup.style.display = "flex";
-        if (chatBtn) chatBtn.style.display = "none";
-    }
-
-    const me = getCurrentPlayerProfile();
-    currentRoomMode = mode;
-
-    const waitingRef = db.ref("waitingRooms/" + mode);
-    const waitingSnap = await waitingRef.once("value");
-    const waiting = waitingSnap.val();
-
-    if (waiting && waiting.uid !== me.uid) {
-        mySide = "den";
-        currentRoomId = waiting.roomId;
-
-        await db.ref("matches/" + currentRoomId + "/players/den").set(me);
-        await db.ref("matches/" + currentRoomId + "/ready/den").set(false);
-        await waitingRef.remove();
-
-        bindRoom(currentRoomId);
-    } else {
-        const newRoomRef = db.ref("matches").push();
-        currentRoomId = newRoomRef.key;
-        mySide = "do";
-
-        await newRoomRef.set({
-            mode,
-            status: "waiting",
-            turn: "do",
-            isCoUp: mode === "co-up",
-            timeDo: 540,
-            timeDen: 540,
-            createdAt: firebase.database.ServerValue.TIMESTAMP,
-            players: {
-                do: me,
-                den: null
-            },
-            ready: {
-                do: false,
-                den: false
-            },
-            board: null,
-            lastMoveFrom: null,
-            lastMoveTo: null,
-            winner: null,
-            winReason: null,
-            drawRequest: null
-        });
-
-        await waitingRef.set({
-            roomId: currentRoomId,
-            uid: me.uid,
-            name: me.name,
-            createdAt: firebase.database.ServerValue.TIMESTAMP
-        });
-
-        bindRoom(currentRoomId);
-    }
-
-    showReadyOverlay(mode);
-    updateReadyUI();
 }
 function toggleProfileMenu(event) {
     event.stopPropagation();
@@ -4339,23 +3714,19 @@ if (amount === null) return;
 }
 
 async function openWallet(type) {
-    if (type === "nap") {
-        const napSo = prompt("Nhập số Pi muốn nạp:");
-        if (napSo === null) return;
-
-        const amount = Number(napSo);
-        if (!Number.isFinite(amount) || amount <= 0) {
-            alert("Số Pi nạp không hợp lệ.");
-            return;
-        }
-
-        await startPiDeposit(amount);
-        return;
+  if (type === "nap") {
+    if (!piAuth) {
+      const auth = await loginPi();
+      if (!auth) return;
     }
 
-    if (type === "rut") {
-        await processWithdraw();
-    }
+    await startPiDeposit(10);
+    return;
+  }
+
+  if (type === "rut") {
+    await processWithdraw();
+  }
 }
 // Dòng 708: Hàm mở bảng chỉnh sửa
 function openEditProfile() {
@@ -4482,33 +3853,25 @@ wrap.style.transform = "translate(-50%, -50%) scale(1)";
 }
 
 function handleMatchAction(type) {
-    closeActionMenu();
+closeActionMenu();
 
-    if (type === "thoat") {
-        backToMenu();
-        return;
-    }
+if (type === "thoat") {
+backToMenu();
+return;
+}
 
-    if (!currentRoomId || !mySide) return;
+if (type === "dauhang") {
+if (confirm("Đầu hàng ván này?")) {
+endGame("ĐẦU HÀNG", `BÊN ${luotDi === 'do' ? 'ĐEN' : 'ĐỎ'} THẮNG`);
+}
+return;
+}
 
-    if (type === "dauhang") {
-        if (confirm("Đầu hàng ván này?")) {
-            db.ref("matches/" + currentRoomId).update({
-                winner: mySide === "do" ? "den" : "do",
-                winReason: "dauhang"
-            });
-        }
-        return;
-    }
-
-    if (type === "hoa") {
-        if (confirm("Gửi xin hòa cho đối thủ?")) {
-            db.ref("matches/" + currentRoomId + "/drawRequest").set({
-                from: mySide,
-                at: Date.now()
-            });
-        }
-    }
+if (type === "hoa") {
+if (confirm("Xử hòa ván này?")) {
+hoaTran();
+}
+}
 }
 
 document.addEventListener("click", function (e) {
@@ -4557,41 +3920,48 @@ if (menu) {
 }
 }
 function updateReadyUI() {
-    const countdown = document.getElementById("ready-countdown");
-    const doStatus = document.getElementById("ready-do-status");
-    const denStatus = document.getElementById("ready-den-status");
-    const doBtn = document.getElementById("ready-do-btn");
-    const denBtn = document.getElementById("ready-den-btn");
+const countdown = document.getElementById("ready-countdown");
+const doStatus = document.getElementById("ready-do-status");
+const denStatus = document.getElementById("ready-den-status");
+const doBtn = document.getElementById("ready-do-btn");
+const denBtn = document.getElementById("ready-den-btn");
 
-    if (countdown) countdown.innerText = readyTime;
+if (countdown) countdown.innerText = readyTime;
 
-    if (doStatus) {
-        doStatus.innerText = readyDo ? "ĐỎ: ĐÃ SẴN SÀNG" : "ĐỎ: CHƯA SẴN SÀNG";
-        doStatus.classList.toggle("ready-ok", readyDo);
-    }
-
-    if (denStatus) {
-        denStatus.innerText = readyDen ? "ĐEN: ĐÃ SẴN SÀNG" : "ĐEN: CHƯA SẴN SÀNG";
-        denStatus.classList.toggle("ready-ok", readyDen);
-    }
-
-    if (doBtn) {
-        doBtn.style.display = mySide === "do" ? "block" : "none";
-        doBtn.disabled = mySide !== "do" || readyDo;
-        doBtn.innerText = readyDo ? "ĐỎ ĐÃ SẴN SÀNG" : "ĐỎ SẴN SÀNG";
-    }
-
-    if (denBtn) {
-        denBtn.style.display = mySide === "den" ? "block" : "none";
-        denBtn.disabled = mySide !== "den" || readyDen;
-        denBtn.innerText = readyDen ? "ĐEN ĐÃ SẴN SÀNG" : "ĐEN SẴN SÀNG";
-    }
+if (doStatus) {
+doStatus.innerText = readyDo ? "ĐỎ: ĐÃ SẴN SÀNG" : "ĐỎ: CHƯA SẴN SÀNG";
+doStatus.classList.toggle("ready-ok", readyDo);
 }
-    function closeReadyOverlay() {
-    const overlay = document.getElementById("ready-overlay");
-    if (overlay) overlay.style.display = "none";
-    clearInterval(readyInterval);
+
+if (denStatus) {
+denStatus.innerText = readyDen ? "ĐEN: ĐÃ SẴN SÀNG" : "ĐEN: CHƯA SẴN SÀNG";
+denStatus.classList.toggle("ready-ok", readyDen);
 }
+
+if (doBtn) {
+doBtn.innerText = readyDo ? "ĐỎ ĐÃ SẴN SÀNG" : "ĐỎ SẴN SÀNG";
+doBtn.disabled = readyDo;
+doBtn.style.opacity = readyDo ? "0.82" : "1";
+doBtn.style.cursor = readyDo ? "default" : "pointer";
+}
+
+if (denBtn) {
+denBtn.innerText = readyDen ? "ĐEN ĐÃ SẴN SÀNG" : "ĐEN SẴN SÀNG";
+denBtn.disabled = readyDen;
+denBtn.style.opacity = readyDen ? "0.82" : "1";
+denBtn.style.cursor = readyDen ? "default" : "pointer";
+}
+}
+
+function closeReadyOverlay() {
+const overlay = document.getElementById("ready-overlay");
+if (overlay) {
+    overlay.style.display = "none";
+    overlay.style.pointerEvents = "none";
+}
+clearInterval(readyInterval);
+}
+
 function failReadyAndBackHome() {
     closeReadyOverlay();
     showHomeUI();
@@ -4599,31 +3969,23 @@ function failReadyAndBackHome() {
 }
 
 function startReadyCountdown() {
-    clearInterval(readyInterval);
+clearInterval(readyInterval);
+readyInterval = setInterval(() => {
+readyTime--;
+updateReadyUI();
 
-    readyInterval = setInterval(() => {
-        const overlay = document.getElementById("ready-overlay");
-
-        if (!overlay || overlay.style.display === "none") {
-            clearInterval(readyInterval);
-            return;
-        }
-
-        readyTime--;
-        updateReadyUI();
-
-        if (readyTime <= 0) {
-            clearInterval(readyInterval);
-
-            if (!overlay || overlay.style.display === "none") return;
-
-            alert("Hết thời gian sẵn sàng!");
-            failReadyAndBackHome();
-        }
-    }, 1000);
+if (readyTime <= 0) {
+clearInterval(readyInterval);
+alert("Hết thời gian sẵn sàng!");
+failReadyAndBackHome();
+}
+}, 1000);
+}
+function getCurrentMode() {
+    return isCoUp ? 'co-up' : 'co-tuong';
 }
 
-async function changeMatch() {
+function changeMatch() {
     closeActionMenu();
 
     if (!confirm("Đổi sang bàn mới để tìm đối thủ khác?")) return;
@@ -4637,11 +3999,7 @@ async function changeMatch() {
     selectedPiece = null;
 
     document.getElementById("victory-wrap").style.transform = "translate(-50%, -50%) scale(0)";
-
-    const oldMode = currentRoomMode || getCurrentMode();
-
-    await leaveRealtimeMatch();
-    await joinOrCreateRealtimeMatch(oldMode);
+    showReadyOverlay(getCurrentMode());
 }
 
 function autoResetNextMatch() {
@@ -4650,34 +4008,73 @@ function autoResetNextMatch() {
         showReadyOverlay(getCurrentMode());
     }, 5000);
 }
-
 function showReadyOverlay(mode) {
     pendingGameMode = mode;
+    readyDo = false;
+    readyDen = false;
+    readyTime = 30;
+    readyStarting = false;
 
     const overlay = document.getElementById("ready-overlay");
-    if (!overlay) return;
-
-    const isHidden = getComputedStyle(overlay).display === "none";
-
-    if (isHidden) {
-        readyTime = 30;
+    if (overlay) {
         overlay.style.display = "flex";
-        startReadyCountdown();
+        overlay.style.pointerEvents = "auto";
     }
 
     updateReadyUI();
+    startReadyCountdown();
+}
+
+function tryStartReadyMatch() {
+if (!readyDo || !readyDen) return;
+if (readyStarting) return;
+
+readyStarting = true;
+clearInterval(readyInterval);
+
+const overlay = document.getElementById("ready-overlay");
+if (overlay) {
+    overlay.style.pointerEvents = "none";
+    overlay.style.display = "none";
+}
+
+setTimeout(() => {
+    try {
+        isCoUp = (pendingGameMode === 'co-up');
+        document.getElementById("game-arena").style.display = "block";
+        resetToStartup();
+    } finally {
+        readyStarting = false;
+    }
+}, 60);
 }
 
 function setReady(side) {
-    if (!currentRoomId) return;
-    if (side !== mySide) return;
+if (readyStarting) return;
+if (side === "do") readyDo = true;
+if (side === "den") readyDen = true;
 
-    db.ref("matches/" + currentRoomId + "/ready/" + side).set(true);
+updateReadyUI();
+tryStartReadyMatch();
 }
+function batDauTranDau(loai) {
+    hideHomeUI();
 
-async function batDauTranDau(loai) {
-    const mode = loai === 'up' ? 'co-up' : 'co-tuong';
-    await joinOrCreateRealtimeMatch(mode);
+    const gameArena = document.getElementById('game-arena');
+    if (gameArena) gameArena.style.display = 'block';
+
+    const chatPopup = document.getElementById('match-chat-popup');
+    const chatBtn = document.getElementById('match-chat-btn');
+
+    if (window.innerWidth <= 600) {
+        if (chatPopup) chatPopup.style.display = 'none';
+        if (chatBtn) chatBtn.style.display = 'flex';
+    } else {
+        if (chatPopup) chatPopup.style.display = 'flex';
+        if (chatBtn) chatBtn.style.display = 'none';
+    }
+
+    showReadyOverlay(loai === 'up' ? 'co-up' : 'co-tuong');
 }
 
 // Thêm sự kiện nhấn phím Enter để gửi
@@ -4730,23 +4127,20 @@ document.addEventListener("click", function (e) {
 }
 
 function sendMatchChat() {
-    const input = document.getElementById("match-input-popup");
-    if (!input) return;
+const input = document.getElementById("match-input-popup");
+const content = document.getElementById("match-content-popup");
+if (!input || !content) return;
 
-    const text = input.value.trim();
-    if (text === "") return;
-    if (!currentRoomId || !mySide) return;
+const text = input.value.trim();
+if (text === "") return;
 
-    const me = getCurrentPlayerProfile();
+const msg = document.createElement("div");
+msg.style.marginBottom = "5px";
+msg.innerHTML = `<b style="color:#55efc4;">Mầy:</b> <span style="word-break:break-word;">${text}</span>`;
+content.appendChild(msg);
 
-    db.ref("matches/" + currentRoomId + "/chat").push({
-        name: me.name,
-        side: mySide,
-        text,
-        at: firebase.database.ServerValue.TIMESTAMP
-    });
-
-    input.value = "";
+content.scrollTop = content.scrollHeight;
+input.value = "";
 }
 
 document.getElementById("match-input-popup")?.addEventListener("keypress", function(e) {
@@ -4981,12 +4375,14 @@ async function loginPi() {
     }
 }
 
-async function startPiDeposit(amount = 1) {
+async function startPiDeposit(amount = 10) {
   try {
     if (!window.Pi) {
-      alert("Nạp Pi chỉ chạy trong Pi Browser.");
+      alert("Nút này chỉ chạy trong Pi Browser.");
       return;
     }
+
+    // BẮT BUỘC xin quyền payments trước khi tạo payment
     if (!piAuth) {
       const auth = await loginPi();
       if (!auth) return;
@@ -4998,124 +4394,114 @@ async function startPiDeposit(amount = 1) {
       return;
     }
 
-    window.Pi.createPayment(
-      {
+    const paymentData = {
+      amount: napSo,
+      memo: `Nạp ${napSo} Pi test`,
+      metadata: {
+        type: "deposit",
         amount: napSo,
-        memo: `Nạp ${napSo} Pi vào game`,
-        metadata: {
-          type: "deposit",
-          amount: napSo,
-          time: Date.now()
+        time: Date.now()
+      }
+    };
+
+    const paymentCallbacks = {
+      onReadyForServerApproval: async function (paymentId) {
+        const res = await fetch("/api/pi/approve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ paymentId })
+        });
+
+        const data = await res.json().catch(() => ({}));
+        console.log("APPROVE RESPONSE:", data);
+
+        if (!res.ok || !data.ok) {
+          throw new Error(
+            data?.data?.error ||
+            data?.error ||
+            JSON.stringify(data) ||
+            "Approve payment thất bại"
+          );
         }
       },
-      {
-        onReadyForServerApproval: async function (paymentId) {
-          const res = await fetch("/api/pi/approve", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ paymentId })
-          });
 
-          const data = await res.json();
-          if (!res.ok || !data.ok) {
-            throw new Error("Approve payment thất bại");
-          }
-        },
+      onReadyForServerCompletion: async function (paymentId, txid) {
+        const res = await fetch("/api/pi/complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ paymentId, txid })
+        });
 
-        onReadyForServerCompletion: async function (paymentId, txid) {
-          const res = await fetch("/api/pi/complete", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ paymentId, txid })
-          });
+        const data = await res.json().catch(() => ({}));
+        console.log("COMPLETE RESPONSE:", data);
 
-          const data = await res.json();
-          if (!res.ok || !data.ok) {
-            throw new Error("Complete payment thất bại");
-          }
-
-          const currentBalance = getPiBalance();
-          setPiBalance(currentBalance + napSo);
-
-          alert(`Nạp thành công ${napSo} Pi test.`);
-        },
-
-        onCancel: function () {
-          alert("Người chơi đã hủy nạp Pi.");
-        },
-
-        onError: function (error) {
-          console.error("Pi payment lỗi:", error);
-          alert("Nạp Pi lỗi.");
+        if (!res.ok || !data.ok) {
+          throw new Error(
+            data?.data?.error ||
+            data?.error ||
+            JSON.stringify(data) ||
+            "Complete payment thất bại"
+          );
         }
+
+        const currentBalance = getPiBalance();
+        setPiBalance(currentBalance + napSo);
+        alert(`Nạp thành công ${napSo} Pi test.`);
+      },
+
+      onCancel: function (paymentId) {
+        console.log("PAYMENT CANCEL:", paymentId);
+        alert("Người dùng đã hủy thanh toán.");
+      },
+
+      onError: function (error, payment) {
+        console.error("PAYMENT ERROR:", error, payment);
+        alert(error?.message || "Thanh toán bị lỗi.");
       }
-    );
-  } catch (err) {
-    console.error(err);
-    alert(err.message || "Không nạp Pi được.");
+    };
+
+    const payment = await window.Pi.createPayment(paymentData, paymentCallbacks);
+    console.log("PAYMENT CREATED:", payment);
+
+  } catch (error) {
+    console.error("CREATE PAYMENT ERROR:", error);
+    alert(error?.message || "Không tạo được thanh toán.");
   }
 }
-    // Dán cái này vào cuối phần script để làm nhiệm vụ kiểm tra 2 bên
-function checkStartGame(players) {
-    if (!players) return;
-    const pIds = Object.keys(players);
-    
-    // Nếu đủ 2 người trong phòng
-    if (pIds.length === 2) {
-        const p1 = players[pIds[0]];
-        const p2 = players[pIds[1]];
+function openModal(id) {
+    document.querySelectorAll('.auth-modal').forEach(m => m.style.display = 'none');
+    document.getElementById(id).style.display = 'block';
+}
+function closeModal() {
+    document.querySelectorAll('.auth-modal').forEach(m => m.style.display = 'none');
+}
 
-        // Nếu cả hai đều đã bấm Sẵn Sàng (ready === true)
-        if (p1.ready === true && p2.ready === true) {
-            console.log("Cả hai đã SS -> Tắt bảng!");
-            
-            // Lệnh quan trọng nhất để tắt Menu và hiện Bàn Cờ
-            document.getElementById('home-menu').style.display = 'none';
-            document.getElementById('game-container').style.display = 'flex';
-            
-            // Nếu mày đã thêm âm thanh theo tao chỉ lúc nãy thì nó sẽ kêu ở đây
-            if (typeof playSound === 'function') playSound('start');
-        }
+function handleRegister() {
+    const u = document.getElementById('reg-user').value;
+    const p = document.getElementById('reg-pass').value;
+    if(u && p) {
+        localStorage.setItem('game_user', u);
+        localStorage.setItem('game_pass', p);
+        alert("Đăng ký xong rồi đó! Giờ đăng nhập đi.");
+        openModal('login-modal');
     }
 }
-    // HÀM LẮNG NGHE TRẠNG THÁI CỦA 2 NGƯỜI CHƠI
-function listenToPlayers() {
-    if (!roomRef) return;
 
-    roomRef.child('players').on('value', (snapshot) => {
-        const players = snapshot.val();
-        if (!players) return;
+function handleLogin() {
+    const u = document.getElementById('login-user').value;
+    const p = document.getElementById('login-pass').value;
+    const saveU = localStorage.getItem('game_user');
+    const saveP = localStorage.getItem('game_pass');
 
-        const pIds = Object.keys(players);
-        
-        // Hiển thị danh sách người chơi (nếu mày có hàm này rồi)
-        if (typeof updatePlayerList === 'function') {
-            updatePlayerList(players);
-        }
-
-        // KIỂM TRA ĐIỀU KIỆN VÀO TRẬN
-        if (pIds.length === 2) {
-            const p1 = players[pIds[0]];
-            const p2 = players[pIds[1]];
-
-            // Nếu cả hai đều bấm Sẵn Sàng (ready: true)
-            if (p1.ready === true && p2.ready === true) {
-                console.log("Cả hai đã SS! Đang vào trận...");
-                
-                // 1. Tắt Menu SS
-                const menu = document.getElementById('home-menu');
-                if (menu) menu.style.display = 'none';
-                
-                // 2. Hiện bàn cờ
-                const gameContainer = document.getElementById('game-container');
-                if (gameContainer) gameContainer.style.display = 'flex';
-
-                // 3. Phát âm thanh (nếu mày đã thêm hàm playSound ở bước trước)
-                if (typeof playSound === 'function') playSound('start');
-            }
-        }
-    });
+    if(u === saveU && p === saveP && u !== null) {
+        // ĐĂNG NHẬP ĐÚNG -> XÓA MÀN HÌNH CHỜ ĐỂ LỘ RA SẢNH GAME
+        document.getElementById('landing-page').style.display = 'none';
+        alert("Đã vào sảnh Trúc Lâm!");
+    } else {
+        alert("Sai tài khoản rồi mậy!");
+    }
 }
+
 </script>
 </body>
 
