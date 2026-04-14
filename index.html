@@ -84,6 +84,52 @@ color: #ffeaa7;
 box-shadow: 0 0 15px #fdcb6e;
 }
 
+.active-do {
+    --ring-color: #ffffff;
+    --ring-glow: rgba(255, 255, 255, 0.38);
+    border-color: transparent;
+    color: #ff7675;
+    box-shadow:
+        0 0 10px rgba(255, 255, 255, 0.20),
+        0 0 18px rgba(255, 255, 255, 0.35),
+        inset 0 0 10px rgba(255,255,255,0.04);
+}
+
+.active-den {
+    --ring-color: #ffffff;
+    --ring-glow: rgba(255, 255, 255, 0.38);
+    border-color: transparent;
+    color: #ffeaa7;
+    box-shadow:
+        0 0 10px rgba(255, 255, 255, 0.20),
+        0 0 18px rgba(255, 255, 255, 0.35),
+        inset 0 0 10px rgba(255,255,255,0.04);
+}
+
+.timer-inline.danger-time {
+    --ring-color: #ff3b30 !important;
+    --ring-glow: rgba(255, 59, 48, 0.58) !important;
+    color: #ffd9d6 !important;
+    animation: timerDangerPulse 0.7s infinite alternate;
+}
+
+@keyframes timerDangerPulse {
+    from {
+        transform: scale(1);
+        box-shadow:
+            0 0 10px rgba(255, 59, 48, 0.35),
+            0 0 16px rgba(255, 59, 48, 0.45),
+            inset 0 0 10px rgba(255,255,255,0.04);
+    }
+    to {
+        transform: scale(1.03);
+        box-shadow:
+            0 0 14px rgba(255, 59, 48, 0.45),
+            0 0 24px rgba(255, 59, 48, 0.65),
+            inset 0 0 10px rgba(255,255,255,0.05);
+    }
+}
+
 /* --- BÀN CỜ & QUÂN CỜ --- */
 .game-container {
 position: relative;
@@ -250,9 +296,39 @@ transition: 0.5s;
 }
 
 .victory-banner {
-background: #c0392b;
-padding: 20px;
-border: 4px solid #f1c40f;
+    padding: 20px;
+    border: 4px solid #f1c40f;
+    border-radius: 12px;
+    color: #fff;
+    box-shadow: 0 0 26px rgba(0,0,0,0.45);
+    transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* bên này thắng -> popup đỏ */
+.victory-banner.win-local {
+    background: linear-gradient(180deg, #d63031, #8e1b1b);
+    border-color: #ffd166;
+    box-shadow:
+        0 0 16px rgba(214, 48, 49, 0.45),
+        0 0 28px rgba(255, 209, 102, 0.22);
+}
+
+/* bên này thua -> popup đen */
+.victory-banner.lose-local {
+    background: linear-gradient(180deg, #1f1f1f, #000000);
+    border-color: #7f8c8d;
+    box-shadow:
+        0 0 16px rgba(0, 0, 0, 0.65),
+        0 0 20px rgba(255, 255, 255, 0.08);
+}
+
+/* hòa / chưa xác định */
+.victory-banner.draw-local {
+    background: linear-gradient(180deg, #2d3436, #636e72);
+    border-color: #dfe6e9;
+    box-shadow:
+        0 0 14px rgba(99, 110, 114, 0.35),
+        0 0 20px rgba(223, 230, 233, 0.16);
 }
 
 .panel {
@@ -1244,6 +1320,7 @@ color: transparent;
     opacity: 0.65;
     pointer-events: none;
 }
+
 .desktop-friend-panel .friend-box-row input {
     width: 100%;
     background: rgba(10, 10, 10, 0.9);
@@ -2055,25 +2132,20 @@ padding: 2px 4px 6px 4px;
 }
 #match-chat-popup {
 position: fixed;
-left: 8px;
-right: 8px;
-bottom: calc(env(safe-area-inset-bottom, 0px) + 76px);
+left: 10px;
+right: 10px;
+bottom: 80px;
 width: auto;
-max-width: calc(100vw - 16px);
-height: min(38dvh, 235px);
-max-height: min(38dvh, 235px);
+max-width: calc(100vw - 20px);
+height: 350px;
 display: none;
-z-index: 20990;
+z-index: 9999;
 box-sizing: border-box;
-border-radius: 14px;
-overflow: hidden;
-box-shadow: 0 0 18px rgba(0, 0, 0, 0.7);
 }
 
 #match-content-popup {
 min-height: 0;
 word-break: break-word;
-padding: 8px;
 }
 
 .chat-input-box {
@@ -2109,10 +2181,10 @@ justify-content: center;
 
 #match-chat-btn {
 position: fixed;
+bottom: 20px;
 right: 10px;
-bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
-width: 52px;
-height: 52px;
+width: 50px;
+height: 50px;
 background: #55efc4;
 color: black;
 border-radius: 50%;
@@ -2121,19 +2193,12 @@ align-items: center;
 justify-content: center;
 cursor: pointer;
 font-size: 20px;
-z-index: 20995;
-box-shadow: 0 0 12px rgba(0, 0, 0, 0.55);
+z-index: 9999;
 }
 
 .close-chat-mobile {
-display: inline-flex;
-align-items: center;
-justify-content: center;
+display: inline;
 cursor: pointer;
-font-size: 18px;
-font-weight: 900;
-min-width: 26px;
-min-height: 26px;
 }
 }
 #ready-overlay {
@@ -2179,43 +2244,51 @@ gap: 8px;
 margin-bottom: 14px;
 }
 
-#ready-do-status,
-#ready-den-status {
-padding: 10px;
-border-radius: 10px;
-background: #222;
-border: 1px solid #444;
-font-size: 13px;
-}
-
-#ready-do-status.ready-ok,
-#ready-den-status.ready-ok {
-border-color: #55efc4;
-color: #55efc4;
-box-shadow: 0 0 10px rgba(85, 239, 196, 0.25);
+#ready-side-text {
+    margin-bottom: 14px;
+    font-size: 13px;
+    font-weight: 800;
+    color: #dfe6e9;
+    letter-spacing: 0.5px;
+    text-align: center;
 }
 
 #ready-button-row {
-display: flex;
-gap: 10px;
-justify-content: center;
+    display: flex;
+    justify-content: center;
 }
 
-#ready-do-btn,
-#ready-den-btn {
-flex: 1;
-padding: 10px 8px;
-font-size: 13px;
+#ready-main-btn {
+    width: 100%;
+    padding: 12px 10px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 900;
+    letter-spacing: 0.6px;
+    border: none;
+    cursor: pointer;
 }
 
-#ready-do-btn {
-background: #d63031;
-color: white;
+.ready-btn-do {
+    background: linear-gradient(180deg, #ff5a5f, #d63031);
+    color: white;
+    box-shadow: 0 0 14px rgba(214, 48, 49, 0.35);
 }
 
-#ready-den-btn {
-background: #636e72;
-color: white;
+.ready-btn-den {
+    background: linear-gradient(180deg, #7f8c8d, #2d3436);
+    color: white;
+    box-shadow: 0 0 14px rgba(45, 52, 54, 0.35);
+}
+
+.player-ready-on {
+    color: #55efc4 !important;
+    font-weight: 900;
+}
+
+.player-ready-off {
+    color: #b2bec3 !important;
+    font-weight: 700;
 }
 .board-side {
     display: flex;
@@ -2244,6 +2317,10 @@ color: white;
 }
 
 .timer-inline {
+    --timer-pct: 1turn;
+    --ring-color: #ffffff;
+--ring-glow: rgba(255, 255, 255, 0.35);
+
     width: 110px;
     min-width: 110px;
     padding: 8px 10px;
@@ -2251,6 +2328,25 @@ color: white;
     border-radius: 12px;
     margin: 0;
     box-sizing: border-box;
+
+    position: relative;
+    border: 2px solid transparent;
+    background:
+        linear-gradient(rgba(15, 30, 15, 0.94), rgba(15, 30, 15, 0.94)) padding-box,
+        conic-gradient(
+            from -90deg,
+            var(--ring-color) 0turn var(--timer-pct),
+            rgba(255,255,255,0.08) var(--timer-pct) 1turn
+        ) border-box;
+    box-shadow:
+        0 0 8px rgba(0,0,0,0.35),
+        0 0 14px var(--ring-glow),
+        inset 0 0 10px rgba(255,255,255,0.04);
+    transition:
+        background 0.18s linear,
+        box-shadow 0.18s linear,
+        color 0.18s linear,
+        transform 0.18s ease;
 }
 
 .player-chip-inline {
@@ -2289,7 +2385,17 @@ color: white;
 }
 
 .player-chip-rank {
-    color: #fa06d1;
+    font-weight: 900;
+    background: linear-gradient(90deg, #ffd54a 0%, #ffd54a 35%, #ffd54a 70%, #ffef9a 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 10px rgba(255, 213, 74, 0.18);
+}
+.player-chip-name {
+    color: #f11606;
+    font-weight: bold;
 }
 
 @media (max-width: 600px) {
@@ -2349,7 +2455,7 @@ color: white;
         font-size: 10px;
     }
     .chat-header {
-    display: flex;
+    display: none;
 }
 
 #match-content-popup {
@@ -2785,14 +2891,10 @@ color: white;
 <div id="ready-title">SẴN SÀNG</div>
 <div id="ready-countdown">30</div>
 
-<div id="ready-status-row">
-<div id="ready-do-status">ĐỎ: CHƯA SẴN SÀNG</div>
-<div id="ready-den-status">ĐEN: CHƯA SẴN SÀNG</div>
-</div>
+<div id="ready-side-text">ĐANG CHỜ 2 NGƯỜI XÁC NHẬN</div>
 
 <div id="ready-button-row">
-<button id="ready-do-btn" onclick="setReady('do')">ĐỎ SẴN SÀNG</button>
-<button id="ready-den-btn" onclick="setReady('den')">ĐEN SẴN SÀNG</button>
+    <button id="ready-main-btn" onclick="setReady()">SẴN SÀNG</button>
 </div>
 </div>
 </div>
@@ -2811,11 +2913,16 @@ color: white;
 
     <div id="board" class="game-container">
         <div id="victory-wrap">
-            <div class="victory-banner">
-                <h1 id="main-result">CHIẾN THẮNG</h1>
-                <span id="sub-result">BÊN ĐỎ THẮNG</span>
-            </div>
+    <div class="victory-banner">
+        <h1 id="main-result">CHIẾN THẮNG</h1>
+        <span id="sub-result">BÊN ĐỎ THẮNG</span>
+
+        <div id="victory-actions" style="margin-top:16px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+            <button onclick="playNextMatch()">TIẾP TỤC</button>
+            <button onclick="exitAfterMatch()" style="background:#e17055;">THOÁT TRẬN</button>
         </div>
+    </div>
+</div>
     </div>
 
     <div class="turn-row">
@@ -2839,7 +2946,7 @@ color: white;
 <div id="match-chat-popup">
 <div class="chat-header">
 💬 PHÒNG CHAT
-<span class="close-chat-mobile" onclick="closeMatchChat()">✖</span>
+<span class="close-chat-mobile" onclick="toggleMatchChat()">✖</span>
 </div>
 
 <div id="match-content-popup">
@@ -2989,6 +3096,91 @@ let roomValueRef = null;
 let roomChatRef = null;
 let lastRoomBoardHash = "";
 let lastDrawRequestAt = 0;
+const ACTIVE_MATCH_KEY = "co_tuong_active_match_v1";
+
+function readActiveMatchSnapshot() {
+    try {
+        return JSON.parse(localStorage.getItem(ACTIVE_MATCH_KEY) || "null");
+    } catch {
+        return null;
+    }
+}
+
+function saveActiveMatchSnapshot(payload = {}) {
+    const safe = {
+        roomId: payload.roomId || currentRoomId || null,
+        mode: payload.mode || currentRoomMode || null,
+        side: payload.side || mySide || null,
+        savedAt: Date.now()
+    };
+
+    if (!safe.roomId) return;
+    localStorage.setItem(ACTIVE_MATCH_KEY, JSON.stringify(safe));
+}
+
+function clearActiveMatchSnapshot(roomId = null) {
+    const current = readActiveMatchSnapshot();
+    if (!current) return;
+    if (roomId && current.roomId && current.roomId !== roomId) return;
+    localStorage.removeItem(ACTIVE_MATCH_KEY);
+}
+
+function prepareRealtimeArenaUI() {
+    hideHomeUI();
+    document.getElementById("game-arena").style.display = "block";
+
+    const chatPopup = document.getElementById("match-chat-popup");
+    const chatBtn = document.getElementById("match-chat-btn");
+
+    if (window.innerWidth <= 600) {
+        if (chatPopup) chatPopup.style.display = "none";
+        if (chatBtn) chatBtn.style.display = "flex";
+    } else {
+        if (chatPopup) chatPopup.style.display = "flex";
+        if (chatBtn) chatBtn.style.display = "none";
+    }
+}
+
+async function tryResumeRealtimeMatch(preferredMode = null) {
+    const saved = readActiveMatchSnapshot();
+    if (!saved || !saved.roomId) return false;
+
+    const me = getCurrentPlayerProfile();
+    const snap = await db.ref("matches/" + saved.roomId).once("value");
+    const room = snap.val();
+
+    if (!room) {
+        clearActiveMatchSnapshot(saved.roomId);
+        return false;
+    }
+
+    if (preferredMode && room.mode && room.mode !== preferredMode) {
+        return false;
+    }
+
+    const isDo = room.players?.do?.uid === me.uid;
+    const isDen = room.players?.den?.uid === me.uid;
+    const canResume = !room.winner && (room.status === "playing" || room.status === "waiting");
+
+    if (!canResume || (!isDo && !isDen)) {
+        clearActiveMatchSnapshot(saved.roomId);
+        return false;
+    }
+
+    mySide = isDo ? "do" : "den";
+    currentRoomId = saved.roomId;
+    currentRoomMode = room.mode || saved.mode || preferredMode || null;
+
+    saveActiveMatchSnapshot({
+        roomId: saved.roomId,
+        mode: currentRoomMode,
+        side: mySide
+    });
+
+    prepareRealtimeArenaUI();
+    bindRoom(saved.roomId);
+    return true;
+}
 
 provider.setCustomParameters({
     prompt: 'select_account'
@@ -3015,10 +3207,13 @@ function applyLoggedInUI(displayName, photoURL) {
     if (userPhoto) userPhoto.src = safePhoto;
 
     localStorage.setItem("user-name-display", safeName);
-    localStorage.setItem("user-photo", safePhoto);
+localStorage.setItem("user-photo", safePhoto);
 
-    setPiBalance(getPiBalance());
-    showHomeUI();
+currentWalletBalance = 0;
+updateBalanceUI(0);
+loadWalletBalance().catch(err => console.error("Lỗi tải ví:", err));
+
+showHomeUI();
 }
 
 function showLoginChoices() {
@@ -3108,12 +3303,7 @@ function switchAccount() {
             const displayName = user.displayName || "Người chơi";
             const photoURL = user.photoURL || "images/do_tuong.png";
 
-            localStorage.setItem("user-name-display", displayName);
-            localStorage.setItem("user-photo", photoURL);
-
-            document.getElementById("user-name-display").innerText = displayName;
-            document.getElementById("user-name").innerText = displayName;
-            document.getElementById("user-photo").src = photoURL;
+            applyLoggedInUI(displayName, photoURL);
         })
         .catch(err => {
             console.error("Lỗi đổi tài khoản:", err);
@@ -3123,23 +3313,28 @@ function switchAccount() {
 
 
 // --- HỆ THỐNG ÂM THANH (KHỚP VỚI HÌNH THƯ MỤC CỦA MÀY) ---
-// Thêm đoạn này vào đầu thẻ <script>
-const gameSounds = {
-    move: new Audio('sounds/move.mp3'),      // Tiếng đi quân
-    capture: new Audio('sounds/capture.mp3'),// Tiếng ăn quân
-    check: new Audio('sounds/check.mp3'),    // Tiếng chiếu tướng
-    start: new Audio('sounds/start.mp3'),    // Tiếng bắt đầu
-    win: new Audio('sounds/win.mp3'),        // Tiếng thắng
-    lose: new Audio('sounds/lose.mp3')       // Tiếng thua
+const sounds = {
+welcome: new Audio('sounds/welcome.mp3'),
+click: new Audio('sounds/click.mp3'),
+capture: new Audio('sounds/capture.mp3'),
+check: new Audio('sounds/check.mp3'),
+win: new Audio('sounds/win.mp3'),
+lose: new Audio('sounds/lose.mp3'),
+heartbeat: new Audio('sounds/heartbeat.mp3'),
+timeout: new Audio('sounds/timeout.mp3'),
+bgm: new Audio('sounds/bgm.mp3')
 };
+sounds.bgm.loop = true;
+sounds.bgm.volume = 0.4;
+sounds.heartbeat.loop = true; 
 
-// Hàm bổ trợ để phát âm thanh không bị chồng chéo
-function playSound(name) {
-    if (gameSounds[name]) {
-        gameSounds[name].currentTime = 0; 
-        gameSounds[name].play().catch(e => console.warn("Lỗi phát âm thanh:", e));
-    }
+function playSnd(name) {
+if (sounds[name]) {
+sounds[name].currentTime = 0;
+sounds[name].play().catch(e => console.log("Chờ tương tác để phát nhạc..."));
 }
+}
+
 function sendMessage() {
 // 1. Tìm ô nhập liệu
 var input = document.getElementById('match-input');
@@ -3175,12 +3370,13 @@ auth.getRedirectResult()
         console.error("Lỗi redirect:", err);
         alert("Đăng nhập Google bị lỗi: " + (err.message || err.code || err));
     });
-auth.onAuthStateChanged(user => {
+auth.onAuthStateChanged(async user => {
     const piName = localStorage.getItem("pi-user-name");
     const piPhoto = localStorage.getItem("pi-user-photo");
 
     if (piName) {
         applyLoggedInUI(piName, piPhoto || "images/do_tuong.png");
+        await tryResumeRealtimeMatch();
         return;
     }
 
@@ -3188,7 +3384,9 @@ auth.onAuthStateChanged(user => {
         const displayName = user.displayName || localStorage.getItem("user-name-display") || "MC Phan Hieu";
         const photoURL = user.photoURL || localStorage.getItem("user-photo") || "images/do_tuong.png";
         applyLoggedInUI(displayName, photoURL);
+        await tryResumeRealtimeMatch();
     } else {
+        clearActiveMatchSnapshot();
         document.getElementById("login-screen").style.display = "flex";
         document.getElementById("user-display").style.display = "none";
         document.getElementById("home-menu").style.display = "none";
@@ -3248,16 +3446,13 @@ async function backToMenu() {
 
     showHomeUI();
     document.getElementById("game-arena").style.display = "none";
-  clearInterval(interval);
-sounds.bgm.pause();
-sounds.bgm.currentTime = 0;
-sounds.heartbeat.pause();
-sounds.heartbeat.currentTime = 0;
+    clearInterval(interval);
+    clearInterval(readyInterval);
+    sounds.bgm.pause();
+    sounds.heartbeat.pause();
 
     const overlay = document.getElementById("ready-overlay");
     if (overlay) overlay.style.display = "none";
-
-    showMobileChat(false);
 
     const chatContent = document.getElementById("match-content-popup");
     if (chatContent) {
@@ -3284,7 +3479,6 @@ let selectedPiece = null, luotDi = 'do', isGameOver = false, timeDo = 30, timeDe
 let isCoUp = false;
 let lastMoveFrom = null;
 let lastMoveTo = null;
-let historyMoveNo = 0;
 let viewSide = 'do'; // 'do' = góc nhìn đỏ, 'den' = góc nhìn đen
 
 let pendingGameMode = 'co-tuong';
@@ -3292,73 +3486,314 @@ let readyDo = false;
 let readyDen = false;
 let readyTime = 30;
 let readyInterval = null;
+let readyOverlayWaitingShown = false;
+let currentRoomStatus = null;
+
 function formatTime(s) {
     const m = Math.floor(s / 60);
     const sec = s % 60;
     return String(m).padStart(2, '0') + ":" + String(sec).padStart(2, '0');
 }
+
 function startTimer() {
-clearInterval(interval);
-interval = setInterval(() => {
-if (isGameOver) return;
-if (luotDi === 'do') {
-timeDo--;
-timerDoEl.innerText = formatTime(timeDo);
-if (timeDo === 30) playSnd('timeout');
-if (timeDo <= 0) endGame("HẾT GIỜ", "ĐEN THẮNG");
+    clearInterval(interval);
+    renderTimerUI();
+
+    interval = setInterval(() => {
+        if (isGameOver) return;
+
+        if (luotDi === 'do') {
+            timeDo--;
+            if (timeDo === 30) playSnd('timeout');
+            renderTimerUI();
+            if (timeDo <= 0) endGame("HẾT GIỜ", "ĐEN THẮNG");
+        } else {
+            timeDen--;
+            if (timeDen === 30) playSnd('timeout');
+            renderTimerUI();
+            if (timeDen <= 0) endGame("HẾT GIỜ", "ĐỎ THẮNG");
+        }
+    }, 1000);
 }
-else {
-timeDen--;
-timerDenEl.innerText = formatTime(timeDen);
-if (timeDen === 30) playSnd('timeout');
-if (timeDen <= 0) endGame("HẾT GIỜ", "ĐỎ THẮNG");
+const FULL_TURN_SECONDS = 9 * 60;
+function renderTimerUI() {
+    const isBlackView = mySide === "den";
+
+    // timerDenEl = ô timer phía TRÊN
+    // timerDoEl  = ô timer phía DƯỚI
+    const topSeconds = isBlackView ? timeDo : timeDen;
+    const bottomSeconds = isBlackView ? timeDen : timeDo;
+
+    timerDenEl.innerText = formatTime(topSeconds);
+    timerDoEl.innerText = formatTime(bottomSeconds);
+
+    timerDoEl.className = "timer-box timer-inline";
+    timerDenEl.className = "timer-box timer-inline";
+
+    const activeEl =
+        luotDi === "do"
+            ? (isBlackView ? timerDenEl : timerDoEl)
+            : (isBlackView ? timerDoEl : timerDenEl);
+
+    activeEl.classList.add(luotDi === "do" ? "active-do" : "active-den");
+
+    if (typeof refreshTimerRings === "function") {
+        refreshTimerRings();
+    }
 }
-}, 1000);
+function updateSingleTimerRing(timerEl, secondsLeft) {
+    if (!timerEl) return;
+
+    const safeSeconds = Math.max(0, Number(secondsLeft) || 0);
+    const pct = Math.max(0, Math.min(1, safeSeconds / FULL_TURN_SECONDS));
+
+    timerEl.style.setProperty("--timer-pct", `${pct}turn`);
+    timerEl.classList.toggle("danger-time", safeSeconds > 0 && safeSeconds <= 30);
 }
 
+function refreshTimerRings() {
+    updateSingleTimerRing(timerDoEl, timeDo);
+    updateSingleTimerRing(timerDenEl, timeDen);
+}
 
 
 function endGame(main, sub) {
     isGameOver = true;
-   clearInterval(interval);
-sounds.bgm.pause();
-sounds.bgm.currentTime = 0;
-sounds.heartbeat.pause();
-sounds.heartbeat.currentTime = 0;
+    clearInterval(interval);
+    clearInterval(readyInterval);
 
-    if (sub.includes("ĐỎ THẮNG")) playSnd('win');
-    else playSnd('lose');
+    if (sounds.bgm) sounds.bgm.pause();
+    if (sounds.heartbeat) sounds.heartbeat.pause();
 
     const wrap = document.getElementById("victory-wrap");
-    document.getElementById("main-result").innerText = main;
-    document.getElementById("sub-result").innerText = sub;
-    wrap.style.transform = "translate(-50%, -50%) scale(1)";
-saveMatchResultToSeparateHistory(main, sub);
-    autoResetNextMatch();
+    const banner = wrap ? wrap.querySelector(".victory-banner") : null;
+    const mainEl = document.getElementById("main-result");
+    const subEl = document.getElementById("sub-result");
+
+    if (mainEl) mainEl.innerText = main;
+    if (subEl) subEl.innerText = sub;
+
+    let winnerSide = null;
+    if (sub.includes("ĐỎ THẮNG")) winnerSide = "do";
+    else if (sub.includes("ĐEN THẮNG")) winnerSide = "den";
+
+    const myLocalSide = mySide || viewSide || null;
+    const isDraw = !winnerSide;
+
+    if (banner) {
+        banner.classList.remove("win-local", "lose-local", "draw-local");
+
+        if (isDraw) {
+            banner.classList.add("draw-local");
+        } else if (myLocalSide && myLocalSide === winnerSide) {
+            banner.classList.add("win-local");
+        } else {
+            banner.classList.add("lose-local");
+        }
+    }
+
+    if (!isDraw) {
+        if (myLocalSide && myLocalSide === winnerSide) playSnd('win');
+        else playSnd('lose');
+    }
+
+    if (wrap) {
+        wrap.style.transform = "translate(-50%, -50%) scale(1)";
+        wrap.style.pointerEvents = "auto";
+    }
+}
+function hideVictoryPopup() {
+    const wrap = document.getElementById("victory-wrap");
+    if (!wrap) return;
+
+    const banner = wrap.querySelector(".victory-banner");
+    if (banner) {
+        banner.classList.remove("win-local", "lose-local", "draw-local");
+    }
+
+    wrap.style.transform = "translate(-50%, -50%) scale(0)";
+    wrap.style.pointerEvents = "none";
 }
 
+async function playNextMatch() {
+    hideVictoryPopup();
+    clearInterval(interval);
+    clearInterval(readyInterval);
+
+    if (sounds.bgm) sounds.bgm.pause();
+    if (sounds.heartbeat) sounds.heartbeat.pause();
+
+    // Online: đánh lại với đúng người đang cùng phòng
+    if (currentRoomId) {
+        readyDo = false;
+        readyDen = false;
+        isGameOver = false;
+        selectedPiece = null;
+        lastMoveFrom = null;
+        lastMoveTo = null;
+        lastRoomBoardHash = "";
+
+        await db.ref("matches/" + currentRoomId).update({
+            status: "waiting",
+            ready: {
+                do: false,
+                den: false
+            },
+            board: null,
+            turn: "do",
+            timeDo: 540,
+            timeDen: 540,
+            lastMoveFrom: null,
+            lastMoveTo: null,
+            winner: null,
+            winReason: null,
+            drawRequest: null,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+
+        // bindRoom() sẽ tự show lại bản SS cho cả 2 bên
+        return;
+    }
+
+    // Offline fallback
+    isGameOver = false;
+    selectedPiece = null;
+    luotDi = "do";
+    timeDo = 9 * 60;
+    timeDen = 9 * 60;
+
+    timerDoEl.innerText = formatTime(timeDo);
+    timerDenEl.innerText = formatTime(timeDen);
+    document.getElementById("turn-box").innerText = "Lượt: ĐỎ";
+
+    document.querySelectorAll(".piece").forEach(p => p.remove());
+    document.querySelectorAll(".move-hint, .move-hint-capture, .last-move-from, .last-move-to").forEach(el => el.remove());
+
+    if (typeof setupBoard === "function") {
+        setupBoard();
+    } else if (typeof khoiTaoBanCo === "function") {
+        khoiTaoBanCo();
+    } else if (typeof taoBanCo === "function") {
+        taoBanCo();
+    } else {
+        location.reload();
+        return;
+    }
+
+    if (sounds.bgm) {
+        sounds.bgm.currentTime = 0;
+        sounds.bgm.play().catch(() => {});
+    }
+
+    startTimer();
+}
+
+function exitAfterMatch() {
+    hideVictoryPopup();
+    backToMenu();
+}
+function getViewSide() {
+    return mySide === "den" ? "den" : "do";
+}
+
+function mapBoardToView(c, r) {
+    if (getViewSide() === "den") {
+        return { c: 8 - c, r: 9 - r };
+    }
+    return { c, r };
+}
+
+function mapViewToBoard(c, r) {
+    if (getViewSide() === "den") {
+        return { c: 8 - c, r: 9 - r };
+    }
+    return { c, r };
+}
+function makeKingSvg(label, fillColor, textColor) {
+    const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="46" fill="${fillColor}" stroke="#8b5a2b" stroke-width="4"/>
+        <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(0,0,0,0.18)" stroke-width="2"/>
+        <text x="50" y="61" text-anchor="middle"
+              font-size="42" font-weight="700"
+              font-family="serif"
+              fill="${textColor}">${label}</text>
+    </svg>`;
+    return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+}
+
+function isKingPiece(type) {
+    return type === "帥" || type === "將";
+}
 function createPiece(cIdx, rIdx, type, up) {
-const img = document.createElement("img");
-img.className = "piece";
-const side = ["俥", "傌", "相", "仕", "帥", "炮", "兵"].includes(type) ? "do" : "den";
-img.dataset.side = side;
-img.dataset.type = type;
-img.dataset.isUp = up ? "true" : "false";
-const names = { '車': 'xe', '馬': 'ma', '象': 'tuong', '士': 'si', '將': 'tuong_soai', '砲': 'phao', '卒': 'tot', '俥': 'xe', '傌': 'ma', '相': 'tuong', '仕': 'si', '帥': 'soai', '炮': 'phao', '兵': 'tot' };
-img.src = up ? `images/up_mat_trang.png` : `images/${side}_${names[type]}.png`;
-img.style.left = columns[cIdx] + "%";
-img.style.top = rows[rIdx] + "%";
-board.appendChild(img);
+    const img = document.createElement("img");
+    img.className = "piece";
 
+    const side = ["帥", "俥", "傌", "相", "仕", "炮", "兵"].includes(type) ? "do" : "den";
+    img.dataset.side = side;
+    img.dataset.type = type;
+    img.dataset.isUp = up ? "true" : "false";
+
+    const names = {
+        '車': 'xe',
+        '馬': 'ma',
+        '象': 'tuong',
+        '士': 'si',
+        '將': 'tuong_soai',
+        '砲': 'phao',
+        '卒': 'tot',
+
+        '俥': 'xe',
+        '傌': 'ma',
+        '相': 'tuong',
+        '仕': 'si',
+        '帥': 'tuong_soai',
+        '炮': 'phao',
+        '兵': 'tot'
+    };
+
+   if (up) {
+    img.src = "images/up_mat_trang.png";
+} else {
+    img.src = `images/${side}_${names[type]}.png`;
 }
 
+    img.onerror = function () {
+    this.onerror = null;
+    this.src = side === "do" ? "images/do_tuong.png" : "images/den_tuong.png";
+};
+
+    img.style.left = columns[cIdx] + "%";
+    img.style.top = rows[rIdx] + "%";
+
+    // ép nổi lên trên cho riêng 2 con Tướng
+    if (isKingPiece(type)) {
+        img.style.zIndex = "30";
+        img.style.opacity = "1";
+        img.style.visibility = "visible";
+        img.style.display = "block";
+    }
+
+    board.appendChild(img);
+}
 function taoMaTran() {
-let mt = Array(10).fill(null).map(() => Array(9).fill(null));
-document.querySelectorAll(".piece").forEach(p => {
-let c = columns.indexOf(parseFloat(p.style.left)), r = rows.indexOf(parseFloat(p.style.top));
-if (c !== -1 && r !== -1) mt[r][c] = { side: p.dataset.side, type: p.dataset.type };
-});
-return mt;
+    let mt = Array(10).fill(null).map(() => Array(9).fill(null));
+
+    document.querySelectorAll(".piece").forEach(p => {
+        const viewC = columns.indexOf(parseFloat(p.style.left));
+        const viewR = rows.indexOf(parseFloat(p.style.top));
+
+        if (viewC === -1 || viewR === -1) return;
+
+        const realPos = mapViewToBoard(viewC, viewR);
+
+        mt[realPos.r][realPos.c] = {
+            side: p.dataset.side,
+            type: p.dataset.type
+        };
+    });
+
+    return mt;
 }
 
 function countV(x1, y1, x2, y2, mt) {
@@ -3379,18 +3814,22 @@ function drawLastMoveMarks() {
     clearLastMoveMarks();
 
     if (lastMoveFrom) {
+        const fromView = mapBoardToView(lastMoveFrom.c, lastMoveFrom.r);
+
         const fromMark = document.createElement("div");
         fromMark.className = "last-move-from";
-        fromMark.style.left = columns[lastMoveFrom.c] + "%";
-        fromMark.style.top = rows[lastMoveFrom.r] + "%";
+        fromMark.style.left = columns[fromView.c] + "%";
+        fromMark.style.top = rows[fromView.r] + "%";
         board.appendChild(fromMark);
     }
 
     if (lastMoveTo) {
+        const toView = mapBoardToView(lastMoveTo.c, lastMoveTo.r);
+
         const toMark = document.createElement("div");
         toMark.className = "last-move-to";
-        toMark.style.left = columns[lastMoveTo.c] + "%";
-        toMark.style.top = rows[lastMoveTo.r] + "%";
+        toMark.style.left = columns[toView.c] + "%";
+        toMark.style.top = rows[toView.r] + "%";
         board.appendChild(toMark);
     }
 }
@@ -3412,19 +3851,27 @@ function showMoveHints(pieceEl) {
     clearMoveHints();
     if (!pieceEl) return;
 
-    const c1 = columns.indexOf(parseFloat(pieceEl.style.left));
-    const r1 = rows.indexOf(parseFloat(pieceEl.style.top));
+    const fromViewC = columns.indexOf(parseFloat(pieceEl.style.left));
+    const fromViewR = rows.indexOf(parseFloat(pieceEl.style.top));
+    if (fromViewC === -1 || fromViewR === -1) return;
+
+    const fromReal = mapViewToBoard(fromViewC, fromViewR);
+    const c1 = fromReal.c;
+    const r1 = fromReal.r;
+
     const mt = taoMaTran();
 
     for (let tr = 0; tr < 10; tr++) {
         for (let tc = 0; tc < 9; tc++) {
             if (!checkLuat(pieceEl.dataset.type, pieceEl.dataset.side, c1, r1, tc, tr, mt)) continue;
-            if (!isMoveSafe(pieceEl.dataset.type, pieceEl.dataset.side, c1, r1, tc, tr, mt)) continue;
+           // if (!isMoveSafe(pieceEl.dataset.type, pieceEl.dataset.side, c1, r1, tc, tr, mt)) continue;
+
+            const viewPos = mapBoardToView(tc, tr);
 
             const dot = document.createElement("div");
             dot.className = mt[tr][tc] ? "move-hint-capture" : "move-hint";
-            dot.style.left = columns[tc] + "%";
-            dot.style.top = rows[tr] + "%";
+            dot.style.left = columns[viewPos.c] + "%";
+            dot.style.top = rows[viewPos.r] + "%";
             board.appendChild(dot);
         }
     }
@@ -3530,140 +3977,159 @@ return true;
 }
 
 board.onclick = (e) => {
-const overlay = document.getElementById("ready-overlay");
-if (overlay && getComputedStyle(overlay).display !== "none") return;
+    const overlay = document.getElementById("ready-overlay");
+    if (overlay && getComputedStyle(overlay).display !== "none") return;
 
-if (isGameOver) return;
-if (currentRoomId && mySide && luotDi !== mySide) return;
-if (sounds.bgm.paused) playSnd('bgm');
-const rect = board.getBoundingClientRect();
-const fX = columns.reduce((p, c) => Math.abs(c - ((e.clientX - rect.left) / rect.width) * 100) < Math.abs(p - ((e.clientX - rect.left) / rect.width) * 100) ? c : p);
-const fY = rows.reduce((p, c) => Math.abs(c - ((e.clientY - rect.top) / rect.height) * 100) < Math.abs(p - ((e.clientY - rect.top) / rect.height) * 100) ? c : p);
-const target = Array.from(document.querySelectorAll(".piece")).find(p => p.style.left === fX + "%" && p.style.top === fY + "%");
+    if (isGameOver) return;
+    if (currentRoomId && mySide && luotDi !== mySide) return;
+    if (sounds.bgm.paused) playSnd('bgm');
 
-if (!selectedPiece) {
-if (target && target.dataset.side === luotDi) {
-selectedPiece = target;
-selectedPiece.classList.add("selected");
-showMoveHints(selectedPiece);
-playSnd('click');
-}
-} else {
-const c1 = columns.indexOf(parseFloat(selectedPiece.style.left)),
-r1 = rows.indexOf(parseFloat(selectedPiece.style.top)),
-c2 = columns.indexOf(fX),
-r2 = rows.indexOf(fY);
+    const rect = board.getBoundingClientRect();
+    const clickX = ((e.clientX - rect.left) / rect.width) * 100;
+    const clickY = ((e.clientY - rect.top) / rect.height) * 100;
 
-if (target && target.dataset.side === luotDi) {
-selectedPiece.classList.remove("selected");
-selectedPiece = target;
-selectedPiece.classList.add("selected");
-showMoveHints(selectedPiece);
-}
+    const fX = columns.reduce((p, c) =>
+        Math.abs(c - clickX) < Math.abs(p - clickX) ? c : p
+    );
+    const fY = rows.reduce((p, c) =>
+        Math.abs(c - clickY) < Math.abs(p - clickY) ? c : p
+    );
 
-else if (checkLuat(selectedPiece.dataset.type, selectedPiece.dataset.side, c1, r1, c2, r2, taoMaTran())) {
-let mt = taoMaTran();
-mt[r2][c2] = { side: selectedPiece.dataset.side, type: selectedPiece.dataset.type };
-mt[r1][c1] = null;
+    const viewC = columns.indexOf(fX);
+    const viewR = rows.indexOf(fY);
+    const toReal = mapViewToBoard(viewC, viewR);
+    const c2 = toReal.c;
+    const r2 = toReal.r;
 
-if (laBiChieu(luotDi, mt)) {
-alert("Không được để Tướng bị chiếu!");
-return;
-}
-const movedPieceSide = selectedPiece.dataset.side;
-const movedPieceType = selectedPiece.dataset.type;
-const wasUpBeforeMove = selectedPiece.dataset.isUp === "true";
+    const target = Array.from(document.querySelectorAll(".piece")).find(p =>
+        p.style.left === fX + "%" && p.style.top === fY + "%"
+    );
 
-const capturedInfo = target ? {
-    side: target.dataset.side,
-    type: target.dataset.type,
-    isUp: target.dataset.isUp === "true"
-} : null;
-if (target) {
-target.remove();
-playSnd('capture');
-} else {
-playSnd('click');
-}
-lastMoveFrom = { c: c1, r: r1 };
-lastMoveTo = { c: c2, r: r2 };
-selectedPiece.style.left = fX + "%";
-selectedPiece.style.top = fY + "%";
-selectedPiece.classList.remove("selected");
+    if (!selectedPiece) {
+        if (target && target.dataset.side === luotDi) {
+            selectedPiece = target;
+            selectedPiece.classList.add("selected");
+            showMoveHints(selectedPiece);
+            playSnd('click');
+        }
+        return;
+    }
 
-luotDi = (luotDi === 'do') ? 'den' : 'do';
+    const fromViewC = columns.indexOf(parseFloat(selectedPiece.style.left));
+    const fromViewR = rows.indexOf(parseFloat(selectedPiece.style.top));
+    const fromReal = mapViewToBoard(fromViewC, fromViewR);
+    const c1 = fromReal.c;
+    const r1 = fromReal.r;
 
-if (isCoUp && selectedPiece.dataset.isUp === "true") {
-selectedPiece.dataset.isUp = "false";
-const side = selectedPiece.dataset.side;
-const type = selectedPiece.dataset.type;
-const names = { '車': 'xe', '馬': 'ma', '象': 'tuong', '士': 'si', '將': 'tuong_soai', '砲': 'phao', '卒': 'tot', '俥': 'xe', '傌': 'ma', '相': 'tuong', '仕': 'si', '帥': 'soai', '炮': 'phao', '兵': 'tot' };
-selectedPiece.src = `images/${side}_${names[type]}.png`;
-}
+    if (target && target.dataset.side === luotDi) {
+        selectedPiece.classList.remove("selected");
+        selectedPiece = target;
+        selectedPiece.classList.add("selected");
+        showMoveHints(selectedPiece);
+        playSnd('click');
+        return;
+    }
 
-turnBox.innerText = `Lượt: ${luotDi === 'do' ? 'ĐỎ' : 'ĐEN'}`;
-timerDoEl.className = "timer-box timer-inline";
-timerDenEl.className = "timer-box timer-inline";
+    if (!checkLuat(selectedPiece.dataset.type, selectedPiece.dataset.side, c1, r1, c2, r2, taoMaTran())) {
+        selectedPiece.classList.remove("selected");
+        selectedPiece = null;
+        clearMoveHints();
+        return;
+    }
 
-if (luotDi === 'do') {
-    timerDoEl.classList.add("active-do");
-} else {
-    timerDenEl.classList.add("active-den");
-}
-selectedPiece = null;
-clearMoveHints();
-drawLastMoveMarks();
+    let mt = taoMaTran();
+    mt[r2][c2] = { side: selectedPiece.dataset.side, type: selectedPiece.dataset.type };
+    mt[r1][c1] = null;
 
-setTimeout(() => {
-// 1. Xóa sạch hiệu ứng cũ
-document.querySelectorAll('.piece').forEach(p => p.classList.remove('is-chieu'));
+    if (laBiChieu(luotDi, mt)) {
+        alert("Không được để Tướng bị chiếu!");
+        return;
+    }
 
-// 2. Check xem có bị chiếu không
-if (laBiChieu(luotDi, taoMaTran())) {
-   playSnd('check');
-playSnd('heartbeat');
+    if (target) {
+        target.remove();
+        playSnd('capture');
+    } else {
+        playSnd('click');
+    }
 
-// 3. Tìm quân Tướng và gắn hiệu ứng
-const pieces = document.querySelectorAll('.piece');
-pieces.forEach(p => {
-// Kiểm tra cả 2 loại chữ Tướng (帥 và 將)
-const type = p.dataset.type;
-if ((type === '帥' || type === '將') && p.dataset.side === luotDi) {
-p.classList.add('is-chieu');
-console.log("Đã gắn điện cho Tướng:", type); // Mầy bật F12 lên xem nó có hiện dòng này không
-}
-});
+    lastMoveFrom = { c: c1, r: r1 };
+    lastMoveTo = { c: c2, r: r2 };
 
-if (checkMate(luotDi)) endGame("CHIẾU BÍ", `BÊN ${luotDi === 'do' ? 'ĐEN' : 'ĐỎ'} THẮNG`);
-} else {
-if (sounds.heartbeat) sounds.heartbeat.pause();
-}
-}, 200);
-if (currentRoomId) {
-    pushMoveToSeparateHistory({
-        side: movedPieceSide,
-        piece: movedPieceType,
-        from: { c: c1, r: r1 },
-        to: { c: c2, r: r2 },
-        captured: capturedInfo,
-        revealed: isCoUp && wasUpBeforeMove,
-        nextTurn: luotDi
-    });
+    const newViewPos = mapBoardToView(c2, r2);
+    selectedPiece.style.left = columns[newViewPos.c] + "%";
+    selectedPiece.style.top = rows[newViewPos.r] + "%";
+    selectedPiece.classList.remove("selected");
 
-    syncRoomFromBoard();
-}
+    luotDi = (luotDi === 'do') ? 'den' : 'do';
 
-} else {
-selectedPiece.classList.remove("selected");
-selectedPiece = null;
-clearMoveHints();
-}
-}
+    if (isCoUp && selectedPiece.dataset.isUp === "true") {
+        selectedPiece.dataset.isUp = "false";
+        const side = selectedPiece.dataset.side;
+        const type = selectedPiece.dataset.type;
+        const names = {
+            '車': 'xe', '馬': 'ma', '象': 'tuong', '士': 'si', '將': 'tuong_soai', '砲': 'phao', '卒': 'tot',
+            '俥': 'xe', '傌': 'ma', '相': 'tuong', '仕': 'si', '帥': 'tuong_soai', '炮': 'phao', '兵': 'tot'
+        };
+        selectedPiece.src = `images/${side}_${names[type]}.png`;
+    }
+
+    turnBox.innerText = `Lượt: ${luotDi === 'do' ? 'ĐỎ' : 'ĐEN'}`;
+    timerDoEl.className = "timer-box timer-inline";
+    timerDenEl.className = "timer-box timer-inline";
+    if (luotDi === 'do') {
+        timerDoEl.classList.add("active-do");
+    } else {
+        timerDenEl.classList.add("active-den");
+    }
+refreshTimerRings();
+
+    selectedPiece = null;
+    clearMoveHints();
+    drawLastMoveMarks();
+
+    setTimeout(() => {
+        document.querySelectorAll('.piece').forEach(p => p.classList.remove('is-chieu', 'lightning-chieu'));
+
+        if (laBiChieu(luotDi, taoMaTran())) {
+            playSnd('check');
+            playSnd('heartbeat');
+
+            const pieces = document.querySelectorAll('.piece');
+            pieces.forEach(p => {
+                const type = p.dataset.type;
+                if ((type === '帥' || type === '將') && p.dataset.side === luotDi) {
+                    p.classList.add('is-chieu', 'lightning-chieu');
+                }
+            });
+
+            if (checkMate(luotDi)) {
+                const winnerSide = (luotDi === 'do') ? 'den' : 'do';
+                const resultSub = `BÊN ${winnerSide === 'do' ? 'ĐỎ' : 'ĐEN'} THẮNG`;
+
+                if (currentRoomId) {
+                    db.ref("matches/" + currentRoomId).update({
+                        winner: winnerSide,
+                        winReason: "checkmate",
+                        updatedAt: firebase.database.ServerValue.TIMESTAMP
+                    });
+                } else {
+                    endGame("CHIẾU BÍ", resultSub);
+                }
+            }
+        } else {
+            if (sounds.heartbeat) sounds.heartbeat.pause();
+        }
+    }, 200);
+
+    if (currentRoomId) {
+        syncRoomFromBoard();
+    }
 };
 
 function resetToStartup() {
-playSnd('start');
-playSnd('bgm');
+clearInterval(interval);
+playSnd('welcome'); playSnd('bgm');
 isGameOver = false; luotDi = 'do'; timeDo = 540; timeDen = 540;
 document.getElementById("victory-wrap").style.transform = "translate(-50%, -50%) scale(0)";
 document.querySelectorAll(".piece").forEach(p => p.remove());
@@ -3696,7 +4162,8 @@ function getCurrentPlayerProfile() {
     return {
         uid: user?.uid || ("guest_" + (localStorage.getItem("user-name-display") || "guest")),
         name: localStorage.getItem("user-name-display") || user?.displayName || "Người chơi",
-        photo: localStorage.getItem("user-photo") || user?.photoURL || "images/do_tuong.png"
+        photo: localStorage.getItem("user-photo") || user?.photoURL || "images/do_tuong.png",
+        balance: getPiBalance()
     };
 }
 
@@ -3711,23 +4178,49 @@ function updateTurnUIOnly() {
         timerDenEl.classList.add("active-den");
     }
 }
+function getViewSide() {
+    return mySide === "den" ? "den" : "do";
+}
 
+function mapBoardToView(c, r) {
+    if (getViewSide() === "den") {
+        return { c: 8 - c, r: 9 - r };
+    }
+    return { c, r };
+}
+
+function mapViewToBoard(c, r) {
+    if (getViewSide() === "den") {
+        return { c: 8 - c, r: 9 - r };
+    }
+    return { c, r };
+}
 function exportBoardState() {
-    return Array.from(document.querySelectorAll(".piece")).map(p => ({
-        c: columns.indexOf(parseFloat(p.style.left)),
-        r: rows.indexOf(parseFloat(p.style.top)),
-        side: p.dataset.side,
-        type: p.dataset.type,
-        isUp: p.dataset.isUp === "true",
-        src: p.getAttribute("src") || p.src
-    }));
+    return Array.from(document.querySelectorAll(".piece")).map(p => {
+        const viewC = columns.indexOf(parseFloat(p.style.left));
+        const viewR = rows.indexOf(parseFloat(p.style.top));
+        const realPos = mapViewToBoard(viewC, viewR);
+
+        return {
+            c: realPos.c,
+            r: realPos.r,
+            side: p.dataset.side,
+            type: p.dataset.type,
+            isUp: p.dataset.isUp === "true",
+            src: p.getAttribute("src") || p.src
+        };
+    });
 }
 
 function applyBoardStateFromRoom(pieces) {
+    isGameOver = false;
+    hideVictoryPopup();
     document.querySelectorAll(".piece").forEach(p => p.remove());
     clearMoveHints();
     clearLastMoveMarks();
     selectedPiece = null;
+
+    if (sounds.heartbeat) sounds.heartbeat.pause();
 
     (pieces || []).forEach(item => {
         const img = document.createElement("img");
@@ -3736,25 +4229,87 @@ function applyBoardStateFromRoom(pieces) {
         img.dataset.type = item.type;
         img.dataset.isUp = item.isUp ? "true" : "false";
         img.src = item.src;
-        img.style.left = columns[item.c] + "%";
-        img.style.top = rows[item.r] + "%";
+
+        const viewPos = mapBoardToView(item.c, item.r);
+        img.style.left = columns[viewPos.c] + "%";
+        img.style.top = rows[viewPos.r] + "%";
+
         board.appendChild(img);
     });
-}
 
+    updateCheckEffectFromBoard();
+}
+function updateCheckEffectFromBoard() {
+    document.querySelectorAll('.piece').forEach(p => {
+        p.classList.remove('is-chieu', 'lightning-chieu');
+    });
+
+    const mt = taoMaTran();
+
+    ['do', 'den'].forEach(side => {
+        if (!laBiChieu(side, mt)) return;
+
+        document.querySelectorAll('.piece').forEach(p => {
+            const type = p.dataset.type;
+            if (p.dataset.side === side && (type === '帥' || type === '將')) {
+                p.classList.add('is-chieu', 'lightning-chieu');
+            }
+        });
+    });
+}
 function renderPlayersFromRoom(room) {
     const doPlayer = room?.players?.do || {};
     const denPlayer = room?.players?.den || {};
 
-    const doName = document.getElementById("player-do-name");
-    const denName = document.getElementById("player-den-name");
-    const doAvatar = document.getElementById("player-do-avatar");
-    const denAvatar = document.getElementById("player-den-avatar");
+    const topName = document.getElementById("player-den-name");
+    const bottomName = document.getElementById("player-do-name");
+    const topRank = document.getElementById("player-den-rank");
+    const bottomRank = document.getElementById("player-do-rank");
+    const topAvatar = document.getElementById("player-den-avatar");
+    const bottomAvatar = document.getElementById("player-do-avatar");
 
-    if (doName) doName.innerText = doPlayer.name || "BÊN ĐỎ";
-    if (denName) denName.innerText = denPlayer.name || "ĐANG CHỜ...";
-    if (doAvatar) doAvatar.src = doPlayer.photo || "images/do_tuong.png";
-    if (denAvatar) denAvatar.src = denPlayer.photo || "images/do_tuong.png";
+    const doReadyNow = !!room?.ready?.do;
+    const denReadyNow = !!room?.ready?.den;
+    const isPlayingNow = room?.status === "playing";
+
+    const myPlayer = mySide === "den" ? denPlayer : doPlayer;
+    const oppPlayer = mySide === "den" ? doPlayer : denPlayer;
+
+    const myReady = mySide === "den" ? denReadyNow : doReadyNow;
+    const oppReady = mySide === "den" ? doReadyNow : denReadyNow;
+
+    if (topName) topName.innerText = oppPlayer.name || "ĐỐI THỦ";
+    if (bottomName) bottomName.innerText = myPlayer.name || "TAO";
+
+    if (topAvatar) topAvatar.src = oppPlayer.photo || "images/do_tuong.png";
+    if (bottomAvatar) bottomAvatar.src = myPlayer.photo || "images/do_tuong.png";
+
+    const oppBalance = Number(oppPlayer.balance || 0);
+    const myBalance = Number(myPlayer.balance || 0);
+
+    if (topRank) {
+        topRank.classList.remove("player-ready-on", "player-ready-off");
+
+        if (isPlayingNow) {
+            topRank.innerText = oppBalance.toFixed(2) + " π";
+            topRank.classList.add("player-ready-on");
+        } else {
+            topRank.innerText = oppReady ? "ĐÃ SS" : "CHƯA SS";
+            topRank.classList.add(oppReady ? "player-ready-on" : "player-ready-off");
+        }
+    }
+
+    if (bottomRank) {
+        bottomRank.classList.remove("player-ready-on", "player-ready-off");
+
+        if (isPlayingNow) {
+            bottomRank.innerText = myBalance.toFixed(2) + " π";
+            bottomRank.classList.add("player-ready-on");
+        } else {
+            bottomRank.innerText = myReady ? "ĐÃ SS" : "CHƯA SS";
+            bottomRank.classList.add(myReady ? "player-ready-on" : "player-ready-off");
+        }
+    }
 }
 
 function cleanupRoomListeners() {
@@ -3771,6 +4326,7 @@ async function leaveRealtimeMatch() {
     const mode = currentRoomMode;
     const me = getCurrentPlayerProfile();
 
+    clearActiveMatchSnapshot(roomId);
     cleanupRoomListeners();
 
     currentRoomId = null;
@@ -3792,9 +4348,25 @@ async function leaveRealtimeMatch() {
         }
 
         if (side) {
-            await db.ref("matches/" + roomId + "/players/" + side).remove();
-            await db.ref("matches/" + roomId + "/ready/" + side).remove();
-        }
+    const roomSnap = await db.ref("matches/" + roomId).once("value");
+    const room = roomSnap.val() || {};
+
+    const otherSide = side === "do" ? "den" : "do";
+    const stillPlaying = room.status === "playing";
+    const otherPlayerExists = !!room.players?.[otherSide];
+
+    // Nếu đang ở trong trận mà 1 bên tự thoát, xử thua luôn
+    if (stillPlaying && otherPlayerExists && !room.winner) {
+        await db.ref("matches/" + roomId).update({
+            winner: otherSide,
+            winReason: "bochay",
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+    }
+
+    await db.ref("matches/" + roomId + "/players/" + side).remove();
+    await db.ref("matches/" + roomId + "/ready/" + side).remove();
+}
     } catch (err) {
         console.error("Rời phòng lỗi:", err);
     }
@@ -3815,62 +4387,15 @@ function syncRoomFromBoard(extra = {}) {
         ...extra
     });
 }
-function getHistoryRef(roomId = currentRoomId) {
-    return db.ref("matchHistories/" + roomId);
-}
 
-async function resetSeparateHistory(roomId = currentRoomId) {
-    if (!roomId) return;
-
-    historyMoveNo = 0;
-
-    const roomSnap = await db.ref("matches/" + roomId).once("value");
-    const room = roomSnap.val() || {};
-
-    await getHistoryRef(roomId).set({
-        roomId,
-        mode: room.mode || currentRoomMode || getCurrentMode(),
-        players: room.players || null,
-        createdAt: firebase.database.ServerValue.TIMESTAMP,
-        endedAt: null,
-        winner: null,
-        winReason: null,
-        moves: {}
-    });
-}
-
-function pushMoveToSeparateHistory(payload) {
-    if (!currentRoomId) return Promise.resolve();
-
-    historyMoveNo += 1;
-
-    return db.ref("matchHistories/" + currentRoomId + "/moves").push({
-        moveNo: historyMoveNo,
-        ...payload,
-        at: firebase.database.ServerValue.TIMESTAMP
-    });
-}
-
-function saveMatchResultToSeparateHistory(main, sub) {
-    if (!currentRoomId) return Promise.resolve();
-
-    let winner = null;
-    if (sub.includes("ĐỎ THẮNG")) winner = "do";
-    else if (sub.includes("ĐEN THẮNG")) winner = "den";
-    else if (main.includes("HÒA") || sub.includes("HÒA")) winner = "hoa";
-
-    return getHistoryRef(currentRoomId).update({
-        endedAt: firebase.database.ServerValue.TIMESTAMP,
-        winner,
-        winReason: main,
-        resultText: sub
-    });
-}
 async function maybeStartRoomFromHost(room, roomId = currentRoomId) {
-    if (mySide !== "do") return;
+    if (!roomId) return;
     if (room.status === "playing") return;
+    if (mySide !== "do") return;
+    if (room.status !== "waiting") return;
     if (!room.players?.do || !room.players?.den) return;
     if (!(room.ready?.do && room.ready?.den)) return;
+    if (Array.isArray(room.board) && room.board.length) return;
 
     isCoUp = room.mode === "co-up";
     resetToStartup();
@@ -3889,19 +4414,40 @@ async function maybeStartRoomFromHost(room, roomId = currentRoomId) {
         winner: null,
         winReason: null,
         drawRequest: null,
+        ready: {
+            do: false,
+            den: false
+        },
         updatedAt: firebase.database.ServerValue.TIMESTAMP
     });
-    await resetSeparateHistory(roomId);
 }
+function appendMatchChatMessage(msg) {
+    const content = document.getElementById("match-content-popup");
+    if (!content || !msg) return;
 
+    const row = document.createElement("div");
+    row.style.marginBottom = "6px";
+    row.style.wordBreak = "break-word";
+
+    const isMine = msg.uid && auth.currentUser && msg.uid === auth.currentUser.uid;
+    const labelColor =
+        msg.side === "do" ? "#ff7675" :
+        msg.side === "den" ? "#ffeaa7" :
+        "#55efc4";
+
+    const who = isMine ? "Mầy" : (msg.name || "Đối thủ");
+
+    row.innerHTML = `<b style="color:${labelColor};">${who}:</b> <span>${msg.text || ""}</span>`;
+    content.appendChild(row);
+    content.scrollTop = content.scrollHeight;
+}
 function bindRoom(roomId) {
     cleanupRoomListeners();
-
     const listeningRoomId = roomId;
 
     currentRoomId = listeningRoomId;
-    roomValueRef = db.ref("matches/" + listeningRoomId);
-    roomChatRef = db.ref("matches/" + listeningRoomId + "/chat").limitToLast(80);
+roomValueRef = db.ref("matches/" + listeningRoomId);
+roomChatRef = db.ref("matches/" + listeningRoomId + "/chat");
 
     const content = document.getElementById("match-content-popup");
     if (content) {
@@ -3910,84 +4456,124 @@ function bindRoom(roomId) {
 
     roomValueRef.on("value", async (snap) => {
         if (currentRoomId !== listeningRoomId) return;
-
         const room = snap.val();
         if (!room) return;
+const me = getCurrentPlayerProfile();
+
+if (room.players?.do?.uid === me.uid) {
+    mySide = "do";
+} else if (room.players?.den?.uid === me.uid) {
+    mySide = "den";
+}
+
+viewSide = mySide || "do";
+if (typeof applyBoardPerspective === "function") {
+    applyBoardPerspective();
+}
 
         currentRoomMode = room.mode || currentRoomMode;
+        currentRoomStatus = room.status || null;
         readyDo = !!room.ready?.do;
         readyDen = !!room.ready?.den;
+
+        if (mySide) {
+            saveActiveMatchSnapshot({
+                roomId: listeningRoomId,
+                mode: currentRoomMode,
+                side: mySide
+            });
+        }
+
+        if (room.winner) {
+            clearActiveMatchSnapshot(listeningRoomId);
+        }
 
         renderPlayersFromRoom(room);
         updateReadyUI();
 
-        if (room.status === "playing") {
-            closeReadyOverlay();
-        } else if (room.status === "waiting") {
-            showReadyOverlay(room.mode);
-        }
+    const hasEnoughPlayersWaiting = !!room.players?.do && !!room.players?.den && room.status === "waiting";
 
-        if (room.status === "playing") {
-            const newBoardHash = JSON.stringify(room.board || []);
-            if (newBoardHash && newBoardHash !== lastRoomBoardHash) {
-                lastRoomBoardHash = newBoardHash;
+if (hasEnoughPlayersWaiting) {
+    isGameOver = false;
+    selectedPiece = null;
+    clearMoveHints();
+    hideVictoryPopup();
 
-                applyBoardStateFromRoom(room.board || []);
-                isCoUp = !!room.isCoUp;
-                luotDi = room.turn || "do";
-                timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
-                timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
+    if (!readyOverlayWaitingShown) {
+        readyOverlayWaitingShown = true;
+        showReadyOverlay(room.mode);
+    }
+} else {
+    readyOverlayWaitingShown = false;
+    closeReadyOverlay();
+}
 
-                timerDoEl.innerText = formatTime(timeDo);
-                timerDenEl.innerText = formatTime(timeDen);
+if (room.status === "playing" && !room.winner) {
+    readyOverlayWaitingShown = false;
+    isGameOver = false;
+    const overlay = document.getElementById("ready-overlay");
+    if (overlay) overlay.style.display = "none";
+}
+        const newBoardHash = JSON.stringify(room.board || []);
+        if (newBoardHash && newBoardHash !== lastRoomBoardHash) {
+            lastRoomBoardHash = newBoardHash;
 
-                lastMoveFrom = room.lastMoveFrom || null;
-                lastMoveTo = room.lastMoveTo || null;
+            applyBoardStateFromRoom(room.board || []);
+            isCoUp = !!room.isCoUp;
+            luotDi = room.turn || "do";
+            timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
+            timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
 
-                updateTurnUIOnly();
+            timerDoEl.innerText = formatTime(timeDo);
+            timerDenEl.innerText = formatTime(timeDen);
 
-                if (lastMoveFrom && lastMoveTo) {
-                    drawLastMoveMarks();
-                }
+            lastMoveFrom = room.lastMoveFrom || null;
+            lastMoveTo = room.lastMoveTo || null;
 
-                startTimer();
+            updateTurnUIOnly();
+
+            if (lastMoveFrom && lastMoveTo) {
+                drawLastMoveMarks();
             }
+
+            startTimer();
         }
 
         if (room.drawRequest && room.drawRequest.from !== mySide && room.drawRequest.at !== lastDrawRequestAt) {
             lastDrawRequestAt = room.drawRequest.at;
 
             const ok = confirm("Đối thủ xin hòa. Đồng ý không?");
-            if (currentRoomId !== listeningRoomId) return;
-
             if (ok) {
-                await db.ref("matches/" + listeningRoomId).update({
+                await db.ref("matches/" + roomId).update({
                     winner: "hoa",
                     winReason: "hoa",
                     drawRequest: null
                 });
             } else {
-                await db.ref("matches/" + listeningRoomId + "/drawRequest").remove();
+                await db.ref("matches/" + roomId + "/drawRequest").remove();
             }
         }
 
         if (room.winner && !isGameOver) {
-            if (room.winner === "hoa") {
-                endGame("HÒA CỜ", "2 BÊN HÒA");
-            } else {
-                endGame(
-                    room.winReason === "dauhang" ? "ĐẦU HÀNG" : "CHIẾU BÍ",
-                    `BÊN ${room.winner === "do" ? "ĐỎ" : "ĐEN"} THẮNG`
-                );
-            }
-        }
+    if (room.winner === "hoa") {
+        endGame("HÒA CỜ", "2 BÊN HÒA");
+    } else {
+        let title = "CHIẾU BÍ";
+        if (room.winReason === "dauhang") title = "ĐẦU HÀNG";
+        if (room.winReason === "bochay") title = "ĐỐI THỦ THOÁT";
+
+        endGame(
+            title,
+            `BÊN ${room.winner === "do" ? "ĐỎ" : "ĐEN"} THẮNG`
+        );
+    }
+}
 
         await maybeStartRoomFromHost(room, listeningRoomId);
     });
 
     roomChatRef.on("child_added", (snap) => {
         if (currentRoomId !== listeningRoomId) return;
-
         const data = snap.val();
         const content = document.getElementById("match-content-popup");
         if (!data || !content) return;
@@ -4002,19 +4588,19 @@ function bindRoom(roomId) {
 }
 
 async function joinOrCreateRealtimeMatch(mode) {
-    hideHomeUI();
-    document.getElementById("game-arena").style.display = "block";
-
-    const chatPopup = document.getElementById("match-chat-popup");
-    const chatBtn = document.getElementById("match-chat-btn");
-
-    if (window.innerWidth <= 600) {
-        showMobileChat(false);
-    } else {
-        if (chatPopup) chatPopup.style.display = "flex";
-        if (chatBtn) chatBtn.style.display = "none";
+    if (await tryResumeRealtimeMatch(mode)) {
+        return;
     }
 
+    prepareRealtimeArenaUI();
+    clearInterval(interval);
+currentRoomStatus = "waiting";
+isGameOver = false;
+luotDi = "do";
+timeDo = 540;
+timeDen = 540;
+timerDoEl.innerText = formatTime(timeDo);
+timerDenEl.innerText = formatTime(timeDen);
     const me = getCurrentPlayerProfile();
     currentRoomMode = mode;
 
@@ -4030,6 +4616,7 @@ async function joinOrCreateRealtimeMatch(mode) {
         await db.ref("matches/" + currentRoomId + "/ready/den").set(false);
         await waitingRef.remove();
 
+        saveActiveMatchSnapshot({ roomId: currentRoomId, mode, side: "den" });
         bindRoom(currentRoomId);
     } else {
         const newRoomRef = db.ref("matches").push();
@@ -4067,10 +4654,13 @@ async function joinOrCreateRealtimeMatch(mode) {
             createdAt: firebase.database.ServerValue.TIMESTAMP
         });
 
+        saveActiveMatchSnapshot({ roomId: currentRoomId, mode, side: "do" });
         bindRoom(currentRoomId);
     }
 
-    showReadyOverlay(mode);
+    closeReadyOverlay();
+readyOverlayWaitingShown = false;
+updateReadyUI();
 }
 function toggleProfileMenu(event) {
     event.stopPropagation();
@@ -4110,18 +4700,64 @@ document.querySelectorAll("#profile-dropdown .menu-item").forEach(item => {
 });
 const MAX_WITHDRAW_PER_DAY = 5;
 const MAX_WITHDRAW_PER_TX = 1000;
+
 const WITHDRAW_PASS_KEY = "pi_withdraw_password_hash";
-const PI_BALANCE_KEY = "pi-balance";
+const PI_BALANCE_KEY = "pi-balance"; // key cũ, giữ lại để migrate 1 lần
+const BALANCE_CACHE_KEY = "wallet_balance_cache";
 
 let withdrawLockResolve = null;
 let withdrawLockMode = "verify"; // verify | create
+let currentWalletBalance = 0;
+
+function getAccountKey() {
+    const user = auth.currentUser;
+    if (user?.uid) return `google_${user.uid}`;
+
+    const piName = localStorage.getItem("pi-user-name");
+    if (piName) return `pi_${piName.trim().toLowerCase()}`;
+
+    const guestName =
+        localStorage.getItem("currentUsername") ||
+        localStorage.getItem("user-name-display") ||
+        "guest";
+
+    return `guest_${guestName.trim().toLowerCase().replace(/\s+/g, "_")}`;
+}
+
+function makeWalletDbKey() {
+    return getAccountKey().replace(/[.#$\[\]\/]/g, "_");
+}
+
+function scopedKey(base) {
+    return `${base}:${getAccountKey()}`;
+}
+
+function getWithdrawPassKey() {
+    return scopedKey(WITHDRAW_PASS_KEY);
+}
+
+function getBalanceCacheKey() {
+    return scopedKey(BALANCE_CACHE_KEY);
+}
+
+function walletRef() {
+    return db.ref("wallets/" + makeWalletDbKey());
+}
+
+function updateBalanceUI(amount) {
+    const safeAmount = Math.max(0, Number(amount) || 0);
+    const balanceEl = document.getElementById("user-balance");
+    if (balanceEl) {
+        balanceEl.innerText = safeAmount.toFixed(2) + " π";
+    }
+}
 
 function getTodayWithdrawKey() {
     const now = new Date();
     const y = now.getFullYear();
     const m = String(now.getMonth() + 1).padStart(2, "0");
     const d = String(now.getDate()).padStart(2, "0");
-    return `pi_withdraw_${y}-${m}-${d}`;
+    return scopedKey(`pi_withdraw_${y}-${m}-${d}`);
 }
 
 function getWithdrawState() {
@@ -4132,36 +4768,64 @@ function saveWithdrawState(state) {
     localStorage.setItem(getTodayWithdrawKey(), JSON.stringify(state));
 }
 
-function getPiBalance() {
-    const saved = localStorage.getItem(PI_BALANCE_KEY);
-    if (saved !== null) return Number(saved) || 0;
+async function loadWalletBalance() {
+    try {
+        const snap = await walletRef().once("value");
+        let amount = 0;
 
-    const balanceText = document.getElementById("user-balance")?.innerText || "0";
-    const parsed = parseFloat(balanceText.replace(/[^\d.]/g, "")) || 0;
-    localStorage.setItem(PI_BALANCE_KEY, parsed);
-    return parsed;
+        if (snap.exists() && snap.val() && snap.val().balance != null) {
+            amount = Number(snap.val().balance) || 0;
+        } else {
+            const scopedCache = localStorage.getItem(getBalanceCacheKey());
+            const legacy = localStorage.getItem(PI_BALANCE_KEY);
+            amount = Number(scopedCache ?? legacy ?? 0) || 0;
+
+            await walletRef().update({
+                balance: amount,
+                updatedAt: firebase.database.ServerValue.TIMESTAMP,
+                name: localStorage.getItem("user-name-display") || "Người chơi",
+                photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+            });
+        }
+
+        currentWalletBalance = Math.max(0, amount);
+        localStorage.setItem(getBalanceCacheKey(), String(currentWalletBalance));
+        updateBalanceUI(currentWalletBalance);
+        return currentWalletBalance;
+    } catch (err) {
+        console.error("Lỗi load ví:", err);
+
+        const cached = Number(localStorage.getItem(getBalanceCacheKey()) || 0) || 0;
+        currentWalletBalance = Math.max(0, cached);
+        updateBalanceUI(currentWalletBalance);
+        return currentWalletBalance;
+    }
+}
+
+function getPiBalance() {
+    const cached = Number(localStorage.getItem(getBalanceCacheKey()) || currentWalletBalance || 0) || 0;
+    return Math.max(0, cached);
 }
 
 function setPiBalance(amount) {
     const safeAmount = Math.max(0, Number(amount) || 0);
-    localStorage.setItem(PI_BALANCE_KEY, safeAmount);
+    currentWalletBalance = safeAmount;
 
-    const balanceEl = document.getElementById("user-balance");
-    if (balanceEl) {
-        balanceEl.innerText = safeAmount.toFixed(2) + " π";
-    }
-}
+    localStorage.setItem(getBalanceCacheKey(), String(safeAmount));
+    updateBalanceUI(safeAmount);
 
-async function sha256(text) {
-    const data = new TextEncoder().encode(text);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-    return Array.from(new Uint8Array(hashBuffer))
-        .map(b => b.toString(16).padStart(2, "0"))
-        .join("");
+    walletRef().update({
+        balance: safeAmount,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP,
+        name: localStorage.getItem("user-name-display") || "Người chơi",
+        photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+    }).catch(err => {
+        console.error("Lỗi sync số dư:", err);
+    });
 }
 
 function hasWithdrawPassword() {
-    return !!localStorage.getItem(WITHDRAW_PASS_KEY);
+    return !!localStorage.getItem(getWithdrawPassKey());
 }
 
 function openWithdrawLock(mode = "verify") {
@@ -4277,13 +4941,13 @@ async function submitWithdrawLock() {
         }
 
         const hashed = await sha256(pass);
-        localStorage.setItem(WITHDRAW_PASS_KEY, hashed);
+        localStorage.setItem(getWithdrawPassKey(), hashed);
         alert("Đã tạo mật khẩu rút Pi cố định. Không có đổi lại đâu nha.");
         closeWithdrawLock(true);
         return;
     }
 
-    const savedHash = localStorage.getItem(WITHDRAW_PASS_KEY);
+    const savedHash = localStorage.getItem(getWithdrawPassKey());
     if (!savedHash) {
         alert("Chưa có mật khẩu rút Pi.");
         closeWithdrawLock(false);
@@ -4480,17 +5144,18 @@ if (menu) menu.classList.remove("show");
 }
 
 function hoaTran() {
-isGameOver = true;
-clearInterval(interval);
-sounds.bgm.pause();
-sounds.heartbeat.pause();
+    isGameOver = true;
+    clearInterval(interval);
+    clearInterval(readyInterval);
 
-const wrap = document.getElementById("victory-wrap");
-document.getElementById("main-result").innerText = "HÒA CỜ";
-document.getElementById("sub-result").innerText = "KHÔNG PHÂN THẮNG BẠI";
-wrap.style.transform = "translate(-50%, -50%) scale(1)";
+    if (sounds.bgm) sounds.bgm.pause();
+    if (sounds.heartbeat) sounds.heartbeat.pause();
+
+    const wrap = document.getElementById("victory-wrap");
+    document.getElementById("main-result").innerText = "HÒA CỜ";
+    document.getElementById("sub-result").innerText = "KHÔNG PHÂN THẮNG BẠI";
+    wrap.style.transform = "translate(-50%, -50%) scale(1)";
 }
-
 function handleMatchAction(type) {
     closeActionMenu();
 
@@ -4545,77 +5210,68 @@ content.scrollTop = content.scrollHeight;
 }
 
 function sendQuickMsg(text) {
-const input = document.getElementById("match-input-popup");
-const content = document.getElementById("match-content-popup");
-const menu = document.getElementById("emoji-menu");
+    if (!text) return;
 
-if (!input || !content) return;
+    if (!currentRoomId || !roomChatRef) return;
 
-input.value = text;
+    const me = getCurrentPlayerProfile();
 
-const msg = document.createElement("div");
-msg.style.marginBottom = "5px";
-msg.innerHTML = `<b style="color:#55efc4;">Mầy:</b> ${text}`;
+    roomChatRef.push({
+        uid: me.uid || "",
+        name: me.name || "Người chơi",
+        side: mySide || "",
+        text: text,
+        at: firebase.database.ServerValue.TIMESTAMP
+    });
 
-content.appendChild(msg);
-content.scrollTop = content.scrollHeight;
-
-input.value = "";
-
-if (menu) {
-    menu.style.display = "none";
-}
+    // ✅ TẮT MENU ICON SAU KHI CHỌN
+    const menu = document.getElementById("emoji-menu");
+    if (menu) menu.style.display = "none";
 }
 function updateReadyUI() {
-    const countdown = document.getElementById("ready-countdown");
-    const doStatus = document.getElementById("ready-do-status");
-    const denStatus = document.getElementById("ready-den-status");
-    const doBtn = document.getElementById("ready-do-btn");
-    const denBtn = document.getElementById("ready-den-btn");
+    const btn = document.getElementById("ready-main-btn");
+    const sideText = document.getElementById("ready-side-text");
+    const countdownEl = document.getElementById("ready-countdown");
+if (countdownEl) {
+    countdownEl.textContent = Math.max(0, readyTime);
+}
+    if (!btn || !sideText) return;
+    
 
-    if (countdown) countdown.innerText = readyTime;
+    btn.classList.remove("ready-btn-do", "ready-btn-den");
 
-    if (doStatus) {
-        doStatus.innerText = readyDo ? "ĐỎ: ĐÃ SẴN SÀNG" : "ĐỎ: CHƯA SẴN SÀNG";
-        doStatus.classList.toggle("ready-ok", readyDo);
+    if (mySide === "do") {
+        btn.classList.add("ready-btn-do");
+        btn.textContent = readyDo ? "ĐÃ SẴN SÀNG" : "ĐỎ SẴN SÀNG";
+        sideText.textContent = readyDo ? "MÀY ĐÃ XÁC NHẬN" : "MÀY ĐANG CẦM QUÂN ĐỎ";
+    } else if (mySide === "den") {
+        btn.classList.add("ready-btn-den");
+        btn.textContent = readyDen ? "ĐÃ SẴN SÀNG" : "ĐEN SẴN SÀNG";
+        sideText.textContent = readyDen ? "MÀY ĐÃ XÁC NHẬN" : "MÀY ĐANG CẦM QUÂN ĐEN";
+    } else {
+        btn.textContent = "SẴN SÀNG";
+        sideText.textContent = "ĐANG CHỜ NHẬN PHE";
     }
 
-    if (denStatus) {
-        denStatus.innerText = readyDen ? "ĐEN: ĐÃ SẴN SÀNG" : "ĐEN: CHƯA SẴN SÀNG";
-        denStatus.classList.toggle("ready-ok", readyDen);
-    }
-
-    if (doBtn) {
-        doBtn.style.display = mySide === "do" ? "block" : "none";
-        doBtn.disabled = mySide !== "do" || readyDo;
-        doBtn.innerText = readyDo ? "ĐỎ ĐÃ SẴN SÀNG" : "ĐỎ SẴN SÀNG";
-    }
-
-    if (denBtn) {
-        denBtn.style.display = mySide === "den" ? "block" : "none";
-        denBtn.disabled = mySide !== "den" || readyDen;
-        denBtn.innerText = readyDen ? "ĐEN ĐÃ SẴN SÀNG" : "ĐEN SẴN SÀNG";
+    if ((mySide === "do" && readyDo) || (mySide === "den" && readyDen)) {
+        btn.disabled = true;
+        btn.style.opacity = "0.72";
+        btn.style.cursor = "default";
+    } else {
+        btn.disabled = false;
+        btn.style.opacity = "1";
+        btn.style.cursor = "pointer";
     }
 }
-    function closeReadyOverlay() {
+function closeReadyOverlay() {
     const overlay = document.getElementById("ready-overlay");
-    if (overlay) {
-        overlay.style.display = "none";
-        overlay.style.pointerEvents = "none";
-    }
+    if (overlay) overlay.style.display = "none";
     clearInterval(readyInterval);
 }
-async function failReadyAndBackHome() {
+function failReadyAndBackHome() {
     closeReadyOverlay();
-    await leaveRealtimeMatch();
-    showMobileChat(false);
     showHomeUI();
     document.getElementById("game-arena").style.display = "none";
-
-    const chatContent = document.getElementById("match-content-popup");
-    if (chatContent) {
-        chatContent.innerHTML = '<p style="color:#55efc4;">Hệ thống: Vào việc đi mậy!</p>';
-    }
 }
 
 function startReadyCountdown() {
@@ -4624,6 +5280,7 @@ function startReadyCountdown() {
     readyInterval = setInterval(() => {
         const overlay = document.getElementById("ready-overlay");
 
+        // Nếu overlay đã tắt thì dừng countdown luôn
         if (!overlay || overlay.style.display === "none") {
             clearInterval(readyInterval);
             return;
@@ -4635,12 +5292,17 @@ function startReadyCountdown() {
         if (readyTime <= 0) {
             clearInterval(readyInterval);
 
+            // chặn báo nhảm nếu đã vào trận / overlay đã tắt
             if (!overlay || overlay.style.display === "none") return;
 
             alert("Hết thời gian sẵn sàng!");
             failReadyAndBackHome();
         }
     }, 1000);
+
+}
+function getCurrentMode() {
+    return isCoUp ? 'co-up' : 'co-tuong';
 }
 
 async function changeMatch() {
@@ -4672,28 +5334,20 @@ function autoResetNextMatch() {
 }
 
 function showReadyOverlay(mode) {
-    pendingGameMode = mode;
-
+    pendingGameMode = mode || pendingGameMode || currentRoomMode || "tong";
     const overlay = document.getElementById("ready-overlay");
     if (!overlay) return;
 
-    const isHidden = getComputedStyle(overlay).display === "none";
-
-    if (isHidden) {
-        readyTime = 30;
-        overlay.style.display = "flex";
-        overlay.style.pointerEvents = "auto";
-        startReadyCountdown();
-    }
-
+    overlay.style.display = "flex";
+    readyTime = 30;
     updateReadyUI();
+    startReadyCountdown();
 }
 
-function setReady(side) {
-    if (!currentRoomId) return;
-    if (side !== mySide) return;
+function setReady() {
+    if (!currentRoomId || !mySide) return;
 
-    db.ref("matches/" + currentRoomId + "/ready/" + side).set(true);
+    db.ref("matches/" + currentRoomId + "/ready/" + mySide).set(true);
 }
 
 async function batDauTranDau(loai) {
@@ -4706,56 +5360,24 @@ document.getElementById('match-input-popup')?.addEventListener('keypress', funct
 if (e.key === 'Enter') sendMatchChat();
 });
 function toggleEmojiMenu() {
+    const menu = document.getElementById("emoji-menu");
+    if (!menu) return;
 
-const menu = document.getElementById('emoji-menu');
-
-if (!menu) return;
-
-if (menu.style.display === "grid") {
-menu.style.display = "none";
-} else {
-menu.style.display = "grid";
+    menu.style.display = menu.style.display === "none" ? "grid" : "none";
 }
-}
-function showMobileChat(isOpen) {
-const chat = document.getElementById("match-chat-popup");
-const btn = document.getElementById("match-chat-btn");
-const menu = document.getElementById("emoji-menu");
-if (!chat || !btn) return;
-
-if (window.innerWidth > 600) {
-    chat.style.display = "flex";
-    btn.style.display = "none";
-    return;
-}
-
-if (isOpen) {
-    chat.style.display = "flex";
-    btn.style.display = "none";
-} else {
-    chat.style.display = "none";
-    btn.style.display = "flex";
-    if (menu) menu.style.display = "none";
-}
-}
-
-function closeMatchChat() {
-    showMobileChat(false);
-}
-
 function toggleMatchChat() {
 const chat = document.getElementById("match-chat-popup");
+const menu = document.getElementById("emoji-menu");
 if (!chat) return;
 
-if (window.innerWidth > 600) {
-    chat.style.display = "flex";
-    return;
-}
-
 const isOpen = getComputedStyle(chat).display !== "none";
-showMobileChat(!isOpen);
-}
 
+if (isOpen) {
+    chat.style.display = "none";
+    if (menu) menu.style.display = "none";
+} else {
+    chat.style.display = "flex";
+}
 document.addEventListener("click", function (e) {
     if (window.innerWidth > 600) return;
 
@@ -4768,42 +5390,28 @@ document.addEventListener("click", function (e) {
 
     if (chat.contains(e.target) || btn.contains(e.target)) return;
 
-    showMobileChat(false);
+    chat.style.display = "none";
     if (menu) menu.style.display = "none";
+
+    e.preventDefault();
+    e.stopPropagation();
 }, true);
-
-window.addEventListener("resize", function () {
-    if (window.innerWidth > 600) {
-        const chat = document.getElementById("match-chat-popup");
-        const btn = document.getElementById("match-chat-btn");
-        if (chat) chat.style.display = "flex";
-        if (btn) btn.style.display = "none";
-        return;
-    }
-
-    const chat = document.getElementById("match-chat-popup");
-    if (!chat) return;
-
-    if (getComputedStyle(chat).display !== "none") {
-        showMobileChat(true);
-    } else {
-        showMobileChat(false);
-    }
-});
+}
 
 function sendMatchChat() {
     const input = document.getElementById("match-input-popup");
     if (!input) return;
 
     const text = input.value.trim();
-    if (text === "") return;
-    if (!currentRoomId || !mySide) return;
+    if (!text) return;
+    if (!currentRoomId || !roomChatRef) return;
 
     const me = getCurrentPlayerProfile();
 
-    db.ref("matches/" + currentRoomId + "/chat").push({
-        name: me.name,
-        side: mySide,
+    roomChatRef.push({
+        uid: me.uid || "",
+        name: me.name || "Người chơi",
+        side: mySide || "",
         text,
         at: firebase.database.ServerValue.TIMESTAMP
     });
@@ -5117,6 +5725,16 @@ async function startPiDeposit(amount = 1) {
     alert(err.message || "Không nạp Pi được.");
   }
 }
+document.addEventListener("click", function(e) {
+    const menu = document.getElementById("emoji-menu");
+    const btn = document.getElementById("toggle-emoji-btn");
+
+    if (!menu || !btn) return;
+
+    if (!menu.contains(e.target) && e.target !== btn) {
+        menu.style.display = "none";
+    }
+});
 </script>
 </body>
 
