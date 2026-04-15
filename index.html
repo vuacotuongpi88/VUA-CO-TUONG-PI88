@@ -4034,10 +4034,10 @@ board.onclick = (e) => {
     mt[r2][c2] = { side: selectedPiece.dataset.side, type: selectedPiece.dataset.type };
     mt[r1][c1] = null;
 
-    if (laBiChieu(luotDi, mt)) {
-        alert("Không được để Tướng bị chiếu!");
-        return;
-    }
+    if (laBiChieu(selectedPiece.dataset.side, mt)) {
+    alert("Không được để Tướng bị chiếu!");
+    return;
+}
 
     if (target) {
         target.remove();
