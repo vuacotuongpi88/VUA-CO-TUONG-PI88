@@ -4014,14 +4014,14 @@ board.onclick = (e) => {
     const c1 = fromReal.c;
     const r1 = fromReal.r;
 
-    if (target && target.dataset.side === luotDi) {
-        selectedPiece.classList.remove("selected");
-        selectedPiece = target;
-        selectedPiece.classList.add("selected");
-        showMoveHints(selectedPiece);
-        playSnd('click');
-        return;
-    }
+    if (target && target.dataset.side === mySide) {
+    selectedPiece.classList.remove("selected");
+    selectedPiece = target;
+    selectedPiece.classList.add("selected");
+    showMoveHints(selectedPiece);
+    playSnd('click');
+    return;
+}
 
     if (!checkLuat(selectedPiece.dataset.type, selectedPiece.dataset.side, c1, r1, c2, r2, taoMaTran())) {
         selectedPiece.classList.remove("selected");
