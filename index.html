@@ -2603,9 +2603,11 @@ margin-bottom: 14px;
 
 <div id="login-screen">
     <div class="welcome-login-corner">
-        <button id="welcome-pi-btn" onclick="loginPi()" style="display:none;">ĐĂNG NHẬP PI</button>
-        <button id="welcome-google-btn" onclick="loginGoogle()">ĐĂNG NHẬP GOOGLE</button>
+    <button id="welcome-pi-btn" onclick="loginPi()" style="display:none;">ĐĂNG NHẬP PI</button>
+    <div id="pi-browser-note" style="display:none; max-width:220px; padding:8px 10px; border-radius:12px; background:rgba(0,0,0,0.72); color:#ffeaa7; font-size:11px; line-height:1.4; text-align:right; border:1px solid rgba(236,221,7,0.45);">
+        Muốn đăng nhập / nạp / rút Pi, vui lòng mở app bằng Pi Browser.
     </div>
+</div>
 
     <div class="welcome-wrap">
         <div class="welcome-hero">
@@ -3222,15 +3224,17 @@ showHomeUI();
 function showLoginChoices() {
     const piBtn = document.getElementById("welcome-pi-btn");
     const googleBtn = document.getElementById("welcome-google-btn");
+    const piNote = document.getElementById("pi-browser-note");
     const oldPiBtn = document.getElementById("pi-login-btn");
     const oldGoogleBtn = document.getElementById("google-login-btn");
     const guestBtn = document.getElementById("guest-login-btn");
 
-    const isPi = isRealPiBrowser();
+    const isPi = !!window.Pi;
 
     if (piBtn) piBtn.style.display = isPi ? "inline-flex" : "none";
-    if (googleBtn) googleBtn.style.display = "inline-flex";
+    if (piNote) piNote.style.display = isPi ? "none" : "block";
 
+    if (googleBtn) googleBtn.style.display = "none";
     if (oldPiBtn) oldPiBtn.style.display = "none";
     if (oldGoogleBtn) oldGoogleBtn.style.display = "none";
     if (guestBtn) guestBtn.style.display = "none";
@@ -3252,30 +3256,7 @@ function isRealPiBrowser() {
     return !!window.Pi && /pibrowser|pi browser|minepi/i.test(ua);
 }
 function loginGoogle() {
-    const isPiBrowser = isRealPiBrowser();
-
-    localStorage.removeItem("pi-user-name");
-    localStorage.removeItem("pi-user-photo");
-
-    if (isPiBrowser) {
-        auth.signInWithRedirect(provider);
-        return;
-    }
-
-    auth.signInWithPopup(provider)
-        .then((result) => {
-            const user = result.user;
-            if (!user) return;
-
-            const displayName = user.displayName || "Người chơi";
-            const photoURL = user.photoURL || "images/do_tuong.png";
-
-            applyLoggedInUI(displayName, photoURL);
-        })
-        .catch(err => {
-            console.error("Lỗi đăng nhập:", err);
-            alert("Không đăng nhập được Google: " + (err.message || err.code || err));
-        });
+    alert("App này đã chuyển sang đăng nhập bằng tài khoản Pi. Hãy mở bằng Pi Browser rồi bấm ĐĂNG NHẬP PI.");
 }
 
 function logout() {
@@ -3303,38 +3284,19 @@ function switchAccount() {
     const chatBox = document.getElementById("chat-box");
     if (chatBox) chatBox.style.display = "none";
 
-    const isPiBrowser = isRealPiBrowser();
+    localStorage.removeItem("pi-user-name");
+    localStorage.removeItem("pi-user-photo");
+    localStorage.removeItem("user-name-display");
+    localStorage.removeItem("user-photo");
+    localStorage.removeItem("currentUsername");
 
-    auth.signOut()
-        .then(() => {
-            localStorage.removeItem("user-name-display");
-            localStorage.removeItem("user-photo");
-            localStorage.removeItem("currentUsername");
-            localStorage.removeItem("pi-user-name");
-            localStorage.removeItem("pi-user-photo");
+    if (window.Pi) {
+        loginPi();
+        return;
+    }
 
-            if (isPiBrowser) {
-                auth.signInWithRedirect(provider);
-                return;
-            }
-
-            return auth.signInWithPopup(provider);
-        })
-        .then((result) => {
-            if (isPiBrowser || !result) return;
-
-            const user = result.user;
-            if (!user) return;
-
-            const displayName = user.displayName || "Người chơi";
-            const photoURL = user.photoURL || "images/do_tuong.png";
-
-            applyLoggedInUI(displayName, photoURL);
-        })
-        .catch(err => {
-            console.error("Lỗi đổi tài khoản:", err);
-            alert("Không đổi được tài khoản: " + (err.message || err.code || err));
-        });
+    alert("Muốn đổi tài khoản Pi, vui lòng mở app trong Pi Browser.");
+    location.reload();
 }
 
 
@@ -5669,7 +5631,7 @@ async function loginPi() {
             return null;
         }
 
-        const scopes = ["username", "payments"];
+       const scopes = ["username", "payments", "wallet_address"];
         piAuth = await window.Pi.authenticate(scopes, onIncompletePaymentFound);
 
         const piName = piAuth?.user?.username || "Pi User";
