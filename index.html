@@ -4008,13 +4008,13 @@ board.onclick = (e) => {
     return;
 }
 
-    const fromViewC = columns.indexOf(parseFloat(selectedPiece.style.left));
-    const fromViewR = rows.indexOf(parseFloat(selectedPiece.style.top));
-    const fromReal = mapViewToBoard(fromViewC, fromViewR);
-    const c1 = fromReal.c;
-    const r1 = fromReal.r;
+const fromViewC = columns.indexOf(parseFloat(selectedPiece.style.left));
+const fromViewR = rows.indexOf(parseFloat(selectedPiece.style.top));
+const fromReal = mapViewToBoard(fromViewC, fromViewR);
+const c1 = fromReal.c;
+const r1 = fromReal.r;
 
-    if (target && target.dataset.side === mySide) {
+if (target && target.dataset.side === mySide) {
     selectedPiece.classList.remove("selected");
     selectedPiece = target;
     selectedPiece.classList.add("selected");
@@ -4023,18 +4023,18 @@ board.onclick = (e) => {
     return;
 }
 
-    if (!checkLuat(selectedPiece.dataset.type, selectedPiece.dataset.side, c1, r1, c2, r2, taoMaTran())) {
-        selectedPiece.classList.remove("selected");
-        selectedPiece = null;
-        clearMoveHints();
-        return;
-    }
+if (!checkLuat(selectedPiece.dataset.type, selectedPiece.dataset.side, c1, r1, c2, r2, taoMaTran())) {
+    selectedPiece.classList.remove("selected");
+    selectedPiece = null;
+    clearMoveHints();
+    return;
+}
 
-    let mt = taoMaTran();
-    mt[r2][c2] = { side: selectedPiece.dataset.side, type: selectedPiece.dataset.type };
-    mt[r1][c1] = null;
+let mt = taoMaTran();
+mt[r2][c2] = { side: selectedPiece.dataset.side, type: selectedPiece.dataset.type };
+mt[r1][c1] = null;
 
-    if (laBiChieu(selectedPiece.dataset.side, mt)) {
+if (laBiChieu(selectedPiece.dataset.side, mt)) {
     alert("Không được để Tướng bị chiếu!");
     return;
 }
