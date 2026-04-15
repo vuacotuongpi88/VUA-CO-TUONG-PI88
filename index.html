@@ -3432,10 +3432,9 @@ if (friendBox) friendBox.classList.remove("show");
         if (gameRow) gameRow.style.display = "flex";
     }
 }
-function selectGame(mode) {
-    isCoUp = (mode === 'co-up');
-    hideHomeUI();
-    document.getElementById("game-arena").style.display = "block";
+async function selectGame(mode) {
+    const roomMode = mode === "co-up" ? "up" : "tong";
+    await batDauTranDau(roomMode);
 }
 
 async function backToMenu() {
@@ -4284,31 +4283,19 @@ function renderPlayersFromRoom(room) {
     if (bottomAvatar) bottomAvatar.src = myPlayer.photo || "images/do_tuong.png";
 
     const oppBalance = Number(oppPlayer.balance || 0);
-    const myBalance = Number(myPlayer.balance || 0);
+const myBalance = Number(myPlayer.balance || 0);
 
-    if (topRank) {
-        topRank.classList.remove("player-ready-on", "player-ready-off");
+if (topRank) {
+    topRank.classList.remove("player-ready-on", "player-ready-off");
+    topRank.innerText = oppBalance.toFixed(2) + " π";
+    topRank.classList.add("player-ready-on");
+}
 
-        if (isPlayingNow) {
-            topRank.innerText = oppBalance.toFixed(2) + " π";
-            topRank.classList.add("player-ready-on");
-        } else {
-            topRank.innerText = oppReady ? "ĐÃ SS" : "CHƯA SS";
-            topRank.classList.add(oppReady ? "player-ready-on" : "player-ready-off");
-        }
-    }
-
-    if (bottomRank) {
-        bottomRank.classList.remove("player-ready-on", "player-ready-off");
-
-        if (isPlayingNow) {
-            bottomRank.innerText = myBalance.toFixed(2) + " π";
-            bottomRank.classList.add("player-ready-on");
-        } else {
-            bottomRank.innerText = myReady ? "ĐÃ SS" : "CHƯA SS";
-            bottomRank.classList.add(myReady ? "player-ready-on" : "player-ready-off");
-        }
-    }
+if (bottomRank) {
+    bottomRank.classList.remove("player-ready-on", "player-ready-off");
+    bottomRank.innerText = myBalance.toFixed(2) + " π";
+    bottomRank.classList.add("player-ready-on");
+}
 }
 
 function cleanupRoomListeners() {
