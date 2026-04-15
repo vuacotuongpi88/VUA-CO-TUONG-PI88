@@ -3999,14 +3999,14 @@ board.onclick = (e) => {
     );
 
     if (!selectedPiece) {
-        if (target && target.dataset.side === luotDi) {
-            selectedPiece = target;
-            selectedPiece.classList.add("selected");
-            showMoveHints(selectedPiece);
-            playSnd('click');
-        }
-        return;
+    if (target && target.dataset.side === mySide && mySide === luotDi) {
+        selectedPiece = target;
+        selectedPiece.classList.add("selected");
+        showMoveHints(selectedPiece);
+        playSnd('click');
     }
+    return;
+}
 
     const fromViewC = columns.indexOf(parseFloat(selectedPiece.style.left));
     const fromViewR = rows.indexOf(parseFloat(selectedPiece.style.top));
@@ -4014,14 +4014,14 @@ board.onclick = (e) => {
     const c1 = fromReal.c;
     const r1 = fromReal.r;
 
-    if (target && target.dataset.side === luotDi) {
-        selectedPiece.classList.remove("selected");
-        selectedPiece = target;
-        selectedPiece.classList.add("selected");
-        showMoveHints(selectedPiece);
-        playSnd('click');
-        return;
-    }
+    if (target && target.dataset.side === mySide) {
+    selectedPiece.classList.remove("selected");
+    selectedPiece = target;
+    selectedPiece.classList.add("selected");
+    showMoveHints(selectedPiece);
+    playSnd('click');
+    return;
+}
 
     if (!checkLuat(selectedPiece.dataset.type, selectedPiece.dataset.side, c1, r1, c2, r2, taoMaTran())) {
         selectedPiece.classList.remove("selected");
