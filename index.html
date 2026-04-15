@@ -3995,11 +3995,19 @@ board.onclick = (e) => {
     const r2 = toReal.r;
 
     const target = Array.from(document.querySelectorAll(".piece")).find(p =>
+    
         p.style.left === fX + "%" && p.style.top === fY + "%"
     );
-
+const isOwnTurnPiece = target && mySide && luotDi === mySide && target.dataset.side === mySide;
+if (isOwnTurnPiece) {
+    try {
+        sounds.click.pause();
+        sounds.click.currentTime = 0;
+        sounds.click.play().catch(() => {});
+    } catch (e) {}
+}
     if (!selectedPiece) {
-    if (target && target.dataset.side === mySide && mySide === luotDi) {
+    if (target && target.dataset.side === luotDi) {
         selectedPiece = target;
         selectedPiece.classList.add("selected");
         showMoveHints(selectedPiece);
@@ -4014,7 +4022,7 @@ board.onclick = (e) => {
     const c1 = fromReal.c;
     const r1 = fromReal.r;
 
-    if (target && target.dataset.side === mySide) {
+    if (target && target.dataset.side === luotDi) {
     selectedPiece.classList.remove("selected");
     selectedPiece = target;
     selectedPiece.classList.add("selected");
@@ -4034,16 +4042,20 @@ board.onclick = (e) => {
     mt[r2][c2] = { side: selectedPiece.dataset.side, type: selectedPiece.dataset.type };
     mt[r1][c1] = null;
 
-    if (laBiChieu(selectedPiece.dataset.side, mt)) {
-        alert("Không được để Tướng bị chiếu!");
-        return;
-    }
+    if (laBiChieu(luotDi, mt)) {
+    alert("Không được để Tướng bị chiếu!");
+    return;
+}
 
     if (target) {
     target.remove();
-    playPieceSideSound(selectedPiece.dataset.side, 'capture');
+    try {
+        sounds.capture.pause();
+        sounds.capture.currentTime = 0;
+        sounds.capture.play().catch(() => {});
+    } catch (e) {}
 } else {
-    playPieceSideSound(selectedPiece.dataset.side, 'click');
+    playSnd('click');
 }
 
     lastMoveFrom = { c: c1, r: r1 };
