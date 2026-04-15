@@ -4,7 +4,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<<<<<<< HEAD
 <title>Cờ Tướng Online MC - trúc lâm tiên cảnh/title>
+=======
+<title>Cờ Tướng Online MC - TRÚC LÂM ĐỘC TÔN</title>
+>>>>>>> 1ae506f (fix google login normal browser and pi browser flow)
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -2600,7 +2604,7 @@ margin-bottom: 14px;
 <div id="login-screen">
     <div class="welcome-login-corner">
         <button id="welcome-pi-btn" onclick="loginPi()" style="display:none;">ĐĂNG NHẬP PI</button>
-        <button id="welcome-google-btn" onclick="loginGoogle()">ĐĂNG NHẬP</button>
+        <button id="welcome-google-btn" onclick="loginGoogle()">ĐĂNG NHẬP GOOGLE</button>
     </div>
 
     <div class="welcome-wrap">
@@ -3222,7 +3226,7 @@ function showLoginChoices() {
     const oldGoogleBtn = document.getElementById("google-login-btn");
     const guestBtn = document.getElementById("guest-login-btn");
 
-    const isPi = !!window.Pi;
+    const isPi = isRealPiBrowser();
 
     if (piBtn) piBtn.style.display = isPi ? "inline-flex" : "none";
     if (googleBtn) googleBtn.style.display = "inline-flex";
@@ -3243,7 +3247,21 @@ function savePiUser(userName) {
     localStorage.setItem("pi-user-name", userName || "Pi User");
     localStorage.setItem("pi-user-photo", "images/do_tuong.png");
 }
+function isRealPiBrowser() {
+    const ua = navigator.userAgent || "";
+    return !!window.Pi && /pibrowser|pi browser|minepi/i.test(ua);
+}
 function loginGoogle() {
+    const isPiBrowser = isRealPiBrowser();
+
+    localStorage.removeItem("pi-user-name");
+    localStorage.removeItem("pi-user-photo");
+
+    if (isPiBrowser) {
+        auth.signInWithRedirect(provider);
+        return;
+    }
+
     auth.signInWithPopup(provider)
         .then((result) => {
             const user = result.user;
@@ -3252,14 +3270,11 @@ function loginGoogle() {
             const displayName = user.displayName || "Người chơi";
             const photoURL = user.photoURL || "images/do_tuong.png";
 
-            localStorage.removeItem("pi-user-name");
-            localStorage.removeItem("pi-user-photo");
-
             applyLoggedInUI(displayName, photoURL);
         })
         .catch(err => {
             console.error("Lỗi đăng nhập:", err);
-            alert("Không đăng nhập được: " + (err.message || err.code || err));
+            alert("Không đăng nhập được Google: " + (err.message || err.code || err));
         });
 }
 
@@ -3288,14 +3303,26 @@ function switchAccount() {
     const chatBox = document.getElementById("chat-box");
     if (chatBox) chatBox.style.display = "none";
 
+    const isPiBrowser = isRealPiBrowser();
+
     auth.signOut()
         .then(() => {
             localStorage.removeItem("user-name-display");
             localStorage.removeItem("user-photo");
             localStorage.removeItem("currentUsername");
+            localStorage.removeItem("pi-user-name");
+            localStorage.removeItem("pi-user-photo");
+
+            if (isPiBrowser) {
+                auth.signInWithRedirect(provider);
+                return;
+            }
+
             return auth.signInWithPopup(provider);
         })
         .then((result) => {
+            if (isPiBrowser || !result) return;
+
             const user = result.user;
             if (!user) return;
 
@@ -3432,9 +3459,10 @@ if (friendBox) friendBox.classList.remove("show");
         if (gameRow) gameRow.style.display = "flex";
     }
 }
-async function selectGame(mode) {
-    const roomMode = mode === "co-up" ? "up" : "tong";
-    await batDauTranDau(roomMode);
+function selectGame(mode) {
+    isCoUp = (mode === 'co-up');
+    hideHomeUI();
+    document.getElementById("game-arena").style.display = "block";
 }
 
 async function backToMenu() {
@@ -3550,8 +3578,15 @@ function updateSingleTimerRing(timerEl, secondsLeft) {
 }
 
 function refreshTimerRings() {
-    updateSingleTimerRing(timerDoEl, timeDo);
-    updateSingleTimerRing(timerDenEl, timeDen);
+    const isBlackView = mySide === "den";
+
+    // timerDenEl = ô timer phía TRÊN
+    // timerDoEl  = ô timer phía DƯỚI
+    const topSeconds = isBlackView ? timeDo : timeDen;
+    const bottomSeconds = isBlackView ? timeDen : timeDo;
+
+    updateSingleTimerRing(timerDenEl, topSeconds);
+    updateSingleTimerRing(timerDoEl, bottomSeconds);
 }
 
 
@@ -4283,19 +4318,31 @@ function renderPlayersFromRoom(room) {
     if (bottomAvatar) bottomAvatar.src = myPlayer.photo || "images/do_tuong.png";
 
     const oppBalance = Number(oppPlayer.balance || 0);
-const myBalance = Number(myPlayer.balance || 0);
+    const myBalance = Number(myPlayer.balance || 0);
 
-if (topRank) {
-    topRank.classList.remove("player-ready-on", "player-ready-off");
-    topRank.innerText = oppBalance.toFixed(2) + " π";
-    topRank.classList.add("player-ready-on");
-}
+    if (topRank) {
+        topRank.classList.remove("player-ready-on", "player-ready-off");
 
-if (bottomRank) {
-    bottomRank.classList.remove("player-ready-on", "player-ready-off");
-    bottomRank.innerText = myBalance.toFixed(2) + " π";
-    bottomRank.classList.add("player-ready-on");
-}
+        if (isPlayingNow) {
+            topRank.innerText = oppBalance.toFixed(2) + " π";
+            topRank.classList.add("player-ready-on");
+        } else {
+            topRank.innerText = oppReady ? "ĐÃ SS" : "CHƯA SS";
+            topRank.classList.add(oppReady ? "player-ready-on" : "player-ready-off");
+        }
+    }
+
+    if (bottomRank) {
+        bottomRank.classList.remove("player-ready-on", "player-ready-off");
+
+        if (isPlayingNow) {
+            bottomRank.innerText = myBalance.toFixed(2) + " π";
+            bottomRank.classList.add("player-ready-on");
+        } else {
+            bottomRank.innerText = myReady ? "ĐÃ SS" : "CHƯA SS";
+            bottomRank.classList.add(myReady ? "player-ready-on" : "player-ready-off");
+        }
+    }
 }
 
 function cleanupRoomListeners() {
