@@ -3966,24 +3966,7 @@ if (safe) return false;
 }
 return true;
 }
-function forcePieceSound(kind) {
-    try {
-        const snd = sounds[kind];
-        if (!snd) return;
-        snd.pause();
-        snd.currentTime = 0;
-        snd.play().catch(() => {});
-    } catch (e) {}
-}
-function forcePieceSoundDen(kind) {
-    try {
-        const snd = sounds[kind];
-        if (!snd) return;
-        snd.pause();
-        snd.currentTime = 0;
-        snd.play().catch(() => {});
-    } catch (e) {}
-}
+
 board.onclick = (e) => {
     console.log("CLICK", { mySide, luotDi, currentRoomId });
     const overlay = document.getElementById("ready-overlay");
@@ -4015,18 +3998,20 @@ board.onclick = (e) => {
     
         p.style.left === fX + "%" && p.style.top === fY + "%"
     );
-
+const isOwnTurnPiece = target && mySide && luotDi === mySide && target.dataset.side === mySide;
+if (isOwnTurnPiece) {
+    try {
+        sounds.click.pause();
+        sounds.click.currentTime = 0;
+        sounds.click.play().catch(() => {});
+    } catch (e) {}
+}
     if (!selectedPiece) {
     if (target && target.dataset.side === luotDi) {
         selectedPiece = target;
         selectedPiece.classList.add("selected");
         showMoveHints(selectedPiece);
-
-        if (target.dataset.side === "do") {
-            forcePieceSound('click');
-        } else {
-            forcePieceSoundDen('click');
-        }
+        playSnd('click');
     }
     return;
 }
@@ -4042,7 +4027,7 @@ board.onclick = (e) => {
     selectedPiece = target;
     selectedPiece.classList.add("selected");
     showMoveHints(selectedPiece);
-    forcePieceSound('click');
+    playSnd('click');
     return;
 }
 
@@ -4064,21 +4049,13 @@ board.onclick = (e) => {
 
     if (target) {
     target.remove();
-
-    if (selectedPiece.dataset.side === "do") {
-        forcePieceSound('capture');
-    } else {
-        forcePieceSoundDen('capture');
-    }
-
+    try {
+        sounds.capture.pause();
+        sounds.capture.currentTime = 0;
+        sounds.capture.play().catch(() => {});
+    } catch (e) {}
 } else {
-
-    if (selectedPiece.dataset.side === "do") {
-        forcePieceSound('click');
-    } else {
-        forcePieceSoundDen('click');
-    }
-
+    playSnd('click');
 }
 
     lastMoveFrom = { c: c1, r: r1 };
