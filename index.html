@@ -3966,7 +3966,15 @@ if (safe) return false;
 }
 return true;
 }
-
+function forcePieceSound(kind) {
+    try {
+        const snd = sounds[kind];
+        if (!snd) return;
+        snd.pause();
+        snd.currentTime = 0;
+        snd.play().catch(() => {});
+    } catch (e) {}
+}
 board.onclick = (e) => {
     console.log("CLICK", { mySide, luotDi, currentRoomId });
     const overlay = document.getElementById("ready-overlay");
@@ -4011,7 +4019,7 @@ if (isOwnTurnPiece) {
         selectedPiece = target;
         selectedPiece.classList.add("selected");
         showMoveHints(selectedPiece);
-        playSnd('click');
+        forcePieceSound('click');
     }
     return;
 }
@@ -4027,7 +4035,7 @@ if (isOwnTurnPiece) {
     selectedPiece = target;
     selectedPiece.classList.add("selected");
     showMoveHints(selectedPiece);
-    playSnd('click');
+    forcePieceSound('click');
     return;
 }
 
@@ -4049,13 +4057,9 @@ if (isOwnTurnPiece) {
 
     if (target) {
     target.remove();
-    try {
-        sounds.capture.pause();
-        sounds.capture.currentTime = 0;
-        sounds.capture.play().catch(() => {});
-    } catch (e) {}
+    forcePieceSound('capture');
 } else {
-    playSnd('click');
+    forcePieceSound('click');
 }
 
     lastMoveFrom = { c: c1, r: r1 };
