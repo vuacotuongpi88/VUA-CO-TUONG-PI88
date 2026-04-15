@@ -3754,9 +3754,8 @@ function createPiece(cIdx, rIdx, type, up) {
     this.src = side === "do" ? "images/do_tuong.png" : "images/den_tuong.png";
 };
 
-    img.style.left = columns[cIdx] + "%";
+   img.style.left = columns[cIdx] + "%";
 img.style.top = rows[rIdx] + "%";
-
 img.dataset.c = cIdx;
 img.dataset.r = rIdx;
 
@@ -3969,7 +3968,29 @@ if (safe) return false;
 }
 return true;
 }
+function forcePieceSound(kind) {
+    try {
+        const base = sounds[kind];
+        console.log("[SOUND forcePieceSound]", {
+            kind,
+            hasBase: !!base,
+            src: base ? base.src : null,
+            currentTime: base ? base.currentTime : null
+        });
 
+        if (!base) return;
+
+        const snd = base.cloneNode(true);
+        snd.volume = base.volume ?? 1;
+
+        snd.onplay = () => console.log("[SOUND PLAY OK]", kind, snd.src);
+        snd.onerror = (e) => console.log("[SOUND PLAY ERROR]", kind, e);
+
+        snd.play().catch(err => console.log("[SOUND PLAY CATCH]", kind, err));
+    } catch (e) {
+        console.log("[SOUND FORCE ERROR]", kind, e);
+    }
+}
 board.onclick = (e) => {
     console.log("CLICK", { mySide, luotDi, currentRoomId });
     const overlay = document.getElementById("ready-overlay");
@@ -3998,27 +4019,40 @@ board.onclick = (e) => {
     const r2 = toReal.r;
 
     const target = Array.from(document.querySelectorAll(".piece")).find(p =>
-    
-        p.style.left === fX + "%" && p.style.top === fY + "%"
-    );
-const isOwnTurnPiece = target && mySide && luotDi === mySide && target.dataset.side === mySide;
-if (isOwnTurnPiece) {
-    try {
-        sounds.click.pause();
-        sounds.click.currentTime = 0;
-        sounds.click.play().catch(() => {});
-    } catch (e) {}
-}
+    Number(p.dataset.c) === c2 && Number(p.dataset.r) === r2
+);
+
+console.log("[CLICK DEBUG]", {
+    mySide,
+    luotDi,
+    fX,
+    fY,
+    c2,
+    r2,
+    targetFound: !!target,
+    targetSide: target ? target.dataset.side : null,
+    targetType: target ? target.dataset.type : null,
+    targetC: target ? target.dataset.c : null,
+    targetR: target ? target.dataset.r : null
+});
+
     if (!selectedPiece) {
+    console.log("[SELECT PHASE]", {
+        hasTarget: !!target,
+        targetSide: target ? target.dataset.side : null,
+        targetType: target ? target.dataset.type : null,
+        luotDi
+    });
+
     if (target && target.dataset.side === luotDi) {
+        console.log("[SELECT PHASE -> PLAY CLICK]", target.dataset.side, target.dataset.type);
         selectedPiece = target;
         selectedPiece.classList.add("selected");
         showMoveHints(selectedPiece);
-        playSnd('click');
+        forcePieceSound('click');
     }
     return;
 }
-
     const fromViewC = columns.indexOf(parseFloat(selectedPiece.style.left));
     const fromViewR = rows.indexOf(parseFloat(selectedPiece.style.top));
     const fromReal = mapViewToBoard(fromViewC, fromViewR);
@@ -4030,7 +4064,7 @@ if (isOwnTurnPiece) {
     selectedPiece = target;
     selectedPiece.classList.add("selected");
     showMoveHints(selectedPiece);
-    playSnd('click');
+    forcePieceSound('click');
     return;
 }
 
@@ -4051,14 +4085,20 @@ if (isOwnTurnPiece) {
 }
 
     if (target) {
+    console.log("[CAPTURE PHASE -> PLAY CAPTURE]", {
+        attackerSide: selectedPiece?.dataset?.side,
+        attackerType: selectedPiece?.dataset?.type,
+        victimSide: target?.dataset?.side,
+        victimType: target?.dataset?.type
+    });
     target.remove();
-    try {
-        sounds.capture.pause();
-        sounds.capture.currentTime = 0;
-        sounds.capture.play().catch(() => {});
-    } catch (e) {}
+    forcePieceSound('capture');
 } else {
-    playSnd('click');
+    console.log("[MOVE PHASE -> PLAY CLICK]", {
+        moverSide: selectedPiece?.dataset?.side,
+        moverType: selectedPiece?.dataset?.type
+    });
+    forcePieceSound('click');
 }
 
     lastMoveFrom = { c: c1, r: r1 };
@@ -4066,7 +4106,10 @@ if (isOwnTurnPiece) {
 
     const newViewPos = mapBoardToView(c2, r2);
     selectedPiece.style.left = columns[newViewPos.c] + "%";
-    selectedPiece.style.top = rows[newViewPos.r] + "%";
+selectedPiece.style.top = rows[newViewPos.r] + "%";
+selectedPiece.dataset.c = c2;
+selectedPiece.dataset.r = r2;
+selectedPiece.classList.remove("selected");
     selectedPiece.classList.remove("selected");
 
     luotDi = (luotDi === 'do') ? 'den' : 'do';
@@ -4231,19 +4274,21 @@ function applyBoardStateFromRoom(pieces) {
     if (sounds.heartbeat) sounds.heartbeat.pause();
 
     (pieces || []).forEach(item => {
-        const img = document.createElement("img");
-        img.className = "piece";
-        img.dataset.side = item.side;
-        img.dataset.type = item.type;
-        img.dataset.isUp = item.isUp ? "true" : "false";
-        img.src = item.src;
+    const img = document.createElement("img");
+    img.className = "piece";
+    img.dataset.side = item.side;
+    img.dataset.type = item.type;
+    img.dataset.isUp = item.isUp ? "true" : "false";
+    img.src = item.src;
 
-        const viewPos = mapBoardToView(item.c, item.r);
-        img.style.left = columns[viewPos.c] + "%";
-        img.style.top = rows[viewPos.r] + "%";
+    const viewPos = mapBoardToView(item.c, item.r);
+    img.style.left = columns[viewPos.c] + "%";
+    img.style.top = rows[viewPos.r] + "%";
+    img.dataset.c = item.c;
+    img.dataset.r = item.r;
 
-        board.appendChild(img);
-    });
+    board.appendChild(img);
+});
 
     updateCheckEffectFromBoard();
 }
