@@ -4,7 +4,6 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Cờ Tướng Online MC - trúc lâm tiên cảnh/title>
 <title>Cờ Tướng Online MC - TRÚC LÂM ĐỘC TÔN</title>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
@@ -3969,7 +3968,9 @@ return true;
 }
 
 board.onclick = (e) => {
+    console.log("CLICK", { mySide, luotDi, currentRoomId });
     const overlay = document.getElementById("ready-overlay");
+    
     if (overlay && getComputedStyle(overlay).display !== "none") return;
 
     if (isGameOver) return;
