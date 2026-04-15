@@ -3970,7 +3970,7 @@ return true;
 board.onclick = (e) => {
     console.log("CLICK", { mySide, luotDi, currentRoomId });
     const overlay = document.getElementById("ready-overlay");
-    
+    console.log("SIDE CLICK:", target?.dataset?.side); 
     if (overlay && getComputedStyle(overlay).display !== "none") return;
 
     if (isGameOver) return;
@@ -4028,9 +4028,8 @@ if (isOwnTurnPiece) {
     selectedPiece.classList.add("selected");
     showMoveHints(selectedPiece);
     playSnd('click');
-    }
     return;
-
+}
 
     if (!checkLuat(selectedPiece.dataset.type, selectedPiece.dataset.side, c1, r1, c2, r2, taoMaTran())) {
         selectedPiece.classList.remove("selected");
