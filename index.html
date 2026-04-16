@@ -4030,17 +4030,24 @@ board.onclick = (e) => {
     const r2 = toReal.r;
 
     const target = Array.from(document.querySelectorAll(".piece")).find(p =>
-    
-        p.style.left === fX + "%" && p.style.top === fY + "%"
-    );
+    p.style.left === fX + "%" && p.style.top === fY + "%"
+);
 
-    playSnd('click', target.dataset.side);
+if (!selectedPiece) {
+    if (target && target.dataset.side === luotDi) {
+        selectedPiece = target;
+        selectedPiece.classList.add("selected");
+        showMoveHints(selectedPiece);
+        playSnd('click', target.dataset.side);
+    }
+    return;
+}
 
-    const fromViewC = columns.indexOf(parseFloat(selectedPiece.style.left));
-    const fromViewR = rows.indexOf(parseFloat(selectedPiece.style.top));
-    const fromReal = mapViewToBoard(fromViewC, fromViewR);
-    const c1 = fromReal.c;
-    const r1 = fromReal.r;
+const fromViewC = columns.indexOf(parseFloat(selectedPiece.style.left));
+const fromViewR = rows.indexOf(parseFloat(selectedPiece.style.top));
+const fromReal = mapViewToBoard(fromViewC, fromViewR);
+const c1 = fromReal.c;
+const r1 = fromReal.r;
 
     if (target && target.dataset.side === luotDi) {
     selectedPiece.classList.remove("selected");
