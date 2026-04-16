@@ -5187,6 +5187,90 @@ async function maybeSettleStakeRoom(room, roomId) {
     const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
     if (!roomId || !stake || !room?.winner) return;
 
+    const doPlayer = room?.players?.do || {};
+    const denPlayer = room?.players?.den || {};
+    const localWalletKey = makeWalletDbKey();
+
+    // ===== HÒA =====
+    if (room.winner === "hoa") {
+        const refundTargets = [];
+
+        if (doPlayer.walletKey) {
+            refundTargets.push({
+                walletKey: doPlayer.walletKey,
+                name: doPlayer.name,
+                photo: doPlayer.photo
+            });
+        } else if (mySide === "do") {
+            refundTargets.push({
+                walletKey: localWalletKey,
+                name: localStorage.getItem("user-name-display") || "Người chơi",
+                photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+            });
+        }
+
+        if (denPlayer.walletKey) {
+            refundTargets.push({
+                walletKey: denPlayer.walletKey,
+                name: denPlayer.name,
+                photo: denPlayer.photo
+            });
+        } else if (mySide === "den") {
+            refundTargets.push({
+                walletKey: localWalletKey,
+                name: localStorage.getItem("user-name-display") || "Người chơi",
+                photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+            });
+        }
+
+        const uniqueTargets = [];
+        const seen = new Set();
+        for (const item of refundTargets) {
+            if (!item.walletKey || seen.has(item.walletKey)) continue;
+            seen.add(item.walletKey);
+            uniqueTargets.push(item);
+        }
+
+        // Chưa xác định đủ ví thì chưa được đóng cờ done
+        if (!uniqueTargets.length) return;
+
+        const settlementRef = db.ref(`matches/${roomId}/settlement`);
+        const result = await runRefTransaction(settlementRef, current => {
+            if (current && current.done) return;
+            return {
+                done: true,
+                winner: room.winner,
+                stakePMC: stake,
+                at: Date.now(),
+                by: getCurrentPlayerProfile().uid || ""
+            };
+        });
+
+        if (!result.committed) return;
+
+        for (const item of uniqueTargets) {
+            await adjustPmcWalletByKey(item.walletKey, stake, {
+                name: item.name,
+                photo: item.photo
+            });
+        }
+
+        await loadWalletBalance().catch(() => {});
+        return;
+    }
+
+    // ===== CÓ NGƯỜI THẮNG =====
+    const winnerPlayer = room.winner === "do" ? doPlayer : denPlayer;
+    let winnerWalletKey = winnerPlayer.walletKey || "";
+
+    // fallback: nếu room thiếu walletKey nhưng máy này chính là bên thắng
+    if (!winnerWalletKey && room.winner === mySide) {
+        winnerWalletKey = localWalletKey;
+    }
+
+    // Chưa xác định được ví thắng thì KHÔNG được đóng settlement.done
+    if (!winnerWalletKey) return;
+
     const settlementRef = db.ref(`matches/${roomId}/settlement`);
     const result = await runRefTransaction(settlementRef, current => {
         if (current && current.done) return;
@@ -5200,67 +5284,6 @@ async function maybeSettleStakeRoom(room, roomId) {
     });
 
     if (!result.committed) return;
-
-    const doPlayer = room?.players?.do || {};
-    const denPlayer = room?.players?.den || {};
-    const localWalletKey = makeWalletDbKey();
-
-    // Hòa: hoàn lại mỗi bên 1 cọc
-    if (room.winner === "hoa") {
-        const refundTargets = [];
-
-        if (doPlayer.walletKey) refundTargets.push({
-            walletKey: doPlayer.walletKey,
-            name: doPlayer.name,
-            photo: doPlayer.photo
-        });
-        if (denPlayer.walletKey) refundTargets.push({
-            walletKey: denPlayer.walletKey,
-            name: denPlayer.name,
-            photo: denPlayer.photo
-        });
-
-        // fallback cho máy local nếu room cũ thiếu walletKey
-        if (mySide === "do" && !doPlayer.walletKey) {
-            refundTargets.push({
-                walletKey: localWalletKey,
-                name: localStorage.getItem("user-name-display") || "Người chơi",
-                photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-            });
-        }
-        if (mySide === "den" && !denPlayer.walletKey) {
-            refundTargets.push({
-                walletKey: localWalletKey,
-                name: localStorage.getItem("user-name-display") || "Người chơi",
-                photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-            });
-        }
-
-        const seen = new Set();
-        for (const item of refundTargets) {
-            if (!item.walletKey || seen.has(item.walletKey)) continue;
-            seen.add(item.walletKey);
-
-            await adjustPmcWalletByKey(item.walletKey, stake, {
-                name: item.name,
-                photo: item.photo
-            });
-        }
-
-        await loadWalletBalance().catch(() => {});
-        return;
-    }
-
-    // Có người thắng: người thắng nhận toàn bộ pot
-    const winnerPlayer = room.winner === "do" ? doPlayer : denPlayer;
-    let winnerWalletKey = winnerPlayer.walletKey || "";
-
-    // fallback cho máy local nếu room cũ thiếu walletKey
-    if (!winnerWalletKey && room.winner === mySide) {
-        winnerWalletKey = localWalletKey;
-    }
-
-    if (!winnerWalletKey) return;
 
     await adjustPmcWalletByKey(winnerWalletKey, stake * 2, {
         name: winnerPlayer.name || localStorage.getItem("user-name-display") || "Người chơi",
