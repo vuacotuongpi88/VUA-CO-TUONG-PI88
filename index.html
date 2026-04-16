@@ -2599,6 +2599,7 @@ margin-bottom: 14px;
 
 <div id="login-screen">
     <div class="welcome-login-corner">
+    <button id="welcome-google-btn" onclick="loginGoogle()" style="display:none;">ĐĂNG NHẬP GG</button>
     <button id="welcome-pi-btn" onclick="loginPi()" style="display:none;">ĐĂNG NHẬP PI</button>
     <div id="pi-browser-note" style="display:none; max-width:220px; padding:8px 10px; border-radius:12px; background:rgba(0,0,0,0.72); color:#ffeaa7; font-size:11px; line-height:1.4; text-align:right; border:1px solid rgba(236,221,7,0.45);">
         Muốn đăng nhập / nạp / rút Pi, vui lòng mở app bằng Pi Browser.
@@ -3228,9 +3229,9 @@ function showLoginChoices() {
     const isPi = !!window.Pi;
 
     if (piBtn) piBtn.style.display = isPi ? "inline-flex" : "none";
+    if (googleBtn) googleBtn.style.display = "inline-flex";
     if (piNote) piNote.style.display = isPi ? "none" : "block";
 
-    if (googleBtn) googleBtn.style.display = "none";
     if (oldPiBtn) oldPiBtn.style.display = "none";
     if (oldGoogleBtn) oldGoogleBtn.style.display = "none";
     if (guestBtn) guestBtn.style.display = "none";
@@ -3252,7 +3253,26 @@ function isRealPiBrowser() {
     return !!window.Pi && /pibrowser|pi browser|minepi/i.test(ua);
 }
 function loginGoogle() {
-    alert("App này đã chuyển sang đăng nhập bằng tài khoản Pi. Hãy mở bằng Pi Browser rồi bấm ĐĂNG NHẬP PI.");
+    localStorage.removeItem("pi-user-name");
+    localStorage.removeItem("pi-user-photo");
+
+    auth.signInWithPopup(provider)
+        .then((result) => {
+            const user = result.user;
+            if (!user) return;
+
+            const displayName = user.displayName || "Người chơi";
+            const photoURL = user.photoURL || "images/do_tuong.png";
+
+            localStorage.setItem("user-name-display", displayName);
+            localStorage.setItem("user-photo", photoURL);
+
+            applyLoggedInUI(displayName, photoURL);
+        })
+        .catch((err) => {
+            console.error("Lỗi đăng nhập Google:", err);
+            alert("Đăng nhập Google lỗi: " + (err.message || err.code || err));
+        });
 }
 
 function logout() {
@@ -3298,10 +3318,6 @@ function switchAccount() {
 
 // --- HỆ THỐNG ÂM THANH (KHỚP VỚI HÌNH THƯ MỤC CỦA MÀY) ---
 const sounds = {
-click_do: new Audio('sounds/click_do.mp3'),
-click_den: new Audio('sounds/click_den.mp3'),
-capture_do: new Audio('sounds/capture_do.mp3'),
-capture_den: new Audio('sounds/capture_den.mp3'),
 welcome: new Audio('sounds/welcome.mp3'),
 click: new Audio('sounds/click.mp3'),
 capture: new Audio('sounds/capture.mp3'),
@@ -3312,37 +3328,15 @@ heartbeat: new Audio('sounds/heartbeat.mp3'),
 timeout: new Audio('sounds/timeout.mp3'),
 bgm: new Audio('sounds/bgm.mp3')
 };
-
 sounds.bgm.loop = true;
 sounds.bgm.volume = 0.4;
 sounds.heartbeat.loop = true; 
 
-function playSnd(name, side = "") {
-    let key = name;
-
-    if (name === "click") {
-    key = String(side).toLowerCase().includes("den") ? "click_den" : "click_do";
-} else if (name === "capture") {
-    key = String(side).toLowerCase().includes("den") ? "capture_den" : "capture_do";
+function playSnd(name) {
+if (sounds[name]) {
+sounds[name].currentTime = 0;
+sounds[name].play().catch(e => console.log("Chờ tương tác để phát nhạc..."));
 }
-
-    const base = sounds[key];
-    if (!base) return;
-
-    try {
-        if (name === "bgm" || name === "heartbeat") {
-            base.pause();
-            base.currentTime = 0;
-            base.play().catch(err => console.log("AUDIO BLOCK:", key, err));
-            return;
-        }
-
-        const snd = base.cloneNode(true);
-        snd.play().catch(err => console.log("AUDIO BLOCK:", key, err));
-        console.log("PLAY SND:", { name, side, key, src: snd.src });
-    } catch (err) {
-        console.log("AUDIO ERROR:", key, err);
-    }
 }
 
 function sendMessage() {
@@ -4037,7 +4031,7 @@ if (isOwnTurnPiece) {
         selectedPiece = target;
         selectedPiece.classList.add("selected");
         showMoveHints(selectedPiece);
-        playSnd('click', target.dataset.side);
+        playSnd('click');
     }
     return;
 }
@@ -4053,7 +4047,7 @@ if (isOwnTurnPiece) {
     selectedPiece = target;
     selectedPiece.classList.add("selected");
     showMoveHints(selectedPiece);
-    playSnd('click', target.dataset.side);
+    playSnd('click');
     return;
 }
 
@@ -4075,9 +4069,13 @@ if (isOwnTurnPiece) {
 
     if (target) {
     target.remove();
-    playSnd('capture', selectedPiece.dataset.side);
+    try {
+        sounds.capture.pause();
+        sounds.capture.currentTime = 0;
+        sounds.capture.play().catch(() => {});
+    } catch (e) {}
 } else {
-    playSnd('click', selectedPiece.dataset.side);
+    playSnd('click');
 }
 
     lastMoveFrom = { c: c1, r: r1 };
