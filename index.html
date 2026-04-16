@@ -4041,9 +4041,7 @@ board.onclick = (e) => {
         showMoveHints(selectedPiece);
         return;
     }
-
-    if (!checkLuat(selectedPiece.dataset.type, selectedPiece.dataset.side, c1, r1, c2, r2, taoMaTran())) {
-        console.log("MOVE TEST", {
+console.log("MOVE TEST", {
     mySide,
     luotDi,
     pieceSide: selectedPiece?.dataset?.side,
@@ -4052,16 +4050,29 @@ board.onclick = (e) => {
     fromViewC, fromViewR,
     targetSide: target?.dataset?.side || null
 });
-        selectedPiece.classList.remove("selected");
-        selectedPiece = null;
-        clearMoveHints();
-        return;
-    }
+   const hopLe = checkLuat(selectedPiece.dataset.type, selectedPiece.dataset.side, c1, r1, c2, r2, taoMaTran());
+console.log("CHECKLUAT RESULT:", hopLe, {
+    side: selectedPiece?.dataset?.side,
+    type: selectedPiece?.dataset?.type,
+    c1, r1, c2, r2
+});
+
+if (!hopLe) {
+    // TEST TẠM: chỉ log, chưa return ngay
+    selectedPiece.classList.remove("selected");
+    selectedPiece = null;
+    clearMoveHints();
+    return;
+}
 
     let mt = taoMaTran();
     mt[r2][c2] = { side: selectedPiece.dataset.side, type: selectedPiece.dataset.type };
     mt[r1][c1] = null;
-
+console.log("CHECKLUAT OK, NOW TEST CHIEU", {
+    luotDi,
+    movedSide: selectedPiece?.dataset?.side,
+    c1, r1, c2, r2
+});
     if (laBiChieu(luotDi, mt)) {
         alert("Không được để Tướng bị chiếu!");
         return;
