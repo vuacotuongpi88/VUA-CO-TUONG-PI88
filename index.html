@@ -4925,6 +4925,7 @@ let selectedRoomStakePMC = 0;
 let selectedRoomMode = "co-tuong";
 let currentRoomStakePMC = 0;
 let currentRoomBucket = null;
+let isJoiningStakeRoom = false;
 
 function getAccountKey() {
     const user = auth.currentUser;
@@ -5725,34 +5726,39 @@ function pickStakePMC(value, el) {
 }
 
 async function confirmStakeSelection() {
+    if (isJoiningStakeRoom) return;
+    isJoiningStakeRoom = true;
+
     const custom = document.getElementById("custom-stake-pmc");
     const customValue = Math.floor(Number(custom?.value || 0) || 0);
     const finalStake = customValue > 0 ? customValue : selectedRoomStakePMC;
 
     if (!Number.isFinite(finalStake) || finalStake <= 0) {
+        isJoiningStakeRoom = false;
         alert("Chọn hoặc nhập mức PMC trước đã.");
         return;
     }
 
-    if (finalStake > getPmcBalance()) {
-        alert("PMC không đủ. Hiện còn " + formatPMC(getPmcBalance()) + " PMC");
+    const currentPmc = getPmcBalance();
+    if (finalStake > currentPmc) {
+        isJoiningStakeRoom = false;
+        alert("PMC không đủ. Hiện còn " + formatPMC(currentPmc) + " PMC");
         return;
     }
 
-    closeStakeRoomModal();
-    await joinOrCreateRealtimeMatch(selectedRoomMode, finalStake);
-}
+    setPmcBalance(currentPmc - finalStake);
 
-document.getElementById("exchange-pi-input")?.addEventListener("input", updateExchangePreview);
-document.getElementById("custom-stake-pmc")?.addEventListener("input", function () {
-    const val = Math.floor(Number(this.value || 0) || 0);
-    if (val > 0) {
-        selectedRoomStakePMC = val;
-        document.querySelectorAll(".stake-chip").forEach(btn => btn.classList.remove("active"));
-        const preview = document.getElementById("stake-preview");
-        if (preview) preview.innerText = "Mức đã chọn: " + formatPMC(val) + " PMC";
+    try {
+        closeStakeRoomModal();
+        await joinOrCreateRealtimeMatch(selectedRoomMode, finalStake);
+    } catch (err) {
+        console.error("Lỗi vào phòng, hoàn lại PMC:", err);
+        setPmcBalance(getPmcBalance() + finalStake);
+        alert("Vào phòng lỗi, đã hoàn lại " + formatPMC(finalStake) + " PMC");
+    } finally {
+        isJoiningStakeRoom = false;
     }
-});
+}
 
 // Thêm sự kiện nhấn phím Enter để gửi
 document.getElementById('match-input-popup')?.addEventListener('keypress', function (e) {
