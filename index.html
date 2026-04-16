@@ -596,7 +596,103 @@ padding: 1px 8px;
 border-radius: 12px;
 box-shadow: 0 0 8px rgba(85, 239, 196, 0.4);
 }
+.pmc-balance-box {
+    color: #7dffb3;
+    border-color: #7dffb3;
+    box-shadow: 0 0 8px rgba(125, 255, 179, 0.28);
+    margin-top: 4px;
+}
 
+.modal-input-dark {
+    width: 100%;
+    box-sizing: border-box;
+    background: #111;
+    color: #fff;
+    border: 1px solid #55efc4;
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 14px;
+    outline: none;
+    margin-top: 10px;
+}
+
+.pmc-note {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #b2bec3;
+    line-height: 1.5;
+}
+
+.exchange-preview {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(85, 239, 196, 0.08);
+    border: 1px solid rgba(85, 239, 196, 0.25);
+    color: #7dffb3;
+    font-weight: 800;
+    font-size: 14px;
+}
+
+.stake-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.stake-chip {
+    padding: 10px 8px;
+    border-radius: 12px;
+    border: 1px solid rgba(85,239,196,0.35);
+    background: #111;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: 0.18s ease;
+}
+
+.stake-chip:hover {
+    border-color: #55efc4;
+    transform: translateY(-1px);
+}
+
+.stake-chip.active {
+    background: linear-gradient(180deg, #00c38a, #00a06d);
+    color: #fff;
+    border-color: #7dffb3;
+    box-shadow: 0 0 12px rgba(125,255,179,0.25);
+}
+
+.stake-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.stake-cancel-btn {
+    background: linear-gradient(180deg, #636e72, #2d3436);
+    color: white;
+    border-radius: 12px;
+    font-weight: 800;
+}
+
+.stake-ok-btn {
+    background: linear-gradient(180deg, #6d28d9, #3b0764);
+    color: white;
+    border-radius: 12px;
+    font-weight: 800;
+}
+
+.room-mode-title {
+    font-size: 22px;
+    color: #55efc4;
+    font-weight: 900;
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+}
 /* Menu sổ xuống */
 .profile-menu {
 display: none;
@@ -2706,6 +2802,7 @@ margin-bottom: 14px;
 <div class="user-meta" onclick="toggleProfileMenu(event)">
 <div id="user-name-display" style="font-weight: bold; color: #55efc4;">core team</div>
 <div id="user-balance" class="pi-balance-box">0.00 π</div>
+<div id="user-pmc-balance" class="pi-balance-box pmc-balance-box">0 PMC</div>
 </div>
 
 <div id="profile-dropdown" class="profile-menu">
@@ -2724,7 +2821,10 @@ margin-bottom: 14px;
     <span class="menu-icon">🪙</span>
     <span>NẠP PI</span>
 </div>
-
+<div class="menu-item" onclick="openExchangeModal()">
+    <span class="menu-icon">🔁</span>
+    <span>ĐỔI PI → PMC</span>
+</div>
 <div class="menu-item" onclick="openWallet('rut')">
     <span class="menu-icon">💸</span>
     <span>RÚT PI</span>
@@ -3012,6 +3112,62 @@ margin-bottom: 14px;
 </div>
 </div>
 </div>
+<div id="exchange-modal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <span class="close" onclick="closeExchangeModal()">&times;</span>
+        <div class="room-mode-title">ĐỔI PI → PMC</div>
+
+        <div style="font-size:13px; color:#dfe6e9;">Tỷ lệ cố định: <b style="color:#7dffb3;">1 Pi = 1000 PMC</b></div>
+
+        <input id="exchange-pi-input" class="modal-input-dark" type="number" min="0.01" step="0.01" placeholder="Nhập số Pi muốn đổi">
+
+        <div id="exchange-preview" class="exchange-preview">Nhận: 0 PMC</div>
+
+        <div class="pmc-note">
+            PMC là xu nội bộ / demo để vào phòng. Không tự đổi ngược theo thắng thua.
+        </div>
+
+        <div class="stake-actions">
+            <button type="button" class="stake-cancel-btn" onclick="closeExchangeModal()">HỦY</button>
+            <button type="button" class="stake-ok-btn" onclick="submitExchangeToPMC()">XÁC NHẬN ĐỔI</button>
+        </div>
+    </div>
+</div>
+
+<div id="stake-room-modal" class="modal" style="display:none;">
+    <div class="modal-content" style="width:min(92vw, 420px);">
+        <span class="close" onclick="closeStakeRoomModal()">&times;</span>
+        <div id="stake-room-title" class="room-mode-title">CHỌN PHÒNG</div>
+
+        <div style="font-size:13px; color:#dfe6e9;">
+            Số dư PMC hiện có: <b id="stake-pmc-now" style="color:#7dffb3;">0 PMC</b>
+        </div>
+
+        <div class="stake-grid">
+            <button class="stake-chip" onclick="pickStakePMC(50, this)">50</button>
+            <button class="stake-chip" onclick="pickStakePMC(100, this)">100</button>
+            <button class="stake-chip" onclick="pickStakePMC(250, this)">250</button>
+            <button class="stake-chip" onclick="pickStakePMC(500, this)">500</button>
+            <button class="stake-chip" onclick="pickStakePMC(800, this)">800</button>
+            <button class="stake-chip" onclick="pickStakePMC(1000, this)">1000</button>
+            <button class="stake-chip" onclick="pickStakePMC(2500, this)">2500</button>
+            <button class="stake-chip" onclick="pickStakePMC(5000, this)">5000</button>
+            <button class="stake-chip" onclick="pickStakePMC(10000, this)">10000</button>
+            <button class="stake-chip" onclick="pickStakePMC(100000, this)">100000</button>
+            <button class="stake-chip" onclick="pickStakePMC(1000000, this)">1000000</button>
+            <button class="stake-chip" onclick="pickStakePMC(10000000, this)">10000000</button>
+        </div>
+
+        <input id="custom-stake-pmc" class="modal-input-dark" type="number" min="1" step="1" placeholder="Hoặc nhập PMC tự chọn">
+
+        <div id="stake-preview" class="exchange-preview">Mức đã chọn: 0 PMC</div>
+
+        <div class="stake-actions">
+            <button type="button" class="stake-cancel-btn" onclick="closeStakeRoomModal()">HỦY</button>
+            <button type="button" class="stake-ok-btn" onclick="confirmStakeSelection()">TIẾP TỤC</button>
+        </div>
+    </div>
+</div>
 <div id="withdraw-lock-modal" style="display:none;">
     <div class="withdraw-lock-box">
         <div class="withdraw-lock-icon">🔒</div>
@@ -3172,6 +3328,8 @@ async function tryResumeRealtimeMatch(preferredMode = null) {
     mySide = isDo ? "do" : "den";
     currentRoomId = saved.roomId;
     currentRoomMode = room.mode || saved.mode || preferredMode || null;
+    currentRoomStakePMC = Math.max(0, Math.floor(Number(room.stakePMC || 0) || 0));
+currentRoomBucket = room.roomBucket || makeStakeBucket(currentRoomMode, currentRoomStakePMC);
 
     saveActiveMatchSnapshot({
         roomId: saved.roomId,
@@ -3212,7 +3370,10 @@ function applyLoggedInUI(displayName, photoURL) {
 localStorage.setItem("user-photo", safePhoto);
 
 currentWalletBalance = 0;
+currentPmcBalance = 0;
 updateBalanceUI(0);
+updatePmcUI(0);
+
 loadWalletBalance().catch(err => console.error("Lỗi tải ví:", err));
 
 showHomeUI();
@@ -4188,7 +4349,8 @@ function getCurrentPlayerProfile() {
         uid: user?.uid || ("guest_" + (localStorage.getItem("user-name-display") || "guest")),
         name: localStorage.getItem("user-name-display") || user?.displayName || "Người chơi",
         photo: localStorage.getItem("user-photo") || user?.photoURL || "images/do_tuong.png",
-        balance: getPiBalance()
+        balance: getPiBalance(),
+        pmcBalance: getPmcBalance()
     };
 }
 
@@ -4309,14 +4471,15 @@ function renderPlayersFromRoom(room) {
     if (topAvatar) topAvatar.src = oppPlayer.photo || "images/do_tuong.png";
     if (bottomAvatar) bottomAvatar.src = myPlayer.photo || "images/do_tuong.png";
 
-    const oppBalance = Number(oppPlayer.balance || 0);
-    const myBalance = Number(myPlayer.balance || 0);
+    const roomStake = Number(room?.stakePMC || 0);
+    const oppPmc = Number(oppPlayer.pmcBalance || 0);
+    const myPmc = Number(myPlayer.pmcBalance || 0);
 
     if (topRank) {
         topRank.classList.remove("player-ready-on", "player-ready-off");
 
         if (isPlayingNow) {
-            topRank.innerText = oppBalance.toFixed(2) + " π";
+            topRank.innerText = roomStake > 0 ? ("PHÒNG " + formatPMC(roomStake) + " PMC") : (formatPMC(oppPmc) + " PMC");
             topRank.classList.add("player-ready-on");
         } else {
             topRank.innerText = oppReady ? "ĐÃ SS" : "CHƯA SS";
@@ -4328,7 +4491,7 @@ function renderPlayersFromRoom(room) {
         bottomRank.classList.remove("player-ready-on", "player-ready-off");
 
         if (isPlayingNow) {
-            bottomRank.innerText = myBalance.toFixed(2) + " π";
+            bottomRank.innerText = roomStake > 0 ? ("PHÒNG " + formatPMC(roomStake) + " PMC") : (formatPMC(myPmc) + " PMC");
             bottomRank.classList.add("player-ready-on");
         } else {
             bottomRank.innerText = myReady ? "ĐÃ SS" : "CHƯA SS";
@@ -4357,20 +4520,22 @@ async function leaveRealtimeMatch() {
     currentRoomId = null;
     mySide = null;
     currentRoomMode = null;
+    currentRoomStakePMC = 0;
+    currentRoomBucket = null;
     readyDo = false;
-    readyDen = false;
+    readyDen = false; 
 
     if (!roomId) return;
 
     try {
-        if (mode) {
-            const waitingRef = db.ref("waitingRooms/" + mode);
-            const waitingSnap = await waitingRef.once("value");
-            const waiting = waitingSnap.val();
-            if (waiting && waiting.roomId === roomId && waiting.uid === me.uid) {
-                await waitingRef.remove();
-            }
-        }
+        if (currentRoomBucket) {
+    const waitingRef = db.ref("waitingRooms/" + currentRoomBucket);
+    const waitingSnap = await waitingRef.once("value");
+    const waiting = waitingSnap.val();
+    if (waiting && waiting.roomId === roomId && waiting.uid === me.uid) {
+        await waitingRef.remove();
+    }
+}
 
         if (side) {
     const roomSnap = await db.ref("matches/" + roomId).once("value");
@@ -4612,24 +4777,40 @@ if (room.status === "playing" && !room.winner) {
     });
 }
 
-async function joinOrCreateRealtimeMatch(mode) {
+async function joinOrCreateRealtimeMatch(mode, stakePMC = 0) {
     if (await tryResumeRealtimeMatch(mode)) {
+        return;
+    }
+
+    const safeStake = Math.max(0, Math.floor(Number(stakePMC) || 0));
+    const me = getCurrentPlayerProfile();
+
+    if (safeStake <= 0) {
+        alert("Mức PMC không hợp lệ.");
+        return;
+    }
+
+    if ((me.pmcBalance || 0) < safeStake) {
+        alert("PMC không đủ để vào phòng này.");
         return;
     }
 
     prepareRealtimeArenaUI();
     clearInterval(interval);
-currentRoomStatus = "waiting";
-isGameOver = false;
-luotDi = "do";
-timeDo = 540;
-timeDen = 540;
-timerDoEl.innerText = formatTime(timeDo);
-timerDenEl.innerText = formatTime(timeDen);
-    const me = getCurrentPlayerProfile();
-    currentRoomMode = mode;
 
-    const waitingRef = db.ref("waitingRooms/" + mode);
+    currentRoomStatus = "waiting";
+    isGameOver = false;
+    luotDi = "do";
+    timeDo = 540;
+    timeDen = 540;
+    timerDoEl.innerText = formatTime(timeDo);
+    timerDenEl.innerText = formatTime(timeDen);
+
+    currentRoomMode = mode;
+    currentRoomStakePMC = safeStake;
+    currentRoomBucket = makeStakeBucket(mode, safeStake);
+
+    const waitingRef = db.ref("waitingRooms/" + currentRoomBucket);
     const waitingSnap = await waitingRef.once("value");
     const waiting = waitingSnap.val();
 
@@ -4650,6 +4831,8 @@ timerDenEl.innerText = formatTime(timeDen);
 
         await newRoomRef.set({
             mode,
+            stakePMC: safeStake,
+            roomBucket: currentRoomBucket,
             status: "waiting",
             turn: "do",
             isCoUp: mode === "co-up",
@@ -4676,6 +4859,8 @@ timerDenEl.innerText = formatTime(timeDen);
             roomId: currentRoomId,
             uid: me.uid,
             name: me.name,
+            mode,
+            stakePMC: safeStake,
             createdAt: firebase.database.ServerValue.TIMESTAMP
         });
 
@@ -4684,8 +4869,8 @@ timerDenEl.innerText = formatTime(timeDen);
     }
 
     closeReadyOverlay();
-readyOverlayWaitingShown = false;
-updateReadyUI();
+    readyOverlayWaitingShown = false;
+    updateReadyUI();
 }
 function toggleProfileMenu(event) {
     event.stopPropagation();
@@ -4729,10 +4914,17 @@ const MAX_WITHDRAW_PER_TX = 1000;
 const WITHDRAW_PASS_KEY = "pi_withdraw_password_hash";
 const PI_BALANCE_KEY = "pi-balance"; // key cũ, giữ lại để migrate 1 lần
 const BALANCE_CACHE_KEY = "wallet_balance_cache";
+const PMC_BALANCE_KEY = "pmc_balance_cache";
+const PMC_RATE = 1000; // 1 Pi = 1000 PMC
 
 let withdrawLockResolve = null;
 let withdrawLockMode = "verify"; // verify | create
 let currentWalletBalance = 0;
+let currentPmcBalance = 0;
+let selectedRoomStakePMC = 0;
+let selectedRoomMode = "co-tuong";
+let currentRoomStakePMC = 0;
+let currentRoomBucket = null;
 
 function getAccountKey() {
     const user = auth.currentUser;
@@ -4764,7 +4956,9 @@ function getWithdrawPassKey() {
 function getBalanceCacheKey() {
     return scopedKey(BALANCE_CACHE_KEY);
 }
-
+function getPmcCacheKey() {
+    return scopedKey(PMC_BALANCE_KEY);
+}
 function walletRef() {
     return db.ref("wallets/" + makeWalletDbKey());
 }
@@ -4775,6 +4969,22 @@ function updateBalanceUI(amount) {
     if (balanceEl) {
         balanceEl.innerText = safeAmount.toFixed(2) + " π";
     }
+}
+
+function updatePmcUI(amount) {
+    const safeAmount = Math.max(0, Math.floor(Number(amount) || 0));
+    const pmcEl = document.getElementById("user-pmc-balance");
+    if (pmcEl) {
+        pmcEl.innerText = safeAmount.toLocaleString("vi-VN") + " PMC";
+    }
+}
+
+function formatPMC(amount) {
+    return Math.max(0, Math.floor(Number(amount) || 0)).toLocaleString("vi-VN");
+}
+
+function makeStakeBucket(mode, stakePMC) {
+    return `${mode}__${Math.max(0, Math.floor(Number(stakePMC) || 0))}`;
 }
 
 function getTodayWithdrawKey() {
@@ -4796,39 +5006,60 @@ function saveWithdrawState(state) {
 async function loadWalletBalance() {
     try {
         const snap = await walletRef().once("value");
-        let amount = 0;
+        const data = snap.val() || {};
 
-        if (snap.exists() && snap.val() && snap.val().balance != null) {
-            amount = Number(snap.val().balance) || 0;
+        let piAmount = 0;
+        if (data.balance != null) {
+            piAmount = Number(data.balance) || 0;
         } else {
             const scopedCache = localStorage.getItem(getBalanceCacheKey());
             const legacy = localStorage.getItem(PI_BALANCE_KEY);
-            amount = Number(scopedCache ?? legacy ?? 0) || 0;
-
-            await walletRef().update({
-                balance: amount,
-                updatedAt: firebase.database.ServerValue.TIMESTAMP,
-                name: localStorage.getItem("user-name-display") || "Người chơi",
-                photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-            });
+            piAmount = Number(scopedCache ?? legacy ?? 0) || 0;
         }
 
-        currentWalletBalance = Math.max(0, amount);
+        let pmcAmount = 0;
+        if (data.pmcBalance != null) {
+            pmcAmount = Math.floor(Number(data.pmcBalance) || 0);
+        } else {
+            pmcAmount = Math.floor(Number(localStorage.getItem(getPmcCacheKey()) || 0) || 0);
+        }
+
+        currentWalletBalance = Math.max(0, piAmount);
+        currentPmcBalance = Math.max(0, pmcAmount);
+
         localStorage.setItem(getBalanceCacheKey(), String(currentWalletBalance));
+        localStorage.setItem(getPmcCacheKey(), String(currentPmcBalance));
+
+        await walletRef().update({
+            balance: currentWalletBalance,
+            pmcBalance: currentPmcBalance,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP,
+            name: localStorage.getItem("user-name-display") || "Người chơi",
+            photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+        });
+
         updateBalanceUI(currentWalletBalance);
-        return currentWalletBalance;
+        updatePmcUI(currentPmcBalance);
+        return { pi: currentWalletBalance, pmc: currentPmcBalance };
     } catch (err) {
         console.error("Lỗi load ví:", err);
 
-        const cached = Number(localStorage.getItem(getBalanceCacheKey()) || 0) || 0;
-        currentWalletBalance = Math.max(0, cached);
+        currentWalletBalance = Math.max(0, Number(localStorage.getItem(getBalanceCacheKey()) || 0) || 0);
+        currentPmcBalance = Math.max(0, Math.floor(Number(localStorage.getItem(getPmcCacheKey()) || 0) || 0));
+
         updateBalanceUI(currentWalletBalance);
-        return currentWalletBalance;
+        updatePmcUI(currentPmcBalance);
+        return { pi: currentWalletBalance, pmc: currentPmcBalance };
     }
 }
 
 function getPiBalance() {
     const cached = Number(localStorage.getItem(getBalanceCacheKey()) || currentWalletBalance || 0) || 0;
+    return Math.max(0, cached);
+}
+
+function getPmcBalance() {
+    const cached = Math.floor(Number(localStorage.getItem(getPmcCacheKey()) || currentPmcBalance || 0) || 0);
     return Math.max(0, cached);
 }
 
@@ -4841,11 +5072,30 @@ function setPiBalance(amount) {
 
     walletRef().update({
         balance: safeAmount,
+        pmcBalance: getPmcBalance(),
         updatedAt: firebase.database.ServerValue.TIMESTAMP,
         name: localStorage.getItem("user-name-display") || "Người chơi",
         photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
     }).catch(err => {
-        console.error("Lỗi sync số dư:", err);
+        console.error("Lỗi sync số dư Pi:", err);
+    });
+}
+
+function setPmcBalance(amount) {
+    const safeAmount = Math.max(0, Math.floor(Number(amount) || 0));
+    currentPmcBalance = safeAmount;
+
+    localStorage.setItem(getPmcCacheKey(), String(safeAmount));
+    updatePmcUI(safeAmount);
+
+    walletRef().update({
+        balance: getPiBalance(),
+        pmcBalance: safeAmount,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP,
+        name: localStorage.getItem("user-name-display") || "Người chơi",
+        photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+    }).catch(err => {
+        console.error("Lỗi sync số dư PMC:", err);
     });
 }
 
@@ -5376,9 +5626,133 @@ function setReady() {
 }
 
 async function batDauTranDau(loai) {
-    const mode = loai === 'up' ? 'co-up' : 'co-tuong';
-    await joinOrCreateRealtimeMatch(mode);
+    const mode = loai === "up" ? "co-up" : "co-tuong";
+    openStakeRoomModal(mode);
 }
+
+function openExchangeModal() {
+    const modal = document.getElementById("exchange-modal");
+    const input = document.getElementById("exchange-pi-input");
+    const preview = document.getElementById("exchange-preview");
+    if (!modal || !input || !preview) return;
+
+    input.value = "";
+    preview.innerText = "Nhận: 0 PMC";
+    modal.style.display = "flex";
+    setTimeout(() => input.focus(), 50);
+}
+
+function closeExchangeModal() {
+    const modal = document.getElementById("exchange-modal");
+    if (modal) modal.style.display = "none";
+}
+
+function updateExchangePreview() {
+    const input = document.getElementById("exchange-pi-input");
+    const preview = document.getElementById("exchange-preview");
+    if (!input || !preview) return;
+
+    const pi = Number(input.value || 0);
+    const pmc = Math.max(0, Math.floor(pi * PMC_RATE));
+    preview.innerText = "Nhận: " + formatPMC(pmc) + " PMC";
+}
+
+async function submitExchangeToPMC() {
+    const input = document.getElementById("exchange-pi-input");
+    if (!input) return;
+
+    const piAmount = Number(input.value || 0);
+    if (!Number.isFinite(piAmount) || piAmount <= 0) {
+        alert("Nhập số Pi muốn đổi trước đã.");
+        return;
+    }
+
+    const piBalance = getPiBalance();
+    if (piAmount > piBalance) {
+        alert("Pi không đủ. Hiện còn " + piBalance.toFixed(2) + " π");
+        return;
+    }
+
+    const pmcAdd = Math.floor(piAmount * PMC_RATE);
+    if (pmcAdd <= 0) {
+        alert("Số PMC nhận được không hợp lệ.");
+        return;
+    }
+
+    setPiBalance(piBalance - piAmount);
+    setPmcBalance(getPmcBalance() + pmcAdd);
+
+    alert("Đổi thành công " + piAmount.toFixed(2) + " π → " + formatPMC(pmcAdd) + " PMC");
+    closeExchangeModal();
+}
+
+function openStakeRoomModal(mode) {
+    selectedRoomMode = mode || "co-tuong";
+    selectedRoomStakePMC = 0;
+
+    const modal = document.getElementById("stake-room-modal");
+    const title = document.getElementById("stake-room-title");
+    const now = document.getElementById("stake-pmc-now");
+    const preview = document.getElementById("stake-preview");
+    const custom = document.getElementById("custom-stake-pmc");
+
+    document.querySelectorAll(".stake-chip").forEach(btn => btn.classList.remove("active"));
+
+    if (title) title.innerText = selectedRoomMode === "co-up" ? "CHỌN PHÒNG CỜ ÚP" : "CHỌN PHÒNG CỜ TƯỚNG";
+    if (now) now.innerText = formatPMC(getPmcBalance()) + " PMC";
+    if (preview) preview.innerText = "Mức đã chọn: 0 PMC";
+    if (custom) custom.value = "";
+
+    if (modal) modal.style.display = "flex";
+}
+
+function closeStakeRoomModal() {
+    const modal = document.getElementById("stake-room-modal");
+    if (modal) modal.style.display = "none";
+}
+
+function pickStakePMC(value, el) {
+    selectedRoomStakePMC = Math.max(0, Math.floor(Number(value) || 0));
+
+    document.querySelectorAll(".stake-chip").forEach(btn => btn.classList.remove("active"));
+    if (el) el.classList.add("active");
+
+    const custom = document.getElementById("custom-stake-pmc");
+    if (custom) custom.value = "";
+
+    const preview = document.getElementById("stake-preview");
+    if (preview) preview.innerText = "Mức đã chọn: " + formatPMC(selectedRoomStakePMC) + " PMC";
+}
+
+async function confirmStakeSelection() {
+    const custom = document.getElementById("custom-stake-pmc");
+    const customValue = Math.floor(Number(custom?.value || 0) || 0);
+    const finalStake = customValue > 0 ? customValue : selectedRoomStakePMC;
+
+    if (!Number.isFinite(finalStake) || finalStake <= 0) {
+        alert("Chọn hoặc nhập mức PMC trước đã.");
+        return;
+    }
+
+    if (finalStake > getPmcBalance()) {
+        alert("PMC không đủ. Hiện còn " + formatPMC(getPmcBalance()) + " PMC");
+        return;
+    }
+
+    closeStakeRoomModal();
+    await joinOrCreateRealtimeMatch(selectedRoomMode, finalStake);
+}
+
+document.getElementById("exchange-pi-input")?.addEventListener("input", updateExchangePreview);
+document.getElementById("custom-stake-pmc")?.addEventListener("input", function () {
+    const val = Math.floor(Number(this.value || 0) || 0);
+    if (val > 0) {
+        selectedRoomStakePMC = val;
+        document.querySelectorAll(".stake-chip").forEach(btn => btn.classList.remove("active"));
+        const preview = document.getElementById("stake-preview");
+        if (preview) preview.innerText = "Mức đã chọn: " + formatPMC(val) + " PMC";
+    }
+});
 
 // Thêm sự kiện nhấn phím Enter để gửi
 document.getElementById('match-input-popup')?.addEventListener('keypress', function (e) {
