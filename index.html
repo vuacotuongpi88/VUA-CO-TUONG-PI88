@@ -3999,12 +3999,7 @@ board.onclick = (e) => {
     console.log("CLICK", { mySide, luotDi, currentRoomId });
     const overlay = document.getElementById("ready-overlay");
     
-    // if (overlay && getComputedStyle(overlay).display !== "none") {
-//     console.log("BLOCKED BY READY OVERLAY", getComputedStyle(overlay).display);
-//     return;
-// }
-
-// if (overlay && getComputedStyle(overlay).display !== "none") return;f (overlay && getComputedStyle(overlay).display !== "none") return;
+    if (overlay && getComputedStyle(overlay).display !== "none") return;
 
     if (isGameOver) return;
     if (currentRoomId && mySide && luotDi !== mySide) return;
