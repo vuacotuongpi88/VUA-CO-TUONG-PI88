@@ -3996,94 +3996,88 @@ return true;
 }
 
 board.onclick = (e) => {
+    console.log("CLICK", { mySide, luotDi, currentRoomId });
+    const overlay = document.getElementById("ready-overlay");
+    
+    // if (overlay && getComputedStyle(overlay).display !== "none") {
+//     console.log("BLOCKED BY READY OVERLAY", getComputedStyle(overlay).display);
+//     return;
+// }
+
+// if (overlay && getComputedStyle(overlay).display !== "none") return;f (overlay && getComputedStyle(overlay).display !== "none") return;
+
+    if (isGameOver) return;
+    if (currentRoomId && mySide && luotDi !== mySide) return;
+    if (sounds.bgm.paused) playSnd('bgm');
+
     const rect = board.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const clickX = ((e.clientX - rect.left) / rect.width) * 100;
+    const clickY = ((e.clientY - rect.top) / rect.height) * 100;
 
-    const nearestCol = columns.reduce((prev, curr) =>
-        Math.abs(curr - x / rect.width * 100) < Math.abs(prev - x / rect.width * 100) ? curr : prev
+    const fX = columns.reduce((p, c) =>
+        Math.abs(c - clickX) < Math.abs(p - clickX) ? c : p
     );
-    const nearestRow = rows.reduce((prev, curr) =>
-        Math.abs(curr - y / rect.height * 100) < Math.abs(prev - y / rect.height * 100) ? curr : prev
+    const fY = rows.reduce((p, c) =>
+        Math.abs(c - clickY) < Math.abs(p - clickY) ? c : p
     );
 
-    const fX = nearestCol;
-    const fY = nearestRow;
+    const viewC = columns.indexOf(fX);
+    const viewR = rows.indexOf(fY);
+    const toReal = mapViewToBoard(viewC, viewR);
+    const c2 = toReal.c;
+    const r2 = toReal.r;
 
     const target = Array.from(document.querySelectorAll(".piece")).find(p =>
-        p.style.left === fX + "%" && p.style.top === fY + "%"
-    );
+    p.style.left === fX + "%" && p.style.top === fY + "%"
+);
 
-    const clickedOwnTurnPiece = target && target.dataset && target.dataset.side === luotDi;
-    if (clickedOwnTurnPiece) {
-        playSnd('click');
-    }
-
-    if (!selectedPiece) {
-        if (target && target.dataset.side === luotDi) {
-            selectedPiece = target;
-            selectedPiece.classList.add("selected");
-            showMoveHints(selectedPiece);
-        }
-        return;
-    }
-
-    const fromViewC = columns.indexOf(parseFloat(selectedPiece.style.left));
-    const fromViewR = rows.indexOf(parseFloat(selectedPiece.style.top));
-    const fromReal = mapViewToBoard(fromViewC, fromViewR);
-    const c1 = fromReal.c;
-    const r1 = fromReal.r;
-
+if (!selectedPiece) {
     if (target && target.dataset.side === luotDi) {
-        selectedPiece.classList.remove("selected");
         selectedPiece = target;
         selectedPiece.classList.add("selected");
         showMoveHints(selectedPiece);
-        return;
+        playSnd('click');
     }
-console.log("MOVE TEST", {
-    mySide,
-    luotDi,
-    pieceSide: selectedPiece?.dataset?.side,
-    pieceType: selectedPiece?.dataset?.type,
-    c1, r1, c2, r2,
-    fromViewC, fromViewR,
-    targetSide: target?.dataset?.side || null
-});
-   const hopLe = checkLuat(selectedPiece.dataset.type, selectedPiece.dataset.side, c1, r1, c2, r2, taoMaTran());
-console.log("CHECKLUAT RESULT:", hopLe, {
-    side: selectedPiece?.dataset?.side,
-    type: selectedPiece?.dataset?.type,
-    c1, r1, c2, r2
-});
+    return;
+}
 
-if (!hopLe) {
-    // TEST TẠM: chỉ log, chưa return ngay
+const fromViewC = columns.indexOf(parseFloat(selectedPiece.style.left));
+const fromViewR = rows.indexOf(parseFloat(selectedPiece.style.top));
+const fromReal = mapViewToBoard(fromViewC, fromViewR);
+const c1 = fromReal.c;
+const r1 = fromReal.r;
+
+if (target && target.dataset.side === luotDi) {
+    selectedPiece.classList.remove("selected");
+    selectedPiece = target;
+    selectedPiece.classList.add("selected");
+    showMoveHints(selectedPiece);
+    playSnd('click');
+    return;
+}
+
+if (!checkLuat(selectedPiece.dataset.type, selectedPiece.dataset.side, c1, r1, c2, r2, taoMaTran())) {
     selectedPiece.classList.remove("selected");
     selectedPiece = null;
     clearMoveHints();
     return;
 }
 
-    let mt = taoMaTran();
-    mt[r2][c2] = { side: selectedPiece.dataset.side, type: selectedPiece.dataset.type };
-    mt[r1][c1] = null;
-console.log("CHECKLUAT OK, NOW TEST CHIEU", {
-    luotDi,
-    movedSide: selectedPiece?.dataset?.side,
-    c1, r1, c2, r2
-});
-    if (laBiChieu(luotDi, mt)) {
-        alert("Không được để Tướng bị chiếu!");
-        return;
-    }
+let mt = taoMaTran();
+mt[r2][c2] = { side: selectedPiece.dataset.side, type: selectedPiece.dataset.type };
+mt[r1][c1] = null;
 
-    if (target) {
-        target.remove();
-        playSnd('capture');
-    } else {
-        playSnd('click');
-    }
+if (laBiChieu(luotDi, mt)) {
+    alert("Không được để Tướng bị chiếu!");
+    return;
+}
+
+if (target) {
+    target.remove();
+    playSnd('capture');
+} else {
+    playSnd('click');
+}
 
     lastMoveFrom = { c: c1, r: r1 };
     lastMoveTo = { c: c2, r: r2 };
