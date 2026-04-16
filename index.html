@@ -4043,6 +4043,15 @@ board.onclick = (e) => {
     }
 
     if (!checkLuat(selectedPiece.dataset.type, selectedPiece.dataset.side, c1, r1, c2, r2, taoMaTran())) {
+        console.log("MOVE TEST", {
+    mySide,
+    luotDi,
+    pieceSide: selectedPiece?.dataset?.side,
+    pieceType: selectedPiece?.dataset?.type,
+    c1, r1, c2, r2,
+    fromViewC, fromViewR,
+    targetSide: target?.dataset?.side || null
+});
         selectedPiece.classList.remove("selected");
         selectedPiece = null;
         clearMoveHints();
