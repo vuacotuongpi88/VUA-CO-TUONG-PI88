@@ -3298,25 +3298,60 @@ function switchAccount() {
 
 // --- HỆ THỐNG ÂM THANH (KHỚP VỚI HÌNH THƯ MỤC CỦA MÀY) ---
 const sounds = {
-welcome: new Audio('sounds/welcome.mp3'),
-click: new Audio('sounds/click.mp3'),
-capture: new Audio('sounds/capture.mp3'),
-check: new Audio('sounds/check.mp3'),
-win: new Audio('sounds/win.mp3'),
-lose: new Audio('sounds/lose.mp3'),
-heartbeat: new Audio('sounds/heartbeat.mp3'),
-timeout: new Audio('sounds/timeout.mp3'),
-bgm: new Audio('sounds/bgm.mp3')
+    welcome: new Audio('sounds/welcome.mp3'),
+
+    // âm thanh chung cũ
+    click: new Audio('sounds/click.mp3'),
+    capture: new Audio('sounds/capture.mp3'),
+
+    // tách riêng 2 luồng đỏ / đen
+    click_do: new Audio('sounds/click.mp3'),
+    click_den: new Audio('sounds/click.mp3'),
+    capture_do: new Audio('sounds/capture.mp3'),
+    capture_den: new Audio('sounds/capture.mp3'),
+
+    check: new Audio('sounds/check.mp3'),
+    win: new Audio('sounds/win.mp3'),
+    lose: new Audio('sounds/lose.mp3'),
+    heartbeat: new Audio('sounds/heartbeat.mp3'),
+    timeout: new Audio('sounds/timeout.mp3'),
+    bgm: new Audio('sounds/bgm.mp3')
 };
+
 sounds.bgm.loop = true;
 sounds.bgm.volume = 0.4;
-sounds.heartbeat.loop = true; 
+sounds.heartbeat.loop = true;
 
-function playSnd(name) {
-if (sounds[name]) {
-sounds[name].currentTime = 0;
-sounds[name].play().catch(e => console.log("Chờ tương tác để phát nhạc..."));
-}
+// preload nhẹ để GitHub đỡ trễ file
+Object.values(sounds).forEach(a => {
+    try {
+        a.preload = "auto";
+        a.load();
+    } catch (e) {}
+});
+
+function playSnd(name, side = "") {
+    let key = name;
+
+    if (name === "click") {
+        key = side === "den" ? "click_den" : "click_do";
+    } else if (name === "capture") {
+        key = side === "den" ? "capture_den" : "capture_do";
+    }
+
+    const snd = sounds[key];
+    if (!snd) return;
+
+    try {
+        snd.pause();
+        snd.currentTime = 0;
+        console.log("PLAY SND:", { name, side, key, src: snd.src });
+        snd.play().catch(err => {
+            console.log("AUDIO BLOCK:", key, err?.name || err);
+        });
+    } catch (err) {
+        console.log("AUDIO ERROR:", key, err);
+    }
 }
 
 function sendMessage() {
@@ -3998,23 +4033,8 @@ board.onclick = (e) => {
     
         p.style.left === fX + "%" && p.style.top === fY + "%"
     );
-const isOwnTurnPiece = target && mySide && luotDi === mySide && target.dataset.side === mySide;
-if (isOwnTurnPiece) {
-    try {
-        sounds.click.pause();
-        sounds.click.currentTime = 0;
-        sounds.click.play().catch(() => {});
-    } catch (e) {}
-}
-    if (!selectedPiece) {
-    if (target && target.dataset.side === luotDi) {
-        selectedPiece = target;
-        selectedPiece.classList.add("selected");
-        showMoveHints(selectedPiece);
-        playSnd('click');
-    }
-    return;
-}
+
+    playSnd('click', target.dataset.side);
 
     const fromViewC = columns.indexOf(parseFloat(selectedPiece.style.left));
     const fromViewR = rows.indexOf(parseFloat(selectedPiece.style.top));
@@ -4027,7 +4047,7 @@ if (isOwnTurnPiece) {
     selectedPiece = target;
     selectedPiece.classList.add("selected");
     showMoveHints(selectedPiece);
-    playSnd('click');
+    playSnd('click', target.dataset.side);
     return;
 }
 
@@ -4049,13 +4069,9 @@ if (isOwnTurnPiece) {
 
     if (target) {
     target.remove();
-    try {
-        sounds.capture.pause();
-        sounds.capture.currentTime = 0;
-        sounds.capture.play().catch(() => {});
-    } catch (e) {}
+    playSnd('capture', selectedPiece.dataset.side);
 } else {
-    playSnd('click');
+    playSnd('click', selectedPiece.dataset.side);
 }
 
     lastMoveFrom = { c: c1, r: r1 };
@@ -5086,7 +5102,8 @@ localStorage.setItem("currentUsername", newName);
 
 alert("Cập nhật hồ sơ thành công!");
 closeEditProfile();
-}function openChat() {
+}
+function openChat() {
     document.querySelectorAll(".profile-menu").forEach(m => {
         m.classList.remove("show");
     });
@@ -5102,7 +5119,8 @@ closeEditProfile();
 // Hàm đóng khung chat
 function closeChat() {
 document.getElementById("chat-box").style.display = "none";
-} function sendMsg() {
+} 
+function sendMsg() {
 const msgInput = document.getElementById("user-msg");
 const chatContent = document.getElementById("chat-content");
 const message = msgInput.value.trim();
