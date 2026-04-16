@@ -3299,17 +3299,8 @@ function switchAccount() {
 // --- HỆ THỐNG ÂM THANH (KHỚP VỚI HÌNH THƯ MỤC CỦA MÀY) ---
 const sounds = {
     welcome: new Audio('sounds/welcome.mp3'),
-
-    // âm thanh chung cũ
     click: new Audio('sounds/click.mp3'),
     capture: new Audio('sounds/capture.mp3'),
-
-    // tách riêng 2 luồng đỏ / đen
-    click_do: new Audio('sounds/click.mp3'),
-    click_den: new Audio('sounds/click.mp3'),
-    capture_do: new Audio('sounds/capture.mp3'),
-    capture_den: new Audio('sounds/capture.mp3'),
-
     check: new Audio('sounds/check.mp3'),
     win: new Audio('sounds/win.mp3'),
     lose: new Audio('sounds/lose.mp3'),
@@ -3322,7 +3313,6 @@ sounds.bgm.loop = true;
 sounds.bgm.volume = 0.4;
 sounds.heartbeat.loop = true;
 
-// preload nhẹ để GitHub đỡ trễ file
 Object.values(sounds).forEach(a => {
     try {
         a.preload = "auto";
@@ -3330,27 +3320,30 @@ Object.values(sounds).forEach(a => {
     } catch (e) {}
 });
 
-function playSnd(name, side = "") {
-    let key = name;
-
-    if (name === "click") {
-        key = side === "den" ? "click_den" : "click_do";
-    } else if (name === "capture") {
-        key = side === "den" ? "capture_den" : "capture_do";
-    }
-
-    const snd = sounds[key];
-    if (!snd) return;
+function playSnd(name) {
+    const base = sounds[name];
+    if (!base) return;
 
     try {
-        snd.pause();
-        snd.currentTime = 0;
-        console.log("PLAY SND:", { name, side, key, src: snd.src });
+        // bgm và heartbeat giữ nguyên 1 object
+        if (name === 'bgm' || name === 'heartbeat') {
+            base.pause();
+            base.currentTime = 0;
+            base.play().catch(err => {
+                console.log("AUDIO BLOCK:", name, err?.name || err);
+            });
+            return;
+        }
+
+        // click / capture / check / win / lose / timeout / welcome:
+        // mỗi lần phát tạo 1 bản sao mới để khỏi kẹt 1 object audio
+        const snd = base.cloneNode(true);
+        snd.volume = base.volume ?? 1;
         snd.play().catch(err => {
-            console.log("AUDIO BLOCK:", key, err?.name || err);
+            console.log("AUDIO BLOCK:", name, err?.name || err);
         });
     } catch (err) {
-        console.log("AUDIO ERROR:", key, err);
+        console.log("AUDIO ERROR:", name, err);
     }
 }
 
@@ -4038,7 +4031,7 @@ if (!selectedPiece) {
         selectedPiece = target;
         selectedPiece.classList.add("selected");
         showMoveHints(selectedPiece);
-        playSnd('click', target.dataset.side);
+        playSnd('click');
     }
     return;
 }
@@ -4049,36 +4042,36 @@ const fromReal = mapViewToBoard(fromViewC, fromViewR);
 const c1 = fromReal.c;
 const r1 = fromReal.r;
 
-    if (target && target.dataset.side === luotDi) {
+if (target && target.dataset.side === luotDi) {
     selectedPiece.classList.remove("selected");
     selectedPiece = target;
     selectedPiece.classList.add("selected");
     showMoveHints(selectedPiece);
-    playSnd('click', target.dataset.side);
+    playSnd('click');
     return;
 }
 
-    if (!checkLuat(selectedPiece.dataset.type, selectedPiece.dataset.side, c1, r1, c2, r2, taoMaTran())) {
-        selectedPiece.classList.remove("selected");
-        selectedPiece = null;
-        clearMoveHints();
-        return;
-    }
+if (!checkLuat(selectedPiece.dataset.type, selectedPiece.dataset.side, c1, r1, c2, r2, taoMaTran())) {
+    selectedPiece.classList.remove("selected");
+    selectedPiece = null;
+    clearMoveHints();
+    return;
+}
 
-    let mt = taoMaTran();
-    mt[r2][c2] = { side: selectedPiece.dataset.side, type: selectedPiece.dataset.type };
-    mt[r1][c1] = null;
+let mt = taoMaTran();
+mt[r2][c2] = { side: selectedPiece.dataset.side, type: selectedPiece.dataset.type };
+mt[r1][c1] = null;
 
-    if (laBiChieu(luotDi, mt)) {
+if (laBiChieu(luotDi, mt)) {
     alert("Không được để Tướng bị chiếu!");
     return;
 }
 
-    if (target) {
+if (target) {
     target.remove();
-    playSnd('capture', selectedPiece.dataset.side);
+    playSnd('capture');
 } else {
-    playSnd('click', selectedPiece.dataset.side);
+    playSnd('click');
 }
 
     lastMoveFrom = { c: c1, r: r1 };
