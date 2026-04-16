@@ -3298,53 +3298,25 @@ function switchAccount() {
 
 // --- HỆ THỐNG ÂM THANH (KHỚP VỚI HÌNH THƯ MỤC CỦA MÀY) ---
 const sounds = {
-    welcome: new Audio('sounds/welcome.mp3'),
-    click: new Audio('sounds/click.mp3'),
-    capture: new Audio('sounds/capture.mp3'),
-    check: new Audio('sounds/check.mp3'),
-    win: new Audio('sounds/win.mp3'),
-    lose: new Audio('sounds/lose.mp3'),
-    heartbeat: new Audio('sounds/heartbeat.mp3'),
-    timeout: new Audio('sounds/timeout.mp3'),
-    bgm: new Audio('sounds/bgm.mp3')
+welcome: new Audio('sounds/welcome.mp3'),
+click: new Audio('sounds/click.mp3'),
+capture: new Audio('sounds/capture.mp3'),
+check: new Audio('sounds/check.mp3'),
+win: new Audio('sounds/win.mp3'),
+lose: new Audio('sounds/lose.mp3'),
+heartbeat: new Audio('sounds/heartbeat.mp3'),
+timeout: new Audio('sounds/timeout.mp3'),
+bgm: new Audio('sounds/bgm.mp3')
 };
-
 sounds.bgm.loop = true;
 sounds.bgm.volume = 0.4;
-sounds.heartbeat.loop = true;
-
-Object.values(sounds).forEach(a => {
-    try {
-        a.preload = "auto";
-        a.load();
-    } catch (e) {}
-});
+sounds.heartbeat.loop = true; 
 
 function playSnd(name) {
-    const base = sounds[name];
-    if (!base) return;
-
-    try {
-        // bgm và heartbeat giữ nguyên 1 object
-        if (name === 'bgm' || name === 'heartbeat') {
-            base.pause();
-            base.currentTime = 0;
-            base.play().catch(err => {
-                console.log("AUDIO BLOCK:", name, err?.name || err);
-            });
-            return;
-        }
-
-        // click / capture / check / win / lose / timeout / welcome:
-        // mỗi lần phát tạo 1 bản sao mới để khỏi kẹt 1 object audio
-        const snd = base.cloneNode(true);
-        snd.volume = base.volume ?? 1;
-        snd.play().catch(err => {
-            console.log("AUDIO BLOCK:", name, err?.name || err);
-        });
-    } catch (err) {
-        console.log("AUDIO ERROR:", name, err);
-    }
+if (sounds[name]) {
+sounds[name].currentTime = 0;
+sounds[name].play().catch(e => console.log("Chờ tương tác để phát nhạc..."));
+}
 }
 
 function sendMessage() {
@@ -4023,10 +3995,18 @@ board.onclick = (e) => {
     const r2 = toReal.r;
 
     const target = Array.from(document.querySelectorAll(".piece")).find(p =>
-    p.style.left === fX + "%" && p.style.top === fY + "%"
-);
-
-if (!selectedPiece) {
+    
+        p.style.left === fX + "%" && p.style.top === fY + "%"
+    );
+const isOwnTurnPiece = target && mySide && luotDi === mySide && target.dataset.side === mySide;
+if (isOwnTurnPiece) {
+    try {
+        sounds.click.pause();
+        sounds.click.currentTime = 0;
+        sounds.click.play().catch(() => {});
+    } catch (e) {}
+}
+    if (!selectedPiece) {
     if (target && target.dataset.side === luotDi) {
         selectedPiece = target;
         selectedPiece.classList.add("selected");
@@ -4036,13 +4016,13 @@ if (!selectedPiece) {
     return;
 }
 
-const fromViewC = columns.indexOf(parseFloat(selectedPiece.style.left));
-const fromViewR = rows.indexOf(parseFloat(selectedPiece.style.top));
-const fromReal = mapViewToBoard(fromViewC, fromViewR);
-const c1 = fromReal.c;
-const r1 = fromReal.r;
+    const fromViewC = columns.indexOf(parseFloat(selectedPiece.style.left));
+    const fromViewR = rows.indexOf(parseFloat(selectedPiece.style.top));
+    const fromReal = mapViewToBoard(fromViewC, fromViewR);
+    const c1 = fromReal.c;
+    const r1 = fromReal.r;
 
-if (target && target.dataset.side === luotDi) {
+    if (target && target.dataset.side === luotDi) {
     selectedPiece.classList.remove("selected");
     selectedPiece = target;
     selectedPiece.classList.add("selected");
@@ -4051,25 +4031,29 @@ if (target && target.dataset.side === luotDi) {
     return;
 }
 
-if (!checkLuat(selectedPiece.dataset.type, selectedPiece.dataset.side, c1, r1, c2, r2, taoMaTran())) {
-    selectedPiece.classList.remove("selected");
-    selectedPiece = null;
-    clearMoveHints();
-    return;
-}
+    if (!checkLuat(selectedPiece.dataset.type, selectedPiece.dataset.side, c1, r1, c2, r2, taoMaTran())) {
+        selectedPiece.classList.remove("selected");
+        selectedPiece = null;
+        clearMoveHints();
+        return;
+    }
 
-let mt = taoMaTran();
-mt[r2][c2] = { side: selectedPiece.dataset.side, type: selectedPiece.dataset.type };
-mt[r1][c1] = null;
+    let mt = taoMaTran();
+    mt[r2][c2] = { side: selectedPiece.dataset.side, type: selectedPiece.dataset.type };
+    mt[r1][c1] = null;
 
-if (laBiChieu(luotDi, mt)) {
+    if (laBiChieu(luotDi, mt)) {
     alert("Không được để Tướng bị chiếu!");
     return;
 }
 
-if (target) {
+    if (target) {
     target.remove();
-    playSnd('capture');
+    try {
+        sounds.capture.pause();
+        sounds.capture.currentTime = 0;
+        sounds.capture.play().catch(() => {});
+    } catch (e) {}
 } else {
     playSnd('click');
 }
@@ -5102,8 +5086,7 @@ localStorage.setItem("currentUsername", newName);
 
 alert("Cập nhật hồ sơ thành công!");
 closeEditProfile();
-}
-function openChat() {
+}function openChat() {
     document.querySelectorAll(".profile-menu").forEach(m => {
         m.classList.remove("show");
     });
@@ -5119,8 +5102,7 @@ function openChat() {
 // Hàm đóng khung chat
 function closeChat() {
 document.getElementById("chat-box").style.display = "none";
-} 
-function sendMsg() {
+} function sendMsg() {
 const msgInput = document.getElementById("user-msg");
 const chatContent = document.getElementById("chat-content");
 const message = msgInput.value.trim();
