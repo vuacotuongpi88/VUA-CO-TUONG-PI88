@@ -5203,33 +5203,71 @@ async function maybeSettleStakeRoom(room, roomId) {
 
     const doPlayer = room?.players?.do || {};
     const denPlayer = room?.players?.den || {};
+    const localWalletKey = makeWalletDbKey();
 
-    // Hòa: hoàn lại tiền cọc cho mỗi bên
+    // Hòa: hoàn lại mỗi bên 1 cọc
     if (room.winner === "hoa") {
-        if (doPlayer.walletKey) {
-            await adjustPmcWalletByKey(doPlayer.walletKey, stake, {
-                name: doPlayer.name,
-                photo: doPlayer.photo
+        const refundTargets = [];
+
+        if (doPlayer.walletKey) refundTargets.push({
+            walletKey: doPlayer.walletKey,
+            name: doPlayer.name,
+            photo: doPlayer.photo
+        });
+        if (denPlayer.walletKey) refundTargets.push({
+            walletKey: denPlayer.walletKey,
+            name: denPlayer.name,
+            photo: denPlayer.photo
+        });
+
+        // fallback cho máy local nếu room cũ thiếu walletKey
+        if (mySide === "do" && !doPlayer.walletKey) {
+            refundTargets.push({
+                walletKey: localWalletKey,
+                name: localStorage.getItem("user-name-display") || "Người chơi",
+                photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+            });
+        }
+        if (mySide === "den" && !denPlayer.walletKey) {
+            refundTargets.push({
+                walletKey: localWalletKey,
+                name: localStorage.getItem("user-name-display") || "Người chơi",
+                photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
             });
         }
 
-        if (denPlayer.walletKey) {
-            await adjustPmcWalletByKey(denPlayer.walletKey, stake, {
-                name: denPlayer.name,
-                photo: denPlayer.photo
+        const seen = new Set();
+        for (const item of refundTargets) {
+            if (!item.walletKey || seen.has(item.walletKey)) continue;
+            seen.add(item.walletKey);
+
+            await adjustPmcWalletByKey(item.walletKey, stake, {
+                name: item.name,
+                photo: item.photo
             });
         }
+
+        await loadWalletBalance().catch(() => {});
         return;
     }
 
     // Có người thắng: người thắng nhận toàn bộ pot
     const winnerPlayer = room.winner === "do" ? doPlayer : denPlayer;
-    if (winnerPlayer.walletKey) {
-        await adjustPmcWalletByKey(winnerPlayer.walletKey, stake * 2, {
-            name: winnerPlayer.name,
-            photo: winnerPlayer.photo
-        });
+    let winnerWalletKey = winnerPlayer.walletKey || "";
+
+    // fallback cho máy local nếu room cũ thiếu walletKey
+    if (!winnerWalletKey && room.winner === mySide) {
+        winnerWalletKey = localWalletKey;
     }
+
+    if (!winnerWalletKey) return;
+
+    await adjustPmcWalletByKey(winnerWalletKey, stake * 2, {
+        name: winnerPlayer.name || localStorage.getItem("user-name-display") || "Người chơi",
+        photo: winnerPlayer.photo || localStorage.getItem("user-photo") || "images/do_tuong.png"
+    });
+
+    await loadWalletBalance().catch(() => {});
 }
 function hasWithdrawPassword() {
     return !!localStorage.getItem(getWithdrawPassKey());
