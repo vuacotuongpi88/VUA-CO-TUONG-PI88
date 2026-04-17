@@ -5237,33 +5237,30 @@ function runRefTransaction(ref, updater) {
 async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
     const ref = walletRefByKey(walletKey);
 
-    const result = await runRefTransaction(ref, current => {
-        const safeCurrent = current && typeof current === "object" ? current : {};
+    const snap = await ref.once("value");
+    const safeCurrent = snap.val() && typeof snap.val() === "object" ? snap.val() : {};
 
-        const currentPi = Number(safeCurrent.balance ?? 0) || 0;
-        const currentPmc = Math.floor(Number(safeCurrent.pmcBalance ?? 0) || 0);
-        const nextPmc = currentPmc + Math.floor(Number(delta || 0));
+    const currentPi = Number(safeCurrent.balance ?? 0) || 0;
+    const currentPmc = Math.floor(Number(safeCurrent.pmcBalance ?? 0) || 0);
+    const nextPmc = currentPmc + Math.floor(Number(delta || 0));
 
-        if (nextPmc < 0) return;
+    if (nextPmc < 0) return null;
 
-        return {
-            ...safeCurrent,
-            balance: currentPi,
-            pmcBalance: nextPmc,
-            updatedAt: Date.now(),
-            name: profile.name || safeCurrent.name || localStorage.getItem("user-name-display") || "Người chơi",
-            photo: profile.photo || safeCurrent.photo || localStorage.getItem("user-photo") || "images/do_tuong.png"
-        };
+    await ref.update({
+        ...safeCurrent,
+        balance: currentPi,
+        pmcBalance: nextPmc,
+        updatedAt: Date.now(),
+        name: profile.name || safeCurrent.name || localStorage.getItem("user-name-display") || "Người chơi",
+        photo: profile.photo || safeCurrent.photo || localStorage.getItem("user-photo") || "images/do_tuong.png"
     });
-console.log("PMC TX RESULT", {
-    walletKey,
-    delta,
-    committed: result.committed,
-    value: result.snapshot && result.snapshot.val ? result.snapshot.val() : null
-});
-    if (!result.committed) return null;
 
-    const nextPmc = Math.floor(Number(result.snapshot?.val()?.pmcBalance ?? 0) || 0);
+    console.log("PMC DIRECT UPDATE OK", {
+        walletKey,
+        delta,
+        before: currentPmc,
+        after: nextPmc
+    });
 
     if (walletKey === makeWalletDbKey()) {
         currentPmcBalance = nextPmc;
