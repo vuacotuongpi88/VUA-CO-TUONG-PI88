@@ -4748,7 +4748,9 @@ if (room.status === "playing" && !room.winner) {
             }
         }
         if (room.winner) {
-        await maybeSettleStakeRoom(room, listeningRoomId);
+    setTimeout(() => {
+        settlePmcViaApi(listeningRoomId);
+    }, 0);
 }
         if (room.winner && !isGameOver) {
     if (room.winner === "hoa") {
@@ -5159,7 +5161,27 @@ async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
 
     return nextPmc;
 }
+async function settlePmcViaApi(roomId) {
+    try {
+        const res = await fetch("/api/pmc/settle", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ roomId })
+        });
 
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok || data.ok === false) {
+            console.error("Lỗi settle PMC qua API:", data);
+            return;
+        }
+
+        console.log("Settle PMC qua API OK:", data);
+        await loadWalletBalance().catch(() => {});
+    } catch (err) {
+        console.error("Lỗi gọi API settle PMC:", err);
+    }
+}
 async function maybeRefundWaitingStakePMC(roomId, room, side) {
     const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
     if (!roomId || !side || !stake) return;

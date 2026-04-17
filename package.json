@@ -1,0 +1,24 @@
+{
+  "name": "co_tuong_pi_88",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vuacotuongpi88/VUA-CO-TUONG-PI88.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/vuacotuongpi88/VUA-CO-TUONG-PI88/issues"
+  },
+  "homepage": "https://github.com/vuacotuongpi88/VUA-CO-TUONG-PI88#readme",
+  "dependencies": {
+    "firebase-admin": "^13.8.0"
+  }
+}
