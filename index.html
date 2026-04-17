@@ -5426,24 +5426,14 @@ async function maybeSettleStakeRoom(room, roomId) {
 }
 async function chargeStakeForReady(roomId, side) {
     try {
-        if (!roomId || !side) {
-            alert("READY FAIL: thiếu roomId hoặc side");
-            return { ok: false, stage: "input" };
-        }
+        if (!roomId || !side) return { ok: false, stage: "input" };
 
         const roomSnap = await db.ref("matches/" + roomId).once("value");
         const room = roomSnap.val() || {};
 
         const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
-        if (!stake) {
-            alert("READY INFO: room không có stakePMC hợp lệ");
-            return { ok: true, stage: "no_stake" };
-        }
-
-        if (room?.stakeLocked?.[side]) {
-            alert("READY INFO: bên này đã bị trừ stake trước đó rồi");
-            return { ok: true, stage: "already_locked" };
-        }
+        if (!stake) return { ok: true, stage: "no_stake" };
+        if (room?.stakeLocked?.[side]) return { ok: true, stage: "already_locked" };
 
         const localProfile = getCurrentPlayerProfile();
         const sidePlayer = room?.players?.[side] || {};
@@ -5465,31 +5455,13 @@ async function chargeStakeForReady(roomId, side) {
         const targetPmc = Math.max(0, Math.floor(Number(targetWallet.pmcBalance || 0) || 0));
 
         if (!targetWalletKey) {
-            alert(
-                "READY FAIL [walletKey trống]\n" +
-                "roomId: " + roomId + "\n" +
-                "side: " + side + "\n" +
-                "local uid: " + (localProfile.uid || "") + "\n" +
-                "room uid: " + (sidePlayer.uid || "")
-            );
+            console.error("READY FAIL wallet_key_missing", { roomId, side });
             return { ok: false, stage: "wallet_key_missing" };
         }
 
         if (targetPmc < stake) {
-            alert(
-                "READY FAIL [ví không đủ PMC]\n" +
-                "walletKey: " + targetWalletKey + "\n" +
-                "PMC ví này: " + targetPmc + "\n" +
-                "Stake cần: " + stake + "\n" +
-                "UI local đang hiện: " + getPmcBalance()
-            );
-            return {
-                ok: false,
-                stage: "insufficient_wallet",
-                walletKey: targetWalletKey,
-                targetPmc,
-                stake
-            };
+            console.error("READY FAIL insufficient_wallet", { targetWalletKey, targetPmc, stake });
+            return { ok: false, stage: "insufficient_wallet" };
         }
 
         const paid = await adjustPmcWalletByKey(targetWalletKey, -stake, {
@@ -5498,21 +5470,8 @@ async function chargeStakeForReady(roomId, side) {
         });
 
         if (paid == null) {
-            alert(
-                "READY FAIL [transaction không commit]\n" +
-                "walletKey: " + targetWalletKey + "\n" +
-                "PMC trước khi trừ: " + targetPmc + "\n" +
-                "Stake: " + stake + "\n" +
-                "localWalletKey: " + makeWalletDbKey()
-            );
-            return {
-                ok: false,
-                stage: "tx_not_committed",
-                walletKey: targetWalletKey,
-                targetPmc,
-                stake,
-                localWalletKey: makeWalletDbKey()
-            };
+            console.error("READY FAIL tx_not_committed", { targetWalletKey, targetPmc, stake });
+            return { ok: false, stage: "tx_not_committed" };
         }
 
         if (targetWalletKey === localProfile.walletKey) {
@@ -5525,29 +5484,11 @@ async function chargeStakeForReady(roomId, side) {
 
         await db.ref("matches/" + roomId + "/stakeLocked/" + side).set(true);
 
-        alert(
-            "READY OK\n" +
-            "walletKey: " + targetWalletKey + "\n" +
-            "PMC sau khi trừ: " + paid
-        );
-
-        return {
-            ok: true,
-            stage: "done",
-            walletKey: targetWalletKey,
-            paid
-        };
+        return { ok: true, stage: "done", walletKey: targetWalletKey, paid };
     } catch (err) {
-        alert(
-            "READY EXCEPTION\n" +
-            (err?.message || err)
-        );
         console.error("chargeStakeForReady exception:", err);
-        return {
-            ok: false,
-            stage: "exception",
-            error: String(err?.message || err)
-        };
+        alert("Lỗi trừ PMC, thử lại.");
+        return { ok: false, stage: "exception", error: String(err?.message || err) };
     }
 }
 function hasWithdrawPassword() {
