@@ -3790,13 +3790,20 @@ console.log("PAYOUT endGame START", {
 });
 async function maybePayoutFromEndGame(winnerSide) {
     const stake = Math.max(0, Math.floor(Number(currentRoomStakePMC || 0) || 0));
+    console.log("PAYOUT endGame START", {
+        currentRoomId,
+        currentRoomStakePMC,
+        winnerSide,
+        mySide,
+        walletKey: makeWalletDbKey()
+    });
+
     if (!currentRoomId || !stake || !winnerSide || !mySide) return;
 
-    // Chỉ máy bên thắng mới tự cộng ví của chính nó
-   if (winnerSide !== mySide) {
-  console.log("PAYOUT endGame SKIP because winnerSide !== mySide", { winnerSide, mySide });
-  return;
-}
+    if (winnerSide !== mySide) {
+        console.log("PAYOUT endGame SKIP because winnerSide !== mySide", { winnerSide, mySide });
+        return;
+    }
 
     const payoutRef = db.ref(`matches/${currentRoomId}/endGamePayout/${mySide}`);
 
@@ -3813,15 +3820,17 @@ async function maybePayoutFromEndGame(winnerSide) {
     });
 
     if (!tx.committed) {
-  console.log("PAYOUT endGame SKIP because tx not committed");
-  return;
-}
+        console.log("PAYOUT endGame SKIP because tx not committed");
+        return;
+    }
 
     const paid = await adjustPmcWalletByKey(makeWalletDbKey(), stake * 2, {
         name: localStorage.getItem("user-name-display") || "Người chơi",
         photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
     });
-console.log("PAYOUT endGame RESULT", { paid });
+
+    console.log("PAYOUT endGame RESULT", { paid });
+
     if (paid == null) {
         await payoutRef.update({
             done: false,
