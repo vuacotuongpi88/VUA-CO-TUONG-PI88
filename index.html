@@ -3729,7 +3729,7 @@ function refreshTimerRings() {
 }
 
 
-function endGame(main, sub) {
+async function endGame(main, sub) {
     isGameOver = true;
     clearInterval(interval);
     clearInterval(readyInterval);
@@ -3751,6 +3751,9 @@ function endGame(main, sub) {
 
     const myLocalSide = mySide || viewSide || null;
     const isDraw = !winnerSide;
+    if (!isDraw) {
+    await maybePayoutFromEndGame(winnerSide);
+}
 
     if (banner) {
         banner.classList.remove("win-local", "lose-local", "draw-local");
@@ -3773,6 +3776,53 @@ function endGame(main, sub) {
         wrap.style.transform = "translate(-50%, -50%) scale(1)";
         wrap.style.pointerEvents = "auto";
     }
+}
+async function maybePayoutFromEndGame(winnerSide) {
+    const stake = Math.max(0, Math.floor(Number(currentRoomStakePMC || 0) || 0));
+    if (!currentRoomId || !stake || !winnerSide || !mySide) return;
+
+    // Chỉ máy bên thắng mới tự cộng ví của chính nó
+    if (winnerSide !== mySide) return;
+
+    const payoutRef = db.ref(`matches/${currentRoomId}/endGamePayout/${mySide}`);
+
+    const tx = await runRefTransaction(payoutRef, current => {
+        if (current && current.done) return;
+        return {
+            done: true,
+            winner: winnerSide,
+            side: mySide,
+            stakePMC: stake,
+            at: Date.now(),
+            uid: getCurrentPlayerProfile().uid || ""
+        };
+    });
+
+    if (!tx.committed) return;
+
+    const paid = await adjustPmcWalletByKey(makeWalletDbKey(), stake * 2, {
+        name: localStorage.getItem("user-name-display") || "Người chơi",
+        photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+    });
+
+    if (paid == null) {
+        await payoutRef.update({
+            done: false,
+            error: "endgame_payout_failed",
+            errorAt: Date.now()
+        });
+        return;
+    }
+
+    await db.ref(`matches/${currentRoomId}/settlement`).update({
+        paid: true,
+        paidAt: Date.now(),
+        winner: winnerSide,
+        stakePMC: stake,
+        by: "endGame"
+    });
+
+    await loadWalletBalance().catch(() => {});
 }
 function hideVictoryPopup() {
     const wrap = document.getElementById("victory-wrap");
@@ -4679,8 +4729,8 @@ if (typeof applyBoardPerspective === "function") {
         }
 
         if (room.winner) {
-            clearActiveMatchSnapshot(listeningRoomId);
-        }
+        // await maybeSettleStakeRoom(room, listeningRoomId);
+}
 
         renderPlayersFromRoom(room);
         updateReadyUI();
@@ -4752,13 +4802,13 @@ if (room.status === "playing" && !room.winner) {
 }
         if (room.winner && !isGameOver) {
     if (room.winner === "hoa") {
-        endGame("HÒA CỜ", "2 BÊN HÒA");
+        await endGame("HÒA CỜ", "2 BÊN HÒA");
     } else {
         let title = "CHIẾU BÍ";
         if (room.winReason === "dauhang") title = "ĐẦU HÀNG";
         if (room.winReason === "bochay") title = "ĐỐI THỦ THOÁT";
 
-        endGame(
+        await endGame(
             title,
             `BÊN ${room.winner === "do" ? "ĐỎ" : "ĐEN"} THẮNG`
         );
