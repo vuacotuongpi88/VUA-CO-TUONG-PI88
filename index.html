@@ -5316,6 +5316,7 @@ async function maybeRefundWaitingStakePMC(roomId, room, side) {
 }
 
 async function maybeSettleStakeRoom(room, roomId) {
+    alert("DEBUG BUILD 1019: maybeSettleStakeRoom da chay");
     const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
     if (!roomId || !stake || !room?.winner) return;
 
