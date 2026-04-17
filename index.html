@@ -4786,10 +4786,123 @@ if (room.status === "playing" && !room.winner) {
     });
 }
 
-async function joinOrCreateRealtimeMatch(mode, stakePMC = 0) {
-    if (await tryResumeRealtimeMatch(mode)) {
-        return;
+async function joinExistingWaitingRoom(waitingRef, roomId, me, mode, stakePMC) {
+    const roomRef = db.ref("matches/" + roomId);
+    const roomSnap = await roomRef.once("value");
+    const room = roomSnap.val();
+
+    if (!room || room.mode !== mode || !room.players?.do) {
+        const currentWaiting = (await waitingRef.once("value")).val();
+        if (currentWaiting && currentWaiting.roomId === roomId && currentWaiting.claimedBy === me.uid) {
+            await waitingRef.remove().catch(() => {});
+        }
+        return false;
     }
+
+    const denRef = db.ref("matches/" + roomId + "/players/den");
+    const denJoinResult = await denRef.transaction((current) => {
+        if (current && current.uid && current.uid !== me.uid) return;
+        return me;
+    }, undefined, false);
+
+    if (!denJoinResult.committed) {
+        const currentWaiting = (await waitingRef.once("value")).val();
+        if (currentWaiting && currentWaiting.roomId === roomId && currentWaiting.claimedBy === me.uid) {
+            await waitingRef.remove().catch(() => {});
+        }
+        return false;
+    }
+
+    await db.ref("matches/" + roomId + "/ready/den").set(false);
+    await db.ref("matches/" + roomId + "/stakeLocked/den").set(false);
+
+    const currentWaiting = (await waitingRef.once("value")).val();
+    if (currentWaiting && currentWaiting.roomId === roomId && currentWaiting.claimedBy === me.uid) {
+        await waitingRef.remove().catch(() => {});
+    }
+
+    mySide = "den";
+    currentRoomId = roomId;
+    currentRoomMode = mode;
+    currentRoomStakePMC = stakePMC;
+
+    saveActiveMatchSnapshot({ roomId, mode, side: "den" });
+    bindRoom(roomId);
+    return true;
+}
+
+async function createAndPublishWaitingRoom(waitingRef, me, mode, stakePMC, bucket) {
+    const newRoomRef = db.ref("matches").push();
+    const newRoomId = newRoomRef.key;
+
+    await newRoomRef.set({
+        mode,
+        stakePMC,
+        roomBucket: bucket,
+        status: "waiting",
+        turn: "do",
+        isCoUp: mode === "co-up",
+        timeDo: 540,
+        timeDen: 540,
+        createdAt: firebase.database.ServerValue.TIMESTAMP,
+        players: {
+            do: me,
+            den: null
+        },
+        ready: {
+            do: false,
+            den: false
+        },
+        stakeLocked: {
+            do: false,
+            den: false
+        },
+        board: null,
+        lastMoveFrom: null,
+        lastMoveTo: null,
+        winner: null,
+        winReason: null,
+        drawRequest: null
+    });
+
+    const publishResult = await waitingRef.transaction((current) => {
+        if (current && current.roomId) {
+            if (current.uid !== me.uid) return current;
+            if (current.claimedBy && current.claimedBy !== me.uid) return current;
+        }
+
+        return {
+            roomId: newRoomId,
+            uid: me.uid,
+            name: me.name,
+            mode,
+            stakePMC,
+            createdAt: Date.now(),
+            claimedBy: null,
+            claimedAt: null
+        };
+    }, undefined, false);
+
+    const waiting = publishResult.snapshot.val();
+    const iAmHost = !!waiting && waiting.roomId === newRoomId && waiting.uid === me.uid;
+
+    if (!iAmHost) {
+        await newRoomRef.remove().catch(() => {});
+        return false;
+    }
+
+    mySide = "do";
+    currentRoomId = newRoomId;
+    currentRoomMode = mode;
+    currentRoomStakePMC = stakePMC;
+
+    saveActiveMatchSnapshot({ roomId: newRoomId, mode, side: "do" });
+    bindRoom(newRoomId);
+    return true;
+}
+
+async function joinOrCreateRealtimeMatch(mode, stakePMC = 0) {
+    if (await tryResumeRealtimeMatch(mode)) return;
 
     const safeStake = Math.max(0, Math.floor(Number(stakePMC) || 0));
     const me = getCurrentPlayerProfile();
@@ -4823,63 +4936,51 @@ async function joinOrCreateRealtimeMatch(mode, stakePMC = 0) {
     const waitingSnap = await waitingRef.once("value");
     const waiting = waitingSnap.val();
 
-    if (waiting && waiting.uid !== me.uid) {
-        mySide = "den";
-        currentRoomId = waiting.roomId;
+    if (waiting && waiting.roomId && waiting.uid !== me.uid) {
+        const claimed = await waitingRef.transaction((current) => {
+            if (!current || !current.roomId) return current;
+            if (current.uid === me.uid) return current;
+            if (current.claimedBy && current.claimedBy !== me.uid) return;
+            return {
+                ...current,
+                claimedBy: me.uid,
+                claimedAt: Date.now()
+            };
+        }, undefined, false);
 
-        await db.ref("matches/" + currentRoomId + "/players/den").set(me);
-        await db.ref("matches/" + currentRoomId + "/ready/den").set(false);
-        await db.ref("matches/" + currentRoomId + "/stakeLocked/den").set(false);
-        await waitingRef.remove();
+        const claimedWaiting = claimed.snapshot.val();
+        const iClaimedIt = claimed.committed &&
+            claimedWaiting &&
+            claimedWaiting.roomId === waiting.roomId &&
+            claimedWaiting.claimedBy === me.uid;
 
-        saveActiveMatchSnapshot({ roomId: currentRoomId, mode, side: "den" });
-        bindRoom(currentRoomId);
-    } else {
-        const newRoomRef = db.ref("matches").push();
-        currentRoomId = newRoomRef.key;
-        mySide = "do";
+        if (iClaimedIt) {
+            const joined = await joinExistingWaitingRoom(
+                waitingRef,
+                waiting.roomId,
+                me,
+                mode,
+                safeStake
+            );
+            if (joined) {
+                closeReadyOverlay();
+                readyOverlayWaitingShown = false;
+                updateReadyUI();
+                return;
+            }
+        }
+    }
 
-        await newRoomRef.set({
-            mode,
-            stakePMC: safeStake,
-            roomBucket: currentRoomBucket,
-            status: "waiting",
-            turn: "do",
-            isCoUp: mode === "co-up",
-            timeDo: 540,
-            timeDen: 540,
-            createdAt: firebase.database.ServerValue.TIMESTAMP,
-            players: {
-                do: me,
-                den: null
-            },
-            ready: {
-                do: false,
-                den: false
-            },
-            stakeLocked: {
-            do: false,
-            den: false
-            },
-            board: null,
-            lastMoveFrom: null,
-            lastMoveTo: null,
-            winner: null,
-            winReason: null,
-            drawRequest: null
-        });
+    const created = await createAndPublishWaitingRoom(
+        waitingRef,
+        me,
+        mode,
+        safeStake,
+        currentRoomBucket
+    );
 
-        await waitingRef.set({
-            roomId: currentRoomId,
-            uid: me.uid,
-            name: me.name,
-            mode,
-            stakePMC: safeStake,
-            createdAt: firebase.database.ServerValue.TIMESTAMP
-        });
-
-        saveActiveMatchSnapshot({ roomId: currentRoomId, mode, side: "do" });
-        bindRoom(currentRoomId);
+    if (!created) {
+        throw new Error("Không tạo được phòng chờ.");
     }
 
     closeReadyOverlay();
