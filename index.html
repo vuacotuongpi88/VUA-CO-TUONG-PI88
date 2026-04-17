@@ -5433,12 +5433,35 @@ async function chargeStakeForReady(roomId, side) {
 
     if (room?.stakeLocked?.[side]) return true;
 
-    const paid = await adjustPmcWalletByKey(makeWalletDbKey(), -stake, {
-        name: localStorage.getItem("user-name-display") || "Người chơi",
-        photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+    const sidePlayer = room?.players?.[side] || {};
+    const targetWalletKey = sidePlayer.walletKey || makeWalletDbKey();
+
+    console.log("SS charge side =", side, "targetWalletKey =", targetWalletKey, "localWalletKey =", makeWalletDbKey(), "stake =", stake);
+
+    const paid = await adjustPmcWalletByKey(targetWalletKey, -stake, {
+        name: sidePlayer.name || localStorage.getItem("user-name-display") || "Người chơi",
+        photo: sidePlayer.photo || localStorage.getItem("user-photo") || "images/do_tuong.png"
     });
 
-    if (paid == null) return false;
+    if (paid == null) {
+        console.error("SS charge failed:", {
+            roomId,
+            side,
+            targetWalletKey,
+            localWalletKey: makeWalletDbKey(),
+            stake
+        });
+        return false;
+    }
+
+    // nếu chính ví local bị trừ thì đồng bộ lại UI local
+    if (targetWalletKey === makeWalletDbKey()) {
+        currentPmcBalance = paid;
+        localStorage.setItem(getPmcCacheKey(), String(paid));
+        updatePmcUI(paid);
+    } else {
+        await loadWalletBalance().catch(() => {});
+    }
 
     await db.ref("matches/" + roomId + "/stakeLocked/" + side).set(true);
     return true;
