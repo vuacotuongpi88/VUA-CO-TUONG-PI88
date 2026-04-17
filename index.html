@@ -5416,17 +5416,25 @@ alert(
     "stake: " + stake
 );
 
-const winLock = await runRefTransaction(winnerPaidRef, current => {
-    if (current && current.done) return;
-    return {
-        done: true,
-        side: mySide,
-        winner: room.winner,
-        stakePMC: stake,
-        at: Date.now(),
-        uid: getCurrentPlayerProfile().uid || ""
-    };
-});
+const winLock = await Promise.race([
+    runRefTransaction(winnerPaidRef, current => {
+        if (current && current.done) return;
+        return {
+            done: true,
+            side: mySide,
+            winner: room.winner,
+            stakePMC: stake,
+            at: Date.now(),
+            uid: getCurrentPlayerProfile().uid || ""
+        };
+    }),
+    new Promise(resolve => setTimeout(() => resolve({ timeout: true }), 3000))
+]);
+
+if (winLock && winLock.timeout) {
+    alert("SETTLE HANG: winnerPaid lock bị treo quá 3 giây");
+    return;
+}
 
 if (!winLock.committed) {
     alert("SETTLE FAIL: winnerPaid lock không commit");
