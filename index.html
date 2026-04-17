@@ -4590,6 +4590,7 @@ async function maybeStartRoomFromHost(room, roomId = currentRoomId) {
     if (!room.players?.do || !room.players?.den) return;
     if (!(room.ready?.do && room.ready?.den)) return;
     if (Array.isArray(room.board) && room.board.length) return;
+    if (!(room.stakeLocked?.do && room.stakeLocked?.den)) return;
 
     isCoUp = room.mode === "co-up";
     resetToStartup();
@@ -4828,6 +4829,7 @@ async function joinOrCreateRealtimeMatch(mode, stakePMC = 0) {
 
         await db.ref("matches/" + currentRoomId + "/players/den").set(me);
         await db.ref("matches/" + currentRoomId + "/ready/den").set(false);
+        await db.ref("matches/" + currentRoomId + "/stakeLocked/den").set(false);
         await waitingRef.remove();
 
         saveActiveMatchSnapshot({ roomId: currentRoomId, mode, side: "den" });
@@ -4854,6 +4856,10 @@ async function joinOrCreateRealtimeMatch(mode, stakePMC = 0) {
             ready: {
                 do: false,
                 den: false
+            },
+            stakeLocked: {
+            do: false,
+            den: false
             },
             board: null,
             lastMoveFrom: null,
@@ -5185,6 +5191,7 @@ async function settlePmcViaApi(roomId) {
 async function maybeRefundWaitingStakePMC(roomId, room, side) {
     const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
     if (!roomId || !side || !stake) return;
+    if (!room?.stakeLocked?.[side]) return;
     if (room?.status === "playing" || room?.winner) return;
 
     const refundRef = db.ref(`matches/${roomId}/refunds/${side}`);
@@ -5313,6 +5320,27 @@ async function maybeSettleStakeRoom(room, roomId) {
     });
 
     await loadWalletBalance().catch(() => {});
+}
+async function chargeStakeForReady(roomId, side) {
+    if (!roomId || !side) return false;
+
+    const roomSnap = await db.ref("matches/" + roomId).once("value");
+    const room = roomSnap.val() || {};
+
+    const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
+    if (!stake) return true;
+
+    if (room?.stakeLocked?.[side]) return true;
+
+    const paid = await adjustPmcWalletByKey(makeWalletDbKey(), -stake, {
+        name: localStorage.getItem("user-name-display") || "Người chơi",
+        photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+    });
+
+    if (paid == null) return false;
+
+    await db.ref("matches/" + roomId + "/stakeLocked/" + side).set(true);
+    return true;
 }
 function hasWithdrawPassword() {
     return !!localStorage.getItem(getWithdrawPassKey());
@@ -5834,10 +5862,16 @@ function showReadyOverlay(mode) {
     startReadyCountdown();
 }
 
-function setReady() {
+async function setReady() {
     if (!currentRoomId || !mySide) return;
 
-    db.ref("matches/" + currentRoomId + "/ready/" + mySide).set(true);
+    const ok = await chargeStakeForReady(currentRoomId, mySide);
+    if (!ok) {
+        alert("Trừ PMC thất bại hoặc PMC không đủ.");
+        return;
+    }
+
+    await db.ref("matches/" + currentRoomId + "/ready/" + mySide).set(true);
 }
 
 async function batDauTranDau(loai) {
@@ -5960,15 +5994,12 @@ async function confirmStakeSelection() {
         return;
     }
 
-    setPmcBalance(currentPmc - finalStake);
-
     try {
         closeStakeRoomModal();
         await joinOrCreateRealtimeMatch(selectedRoomMode, finalStake);
     } catch (err) {
-        console.error("Lỗi vào phòng, hoàn lại PMC:", err);
-        setPmcBalance(getPmcBalance() + finalStake);
-        alert("Vào phòng lỗi, đã hoàn lại " + formatPMC(finalStake) + " PMC");
+        console.error("Lỗi vào phòng:", err);
+        alert("Vào phòng lỗi.");
     } finally {
         isJoiningStakeRoom = false;
     }
