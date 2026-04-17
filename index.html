@@ -3375,7 +3375,7 @@ updateBalanceUI(0);
 updatePmcUI(0);
 
 loadWalletBalance().catch(err => console.error("Lỗi tải ví:", err));
-
+startWalletLiveSync();
 showHomeUI();
 }
 
@@ -4969,7 +4969,41 @@ function getPmcCacheKey() {
 function walletRef() {
     return db.ref("wallets/" + makeWalletDbKey());
 }
+let walletValueRef = null;
 
+function startWalletLiveSync() {
+    try {
+        if (walletValueRef) walletValueRef.off();
+
+        walletValueRef = walletRef();
+        walletValueRef.on("value", (snap) => {
+            const data = snap.val() || {};
+
+            const piAmount = Math.max(0, Number(data.balance || 0) || 0);
+            const pmcAmount = Math.max(0, Math.floor(Number(data.pmcBalance || 0) || 0));
+
+            currentWalletBalance = piAmount;
+            currentPmcBalance = pmcAmount;
+
+            localStorage.setItem(getBalanceCacheKey(), String(piAmount));
+            localStorage.setItem(getPmcCacheKey(), String(pmcAmount));
+
+            updateBalanceUI(piAmount);
+            updatePmcUI(pmcAmount);
+        });
+    } catch (err) {
+        console.error("Lỗi startWalletLiveSync:", err);
+    }
+}
+
+function stopWalletLiveSync() {
+    try {
+        if (walletValueRef) walletValueRef.off();
+        walletValueRef = null;
+    } catch (err) {
+        console.error("Lỗi stopWalletLiveSync:", err);
+    }
+}
 function updateBalanceUI(amount) {
     const safeAmount = Math.max(0, Number(amount) || 0);
     const balanceEl = document.getElementById("user-balance");
