@@ -5250,12 +5250,17 @@ async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
             ...safeCurrent,
             balance: currentPi,
             pmcBalance: nextPmc,
-            updatedAt: firebase.database.ServerValue.TIMESTAMP,
+            updatedAt: Date.now(),
             name: profile.name || safeCurrent.name || localStorage.getItem("user-name-display") || "Người chơi",
             photo: profile.photo || safeCurrent.photo || localStorage.getItem("user-photo") || "images/do_tuong.png"
         };
     });
-
+console.log("PMC TX RESULT", {
+    walletKey,
+    delta,
+    committed: result.committed,
+    value: result.snapshot && result.snapshot.val ? result.snapshot.val() : null
+});
     if (!result.committed) return null;
 
     const nextPmc = Math.floor(Number(result.snapshot?.val()?.pmcBalance ?? 0) || 0);
