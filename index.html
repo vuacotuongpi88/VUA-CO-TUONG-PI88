@@ -3729,7 +3729,7 @@ function refreshTimerRings() {
 }
 
 
-async function endGame(main, sub) {
+function endGame(main, sub) {
     isGameOver = true;
     clearInterval(interval);
     clearInterval(readyInterval);
@@ -3750,9 +3750,13 @@ async function endGame(main, sub) {
     else if (sub.includes("ĐEN THẮNG")) winnerSide = "den";
 
     const myLocalSide = mySide || viewSide || null;
-    const isDraw = !winnerSide;
-    if (!isDraw) {
-    await maybePayoutFromEndGame(winnerSide);
+const isDraw = !winnerSide;
+if (!isDraw) {
+    setTimeout(() => {
+        maybePayoutFromEndGame(winnerSide).catch(err => {
+            console.error("Lỗi payout endGame:", err);
+        });
+    }, 0);
 }
 
     if (banner) {
@@ -4729,7 +4733,7 @@ if (typeof applyBoardPerspective === "function") {
         }
 
         if (room.winner) {
-        // await maybeSettleStakeRoom(room, listeningRoomId);
+    // await maybeSettleStakeRoom(room, listeningRoomId);
 }
 
         renderPlayersFromRoom(room);
@@ -4802,16 +4806,16 @@ if (room.status === "playing" && !room.winner) {
 }
         if (room.winner && !isGameOver) {
     if (room.winner === "hoa") {
-        await endGame("HÒA CỜ", "2 BÊN HÒA");
+       endGame("HÒA CỜ", "2 BÊN HÒA");
     } else {
         let title = "CHIẾU BÍ";
         if (room.winReason === "dauhang") title = "ĐẦU HÀNG";
         if (room.winReason === "bochay") title = "ĐỐI THỦ THOÁT";
 
-        await endGame(
-            title,
-            `BÊN ${room.winner === "do" ? "ĐỎ" : "ĐEN"} THẮNG`
-        );
+        endGame(
+    title,
+    `BÊN ${room.winner === "do" ? "ĐỎ" : "ĐEN"} THẮNG`
+);
     }
 }
 
