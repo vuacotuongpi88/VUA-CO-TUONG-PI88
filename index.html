@@ -6099,11 +6099,11 @@ async function confirmStakeSelection() {
         closeStakeRoomModal();
         await joinOrCreateRealtimeMatch(selectedRoomMode, finalStake);
     } catch (err) {
-        console.error("Lỗi vào phòng:", err);
-        alert("Vào phòng lỗi.");
-    } finally {
-        isJoiningStakeRoom = false;
-    }
+    console.error("Lỗi vào phòng:", err);
+    alert("Vào phòng lỗi: " + (err && err.message ? err.message : err));
+} finally {
+    isJoiningStakeRoom = false;
+}
 }
 
 // Thêm sự kiện nhấn phím Enter để gửi
