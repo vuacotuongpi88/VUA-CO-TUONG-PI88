@@ -4680,8 +4680,9 @@ if (typeof applyBoardPerspective === "function") {
         }
 
         if (room.winner) {
-            clearActiveMatchSnapshot(listeningRoomId);
-        }
+    alert("BUILD MARK WINNER 2025");
+    await maybeSettleStakeRoom(room, listeningRoomId);
+}
 
         renderPlayersFromRoom(room);
         updateReadyUI();
