@@ -5392,12 +5392,18 @@ async function maybeSettleStakeRoom(room, roomId) {
     }
 
     // ===== CÓ NGƯỜI THẮNG =====
-   if (room.winner !== mySide) {
+ // ===== CÓ NGƯỜI THẮNG =====
+if (room.winner !== mySide) {
     alert("SETTLE STOP: máy này không phải bên thắng");
     return;
 }
 
 const winnerPaidRef = db.ref(`matches/${roomId}/settlement/winnerPaid`);
+const myProfile = {
+    name: localStorage.getItem("user-name-display") || "Người chơi",
+    photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+};
+const myWalletKey = localWalletKey;
 
 alert(
     "SETTLE STEP 1\n" +
