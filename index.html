@@ -5423,67 +5423,130 @@ async function maybeSettleStakeRoom(room, roomId) {
     await loadWalletBalance().catch(() => {});
 }
 async function chargeStakeForReady(roomId, side) {
-    if (!roomId || !side) return false;
+    try {
+        if (!roomId || !side) {
+            alert("READY FAIL: thiếu roomId hoặc side");
+            return { ok: false, stage: "input" };
+        }
 
-    const roomSnap = await db.ref("matches/" + roomId).once("value");
-    const room = roomSnap.val() || {};
+        const roomSnap = await db.ref("matches/" + roomId).once("value");
+        const room = roomSnap.val() || {};
 
-    const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
-    if (!stake) return true;
-    if (room?.stakeLocked?.[side]) return true;
+        const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
+        if (!stake) {
+            alert("READY INFO: room không có stakePMC hợp lệ");
+            return { ok: true, stage: "no_stake" };
+        }
 
-    const localProfile = getCurrentPlayerProfile();
-    const sidePlayer = room?.players?.[side] || {};
+        if (room?.stakeLocked?.[side]) {
+            alert("READY INFO: bên này đã bị trừ stake trước đó rồi");
+            return { ok: true, stage: "already_locked" };
+        }
 
-    let targetWalletKey = sidePlayer.walletKey || localProfile.walletKey;
+        const localProfile = getCurrentPlayerProfile();
+        const sidePlayer = room?.players?.[side] || {};
+        let targetWalletKey = sidePlayer.walletKey || localProfile.walletKey;
 
-    // Nếu đúng là máy của bên này nhưng walletKey trong room bị cũ/lệch
-    if (sidePlayer.uid === localProfile.uid && targetWalletKey !== localProfile.walletKey) {
-        targetWalletKey = localProfile.walletKey;
+        if (sidePlayer.uid === localProfile.uid && targetWalletKey !== localProfile.walletKey) {
+            targetWalletKey = localProfile.walletKey;
 
-        await db.ref("matches/" + roomId + "/players/" + side).update({
-            walletKey: localProfile.walletKey,
-            name: localProfile.name,
-            photo: localProfile.photo
+            await db.ref("matches/" + roomId + "/players/" + side).update({
+                walletKey: localProfile.walletKey,
+                name: localProfile.name,
+                photo: localProfile.photo
+            });
+        }
+
+        const safeWalletKey = String(targetWalletKey || "").replace(/[.#$\[\]\/]/g, "_");
+        const targetWalletSnap = await db.ref("wallets/" + safeWalletKey).once("value");
+        const targetWallet = targetWalletSnap.val() || {};
+        const targetPmc = Math.max(0, Math.floor(Number(targetWallet.pmcBalance || 0) || 0));
+
+        if (!targetWalletKey) {
+            alert(
+                "READY FAIL [walletKey trống]\n" +
+                "roomId: " + roomId + "\n" +
+                "side: " + side + "\n" +
+                "local uid: " + (localProfile.uid || "") + "\n" +
+                "room uid: " + (sidePlayer.uid || "")
+            );
+            return { ok: false, stage: "wallet_key_missing" };
+        }
+
+        if (targetPmc < stake) {
+            alert(
+                "READY FAIL [ví không đủ PMC]\n" +
+                "walletKey: " + targetWalletKey + "\n" +
+                "PMC ví này: " + targetPmc + "\n" +
+                "Stake cần: " + stake + "\n" +
+                "UI local đang hiện: " + getPmcBalance()
+            );
+            return {
+                ok: false,
+                stage: "insufficient_wallet",
+                walletKey: targetWalletKey,
+                targetPmc,
+                stake
+            };
+        }
+
+        const paid = await adjustPmcWalletByKey(targetWalletKey, -stake, {
+            name: sidePlayer.name || localProfile.name || "Người chơi",
+            photo: sidePlayer.photo || localProfile.photo || "images/do_tuong.png"
         });
-    }
 
-    // Đọc thẳng ví sẽ bị trừ để biết nó còn bao nhiêu PMC thật
-    const targetWalletSnap = await db.ref("wallets/" + String(targetWalletKey).replace(/[.#$\[\]\/]/g, "_")).once("value");
-    const targetWallet = targetWalletSnap.val() || {};
-    const targetPmc = Math.max(0, Math.floor(Number(targetWallet.pmcBalance || 0) || 0));
+        if (paid == null) {
+            alert(
+                "READY FAIL [transaction không commit]\n" +
+                "walletKey: " + targetWalletKey + "\n" +
+                "PMC trước khi trừ: " + targetPmc + "\n" +
+                "Stake: " + stake + "\n" +
+                "localWalletKey: " + makeWalletDbKey()
+            );
+            return {
+                ok: false,
+                stage: "tx_not_committed",
+                walletKey: targetWalletKey,
+                targetPmc,
+                stake,
+                localWalletKey: makeWalletDbKey()
+            };
+        }
 
-    if (targetPmc < stake) {
+        if (targetWalletKey === localProfile.walletKey) {
+            currentPmcBalance = paid;
+            localStorage.setItem(getPmcCacheKey(), String(paid));
+            updatePmcUI(paid);
+        } else {
+            await loadWalletBalance().catch(() => {});
+        }
+
+        await db.ref("matches/" + roomId + "/stakeLocked/" + side).set(true);
+
         alert(
-            "Ví bị trừ không đủ PMC.\n" +
+            "READY OK\n" +
             "walletKey: " + targetWalletKey + "\n" +
-            "PMC ví này: " + targetPmc + "\n" +
-            "Cược cần: " + stake
+            "PMC sau khi trừ: " + paid
         );
-        return false;
+
+        return {
+            ok: true,
+            stage: "done",
+            walletKey: targetWalletKey,
+            paid
+        };
+    } catch (err) {
+        alert(
+            "READY EXCEPTION\n" +
+            (err?.message || err)
+        );
+        console.error("chargeStakeForReady exception:", err);
+        return {
+            ok: false,
+            stage: "exception",
+            error: String(err?.message || err)
+        };
     }
-
-    const paid = await adjustPmcWalletByKey(targetWalletKey, -stake, {
-        name: sidePlayer.name || localProfile.name || "Người chơi",
-        photo: sidePlayer.photo || localProfile.photo || "images/do_tuong.png"
-    });
-
-    if (paid == null) {
-        alert("Trừ PMC fail ở ví: " + targetWalletKey);
-        return false;
-    }
-
-    // Đồng bộ lại UI local nếu chính ví local bị trừ
-    if (targetWalletKey === localProfile.walletKey) {
-        currentPmcBalance = paid;
-        localStorage.setItem(getPmcCacheKey(), String(paid));
-        updatePmcUI(paid);
-    } else {
-        await loadWalletBalance().catch(() => {});
-    }
-
-    await db.ref("matches/" + roomId + "/stakeLocked/" + side).set(true);
-    return true;
 }
 function hasWithdrawPassword() {
     return !!localStorage.getItem(getWithdrawPassKey());
@@ -6008,9 +6071,11 @@ function showReadyOverlay(mode) {
 async function setReady() {
     if (!currentRoomId || !mySide) return;
 
-    const ok = await chargeStakeForReady(currentRoomId, mySide);
-    if (!ok) {
-        alert("Trừ PMC thất bại hoặc PMC không đủ.");
+    const result = await chargeStakeForReady(currentRoomId, mySide);
+
+    if (!result.ok) {
+        // không alert thêm ở đây nữa
+        console.error("READY FAIL:", result);
         return;
     }
 
