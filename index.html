@@ -4680,7 +4680,6 @@ if (typeof applyBoardPerspective === "function") {
         }
 
         if (room.winner) {
-    alert("BUILD MARK WINNER 2025");
     await maybeSettleStakeRoom(room, listeningRoomId);
 }
 
@@ -5317,7 +5316,6 @@ async function maybeRefundWaitingStakePMC(roomId, room, side) {
 }
 
 async function maybeSettleStakeRoom(room, roomId) {
-    alert("DEBUG BUILD 1019: maybeSettleStakeRoom da chay");
     const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
     if (!roomId || !stake || !room?.winner) return;
 
@@ -5396,7 +5394,6 @@ async function maybeSettleStakeRoom(room, roomId) {
     // ===== CÓ NGƯỜI THẮNG =====
  // ===== CÓ NGƯỜI THẮNG =====
 if (room.winner !== mySide) {
-    alert("SETTLE STOP: máy này không phải bên thắng");
     return;
 }
 
@@ -5406,15 +5403,6 @@ const myProfile = {
     photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
 };
 const myWalletKey = localWalletKey;
-
-alert(
-    "SETTLE STEP 1\n" +
-    "roomId: " + roomId + "\n" +
-    "winner: " + room.winner + "\n" +
-    "mySide: " + mySide + "\n" +
-    "wallet: " + myWalletKey + "\n" +
-    "stake: " + stake
-);
 
 const winLock = await Promise.race([
     runRefTransaction(winnerPaidRef, current => {
@@ -5432,16 +5420,12 @@ const winLock = await Promise.race([
 ]);
 
 if (winLock && winLock.timeout) {
-    alert("SETTLE HANG: winnerPaid lock bị treo quá 3 giây");
     return;
 }
 
 if (!winLock.committed) {
-    alert("SETTLE FAIL: winnerPaid lock không commit");
     return;
 }
-
-alert("SETTLE STEP 2: lock winnerPaid OK");
 
 const paid = await adjustPmcWalletByKey(myWalletKey, stake * 2, myProfile);
 
@@ -5460,20 +5444,12 @@ if (paid == null) {
     return;
 }
 
-alert(
-    "SETTLE STEP 3: cộng ví OK\n" +
-    "wallet: " + myWalletKey + "\n" +
-    "PMC sau cộng: " + paid
-);
-
 await db.ref(`matches/${roomId}/settlement`).update({
     paid: true,
     paidAt: Date.now(),
     winner: room.winner,
     stakePMC: stake
 });
-
-alert("SETTLE STEP 4: update settlement paid OK");
 
 await loadWalletBalance().catch(() => {});
 }
