@@ -5217,7 +5217,95 @@ async function maybeRefundWaitingStakePMC(roomId, room, side) {
     });
 }
 
-git add .
+async function maybeSettleStakeRoom(room, roomId) {
+    const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
+    if (!roomId || !stake || !room?.winner || !mySide) return;
+
+    const myWalletKey = makeWalletDbKey();
+    const myProfile = {
+        name: localStorage.getItem("user-name-display") || "Người chơi",
+        photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+    };
+    const settlementRootRef = db.ref(`matches/${roomId}/settlement`);
+
+    // Hòa: mỗi bên tự hoàn ví của chính nó
+    if (room.winner === "hoa") {
+        const myRefundRef = db.ref(`matches/${roomId}/settlement/refund_${mySide}`);
+
+        const refundLock = await runRefTransaction(myRefundRef, current => {
+            if (current && current.done) return;
+            return {
+                done: true,
+                side: mySide,
+                winner: "hoa",
+                stakePMC: stake,
+                at: Date.now(),
+                uid: getCurrentPlayerProfile().uid || ""
+            };
+        });
+
+        if (!refundLock.committed) return;
+
+        const paid = await adjustPmcWalletByKey(myWalletKey, stake, myProfile);
+        if (paid == null) {
+            await myRefundRef.update({
+                done: false,
+                error: "refund_failed",
+                errorAt: Date.now()
+            });
+            return;
+        }
+
+        await settlementRootRef.update({
+            paid: true,
+            paidAt: Date.now(),
+            winner: "hoa",
+            stakePMC: stake
+        });
+
+        await loadWalletBalance().catch(() => {});
+        return;
+    }
+
+    // Không phải bên thắng thì không tự cộng gì hết
+    if (room.winner !== mySide) return;
+
+    // Chỉ máy bên thắng tự cộng ví của chính nó
+    const winnerPaidRef = db.ref(`matches/${roomId}/settlement/winnerPaid`);
+
+    const winLock = await runRefTransaction(winnerPaidRef, current => {
+        if (current && current.done) return;
+        return {
+            done: true,
+            side: mySide,
+            winner: room.winner,
+            stakePMC: stake,
+            at: Date.now(),
+            uid: getCurrentPlayerProfile().uid || ""
+        };
+    });
+
+    if (!winLock.committed) return;
+
+    const paid = await adjustPmcWalletByKey(myWalletKey, stake * 2, myProfile);
+    if (paid == null) {
+        await winnerPaidRef.update({
+            done: false,
+            error: "winner_payout_failed",
+            errorAt: Date.now()
+        });
+        return;
+    }
+
+    await settlementRootRef.update({
+        paid: true,
+        paidAt: Date.now(),
+        winner: room.winner,
+        stakePMC: stake
+    });
+
+    await loadWalletBalance().catch(() => {});
+}
 function hasWithdrawPassword() {
     return !!localStorage.getItem(getWithdrawPassKey());
 }
