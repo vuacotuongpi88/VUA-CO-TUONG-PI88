@@ -5430,31 +5430,51 @@ async function chargeStakeForReady(roomId, side) {
 
     const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
     if (!stake) return true;
-
     if (room?.stakeLocked?.[side]) return true;
 
+    const localProfile = getCurrentPlayerProfile();
     const sidePlayer = room?.players?.[side] || {};
-    const targetWalletKey = sidePlayer.walletKey || makeWalletDbKey();
 
-    console.log("SS charge side =", side, "targetWalletKey =", targetWalletKey, "localWalletKey =", makeWalletDbKey(), "stake =", stake);
+    let targetWalletKey = sidePlayer.walletKey || localProfile.walletKey;
 
-    const paid = await adjustPmcWalletByKey(targetWalletKey, -stake, {
-        name: sidePlayer.name || localStorage.getItem("user-name-display") || "Người chơi",
-        photo: sidePlayer.photo || localStorage.getItem("user-photo") || "images/do_tuong.png"
-    });
+    // Nếu đúng là máy của bên này nhưng walletKey trong room bị cũ/lệch
+    if (sidePlayer.uid === localProfile.uid && targetWalletKey !== localProfile.walletKey) {
+        targetWalletKey = localProfile.walletKey;
 
-    if (paid == null) {
-        console.error("SS charge failed:", {
-            roomId,
-            side,
-            targetWalletKey,
-            localWalletKey: makeWalletDbKey(),
-            stake
+        await db.ref("matches/" + roomId + "/players/" + side).update({
+            walletKey: localProfile.walletKey,
+            name: localProfile.name,
+            photo: localProfile.photo
         });
+    }
+
+    // Đọc thẳng ví sẽ bị trừ để biết nó còn bao nhiêu PMC thật
+    const targetWalletSnap = await db.ref("wallets/" + String(targetWalletKey).replace(/[.#$\[\]\/]/g, "_")).once("value");
+    const targetWallet = targetWalletSnap.val() || {};
+    const targetPmc = Math.max(0, Math.floor(Number(targetWallet.pmcBalance || 0) || 0));
+
+    if (targetPmc < stake) {
+        alert(
+            "Ví bị trừ không đủ PMC.\n" +
+            "walletKey: " + targetWalletKey + "\n" +
+            "PMC ví này: " + targetPmc + "\n" +
+            "Cược cần: " + stake
+        );
         return false;
     }
 
-    if (targetWalletKey === makeWalletDbKey()) {
+    const paid = await adjustPmcWalletByKey(targetWalletKey, -stake, {
+        name: sidePlayer.name || localProfile.name || "Người chơi",
+        photo: sidePlayer.photo || localProfile.photo || "images/do_tuong.png"
+    });
+
+    if (paid == null) {
+        alert("Trừ PMC fail ở ví: " + targetWalletKey);
+        return false;
+    }
+
+    // Đồng bộ lại UI local nếu chính ví local bị trừ
+    if (targetWalletKey === localProfile.walletKey) {
         currentPmcBalance = paid;
         localStorage.setItem(getPmcCacheKey(), String(paid));
         updatePmcUI(paid);
