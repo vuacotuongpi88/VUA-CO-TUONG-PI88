@@ -7309,6 +7309,10 @@ async function joinRoomByInviteCode() {
         alert("Vào phòng bằng mã bị lỗi.");
     }
 }
+let activeLobbyRoomTab = "co-tuong";
+let latestLobbyRoomList = [];
+let lobbyRoomListRef = null;
+
 function syncLobbyRoomTabs(roomList = []) {
     const coTuongCount = roomList.filter(room => (room?.mode || "co-tuong") !== "co-up").length;
     const coUpCount = roomList.filter(room => room?.mode === "co-up").length;
