@@ -5816,7 +5816,7 @@ if (hasEnoughPlayersWaiting) {
     clearMoveHints();
     hideVictoryPopup();
     clearInterval(interval);
-    
+
     if (!readyOverlayWaitingShown) {
         readyOverlayWaitingShown = true;
         showReadyOverlay(room.mode);
@@ -5824,6 +5824,7 @@ if (hasEnoughPlayersWaiting) {
 } else {
     readyOverlayWaitingShown = false;
     closeReadyOverlay();
+    clearInterval(interval);
 }
 
 if (room.status === "playing" && !room.winner) {
