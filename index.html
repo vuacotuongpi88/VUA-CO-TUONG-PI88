@@ -8252,7 +8252,6 @@ async function bindRoomInviteInbox() {
 
     setPlayerPresence(currentRoomId ? "arena" : "home");
 }
-
 async function declineRoomInvite(reason = "declined") {
     if (!activeRoomInvite) return;
 
@@ -8271,7 +8270,6 @@ async function declineRoomInvite(reason = "declined") {
     activeRoomInvite = null;
     renderRoomInviteOverlay();
 }
-
 async function acceptRoomInvite() {
     if (!activeRoomInvite) return;
 
@@ -8378,9 +8376,6 @@ async function inviteFriendToRoom(walletKey, displayName) {
         console.error("Lỗi inviteFriendToRoom:", err);
         alert("Mời vào phòng lỗi.");
     }
-}
-function inviteFriendToRoom(walletKey, displayName) {
-    alert("Đã bấm mời " + (displayName || "bạn bè") + ".\nBước này tao đang gắn UI trước, lát nối vào chức năng mời vào phòng tiếp.");
 }
 
 async function bindFriendSystem() {
