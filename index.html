@@ -5815,7 +5815,6 @@ if (hasEnoughPlayersWaiting) {
     selectedPiece = null;
     clearMoveHints();
     hideVictoryPopup();
-    clearInterval(interval);
 
     if (!readyOverlayWaitingShown) {
         readyOverlayWaitingShown = true;
@@ -5824,7 +5823,6 @@ if (hasEnoughPlayersWaiting) {
 } else {
     readyOverlayWaitingShown = false;
     closeReadyOverlay();
-    clearInterval(interval);
 }
 
 if (room.status === "playing" && !room.winner) {
