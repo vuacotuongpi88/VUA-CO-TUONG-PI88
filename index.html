@@ -500,7 +500,207 @@ font-size: 1rem;
     font-size: 12px;
     color: #e0d20a;
 }
+#arena-friend-btn {
+    position: fixed;
+    right: 18px;
+    bottom: 88px;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, #7b2ff7, #4d1d95);
+    color: #f4c542;
+    font-size: 24px;
+    cursor: pointer;
+    z-index: 12020;
+    box-shadow:
+        0 0 14px rgba(123, 47, 247, 0.38),
+        0 0 16px rgba(244, 197, 66, 0.12);
+    border: 1px solid rgba(244, 197, 66, 0.42);
+}
 
+#arena-friend-box {
+    position: fixed;
+    right: 18px;
+    bottom: 148px;
+    width: min(88vw, 320px);
+    max-height: min(55vh, 420px);
+    overflow: hidden;
+    display: none;
+    flex-direction: column;
+    background: rgba(18, 8, 34, 0.96);
+    border: 2px solid #f4c542;
+    border-radius: 16px;
+    z-index: 12021;
+    box-shadow:
+        0 0 18px rgba(123, 47, 247, 0.28),
+        0 0 18px rgba(244, 197, 66, 0.10);
+}
+
+#arena-friend-box.show {
+    display: flex;
+}
+
+.arena-friend-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 14px 8px;
+    color: #f4c542;
+    font-size: 13px;
+    font-weight: 900;
+}
+
+.arena-friend-close {
+    cursor: pointer;
+    color: #fff;
+    font-size: 16px;
+}
+
+.arena-friend-note {
+    padding: 0 14px 10px;
+    color: #d8c7ff;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+#arena-friend-list {
+    padding: 0 12px 12px;
+    overflow-y: auto;
+}
+
+.arena-friend-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    border-radius: 12px;
+    background: rgba(49, 19, 83, 0.88);
+    border: 1px solid rgba(244, 197, 66, 0.16);
+}
+
+.arena-friend-row:last-child {
+    margin-bottom: 0;
+}
+
+.arena-friend-meta {
+    min-width: 0;
+    flex: 1;
+}
+
+.arena-friend-name {
+    font-size: 12px;
+    font-weight: 900;
+    color: #fff6db;
+    line-height: 1.2;
+    word-break: break-word;
+}
+
+.arena-friend-sub {
+    margin-top: 2px;
+    font-size: 10px;
+    color: #d8c7ff;
+}
+
+.arena-friend-invite-btn {
+    padding: 7px 10px !important;
+    border-radius: 10px !important;
+    font-size: 10px !important;
+    font-weight: 900 !important;
+    background: linear-gradient(180deg, #7b2ff7, #4d1d95) !important;
+    color: #fff8d6 !important;
+    border: 1px solid rgba(244, 197, 66, 0.42) !important;
+    min-width: 62px;
+}
+
+#room-invite-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.68);
+    z-index: 14000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    box-sizing: border-box;
+}
+
+#room-invite-overlay.show {
+    display: flex !important;
+}
+
+.room-invite-card {
+    width: min(92vw, 360px);
+    background: rgba(18, 8, 34, 0.98);
+    border: 2px solid #f4c542;
+    border-radius: 18px;
+    padding: 18px 16px;
+    box-shadow:
+        0 0 18px rgba(123, 47, 247, 0.28),
+        0 0 18px rgba(244, 197, 66, 0.12);
+    text-align: center;
+}
+
+.room-invite-title {
+    font-size: 18px;
+    font-weight: 900;
+    color: #f4c542;
+    margin-bottom: 12px;
+}
+
+.room-invite-line {
+    font-size: 13px;
+    color: #fff6db;
+    margin-bottom: 8px;
+    line-height: 1.45;
+}
+
+.room-invite-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.room-invite-accept {
+    background: linear-gradient(180deg, #7b2ff7, #4d1d95) !important;
+    color: #fff8d6 !important;
+    border-radius: 12px !important;
+    font-weight: 900 !important;
+}
+
+.room-invite-decline {
+    background: linear-gradient(180deg, #636e72, #2d3436) !important;
+    color: #fff !important;
+    border-radius: 12px !important;
+    font-weight: 900 !important;
+}
+
+@media (max-width: 600px) {
+    #arena-friend-btn {
+        right: 18px;
+        bottom: 148px;
+        display: flex;
+    }
+
+    #arena-friend-box {
+        right: 12px;
+        bottom: 210px;
+        width: min(88vw, 300px);
+    }
+}
+
+@media (min-width: 601px) {
+    #arena-friend-btn {
+        display: flex;
+        right: 22px;
+        bottom: 24px;
+    }
+}
 @media (max-width: 600px) {
     .welcome-wrap {
         padding: 70px 10px 12px;
@@ -3883,6 +4083,19 @@ margin-bottom: 14px;
 
 <div id="match-chat-btn" onclick="toggleMatchChat()">💬</div>
 
+<div id="arena-friend-btn" onclick="toggleArenaFriendBox(event)">👥</div>
+
+<div id="arena-friend-box">
+    <div class="arena-friend-header">
+        <span>MỜI BẠN VÀO PHÒNG</span>
+        <span class="arena-friend-close" onclick="closeArenaFriendBox()">✖</span>
+    </div>
+    <div class="arena-friend-note">
+        Chỉ mời được khi mày đang là chủ phòng chờ và phòng chưa đủ người.
+    </div>
+    <div id="arena-friend-list"></div>
+</div>
+
 <div id="mobile-match-actions">
 <div id="mobile-action-menu">
 <div class="mobile-action-close" onclick="closeActionMenu()">✖</div>
@@ -3894,6 +4107,20 @@ margin-bottom: 14px;
 <div id="mobile-action-main" onclick="toggleActionMenu(event)">☰</div>
 </div>
 </div>
+</div>
+<div id="room-invite-overlay" style="display:none;">
+    <div class="room-invite-card">
+        <div class="room-invite-title">THÁCH ĐẤU BẠN BÈ</div>
+        <div id="room-invite-from" class="room-invite-line">Người mời: ---</div>
+        <div id="room-invite-mode" class="room-invite-line">Chế độ: ---</div>
+        <div id="room-invite-stake" class="room-invite-line">Cược: --- PMC</div>
+        <div id="room-invite-code" class="room-invite-line">Mã phòng: ---</div>
+
+        <div class="room-invite-actions">
+            <button class="room-invite-accept" onclick="acceptRoomInvite()">CHẤP NHẬN</button>
+            <button class="room-invite-decline" onclick="declineRoomInvite('declined')">TỪ CHỐI</button>
+        </div>
+    </div>
 </div>
 <div id="exchange-modal" class="modal" style="display:none;">
     <div class="modal-content">
@@ -4080,6 +4307,10 @@ function prepareRealtimeArenaUI() {
         if (chatPopup) chatPopup.style.display = "flex";
         if (chatBtn) chatBtn.style.display = "none";
     }
+
+    setPlayerPresence("arena");
+    closeArenaFriendBox();
+    renderRoomInviteOverlay();
 }
 
 async function tryResumeRealtimeMatch(preferredMode = null) {
@@ -4160,6 +4391,8 @@ updatePmcUI(0);
 loadWalletBalance().catch(err => console.error("Lỗi tải ví:", err));
 
 showHomeUI();
+setPlayerPresence("home");
+renderRoomInviteOverlay();
 }
 
 function showLoginChoices() {
@@ -4413,6 +4646,8 @@ async function backToMenu() {
     await leaveRealtimeMatch();
 
     showHomeUI();
+    closeArenaFriendBox();
+    renderRoomInviteOverlay();
     document.getElementById("game-arena").style.display = "none";
     clearInterval(interval);
     clearInterval(readyInterval);
@@ -7429,6 +7664,9 @@ let liveFriendCache = [];
 let liveFriendRequestCache = [];
 let liveFriendSentCache = [];
 let activeFriendTab = "friends";
+let roomInviteInboxRef = null;
+let liveRoomInviteCache = [];
+let activeRoomInvite = null;
 
 function normalizeFriendName(name = "") {
     return String(name || "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -7871,6 +8109,273 @@ async function removeFriend(nameFromButton = "") {
     if (mobileInput) mobileInput.value = "";
     if (desktopInput) desktopInput.value = "";
 }
+function isArenaVisible() {
+    const arena = document.getElementById("game-arena");
+    return !!arena && getComputedStyle(arena).display !== "none";
+}
+
+function isHomeVisible() {
+    const home = document.getElementById("home-menu");
+    return !!home && getComputedStyle(home).display !== "none";
+}
+
+async function setPlayerPresence(state = "home") {
+    try {
+        const me = getCurrentFriendProfile();
+        if (!me?.walletKey) return;
+
+        await db.ref("social/playerState/" + me.walletKey).set({
+            state,
+            roomId: currentRoomId || null,
+            mode: currentRoomMode || null,
+            updatedAt: Date.now()
+        });
+    } catch (err) {
+        console.error("Lỗi setPlayerPresence:", err);
+    }
+}
+
+function closeArenaFriendBox() {
+    const box = document.getElementById("arena-friend-box");
+    if (box) box.classList.remove("show");
+}
+
+function renderArenaFriendInviteList() {
+    const box = document.getElementById("arena-friend-list");
+    if (!box) return;
+
+    const html = !liveFriendCache.length
+        ? `<div class="friend-empty">Chưa có bạn nào để mời.</div>`
+        : liveFriendCache.map(item => `
+            <div class="arena-friend-row">
+                <div class="arena-friend-meta">
+                    <div class="arena-friend-name">${escapeFriendHtml(item.displayName || item.username || "Bạn bè")}</div>
+                    <div class="arena-friend-sub">Bấm mời để vào đúng phòng đang chờ</div>
+                </div>
+                <button class="arena-friend-invite-btn"
+                        onclick="inviteFriendToRoom('${item.walletKey}', '${escapeFriendHtml(item.displayName || item.username || "Bạn bè")}')">
+                    MỜI
+                </button>
+            </div>
+        `).join("");
+
+    box.innerHTML = html;
+}
+
+async function toggleArenaFriendBox(event) {
+    if (event) event.stopPropagation();
+
+    if (!currentRoomId) {
+        alert("Mày phải tạo hoặc vào phòng trước đã.");
+        return;
+    }
+
+    const roomSnap = await db.ref("matches/" + currentRoomId).once("value");
+    const room = roomSnap.val() || {};
+    const me = getCurrentPlayerProfile();
+
+    if (!room?.players?.do?.uid || room.players.do.uid !== me.uid) {
+        alert("Chỉ chủ phòng mới mời bạn vào được.");
+        return;
+    }
+
+    if (room.status !== "waiting" || room?.players?.den) {
+        alert("Phòng này không còn ở trạng thái chờ để mời.");
+        return;
+    }
+
+    renderArenaFriendInviteList();
+
+    const box = document.getElementById("arena-friend-box");
+    if (box) box.classList.toggle("show");
+}
+
+document.addEventListener("click", function (e) {
+    const btn = document.getElementById("arena-friend-btn");
+    const box = document.getElementById("arena-friend-box");
+    if (!btn || !box) return;
+    if (box.contains(e.target) || btn.contains(e.target)) return;
+    box.classList.remove("show");
+});
+
+function renderRoomInviteOverlay() {
+    const overlay = document.getElementById("room-invite-overlay");
+    if (!overlay) return;
+
+    if (!activeRoomInvite || !isHomeVisible() || isArenaVisible() || currentRoomId) {
+        overlay.classList.remove("show");
+        overlay.style.display = "none";
+        return;
+    }
+
+    const fromEl = document.getElementById("room-invite-from");
+    const modeEl = document.getElementById("room-invite-mode");
+    const stakeEl = document.getElementById("room-invite-stake");
+    const codeEl = document.getElementById("room-invite-code");
+
+    if (fromEl) fromEl.innerText = "Người mời: " + (activeRoomInvite.fromName || "Người chơi");
+    if (modeEl) modeEl.innerText = "Chế độ: " + (activeRoomInvite.mode === "co-up" ? "Cờ Úp" : "Cờ Tướng");
+    if (stakeEl) stakeEl.innerText = "Cược: " + formatRoomStakePMC(activeRoomInvite.stakePMC || 0);
+    if (codeEl) codeEl.innerText = "Mã phòng: " + (activeRoomInvite.inviteCode || "---");
+
+    overlay.style.display = "flex";
+    overlay.classList.add("show");
+}
+
+async function bindRoomInviteInbox() {
+    const me = await ensureFriendProfileSynced().catch(() => getCurrentFriendProfile());
+    if (!me?.walletKey) return;
+
+    if (roomInviteInboxRef) roomInviteInboxRef.off();
+
+    roomInviteInboxRef = db.ref("social/roomInvitesInbox/" + me.walletKey);
+    roomInviteInboxRef.on("value", snap => {
+        const list = [];
+        snap.forEach(child => {
+            const v = child.val() || {};
+            if ((v.status || "pending") === "pending") {
+                list.push({
+                    inviteId: child.key,
+                    ...v
+                });
+            }
+        });
+
+        list.sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+        liveRoomInviteCache = list;
+        activeRoomInvite = list[0] || null;
+        renderRoomInviteOverlay();
+    });
+
+    setPlayerPresence(currentRoomId ? "arena" : "home");
+}
+
+async function declineRoomInvite(reason = "declined") {
+    if (!activeRoomInvite) return;
+
+    const me = getCurrentFriendProfile();
+    const invite = activeRoomInvite;
+    const updates = {};
+
+    updates[`social/roomInvitesInbox/${me.walletKey}/${invite.inviteId}`] = null;
+    updates[`social/roomInvitesSent/${invite.fromWalletKey}/${invite.inviteId}`] = {
+        ...invite,
+        status: reason,
+        declinedAt: Date.now()
+    };
+
+    await db.ref().update(updates);
+    activeRoomInvite = null;
+    renderRoomInviteOverlay();
+}
+
+async function acceptRoomInvite() {
+    if (!activeRoomInvite) return;
+
+    const invite = activeRoomInvite;
+    const me = getCurrentPlayerProfile();
+
+    if ((me.pmcBalance || 0) < Math.max(0, Number(invite.stakePMC || 0))) {
+        alert("PMC không đủ để nhận thách đấu này.");
+        return;
+    }
+
+    const roomSnap = await db.ref("matches/" + invite.roomId).once("value");
+    const room = roomSnap.val();
+
+    if (!room) {
+        await declineRoomInvite("room_missing");
+        alert("Phòng này không còn.");
+        return;
+    }
+
+    if (room.winner || room.status !== "waiting" || room?.players?.den) {
+        await declineRoomInvite("room_busy");
+        alert("Phòng này không còn ở trạng thái chờ.");
+        return;
+    }
+
+    const meFriend = getCurrentFriendProfile();
+    const updates = {};
+    updates[`social/roomInvitesInbox/${meFriend.walletKey}/${invite.inviteId}`] = null;
+    updates[`social/roomInvitesSent/${invite.fromWalletKey}/${invite.inviteId}`] = {
+        ...invite,
+        status: "accepted",
+        acceptedAt: Date.now()
+    };
+    await db.ref().update(updates);
+
+    activeRoomInvite = null;
+    renderRoomInviteOverlay();
+    await joinRoomFromLobby(invite.roomId);
+}
+
+async function inviteFriendToRoom(walletKey, displayName) {
+    try {
+        if (!currentRoomId) {
+            alert("Mày chưa ở trong phòng nào.");
+            return;
+        }
+
+        const me = getCurrentFriendProfile();
+        const meGame = getCurrentPlayerProfile();
+
+        const roomSnap = await db.ref("matches/" + currentRoomId).once("value");
+        const room = roomSnap.val() || {};
+
+        if (!room || room.winner) {
+            alert("Phòng này không còn.");
+            return;
+        }
+
+        if (room.status !== "waiting" || room?.players?.den) {
+            alert("Phòng này không còn ở trạng thái chờ để mời.");
+            return;
+        }
+
+        if (room?.players?.do?.uid !== meGame.uid) {
+            alert("Chỉ chủ phòng mới mời bạn bè vào được.");
+            return;
+        }
+
+        const targetState = (await db.ref("social/playerState/" + walletKey).once("value")).val();
+        if (targetState?.state && targetState.state !== "home") {
+            alert((displayName || "Bạn này") + " đang bận, không mời được.");
+            return;
+        }
+
+        const inviteRef = db.ref("social/roomInvitesInbox/" + walletKey).push();
+        const inviteId = inviteRef.key;
+
+        const payload = {
+            inviteId,
+            roomId: currentRoomId,
+            roomBucket: room.roomBucket || currentRoomBucket || null,
+            inviteCode: room.inviteCode || makeInviteCodeFromRoomId(currentRoomId),
+            mode: room.mode || currentRoomMode || "co-tuong",
+            stakePMC: Math.max(0, Math.floor(Number(room.stakePMC || currentRoomStakePMC || 0) || 0)),
+            fromWalletKey: me.walletKey,
+            fromUid: me.uid,
+            fromName: me.displayName || me.username || "Người chơi",
+            fromPhoto: me.photo || "images/do_tuong.png",
+            toWalletKey: walletKey,
+            toName: displayName || "Bạn bè",
+            status: "pending",
+            createdAt: Date.now()
+        };
+
+        const updates = {};
+        updates[`social/roomInvitesInbox/${walletKey}/${inviteId}`] = payload;
+        updates[`social/roomInvitesSent/${me.walletKey}/${inviteId}`] = payload;
+
+        await db.ref().update(updates);
+        alert("Đã gửi lời mời vào phòng cho " + (displayName || "bạn bè") + "!");
+        closeArenaFriendBox();
+    } catch (err) {
+        console.error("Lỗi inviteFriendToRoom:", err);
+        alert("Mời vào phòng lỗi.");
+    }
+}
 function inviteFriendToRoom(walletKey, displayName) {
     alert("Đã bấm mời " + (displayName || "bạn bè") + ".\nBước này tao đang gắn UI trước, lát nối vào chức năng mời vào phòng tiếp.");
 }
@@ -7939,6 +8444,7 @@ async function bindFriendSystem() {
         liveFriendSentCache = list;
         renderFriendList();
     });
+    await bindRoomInviteInbox();
 }
 bindLobbyRoomList();
 bindFriendSystem();
