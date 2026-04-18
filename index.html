@@ -5815,7 +5815,8 @@ if (hasEnoughPlayersWaiting) {
     selectedPiece = null;
     clearMoveHints();
     hideVictoryPopup();
-
+    clearInterval(interval);
+    
     if (!readyOverlayWaitingShown) {
         readyOverlayWaitingShown = true;
         showReadyOverlay(room.mode);
@@ -5831,30 +5832,44 @@ if (room.status === "playing" && !room.winner) {
     const overlay = document.getElementById("ready-overlay");
     if (overlay) overlay.style.display = "none";
 }
-        const newBoardHash = JSON.stringify(room.board || []);
-        if (newBoardHash && newBoardHash !== lastRoomBoardHash) {
-            lastRoomBoardHash = newBoardHash;
+        const isPlayingRoom = room.status === "playing" && !room.winner;
+const hasRealBoard = Array.isArray(room.board) && room.board.length > 0;
 
-            applyBoardStateFromRoom(room.board || []);
-            isCoUp = !!room.isCoUp;
-            luotDi = room.turn || "do";
-            timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
-            timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
+if (!isPlayingRoom) {
+    clearInterval(interval);
 
-            timerDoEl.innerText = formatTime(timeDo);
-            timerDenEl.innerText = formatTime(timeDen);
+    timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
+    timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
+    luotDi = room.turn || "do";
 
-            lastMoveFrom = room.lastMoveFrom || null;
-            lastMoveTo = room.lastMoveTo || null;
+    renderTimerUI();
+} else {
+    const newBoardHash = JSON.stringify(room.board || []);
 
-            updateTurnUIOnly();
+    if (hasRealBoard && newBoardHash !== lastRoomBoardHash) {
+        lastRoomBoardHash = newBoardHash;
 
-            if (lastMoveFrom && lastMoveTo) {
-                drawLastMoveMarks();
-            }
+        applyBoardStateFromRoom(room.board || []);
+        isCoUp = !!room.isCoUp;
+        luotDi = room.turn || "do";
+        timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
+        timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
 
-            startTimer();
+        timerDoEl.innerText = formatTime(timeDo);
+        timerDenEl.innerText = formatTime(timeDen);
+
+        lastMoveFrom = room.lastMoveFrom || null;
+        lastMoveTo = room.lastMoveTo || null;
+
+        updateTurnUIOnly();
+
+        if (lastMoveFrom && lastMoveTo) {
+            drawLastMoveMarks();
         }
+    }
+
+    startTimer();
+}
 
         if (room.drawRequest && room.drawRequest.from !== mySide && room.drawRequest.at !== lastDrawRequestAt) {
             lastDrawRequestAt = room.drawRequest.at;
