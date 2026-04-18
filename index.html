@@ -4647,7 +4647,8 @@ async function backToMenu() {
     if (!confirm("Thoát ván đấu này?")) return;
 
     await leaveRealtimeMatch();
-
+    await setPlayerPresence("home");
+    
     showHomeUI();
     closeArenaFriendBox();
     renderRoomInviteOverlay();
@@ -5679,6 +5680,11 @@ async function leaveRealtimeMatch() {
     } catch (err) {
         console.error("Rời phòng lỗi:", err);
     }
+    try {
+    await setPlayerPresence("home");
+} catch (err) {
+    console.error("Lỗi update presence về home:", err);
+}
 }
 function syncRoomFromBoard(extra = {}) {
     if (!currentRoomId) return;
@@ -8282,7 +8288,56 @@ async function setPlayerPresence(state = "home") {
         console.error("Lỗi setPlayerPresence:", err);
     }
 }
+async function isPlayerActuallyBusy(walletKey) {
+    const stateRef = db.ref("social/playerState/" + walletKey);
+    const snap = await stateRef.once("value");
+    const targetState = snap.val() || {};
 
+    if (!targetState.state || targetState.state === "home") {
+        return false;
+    }
+
+    // Có state bận nhưng không có roomId -> coi như stale
+    if (!targetState.roomId) {
+        await stateRef.set({
+            state: "home",
+            roomId: null,
+            mode: null,
+            updatedAt: Date.now()
+        }).catch(() => {});
+        return false;
+    }
+
+    const roomSnap = await db.ref("matches/" + targetState.roomId).once("value");
+    const room = roomSnap.val();
+
+    // Room mất rồi / đã kết thúc -> stale
+    if (!room || room.winner) {
+        await stateRef.set({
+            state: "home",
+            roomId: null,
+            mode: null,
+            updatedAt: Date.now()
+        }).catch(() => {});
+        return false;
+    }
+
+    const stillInside =
+        room?.players?.do?.walletKey === walletKey ||
+        room?.players?.den?.walletKey === walletKey;
+
+    if (!stillInside) {
+        await stateRef.set({
+            state: "home",
+            roomId: null,
+            mode: null,
+            updatedAt: Date.now()
+        }).catch(() => {});
+        return false;
+    }
+
+    return true;
+}
 function closeArenaFriendBox() {
     const box = document.getElementById("arena-friend-box");
     if (box) box.classList.remove("show");
@@ -8487,11 +8542,11 @@ async function inviteFriendToRoom(walletKey, displayName) {
             return;
         }
 
-        const targetState = (await db.ref("social/playerState/" + walletKey).once("value")).val();
-        if (targetState?.state && targetState.state !== "home") {
-            alert((displayName || "Bạn này") + " đang bận, không mời được.");
-            return;
-        }
+        const reallyBusy = await isPlayerActuallyBusy(walletKey);
+if (reallyBusy) {
+    alert((displayName || "Bạn này") + " đang bận, không mời được.");
+    return;
+}
 
         const inviteRef = db.ref("social/roomInvitesInbox/" + walletKey).push();
         const inviteId = inviteRef.key;
