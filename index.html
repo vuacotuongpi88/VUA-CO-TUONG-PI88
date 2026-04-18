@@ -503,7 +503,8 @@ font-size: 1rem;
 #arena-friend-btn {
     position: fixed;
     right: 18px;
-    bottom: 88px;
+    top: 16px;
+    bottom: auto;
     width: 52px;
     height: 52px;
     border-radius: 50%;
@@ -682,14 +683,16 @@ font-size: 1rem;
 
 @media (max-width: 600px) {
     #arena-friend-btn {
-        right: 18px;
-        bottom: 148px;
+        top: 16px;
+        right: 12px;
+        bottom: auto;
         display: flex;
     }
 
     #arena-friend-box {
+        top: 76px;
         right: 12px;
-        bottom: 210px;
+        bottom: auto;
         width: min(88vw, 300px);
     }
 }
