@@ -6414,6 +6414,15 @@ async function joinRoomFromLobby(roomId) {
             return;
         }
 
+        const waitingRef = db.ref("waitingRooms/" + bucket);
+        const ok = await joinExistingWaitingRoom(waitingRef, roomId, me, mode, stakePMC);
+
+        if (!ok) {
+            alert("Không vào được bàn này, có thể vừa đủ người.");
+            return;
+        }
+
+        closeRankingModal();   // đóng bảng danh sách trước
         prepareRealtimeArenaUI();
         clearInterval(interval);
 
@@ -6425,19 +6434,11 @@ async function joinRoomFromLobby(roomId) {
 
         if (timerDoEl) timerDoEl.innerText = formatTime(timeDo);
         if (timerDenEl) timerDenEl.innerText = formatTime(timeDen);
-
-        const waitingRef = db.ref("waitingRooms/" + bucket);
-        const ok = await joinExistingWaitingRoom(waitingRef, roomId, me, mode, stakePMC);
-
-        if (!ok) {
-            alert("Không vào được bàn này, có thể vừa đủ người.");
-        }
     } catch (err) {
         console.error("joinRoomFromLobby lỗi:", err);
         alert("Vào bàn lỗi.");
     }
 }
-
 function renderLobbyRoomList(roomList) {
     const html = !roomList.length
         ? `<div style="opacity:.8;font-size:13px;">Chưa có bàn nào</div>`
