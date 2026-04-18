@@ -2800,6 +2800,30 @@ margin-bottom: 14px;
     border-radius: 12px;
     font-weight: 800;
 }
+.player-slot {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+.player-invite-code {
+    min-height: 14px;
+    margin-left: 2px;
+    font-size: 11px;
+    font-weight: 900;
+    color: #ffeaa7;
+    letter-spacing: 0.3px;
+    line-height: 1.15;
+    text-shadow: 0 0 6px rgba(0,0,0,0.72);
+    white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+    .player-invite-code {
+        font-size: 10px;
+    }
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -3159,13 +3183,16 @@ margin-bottom: 14px;
 </div>
 <div class="board-side">
     <div class="player-timer-row top-row">
-        <div class="player-chip-inline" onclick="openPlayerStats('den')">
-            <img id="player-den-avatar" src="images/do_tuong.png" alt="Đen">
-            <div class="player-chip-meta">
-                <span id="player-den-name" class="player-chip-name">BÊN ĐEN</span>
-                <span id="player-den-rank" class="player-chip-rank">0 / 4500</span>
-            </div>
+        <div class="player-slot">
+    <div class="player-chip-inline" onclick="openPlayerStats('den')">
+        <img id="player-den-avatar" src="images/do_tuong.png" alt="Đen">
+        <div class="player-chip-meta">
+            <span id="player-den-name" class="player-chip-name">BÊN ĐEN</span>
+            <span id="player-den-rank" class="player-chip-rank">0 / 4500</span>
         </div>
+    </div>
+    <div id="player-den-invite" class="player-invite-code"></div>
+</div>
 
         <div id="timer-den" class="timer-box timer-inline">09:00</div>
     </div>
@@ -3191,13 +3218,16 @@ margin-bottom: 14px;
     <div class="player-timer-row bottom-row">
         <div id="timer-do" class="timer-box active-do timer-inline">09:00</div>
 
-        <div class="player-chip-inline" onclick="openPlayerStats('do')">
-            <img id="player-do-avatar" src="images/do_tuong.png" alt="Đỏ">
-            <div class="player-chip-meta">
-                <span id="player-do-name" class="player-chip-name">BÊN ĐỎ</span>
-                <span id="player-do-rank" class="player-chip-rank">0 / 4500</span>
-            </div>
+        <div class="player-slot">
+    <div class="player-chip-inline" onclick="openPlayerStats('do')">
+        <img id="player-do-avatar" src="images/do_tuong.png" alt="Đỏ">
+        <div class="player-chip-meta">
+            <span id="player-do-name" class="player-chip-name">BÊN ĐỎ</span>
+            <span id="player-do-rank" class="player-chip-rank">0 / 4500</span>
         </div>
+    </div>
+    <div id="player-do-invite" class="player-invite-code"></div>
+</div>
     </div>
 </div>
 
@@ -4618,6 +4648,8 @@ function renderPlayersFromRoom(room) {
     const bottomRank = document.getElementById("player-do-rank");
     const topAvatar = document.getElementById("player-den-avatar");
     const bottomAvatar = document.getElementById("player-do-avatar");
+    const topInvite = document.getElementById("player-den-invite");
+    const bottomInvite = document.getElementById("player-do-invite");
 
     const doReadyNow = !!room?.ready?.do;
     const denReadyNow = !!room?.ready?.den;
@@ -4643,7 +4675,9 @@ function renderPlayersFromRoom(room) {
         topRank.classList.remove("player-ready-on", "player-ready-off");
 
         if (isPlayingNow) {
-            topRank.innerText = roomStake > 0 ? ("PHÒNG " + formatPMC(roomStake) + " PMC") : (formatPMC(oppPmc) + " PMC");
+            topRank.innerText = roomStake > 0
+                ? ("PHÒNG " + formatPMC(roomStake) + " PMC")
+                : (formatPMC(oppPmc) + " PMC");
             topRank.classList.add("player-ready-on");
         } else {
             topRank.innerText = oppReady ? "ĐÃ SS" : "CHƯA SS";
@@ -4655,12 +4689,32 @@ function renderPlayersFromRoom(room) {
         bottomRank.classList.remove("player-ready-on", "player-ready-off");
 
         if (isPlayingNow) {
-            bottomRank.innerText = roomStake > 0 ? ("PHÒNG " + formatPMC(roomStake) + " PMC") : (formatPMC(myPmc) + " PMC");
+            bottomRank.innerText = roomStake > 0
+                ? ("PHÒNG " + formatPMC(roomStake) + " PMC")
+                : (formatPMC(myPmc) + " PMC");
             bottomRank.classList.add("player-ready-on");
         } else {
             bottomRank.innerText = myReady ? "ĐÃ SS" : "CHƯA SS";
             bottomRank.classList.add(myReady ? "player-ready-on" : "player-ready-off");
         }
+    }
+
+    const inviteCode = String(
+        room?.inviteCode || makeInviteCodeFromRoomId(currentRoomId || "")
+    ).toUpperCase();
+
+    const hostUid = room?.players?.do?.uid || "";
+
+    if (topInvite) {
+        topInvite.innerText = oppPlayer?.uid === hostUid && inviteCode
+            ? ("MÃ MỜI: " + inviteCode)
+            : "";
+    }
+
+    if (bottomInvite) {
+        bottomInvite.innerText = myPlayer?.uid === hostUid && inviteCode
+            ? ("MÃ MỜI: " + inviteCode)
+            : "";
     }
 }
 
@@ -5061,18 +5115,11 @@ async function createAndPublishWaitingRoom(me, mode, stakePMC, bucket) {
     currentRoomId = newRoomId;
     currentRoomMode = mode;
     currentRoomStakePMC = stakePMC;
-    currentRoomBucket = bucket;
 
     saveActiveMatchSnapshot({ roomId: newRoomId, mode, side: "do" });
     bindRoom(newRoomId);
-
-    setTimeout(() => {
-        alert("Mã mời phòng của mày: " + inviteCode + "\nGửi mã này cho người mày muốn mời.");
-    }, 250);
-
     return true;
 }
-
 async function joinOrCreateRealtimeMatch(mode, stakePMC = 0) {
     if (await tryResumeRealtimeMatch(mode)) return;
 
@@ -5282,7 +5329,13 @@ function formatPMC(amount) {
 function makeStakeBucket(mode, stakePMC) {
     return `${mode}__${Math.max(0, Math.floor(Number(stakePMC) || 0))}`;
 }
+function makeInviteCodeFromRoomId(roomId = "") {
+    const clean = String(roomId || "")
+        .replace(/[^a-zA-Z0-9]/g, "")
+        .toUpperCase();
 
+    return clean.slice(-8) || "PHONG888";
+}
 function getTodayWithdrawKey() {
     const now = new Date();
     const y = now.getFullYear();
