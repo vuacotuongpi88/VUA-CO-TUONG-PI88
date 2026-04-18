@@ -1496,6 +1496,50 @@ color: transparent;
     text-align: left;
     line-height: 1.4;
 }
+.room-top-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 12px 12px 0;
+}
+
+.room-top-tab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 9px 10px !important;
+    border-radius: 12px;
+    border: 1px solid rgba(244, 197, 66, 0.34);
+    background: linear-gradient(180deg, rgba(58, 24, 102, 0.96), rgba(32, 12, 56, 0.96)) !important;
+    color: #f7e7b1 !important;
+    font-size: 12px !important;
+    font-weight: 900;
+    letter-spacing: 0.4px;
+}
+
+.room-top-tab.active {
+    background: linear-gradient(180deg, #7b2ff7, #4d1d95) !important;
+    color: #fff8d6 !important;
+    border-color: #f4c542 !important;
+    box-shadow:
+        0 0 14px rgba(123, 47, 247, 0.38),
+        0 0 20px rgba(244, 197, 66, 0.15) !important;
+}
+
+.room-top-tab-count {
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, #f4c542, #c99712);
+    color: #2a1147;
+    font-size: 10px;
+    font-weight: 900;
+}
 .rank-row {
     display: grid;
     grid-template-columns: 48px 1fr auto;
@@ -3679,8 +3723,24 @@ margin-bottom: 14px;
 <div id="ranking-modal" class="rank-modal">
     <div class="rank-modal-box">
         <div class="rank-modal-header">
-            <span>DANH SÁCH BÀN CỜ TƯỚNG-CỜ ÚP</span>
+            <span>DANH SÁCH BÀN CỜ</span>
             <span class="rank-close" onclick="closeRankingModal()">✖</span>
+        </div>
+
+        <div class="room-top-tabs">
+            <button id="room-tab-co-tuong"
+                    class="room-top-tab active"
+                    onclick="switchLobbyRoomTab('co-tuong')">
+                CỜ TƯỚNG
+                <span id="room-tab-co-tuong-count" class="room-top-tab-count">0</span>
+            </button>
+
+            <button id="room-tab-co-up"
+                    class="room-top-tab"
+                    onclick="switchLobbyRoomTab('co-up')">
+                CỜ ÚP
+                <span id="room-tab-co-up-count" class="room-top-tab-count">0</span>
+            </button>
         </div>
 
         <div class="invite-join-box">
@@ -3699,7 +3759,7 @@ margin-bottom: 14px;
                 Chủ phòng gửi mã nào thì nhập mã đó để vào cùng phòng.
             </div>
         </div>
-         </div>
+
         <div id="ranking-list"></div>
     </div>
 </div>
@@ -7249,10 +7309,30 @@ async function joinRoomByInviteCode() {
         alert("Vào phòng bằng mã bị lỗi.");
     }
 }
+function syncLobbyRoomTabs(roomList = []) {
+    const coTuongCount = roomList.filter(room => (room?.mode || "co-tuong") !== "co-up").length;
+    const coUpCount = roomList.filter(room => room?.mode === "co-up").length;
 
-function renderLobbyRoomList(roomList) {
-    const html = !roomList.length
-        ? `<div style="opacity:.8;font-size:13px;">Chưa có bàn nào</div>`
+    const btnCoTuong = document.getElementById("room-tab-co-tuong");
+    const btnCoUp = document.getElementById("room-tab-co-up");
+    const countCoTuong = document.getElementById("room-tab-co-tuong-count");
+    const countCoUp = document.getElementById("room-tab-co-up-count");
+
+    if (btnCoTuong) btnCoTuong.classList.toggle("active", activeLobbyRoomTab === "co-tuong");
+    if (btnCoUp) btnCoUp.classList.toggle("active", activeLobbyRoomTab === "co-up");
+
+    if (countCoTuong) countCoTuong.textContent = String(coTuongCount);
+    if (countCoUp) countCoUp.textContent = String(coUpCount);
+}
+
+function switchLobbyRoomTab(tab) {
+    activeLobbyRoomTab = (tab === "co-up") ? "co-up" : "co-tuong";
+    renderLobbyRoomList(latestLobbyRoomList);
+}
+
+function buildLobbyRoomHtml(roomList) {
+    return !roomList.length
+        ? `<div style="opacity:.8;font-size:13px;padding:10px;">Chưa có bàn nào</div>`
         : roomList.map((room, index) => {
             const state = getRoomLobbyState(room);
             const hasDo = !!room?.players?.do;
@@ -7283,15 +7363,28 @@ function renderLobbyRoomList(roomList) {
                 </div>
             `;
         }).join("");
-
-    const preview = document.getElementById("desktop-ranking-preview");
-    if (preview) preview.innerHTML = html;
-
-    const modalList = document.getElementById("ranking-list");
-    if (modalList) modalList.innerHTML = html;
 }
 
-let lobbyRoomListRef = null;
+function renderLobbyRoomList(roomList) {
+    latestLobbyRoomList = Array.isArray(roomList) ? roomList.slice() : [];
+
+    const preview = document.getElementById("desktop-ranking-preview");
+    if (preview) {
+        preview.innerHTML = buildLobbyRoomHtml(latestLobbyRoomList);
+    }
+
+    const filteredModalList = latestLobbyRoomList.filter(room => {
+        const mode = room?.mode || "co-tuong";
+        return activeLobbyRoomTab === "co-up" ? mode === "co-up" : mode !== "co-up";
+    });
+
+    const modalList = document.getElementById("ranking-list");
+    if (modalList) {
+        modalList.innerHTML = buildLobbyRoomHtml(filteredModalList);
+    }
+
+    syncLobbyRoomTabs(latestLobbyRoomList);
+}
 
 function bindLobbyRoomList() {
     if (lobbyRoomListRef) {
