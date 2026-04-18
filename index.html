@@ -1375,7 +1375,8 @@ color: transparent;
     position: absolute;
     top: 60px;
     right: 0;
-    width: min(58vw, 220px);
+    width: min(76vw, 290px);
+    max-width: 290px;
     background: rgba(0, 0, 0, 0.88);
     border: 2px solid #55efc4;
     border-radius: 14px;
@@ -1621,7 +1622,395 @@ color: transparent;
     background: #d63031;
     border-radius: 8px;
 }
+.friend-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+}
 
+.friend-section {
+    background: rgba(7, 16, 12, 0.86);
+    border: 1px solid rgba(85,239,196,0.22);
+    border-radius: 14px;
+    padding: 10px;
+}
+
+.friend-section-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    font-weight: 900;
+    color: #55efc4;
+    letter-spacing: 0.5px;
+}
+
+.friend-section-count {
+    min-width: 20px;
+    height: 20px;
+    border-radius: 999px;
+    padding: 0 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(85,239,196,0.14);
+    border: 1px solid rgba(85,239,196,0.35);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.friend-empty {
+    font-size: 12px;
+    color: #b2bec3;
+    opacity: 0.9;
+}
+
+.friend-request-card,
+.friend-sent-card,
+.friend-accepted-card {
+    border: 1px solid rgba(85,239,196,0.18);
+    border-radius: 12px;
+    padding: 8px 10px;
+    background: rgba(0,0,0,0.28);
+    margin-bottom: 8px;
+}
+
+.friend-request-card:last-child,
+.friend-sent-card:last-child,
+.friend-accepted-card:last-child {
+    margin-bottom: 0;
+}
+
+.friend-user-line {
+    font-size: 12px;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 6px;
+    word-break: break-word;
+}
+
+.friend-sub-line {
+    font-size: 11px;
+    color: #b2bec3;
+    margin-bottom: 8px;
+}
+
+.friend-btn-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.friend-btn-accept {
+    background: linear-gradient(180deg, #00c38a, #008f67) !important;
+    color: #fff !important;
+}
+
+.friend-btn-reject {
+    background: linear-gradient(180deg, #636e72, #2d3436) !important;
+    color: #fff !important;
+}
+
+.friend-btn-cancel {
+    background: linear-gradient(180deg, #6c5ce7, #4834d4) !important;
+    color: #fff !important;
+}
+
+.friend-btn-remove {
+    background: linear-gradient(180deg, #e74c3c, #c0392b) !important;
+    color: #fff !important;
+}
+.friend-accepted-card.compact-friend {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+}
+
+.friend-accepted-main {
+    min-width: 0;
+    flex: 1 1 auto;
+    max-width: calc(100% - 74px);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: left;
+}
+
+.friend-accepted-name {
+    font-size: 12px;
+    font-weight: 900;
+    color: #fff;
+    line-height: 1.2;
+    white-space: normal;
+    overflow: hidden;
+    text-overflow: unset;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.friend-accepted-status {
+    font-size: 10px;
+    color: #b2bec3;
+    line-height: 1.1;
+}
+
+.friend-accepted-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.friend-mini-btn {
+    min-width: 0;
+    padding: 6px 8px !important;
+    border-radius: 9px !important;
+    font-size: 10px !important;
+    font-weight: 900 !important;
+    line-height: 1 !important;
+    letter-spacing: 0.2px;
+}
+
+.friend-invite-btn {
+    background: linear-gradient(180deg, #00c38a, #008f67) !important;
+    color: #fff !important;
+}
+
+.friend-trash-btn {
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+    padding: 0 !important;
+    border-radius: 9px !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, #e74c3c, #c0392b) !important;
+    color: #fff !important;
+    font-size: 14px !important;
+    font-weight: 900 !important;
+}
+.friend-request-card.compact-stranger,
+.friend-sent-card.compact-stranger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+}
+
+.stranger-main {
+    min-width: 0;
+    flex: 1 1 auto;
+    max-width: calc(100% - 96px);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: left;
+}
+.stranger-name {
+    font-size: 12px;
+    font-weight: 900;
+    color: #fff;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.stranger-name {
+    font-size: 12px;
+    font-weight: 900;
+    color: #fff;
+    line-height: 1.2;
+    white-space: normal;
+    overflow: hidden;
+    text-overflow: unset;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+.stranger-status {
+    font-size: 10px;
+    color: #b2bec3;
+    line-height: 1.1;
+}
+
+.stranger-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.stranger-mini-btn {
+    min-width: 0;
+    padding: 6px 8px !important;
+    border-radius: 9px !important;
+    font-size: 10px !important;
+    font-weight: 900 !important;
+    line-height: 1 !important;
+    letter-spacing: 0.2px;
+}
+
+.stranger-accept-btn {
+    background: linear-gradient(180deg, #00c38a, #008f67) !important;
+    color: #fff !important;
+}
+
+.stranger-reject-btn {
+    background: linear-gradient(180deg, #636e72, #2d3436) !important;
+    color: #fff !important;
+}
+
+.stranger-cancel-btn {
+    background: linear-gradient(180deg, #6c5ce7, #4834d4) !important;
+    color: #fff !important;
+}
+#mobile-friend-wrap {
+    position: fixed;
+}
+
+.friend-badge-dot {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: #ff2d55;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 900;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 10px rgba(255,45,85,0.45);
+    border: 2px solid rgba(0,0,0,0.75);
+}
+
+.friend-badge-dot.show {
+    display: inline-flex;
+}
+.friend-top-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.friend-top-tab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 9px 10px !important;
+    border-radius: 12px;
+    border: 1px solid rgba(85,239,196,0.28);
+    background: rgba(8, 16, 12, 0.92) !important;
+    color: #dfe6e9 !important;
+    font-size: 12px !important;
+    font-weight: 900;
+    letter-spacing: 0.4px;
+}
+
+.friend-top-tab.active {
+    background: linear-gradient(180deg, #00c38a, #008f67) !important;
+    color: #fff !important;
+    border-color: rgba(125,255,179,0.7);
+    box-shadow: 0 0 14px rgba(85,239,196,0.22);
+}
+
+.friend-top-tab-count {
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.16);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 900;
+}
+
+.mobile-friend-top-tabs {
+    margin-top: 8px;
+}
+.friend-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.friend-tab-btn {
+    position: relative;
+    padding: 9px 10px !important;
+    border-radius: 12px;
+    border: 1px solid rgba(85,239,196,0.28);
+    background: rgba(8, 16, 12, 0.92) !important;
+    color: #dfe6e9 !important;
+    font-size: 12px !important;
+    font-weight: 900;
+    letter-spacing: 0.4px;
+}
+
+.friend-tab-btn.active {
+    background: linear-gradient(180deg, #00c38a, #008f67) !important;
+    color: #fff !important;
+    border-color: rgba(125,255,179,0.7);
+    box-shadow: 0 0 14px rgba(85,239,196,0.22);
+}
+
+.friend-tab-badge {
+    margin-left: 6px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.14);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 900;
+}
+
+.friend-tab-btn.active .friend-tab-badge {
+    background: rgba(255,255,255,0.22);
+}
+
+.friend-tab-pane {
+    display: none;
+}
+
+.friend-tab-pane.show {
+    display: block;
+}
+
+.friend-subsection {
+    background: rgba(7, 16, 12, 0.86);
+    border: 1px solid rgba(85,239,196,0.22);
+    border-radius: 14px;
+    padding: 10px;
+    margin-bottom: 10px;
+}
+
+.friend-subsection:last-child {
+    margin-bottom: 0;
+}
 @media (max-width: 600px) {
     #home-menu {
         position: fixed;
@@ -3069,42 +3458,64 @@ margin-bottom: 14px;
         </div>
 
         <div class="desktop-panel desktop-friend-panel">
-            <div class="desktop-panel-title">BẠN BÈ</div>
+    <div class="desktop-panel-title">BẠN BÈ</div>
+    <div class="friend-top-tabs">
+    <button id="desktop-friend-tab-friends" class="friend-top-tab active" onclick="switchFriendTab('friends')">
+        BẠN BÈ
+        <span id="desktop-friend-tab-friends-count" class="friend-top-tab-count">0</span>
+    </button>
+    <button id="desktop-friend-tab-requests" class="friend-top-tab" onclick="switchFriendTab('requests')">
+        NGƯỜI LẠ
+        <span id="desktop-friend-tab-requests-count" class="friend-top-tab-count">0</span>
+    </button>
+</div>
 
-            <div class="friend-box-row">
-                <input type="text" id="desktop-friend-name-input" placeholder="Nhập tên user">
-            </div>
+    <div class="friend-box-row">
+        <input type="text" id="desktop-friend-name-input" placeholder="Nhập tên user">
+    </div>
 
-            <div class="friend-box-actions">
-                <button onclick="addFriend()">KẾT BẠN</button>
-                <button onclick="removeFriend()">HỦY/XÓA</button>
-            </div>
+    <div class="friend-box-actions">
+        <button onclick="addFriend()">KẾT BẠN</button>
+        <button onclick="removeFriend()">XÓA BẠN</button>
+    </div>
 
-            <div id="desktop-friend-list"></div>
-        </div>
+    <div id="desktop-friend-list" class="friend-sections"></div>
+</div>
     </div>
 </div>
 
     <div class="mobile-home-wrap">
-        <div id="mobile-friend-wrap">
-    <div id="mobile-friend-toggle" onclick="toggleFriendBox(event)">👥</div>
+    <div id="mobile-friend-wrap">
+    <div id="mobile-friend-toggle" onclick="toggleFriendBox(event)">
+        👥
+        <span id="mobile-friend-badge" class="friend-badge-dot">0</span>
+    </div>
 
     <div id="mobile-friend-box">
         <div class="friend-box-header">
             <span class="friend-box-title">BẠN BÈ</span>
             <span class="friend-close" onclick="closeFriendBox()">✖</span>
         </div>
-
+<div class="friend-top-tabs mobile-friend-top-tabs">
+    <button id="mobile-friend-tab-friends" class="friend-top-tab active" onclick="switchFriendTab('friends')">
+        BẠN BÈ
+        <span id="mobile-friend-tab-friends-count" class="friend-top-tab-count">0</span>
+    </button>
+    <button id="mobile-friend-tab-requests" class="friend-top-tab" onclick="switchFriendTab('requests')">
+        NGƯỜI LẠ
+        <span id="mobile-friend-tab-requests-count" class="friend-top-tab-count">0</span>
+    </button>
+</div>
         <div class="friend-box-row">
             <input type="text" id="friend-name-input" placeholder="Nhập tên user">
         </div>
 
         <div class="friend-box-actions">
             <button onclick="addFriend()">KẾT BẠN</button>
-            <button onclick="removeFriend()">HỦY/XÓA</button>
+            <button onclick="removeFriend()">XÓA BẠN</button>
         </div>
 
-        <div id="friend-list"></div>
+        <div id="friend-list" class="friend-sections"></div>
     </div>
 </div>
  <div id="mobile-lobby-title" class="lobby-title-box lobby-title-mobile">
@@ -3125,7 +3536,6 @@ margin-bottom: 14px;
                 </div>
             </div>
         </div>
-
         <div id="mobile-game-row">
             <div class="mobile-game-card" onclick="batDauTranDau('tong')">
                 <img src="images/co_tuong_new.png" alt="Cờ Tướng">
@@ -3163,7 +3573,7 @@ margin-bottom: 14px;
                 Chủ phòng gửi mã nào thì nhập mã đó để vào cùng phòng.
             </div>
         </div>
-
+         </div>
         <div id="ranking-list"></div>
     </div>
 </div>
@@ -3616,7 +4026,11 @@ function loginGoogle() {
             localStorage.setItem("user-photo", photoURL);
 
             applyLoggedInUI(displayName, photoURL);
+            ensureFriendProfileSynced()
+    .then(() => bindFriendSystem())
+    .catch(err => console.error("Lỗi sync bạn bè sau login Google:", err));
         })
+
         .catch((err) => {
             console.error("Lỗi đăng nhập Google:", err);
             alert("Đăng nhập Google lỗi: " + (err.message || err.code || err));
@@ -3728,6 +4142,14 @@ auth.onAuthStateChanged(async user => {
 
     if (piName) {
         applyLoggedInUI(piName, piPhoto || "images/do_tuong.png");
+
+        await ensureFriendProfileSynced().catch(err => {
+            console.error("Lỗi sync bạn bè khi khôi phục Pi:", err);
+        });
+        await bindFriendSystem().catch(err => {
+            console.error("Lỗi bind bạn bè khi khôi phục Pi:", err);
+        });
+
         await tryResumeRealtimeMatch();
         return;
     }
@@ -3736,6 +4158,14 @@ auth.onAuthStateChanged(async user => {
         const displayName = user.displayName || localStorage.getItem("user-name-display") || "MC Phan Hieu";
         const photoURL = user.photoURL || localStorage.getItem("user-photo") || "images/do_tuong.png";
         applyLoggedInUI(displayName, photoURL);
+
+        await ensureFriendProfileSynced().catch(err => {
+            console.error("Lỗi sync bạn bè khi khôi phục Google:", err);
+        });
+        await bindFriendSystem().catch(err => {
+            console.error("Lỗi bind bạn bè khi khôi phục Google:", err);
+        });
+
         await tryResumeRealtimeMatch();
     } else {
         clearActiveMatchSnapshot();
@@ -6008,9 +6438,20 @@ localStorage.setItem("lastRenameDate", new Date().toISOString());
 localStorage.setItem("currentUsername", newName);
 }
 
+ensureFriendProfileSynced().catch(err => console.error("Lỗi sync profile bạn bè:", err));
+bindFriendSystem();
+localStorage.setItem("user-name-display", newName);
+localStorage.setItem("user-photo", newPhoto);
+localStorage.setItem("currentUsername", newName);
+
+ensureFriendProfileSynced()
+    .then(() => bindFriendSystem())
+    .catch(err => console.error("Lỗi sync profile bạn bè:", err));
+    
 alert("Cập nhật hồ sơ thành công!");
 closeEditProfile();
-}function openChat() {
+}
+function openChat() {
     document.querySelectorAll(".profile-menu").forEach(m => {
         m.classList.remove("show");
     });
@@ -6760,8 +7201,11 @@ function bindLobbyRoomList() {
 }
 let friendListRef = null;
 let friendRequestRef = null;
+let friendSentRef = null;
 let liveFriendCache = [];
 let liveFriendRequestCache = [];
+let liveFriendSentCache = [];
+let activeFriendTab = "friends";
 
 function normalizeFriendName(name = "") {
     return String(name || "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -6802,14 +7246,6 @@ function getCurrentFriendProfile() {
 
 async function ensureFriendProfileSynced() {
     const me = getCurrentFriendProfile();
-    const prevNormKey = scopedKey("friend_username_last_norm");
-    const prevNorm = localStorage.getItem(prevNormKey);
-
-    if (prevNorm && prevNorm !== me.usernameNorm) {
-        await db.ref("social/usersByUsername/" + encodeFriendKey(prevNorm)).remove().catch(() => {});
-    }
-
-    localStorage.setItem(prevNormKey, me.usernameNorm);
 
     await walletRef().update({
         name: me.displayName,
@@ -6822,17 +7258,6 @@ async function ensureFriendProfileSynced() {
         console.error("Lỗi sync wallet profile:", err);
     });
 
-    await db.ref("social/usersByUsername/" + encodeFriendKey(me.usernameNorm)).set({
-        walletKey: me.walletKey,
-        uid: me.uid,
-        username: me.username,
-        displayName: me.displayName,
-        photo: me.photo,
-        updatedAt: Date.now()
-    }).catch(err => {
-        console.error("Lỗi sync user index:", err);
-    });
-
     return me;
 }
 
@@ -6841,17 +7266,7 @@ async function findFriendUserByUsername(name = "") {
     const norm = normalizeFriendName(raw);
     if (!norm) return null;
 
-    const indexedSnap = await db.ref("social/usersByUsername/" + encodeFriendKey(norm)).once("value");
-    const indexed = indexedSnap.val();
-    if (indexed?.walletKey) {
-        return {
-            walletKey: indexed.walletKey,
-            uid: indexed.uid || indexed.walletKey,
-            username: indexed.username || raw,
-            displayName: indexed.displayName || indexed.username || raw,
-            photo: indexed.photo || "images/do_tuong.png"
-        };
-    }
+    let found = null;
 
     const byNormSnap = await db.ref("wallets")
         .orderByChild("usernameNorm")
@@ -6859,7 +7274,6 @@ async function findFriendUserByUsername(name = "") {
         .limitToFirst(1)
         .once("value");
 
-    let found = null;
     byNormSnap.forEach(child => {
         if (found) return;
         const v = child.val() || {};
@@ -6892,51 +7306,174 @@ async function findFriendUserByUsername(name = "") {
         });
     }
 
-    if (found) {
-        await db.ref("social/usersByUsername/" + encodeFriendKey(norm)).set({
-            walletKey: found.walletKey,
-            uid: found.uid,
-            username: found.username,
-            displayName: found.displayName,
-            photo: found.photo,
-            updatedAt: Date.now()
-        }).catch(() => {});
-    }
-
     return found;
 }
+function refreshMobileFriendBadge() {
+    const badge = document.getElementById("mobile-friend-badge");
+    if (!badge) return;
 
+    const count = liveFriendRequestCache.length;
+    badge.textContent = count > 99 ? "99+" : String(count);
+
+    if (count > 0) {
+        badge.classList.add("show");
+    } else {
+        badge.classList.remove("show");
+    }
+}
+function switchFriendTab(tab) {
+    activeFriendTab = (tab === "requests") ? "requests" : "friends";
+    renderFriendList();
+}
+function syncFriendTabButtons() {
+    const isFriends = activeFriendTab === "friends";
+
+    const ids = [
+        ["desktop-friend-tab-friends", isFriends],
+        ["desktop-friend-tab-requests", !isFriends],
+        ["mobile-friend-tab-friends", isFriends],
+        ["mobile-friend-tab-requests", !isFriends]
+    ];
+
+    ids.forEach(([id, active]) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.toggle("active", active);
+    });
+
+    const friendCount = liveFriendCache.length;
+    const requestCount = liveFriendRequestCache.length + liveFriendSentCache.length;
+
+    const friendCountIds = [
+        "desktop-friend-tab-friends-count",
+        "mobile-friend-tab-friends-count"
+    ];
+    const requestCountIds = [
+        "desktop-friend-tab-requests-count",
+        "mobile-friend-tab-requests-count"
+    ];
+
+    friendCountIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = String(friendCount);
+    });
+
+    requestCountIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = String(requestCount);
+    });
+}
+
+function switchFriendTab(tab) {
+    activeFriendTab = (tab === "requests") ? "requests" : "friends";
+    renderFriendList();
+}
 function renderFriendList() {
-    const requestHtml = liveFriendRequestCache.map(item => `
-        <div class="friend-item" style="display:block; padding:8px 0;">
-            <div style="font-size:12px; color:#ffeaa7; font-weight:800; margin-bottom:6px;">
-                Lời mời: ${escapeFriendHtml(item.displayName || item.username || "Người chơi")}
+    const acceptedHtml = liveFriendCache.length
+    ? liveFriendCache.map(item => `
+        <div class="friend-accepted-card compact-friend">
+            <div class="friend-accepted-main">
+                <div class="friend-accepted-name">${escapeFriendHtml(item.displayName || item.username || "Bạn bè")}</div>
+                <div class="friend-accepted-status">Đã kết bạn</div>
             </div>
-            <div style="display:flex; gap:6px;">
-                <button style="background:#00b894; color:#fff; padding:6px 10px; font-size:11px;"
-                        onclick="acceptFriendRequest('${item.walletKey}')">Chấp nhận</button>
-                <button style="background:#636e72; color:#fff; padding:6px 10px; font-size:11px;"
-                        onclick="rejectFriendRequest('${item.walletKey}')">Từ chối</button>
+
+            <div class="friend-accepted-actions">
+                <button class="friend-mini-btn friend-invite-btn"
+                        onclick="inviteFriendToRoom('${item.walletKey}', '${escapeFriendHtml(item.displayName || item.username || "Bạn bè")}')">
+                    MỜI
+                </button>
+
+                <button class="friend-trash-btn"
+                        onclick="removeFriend('${item.walletKey}')"
+                        title="Xóa bạn">
+                    🗑
+                </button>
             </div>
         </div>
-    `).join("");
+    `).join("")
+    : `<div class="friend-empty">Chưa có bạn nào.</div>`;
 
-    const friendHtml = liveFriendCache.map(item => `
-        <div class="friend-item">
-            <span>${escapeFriendHtml(item.displayName || item.username || "Bạn bè")}</span>
-            <button onclick="removeFriend('${item.walletKey}')">Xóa</button>
+    const incomingHtml = liveFriendRequestCache.length
+    ? liveFriendRequestCache.map(item => `
+        <div class="friend-request-card compact-stranger">
+            <div class="stranger-main">
+                <div class="stranger-name">${escapeFriendHtml(item.displayName || item.username || "Người lạ")}</div>
+                <div class="stranger-status">Đã gửi lời mời cho mày</div>
+            </div>
+
+            <div class="stranger-actions">
+                <button class="stranger-mini-btn stranger-accept-btn"
+                        onclick="acceptFriendRequest('${item.walletKey}')">
+                    NHẬN
+                </button>
+                <button class="stranger-mini-btn stranger-reject-btn"
+                        onclick="rejectFriendRequest('${item.walletKey}')">
+                    TỪ CHỐI
+                </button>
+            </div>
         </div>
-    `).join("");
+    `).join("")
+    : `<div class="friend-empty">Chưa có ai gửi lời mời.</div>`;
 
-    const html = (requestHtml + friendHtml) || `<div style="opacity:.8; font-size:12px;">Chưa có bạn nào</div>`;
+    const sentHtml = liveFriendSentCache.length
+    ? liveFriendSentCache.map(item => `
+        <div class="friend-sent-card compact-stranger">
+            <div class="stranger-main">
+                <div class="stranger-name">${escapeFriendHtml(item.displayName || item.username || "Người lạ")}</div>
+                <div class="stranger-status">Mày đã gửi lời mời</div>
+            </div>
+
+            <div class="stranger-actions">
+                <button class="stranger-mini-btn stranger-cancel-btn"
+                        onclick="cancelFriendRequest('${item.walletKey}')">
+                    THU HỒI
+                </button>
+            </div>
+        </div>
+    `).join("")
+    : `<div class="friend-empty">Chưa gửi lời mời nào.</div>`;
+
+    let html = "";
+
+    if (activeFriendTab === "friends") {
+        html = `
+            <div class="friend-section">
+                <div class="friend-section-title">
+                    <span>DANH SÁCH BẠN BÈ</span>
+                    <span class="friend-section-count">${liveFriendCache.length}</span>
+                </div>
+                ${acceptedHtml}
+            </div>
+        `;
+    } else {
+        html = `
+            <div class="friend-section">
+                <div class="friend-section-title">
+                    <span>LỜI MỜI ĐÃ NHẬN</span>
+                    <span class="friend-section-count">${liveFriendRequestCache.length}</span>
+                </div>
+                ${incomingHtml}
+            </div>
+
+            <div class="friend-section" style="margin-top:10px;">
+                <div class="friend-section-title">
+                    <span>LỜI MỜI ĐÃ GỬI</span>
+                    <span class="friend-section-count">${liveFriendSentCache.length}</span>
+                </div>
+                ${sentHtml}
+            </div>
+        `;
+    }
 
     const mobileBox = document.getElementById("friend-list");
     if (mobileBox) mobileBox.innerHTML = html;
 
     const desktopBox = document.getElementById("desktop-friend-list");
     if (desktopBox) desktopBox.innerHTML = html;
-}
 
+    syncFriendTabButtons();
+    refreshMobileFriendBadge();
+}
 async function addFriend() {
     const mobileInput = document.getElementById("friend-name-input");
     const desktopInput = document.getElementById("desktop-friend-name-input");
@@ -6947,38 +7484,54 @@ async function addFriend() {
         return;
     }
 
-    const me = await ensureFriendProfileSynced();
-    const target = await findFriendUserByUsername(rawName);
+    try {
+        const me = await ensureFriendProfileSynced();
+        const target = await findFriendUserByUsername(rawName);
 
-    if (!target?.walletKey) {
-        alert("Không tìm thấy tài khoản này!");
-        return;
+        if (!target?.walletKey) {
+            alert("Không tìm thấy tài khoản này!");
+            return;
+        }
+
+        if (target.walletKey === me.walletKey) {
+            alert("Không thể tự kết bạn với chính mình!");
+            return;
+        }
+
+        const alreadyLocal = liveFriendCache.some(f => f.walletKey === target.walletKey);
+        if (alreadyLocal) {
+            alert("Hai người đã là bạn bè rồi!");
+            return;
+        }
+
+        const updates = {};
+        updates[`social/friendRequests/${target.walletKey}/${me.walletKey}`] = {
+            fromWalletKey: me.walletKey,
+            fromUid: me.uid,
+            fromUsername: me.username,
+            fromDisplayName: me.displayName,
+            fromPhoto: me.photo,
+            createdAt: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        updates[`social/friendRequestSent/${me.walletKey}/${target.walletKey}`] = {
+            targetWalletKey: target.walletKey,
+            username: target.username || "",
+            displayName: target.displayName || target.username || "Người chơi",
+            photo: target.photo || "images/do_tuong.png",
+            createdAt: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        await db.ref().update(updates);
+
+        if (mobileInput) mobileInput.value = "";
+        if (desktopInput) desktopInput.value = "";
+
+        alert("Đã gửi lời mời kết bạn!");
+    } catch (err) {
+        console.error("Lỗi addFriend:", err);
+        alert("Gửi lời mời lỗi, xem console.");
     }
-
-    if (target.walletKey === me.walletKey) {
-        alert("Không thể tự kết bạn với chính mình!");
-        return;
-    }
-
-    const alreadySnap = await db.ref(`social/friends/${me.walletKey}/${target.walletKey}`).once("value");
-    if (alreadySnap.exists()) {
-        alert("Hai người đã là bạn bè rồi!");
-        return;
-    }
-
-    await db.ref(`social/friendRequests/${target.walletKey}/${me.walletKey}`).set({
-        fromWalletKey: me.walletKey,
-        fromUid: me.uid,
-        fromUsername: me.username,
-        fromDisplayName: me.displayName,
-        fromPhoto: me.photo,
-        createdAt: firebase.database.ServerValue.TIMESTAMP
-    });
-
-    if (mobileInput) mobileInput.value = "";
-    if (desktopInput) desktopInput.value = "";
-
-    alert("Đã gửi lời mời kết bạn!");
 }
 
 function toggleFriendBox(event) {
@@ -7035,6 +7588,7 @@ async function acceptFriendRequest(fromWalletKey) {
     };
 
     updates[`social/friendRequests/${me.walletKey}/${fromWalletKey}`] = null;
+    updates[`social/friendRequestSent/${fromWalletKey}/${me.walletKey}`] = null;
 
     await db.ref().update(updates);
     alert("Đã chấp nhận kết bạn!");
@@ -7042,8 +7596,22 @@ async function acceptFriendRequest(fromWalletKey) {
 
 async function rejectFriendRequest(fromWalletKey) {
     const me = getCurrentFriendProfile();
-    await db.ref(`social/friendRequests/${me.walletKey}/${fromWalletKey}`).remove();
+
+    const updates = {};
+    updates[`social/friendRequests/${me.walletKey}/${fromWalletKey}`] = null;
+    updates[`social/friendRequestSent/${fromWalletKey}/${me.walletKey}`] = null;
+
+    await db.ref().update(updates);
     alert("Đã từ chối lời mời!");
+}
+async function cancelFriendRequest(targetWalletKey) {
+    const me = getCurrentFriendProfile();
+
+    const updates = {};
+    updates[`social/friendRequests/${targetWalletKey}/${me.walletKey}`] = null;
+    updates[`social/friendRequestSent/${me.walletKey}/${targetWalletKey}`] = null;
+
+    await db.ref().update(updates);
 }
 
 async function removeFriend(nameFromButton = "") {
@@ -7080,6 +7648,9 @@ async function removeFriend(nameFromButton = "") {
     if (mobileInput) mobileInput.value = "";
     if (desktopInput) desktopInput.value = "";
 }
+function inviteFriendToRoom(walletKey, displayName) {
+    alert("Đã bấm mời " + (displayName || "bạn bè") + ".\nBước này tao đang gắn UI trước, lát nối vào chức năng mời vào phòng tiếp.");
+}
 
 async function bindFriendSystem() {
     const me = await ensureFriendProfileSynced().catch(err => {
@@ -7089,9 +7660,11 @@ async function bindFriendSystem() {
 
     if (friendListRef) friendListRef.off();
     if (friendRequestRef) friendRequestRef.off();
+    if (friendSentRef) friendSentRef.off();
 
     friendListRef = db.ref("social/friends/" + me.walletKey);
     friendRequestRef = db.ref("social/friendRequests/" + me.walletKey);
+    friendSentRef = db.ref("social/friendRequestSent/" + me.walletKey);
 
     friendListRef.on("value", snap => {
         const list = [];
@@ -7124,6 +7697,23 @@ async function bindFriendSystem() {
         });
         list.sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
         liveFriendRequestCache = list;
+        renderFriendList();
+    });
+
+    friendSentRef.on("value", snap => {
+        const list = [];
+        snap.forEach(child => {
+            const v = child.val() || {};
+            list.push({
+                walletKey: child.key,
+                username: v.username || "",
+                displayName: v.displayName || v.username || child.key,
+                photo: v.photo || "images/do_tuong.png",
+                createdAt: Number(v.createdAt || 0)
+            });
+        });
+        list.sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+        liveFriendSentCache = list;
         renderFriendList();
     });
 }
@@ -7192,7 +7782,9 @@ async function loginPi() {
         const piName = piAuth?.user?.username || "Pi User";
         savePiUser(piName);
         applyLoggedInUI(piName, "images/do_tuong.png");
-
+ensureFriendProfileSynced()
+    .then(() => bindFriendSystem())
+    .catch(err => console.error("Lỗi sync bạn bè sau login Pi:", err));
         return piAuth;
     } catch (err) {
         console.error("Pi authenticate lỗi:", err);
