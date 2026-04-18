@@ -3044,7 +3044,7 @@ margin-bottom: 14px;
                 <div class="ad-sub">Mầy có thể thay bằng banner giải đấu, tài trợ, thông báo hệ thống...</div>
             </div>
 
-            <div class="mobile-rank-card" onclick="openRankingModal()">
+            <div class="mobile-rank-card"onclick="openRankingModal()">
                 <div class="rank-board-icon">♟</div>
                 <div class="rank-board-text">
                     <strong>DANH SÁCH BÀN CỜ TƯỚNG</strong>
@@ -6344,12 +6344,8 @@ if (e.key === "Enter") sendMatchChat();
 });
 
 function openRankingModal() {
-    alert("OPEN MODAL CHAY");
     const modal = document.getElementById("ranking-modal");
-    if (!modal) {
-        alert("KHONG TIM THAY ranking-modal");
-        return;
-    }
+    if (!modal) return;
 
     modal.style.display = "flex";
     modal.classList.add("show");
