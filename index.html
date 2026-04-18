@@ -6758,25 +6758,177 @@ function bindLobbyRoomList() {
         renderLobbyRoomList(roomList);
     });
 }
-function getFriendStore() {
-    return JSON.parse(localStorage.getItem("bonsai_friends") || "[]");
+let friendListRef = null;
+let friendRequestRef = null;
+let liveFriendCache = [];
+let liveFriendRequestCache = [];
+
+function normalizeFriendName(name = "") {
+    return String(name || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-function saveFriendStore(list) {
-    localStorage.setItem("bonsai_friends", JSON.stringify(list));
+function encodeFriendKey(value = "") {
+    return encodeURIComponent(normalizeFriendName(value));
+}
+
+function escapeFriendHtml(text = "") {
+    return String(text || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function getCurrentFriendUsername() {
+    return (
+        localStorage.getItem("currentUsername") ||
+        localStorage.getItem("user-name-display") ||
+        "guest"
+    ).trim();
+}
+
+function getCurrentFriendProfile() {
+    const username = getCurrentFriendUsername();
+    return {
+        walletKey: makeWalletDbKey(),
+        uid: auth.currentUser?.uid || makeWalletDbKey(),
+        username,
+        usernameNorm: normalizeFriendName(username),
+        displayName: localStorage.getItem("user-name-display") || username || "Người chơi",
+        photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+    };
+}
+
+async function ensureFriendProfileSynced() {
+    const me = getCurrentFriendProfile();
+    const prevNormKey = scopedKey("friend_username_last_norm");
+    const prevNorm = localStorage.getItem(prevNormKey);
+
+    if (prevNorm && prevNorm !== me.usernameNorm) {
+        await db.ref("social/usersByUsername/" + encodeFriendKey(prevNorm)).remove().catch(() => {});
+    }
+
+    localStorage.setItem(prevNormKey, me.usernameNorm);
+
+    await walletRef().update({
+        name: me.displayName,
+        photo: me.photo,
+        username: me.username,
+        usernameNorm: me.usernameNorm,
+        walletKey: me.walletKey,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+    }).catch(err => {
+        console.error("Lỗi sync wallet profile:", err);
+    });
+
+    await db.ref("social/usersByUsername/" + encodeFriendKey(me.usernameNorm)).set({
+        walletKey: me.walletKey,
+        uid: me.uid,
+        username: me.username,
+        displayName: me.displayName,
+        photo: me.photo,
+        updatedAt: Date.now()
+    }).catch(err => {
+        console.error("Lỗi sync user index:", err);
+    });
+
+    return me;
+}
+
+async function findFriendUserByUsername(name = "") {
+    const raw = String(name || "").trim();
+    const norm = normalizeFriendName(raw);
+    if (!norm) return null;
+
+    const indexedSnap = await db.ref("social/usersByUsername/" + encodeFriendKey(norm)).once("value");
+    const indexed = indexedSnap.val();
+    if (indexed?.walletKey) {
+        return {
+            walletKey: indexed.walletKey,
+            uid: indexed.uid || indexed.walletKey,
+            username: indexed.username || raw,
+            displayName: indexed.displayName || indexed.username || raw,
+            photo: indexed.photo || "images/do_tuong.png"
+        };
+    }
+
+    const byNormSnap = await db.ref("wallets")
+        .orderByChild("usernameNorm")
+        .equalTo(norm)
+        .limitToFirst(1)
+        .once("value");
+
+    let found = null;
+    byNormSnap.forEach(child => {
+        if (found) return;
+        const v = child.val() || {};
+        found = {
+            walletKey: child.key,
+            uid: v.uid || child.key,
+            username: v.username || raw,
+            displayName: v.name || v.username || raw,
+            photo: v.photo || "images/do_tuong.png"
+        };
+    });
+
+    if (!found) {
+        const byNameSnap = await db.ref("wallets")
+            .orderByChild("name")
+            .equalTo(raw)
+            .limitToFirst(1)
+            .once("value");
+
+        byNameSnap.forEach(child => {
+            if (found) return;
+            const v = child.val() || {};
+            found = {
+                walletKey: child.key,
+                uid: v.uid || child.key,
+                username: v.username || raw,
+                displayName: v.name || raw,
+                photo: v.photo || "images/do_tuong.png"
+            };
+        });
+    }
+
+    if (found) {
+        await db.ref("social/usersByUsername/" + encodeFriendKey(norm)).set({
+            walletKey: found.walletKey,
+            uid: found.uid,
+            username: found.username,
+            displayName: found.displayName,
+            photo: found.photo,
+            updatedAt: Date.now()
+        }).catch(() => {});
+    }
+
+    return found;
 }
 
 function renderFriendList() {
-    const friends = getFriendStore();
-
-    const html = !friends.length
-        ? `<div style="opacity:.8; font-size:12px;">Chưa có bạn nào</div>`
-        : friends.map(name => `
-            <div class="friend-item">
-                <span>${name}</span>
-                <button onclick="removeFriend('${name}')">Xóa</button>
+    const requestHtml = liveFriendRequestCache.map(item => `
+        <div class="friend-item" style="display:block; padding:8px 0;">
+            <div style="font-size:12px; color:#ffeaa7; font-weight:800; margin-bottom:6px;">
+                Lời mời: ${escapeFriendHtml(item.displayName || item.username || "Người chơi")}
             </div>
-        `).join("");
+            <div style="display:flex; gap:6px;">
+                <button style="background:#00b894; color:#fff; padding:6px 10px; font-size:11px;"
+                        onclick="acceptFriendRequest('${item.walletKey}')">Chấp nhận</button>
+                <button style="background:#636e72; color:#fff; padding:6px 10px; font-size:11px;"
+                        onclick="rejectFriendRequest('${item.walletKey}')">Từ chối</button>
+            </div>
+        </div>
+    `).join("");
+
+    const friendHtml = liveFriendCache.map(item => `
+        <div class="friend-item">
+            <span>${escapeFriendHtml(item.displayName || item.username || "Bạn bè")}</span>
+            <button onclick="removeFriend('${item.walletKey}')">Xóa</button>
+        </div>
+    `).join("");
+
+    const html = (requestHtml + friendHtml) || `<div style="opacity:.8; font-size:12px;">Chưa có bạn nào</div>`;
 
     const mobileBox = document.getElementById("friend-list");
     if (mobileBox) mobileBox.innerHTML = html;
@@ -6785,30 +6937,50 @@ function renderFriendList() {
     if (desktopBox) desktopBox.innerHTML = html;
 }
 
-function addFriend() {
+async function addFriend() {
     const mobileInput = document.getElementById("friend-name-input");
     const desktopInput = document.getElementById("desktop-friend-name-input");
 
-    const name = (desktopInput?.value.trim() || mobileInput?.value.trim() || "");
-    if (!name) {
-        alert("Nhập tên người dùng trước đã!");
+    const rawName = (desktopInput?.value.trim() || mobileInput?.value.trim() || "");
+    if (!rawName) {
+        alert("Nhập tên tài khoản trước đã!");
         return;
     }
 
-    const friends = getFriendStore();
-    if (friends.some(f => f.toLowerCase() === name.toLowerCase())) {
-        alert("Bạn này đã có trong danh sách rồi!");
+    const me = await ensureFriendProfileSynced();
+    const target = await findFriendUserByUsername(rawName);
+
+    if (!target?.walletKey) {
+        alert("Không tìm thấy tài khoản này!");
         return;
     }
 
-    friends.unshift(name);
-    saveFriendStore(friends.slice(0, 30));
+    if (target.walletKey === me.walletKey) {
+        alert("Không thể tự kết bạn với chính mình!");
+        return;
+    }
+
+    const alreadySnap = await db.ref(`social/friends/${me.walletKey}/${target.walletKey}`).once("value");
+    if (alreadySnap.exists()) {
+        alert("Hai người đã là bạn bè rồi!");
+        return;
+    }
+
+    await db.ref(`social/friendRequests/${target.walletKey}/${me.walletKey}`).set({
+        fromWalletKey: me.walletKey,
+        fromUid: me.uid,
+        fromUsername: me.username,
+        fromDisplayName: me.displayName,
+        fromPhoto: me.photo,
+        createdAt: firebase.database.ServerValue.TIMESTAMP
+    });
 
     if (mobileInput) mobileInput.value = "";
     if (desktopInput) desktopInput.value = "";
 
-    renderFriendList();
+    alert("Đã gửi lời mời kết bạn!");
 }
+
 function toggleFriendBox(event) {
     if (event) event.stopPropagation();
 
@@ -6831,44 +7003,132 @@ document.addEventListener("click", function (e) {
         closeFriendBox();
     }
 });
-function removeFriend(nameFromButton = "") {
+
+async function acceptFriendRequest(fromWalletKey) {
+    const me = await ensureFriendProfileSynced();
+    const reqRef = db.ref(`social/friendRequests/${me.walletKey}/${fromWalletKey}`);
+    const reqSnap = await reqRef.once("value");
+    const req = reqSnap.val();
+
+    if (!req) {
+        alert("Lời mời này không còn.");
+        return;
+    }
+
+    const updates = {};
+    updates[`social/friends/${me.walletKey}/${fromWalletKey}`] = {
+        walletKey: fromWalletKey,
+        uid: req.fromUid || fromWalletKey,
+        username: req.fromUsername || "",
+        displayName: req.fromDisplayName || req.fromUsername || "Người chơi",
+        photo: req.fromPhoto || "images/do_tuong.png",
+        addedAt: firebase.database.ServerValue.TIMESTAMP
+    };
+
+    updates[`social/friends/${fromWalletKey}/${me.walletKey}`] = {
+        walletKey: me.walletKey,
+        uid: me.uid,
+        username: me.username,
+        displayName: me.displayName,
+        photo: me.photo,
+        addedAt: firebase.database.ServerValue.TIMESTAMP
+    };
+
+    updates[`social/friendRequests/${me.walletKey}/${fromWalletKey}`] = null;
+
+    await db.ref().update(updates);
+    alert("Đã chấp nhận kết bạn!");
+}
+
+async function rejectFriendRequest(fromWalletKey) {
+    const me = getCurrentFriendProfile();
+    await db.ref(`social/friendRequests/${me.walletKey}/${fromWalletKey}`).remove();
+    alert("Đã từ chối lời mời!");
+}
+
+async function removeFriend(nameFromButton = "") {
     const mobileInput = document.getElementById("friend-name-input");
     const desktopInput = document.getElementById("desktop-friend-name-input");
 
     const typed = (desktopInput?.value.trim() || mobileInput?.value.trim() || "");
-    const name = (nameFromButton || typed).trim();
+    const raw = (nameFromButton || typed).trim();
 
-    if (!name) {
+    if (!raw) {
         alert("Nhập tên user hoặc bấm nút Xóa trong danh sách!");
         return;
     }
 
-    const friends = getFriendStore();
-    const next = friends.filter(f => f.toLowerCase() !== name.toLowerCase());
+    const me = getCurrentFriendProfile();
 
-    if (next.length === friends.length) {
+    let target = liveFriendCache.find(f =>
+        f.walletKey === raw ||
+        normalizeFriendName(f.username) === normalizeFriendName(raw) ||
+        normalizeFriendName(f.displayName) === normalizeFriendName(raw)
+    );
+
+    if (!target) {
         alert("Không tìm thấy bạn này!");
         return;
     }
 
-    saveFriendStore(next);
+    const updates = {};
+    updates[`social/friends/${me.walletKey}/${target.walletKey}`] = null;
+    updates[`social/friends/${target.walletKey}/${me.walletKey}`] = null;
+
+    await db.ref().update(updates);
 
     if (mobileInput) mobileInput.value = "";
     if (desktopInput) desktopInput.value = "";
-
-    renderFriendList();
 }
 
-document.addEventListener("click", function (e) {
-    const modal = document.getElementById("ranking-modal");
-    const box = document.querySelector(".rank-modal-box");
-    if (modal && modal.classList.contains("show") && box && !box.contains(e.target)) {
-        closeRankingModal();
-    }
-});
+async function bindFriendSystem() {
+    const me = await ensureFriendProfileSynced().catch(err => {
+        console.error("Lỗi bindFriendSystem:", err);
+        return getCurrentFriendProfile();
+    });
 
+    if (friendListRef) friendListRef.off();
+    if (friendRequestRef) friendRequestRef.off();
+
+    friendListRef = db.ref("social/friends/" + me.walletKey);
+    friendRequestRef = db.ref("social/friendRequests/" + me.walletKey);
+
+    friendListRef.on("value", snap => {
+        const list = [];
+        snap.forEach(child => {
+            const v = child.val() || {};
+            list.push({
+                walletKey: child.key,
+                username: v.username || "",
+                displayName: v.displayName || v.username || child.key,
+                photo: v.photo || "images/do_tuong.png",
+                addedAt: Number(v.addedAt || 0)
+            });
+        });
+        list.sort((a, b) => Number(b.addedAt || 0) - Number(a.addedAt || 0));
+        liveFriendCache = list;
+        renderFriendList();
+    });
+
+    friendRequestRef.on("value", snap => {
+        const list = [];
+        snap.forEach(child => {
+            const v = child.val() || {};
+            list.push({
+                walletKey: child.key,
+                username: v.fromUsername || "",
+                displayName: v.fromDisplayName || v.fromUsername || child.key,
+                photo: v.fromPhoto || "images/do_tuong.png",
+                createdAt: Number(v.createdAt || 0)
+            });
+        });
+        list.sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+        liveFriendRequestCache = list;
+        renderFriendList();
+    });
+}
 bindLobbyRoomList();
-renderFriendList();
+bindFriendSystem();
 function hoaTran() {
     isGameOver = true;
     clearInterval(interval);
