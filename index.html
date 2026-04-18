@@ -3044,7 +3044,7 @@ margin-bottom: 14px;
                 <div class="ad-sub">Mầy có thể thay bằng banner giải đấu, tài trợ, thông báo hệ thống...</div>
             </div>
 
-            <div class="mobile-rank-card" onclick="alert('CLICK OK'); openRankingModal()">
+            <div class="mobile-rank-card" onclick="openRankingModal()">
                 <div class="rank-board-icon">♟</div>
                 <div class="rank-board-text">
                     <strong>DANH SÁCH BÀN CỜ TƯỚNG</strong>
@@ -3070,7 +3070,7 @@ margin-bottom: 14px;
 <div id="ranking-modal" class="rank-modal">
     <div class="rank-modal-box">
         <div class="rank-modal-header">
-            <span>TOP 100 CAO THỦ</span>
+            <span>DANH SÁCH BÀN CỜ TƯỚNG-CỜ ÚP</span>
             <span class="rank-close" onclick="closeRankingModal()">✖</span>
         </div>
         <div id="ranking-list"></div>
@@ -6461,7 +6461,7 @@ function renderLobbyRoomList(roomList) {
 
                     <div class="lobby-room-sub">
                         <span>Chủ bàn: ${hostName}</span>
-                        <span>${hasDo ? 1 : 0}${hasDen ? 1 : 0}/2 người</span>
+                        <span>${(hasDo ? 1 : 0) + (hasDen ? 1 : 0)}/2 người</span>
                     </div>
 
                     ${canJoin ? `<div class="room-join-hint">Bấm để tham gia</div>` : ``}
