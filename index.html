@@ -4647,8 +4647,7 @@ async function backToMenu() {
     if (!confirm("Thoát ván đấu này?")) return;
 
     await leaveRealtimeMatch();
-    await setPlayerPresence("home");
-    
+
     showHomeUI();
     closeArenaFriendBox();
     renderRoomInviteOverlay();
