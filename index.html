@@ -6342,6 +6342,18 @@ function sendMatchChat() {
 document.getElementById("match-input-popup")?.addEventListener("keypress", function(e) {
 if (e.key === "Enter") sendMatchChat();
 });
+
+function openRankingModal() {
+    alert("OPEN MODAL CHAY");
+    const modal = document.getElementById("ranking-modal");
+    if (!modal) {
+        alert("KHONG TIM THAY ranking-modal");
+        return;
+    }
+
+    modal.style.display = "flex";
+    modal.classList.add("show");
+}
 function formatRoomStakePMC(stake) {
     return `${Math.max(0, Math.floor(Number(stake) || 0))} PMC`;
 }
