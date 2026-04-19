@@ -1,3 +1,5 @@
+const mod = await import("./_firebaseAdmin.js");
+
 const PMC_PER_PI = 1000;
 
 export default async function handler(req, res) {
