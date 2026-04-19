@@ -1,14 +1,19 @@
 import firebaseAdmin from "./firebaseAdmin.js";
 
 const PMC_PER_PI = 1000;
-const MIN_PMC_TO_PI = 0;
 
 export default async function handler(req, res) {
+  let stage = "start";
+
   if (req.method !== "POST") {
-    return res.status(405).json({ ok: false, error: "Method not allowed" });
+    return res.status(405).json({
+      ok: false,
+      error: "Method not allowed"
+    });
   }
 
   try {
+    stage = "read-body";
     const { pmcAmount, walletKey: bodyWalletKey } = req.body || {};
     const safePmc = Math.max(0, Math.floor(Number(pmcAmount || 0) || 0));
 
@@ -19,13 +24,7 @@ export default async function handler(req, res) {
       });
     }
 
-    if (safePmc < MIN_PMC_TO_PI) {
-      return res.status(400).json({
-        ok: false,
-        error: `Tối thiểu phải đổi ${MIN_PMC_TO_PI} PMC`
-      });
-    }
-
+    stage = "read-wallet-key";
     const walletKey = req.headers["x-wallet-key"] || bodyWalletKey;
     if (!walletKey) {
       return res.status(401).json({
@@ -34,19 +33,22 @@ export default async function handler(req, res) {
       });
     }
 
-    console.log("exchange-pmc-to-pi pmcAmount =", pmcAmount);
-    console.log("exchange-pmc-to-pi walletKey =", walletKey);
-
+    stage = "get-db";
     const db = firebaseAdmin.database();
-    const safeWalletKey = String(walletKey || "").replace(/[.#$\[\]/]/g, "_");
+
+    stage = "build-wallet-path";
+    const safeWalletKey = String(walletKey || "").replace(/[.#$\[\]\/]/g, "_");
     const walletPath = "wallets/" + safeWalletKey;
     const walletRef = db.ref(walletPath);
 
+    console.log("exchange-pmc-to-pi pmcAmount =", safePmc);
+    console.log("exchange-pmc-to-pi walletKey =", walletKey);
     console.log("walletPath =", walletPath);
 
+    stage = "transaction";
     let exchangeResult = null;
 
-    await walletRef.transaction(current => {
+    const txResult = await walletRef.transaction(current => {
       const safeCurrent = current && typeof current === "object" ? current : {};
 
       const currentPi = Number(safeCurrent.balance ?? 0) || 0;
@@ -74,6 +76,7 @@ export default async function handler(req, res) {
       };
     });
 
+    console.log("txResult committed =", txResult?.committed);
     console.log("exchangeResult =", exchangeResult);
 
     if (!exchangeResult) {
@@ -83,6 +86,7 @@ export default async function handler(req, res) {
       });
     }
 
+    stage = "write-history";
     await db.ref("walletTransactions").push({
       type: "pmc_to_pi",
       walletKey: safeWalletKey,
@@ -93,6 +97,7 @@ export default async function handler(req, res) {
       status: "done"
     });
 
+    stage = "done";
     return res.status(200).json({
       ok: true,
       pmcAmount: safePmc,
@@ -101,10 +106,12 @@ export default async function handler(req, res) {
       newPiBalance: exchangeResult.newPiBalance
     });
   } catch (err) {
-    console.error("exchange-pmc-to-pi error full:", err);
+    console.error("exchange-pmc-to-pi crash stage =", stage);
+    console.error("exchange-pmc-to-pi error =", err);
+
     return res.status(500).json({
       ok: false,
-      error: err?.message || "Lỗi server khi đổi PMC sang Pi."
+      error: `stage=${stage} | ${err?.message || String(err)}`
     });
   }
 }

@@ -7528,9 +7528,7 @@ alert("walletKey=" + walletKey + " | livePmc=" + livePmc + " | pmcAmount=" + pmc
         console.log("PMC→PI data =", data);
 
         if (!res.ok || !data?.ok) {
-    throw new Error(
-        `status=${res.status} | error=${data?.error || "Đổi PMC sang Pi thất bại."}`
-    );
+    throw new Error(`status=${res.status} | ${data?.error || "Đổi PMC sang Pi thất bại."}`);
 }
 
         if (typeof data.newPmcBalance === "number") {
