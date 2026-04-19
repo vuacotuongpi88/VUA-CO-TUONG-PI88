@@ -7495,55 +7495,68 @@ async function confirmPmcToPiExchange() {
         const btns = document.querySelectorAll("#pmc-to-pi-modal button");
         btns.forEach(btn => btn.disabled = true);
 
-        // đọc ví thật theo đúng walletKey đang gửi lên API
-        const walletSnap = await walletRefByKey(walletKey).once("value");
-        const walletData = walletSnap.val() && typeof walletSnap.val() === "object"
-            ? walletSnap.val()
-            : {};
+        const ref = walletRefByKey(walletKey);
 
-        const livePmc = Math.floor(Number(walletData.pmcBalance ?? 0) || 0);
+        const tx = await runRefTransaction(ref, current => {
+            const safeCurrent = current && typeof current === "object" ? current : {};
 
-        console.log("walletKey gửi lên API =", walletKey);
-        console.log("PMC local =", getPmcBalance());
-        console.log("PMC realtime =", livePmc);
-        console.log("walletData realtime =", walletData);
+            const currentPi = Number(safeCurrent.balance ?? 0) || 0;
+            const currentPmc = Math.floor(Number(safeCurrent.pmcBalance ?? 0) || 0);
 
-        if (pmcAmount > livePmc) {
-            alert("PMC trong ví thật không đủ để đổi.");
-            return;
-        }
-alert("walletKey=" + walletKey + " | livePmc=" + livePmc + " | pmcAmount=" + pmcAmount);
-        const res = await fetch("/api/exchange-pmc-to-pi", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "x-wallet-key": walletKey
-            },
-            body: JSON.stringify({ pmcAmount, walletKey })
+            if (currentPmc < pmcAmount) {
+                return;
+            }
+
+            const piAmount = pmcAmount / 1000;
+
+            return {
+                ...safeCurrent,
+                balance: currentPi + piAmount,
+                pmcBalance: currentPmc - pmcAmount,
+                updatedAt: firebase.database.ServerValue.TIMESTAMP,
+                name: safeCurrent.name || localStorage.getItem("user-name-display") || "Người chơi",
+                photo: safeCurrent.photo || localStorage.getItem("user-photo") || "images/do_tuong.png"
+            };
         });
 
-        const data = await res.json().catch(() => ({}));
-
-        console.log("PMC→PI status =", res.status);
-        console.log("PMC→PI data =", data);
-
-        if (!res.ok || !data?.ok) {
-    throw new Error(`status=${res.status} | ${data?.error || "Đổi PMC sang Pi thất bại."}`);
-}
-
-        if (typeof data.newPmcBalance === "number") {
-            setPmcBalance(data.newPmcBalance);
+        if (!tx?.committed || !tx?.snapshot) {
+            throw new Error("PMC không đủ hoặc giao dịch không hợp lệ.");
         }
 
-        if (typeof data.newPiBalance === "number") {
-            setPiBalance(data.newPiBalance);
-        }
+        const after = tx.snapshot.val() && typeof tx.snapshot.val() === "object"
+            ? tx.snapshot.val()
+            : {};
+
+        const newPiBalance = Number(after.balance ?? 0) || 0;
+        const newPmcBalance = Math.floor(Number(after.pmcBalance ?? 0) || 0);
+        const piAmount = pmcAmount / 1000;
+
+        currentWalletBalance = newPiBalance;
+        currentPmcBalance = newPmcBalance;
+
+        localStorage.setItem(getBalanceCacheKey(), String(newPiBalance));
+        localStorage.setItem(getPmcCacheKey(), String(newPmcBalance));
+
+        updateBalanceUI(newPiBalance);
+        updatePmcUI(newPmcBalance);
+
+        db.ref("walletTransactions").push({
+            type: "pmc_to_pi",
+            walletKey: String(walletKey || "").replace(/[.#$\[\]\/]/g, "_"),
+            pmcAmount,
+            piAmount,
+            rate: 1000,
+            createdAt: Date.now(),
+            status: "done"
+        }).catch(err => {
+            console.error("Lỗi ghi lịch sử đổi PMC → Pi:", err);
+        });
 
         closePmcToPiModal();
         alert(
             `Đổi thành công!\n` +
             `-${pmcAmount.toLocaleString("vi-VN")} PMC\n` +
-            `+${formatPiExchangeValue(data.piAmount || calcPiFromPmc(pmcAmount))} Pi`
+            `+${formatPiExchangeValue(piAmount)} Pi`
         );
     } catch (err) {
         console.error("Lỗi đổi PMC → Pi:", err);
