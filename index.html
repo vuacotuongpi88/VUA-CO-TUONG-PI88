@@ -7452,7 +7452,6 @@ function previewPmcToPiExchange() {
 
     const pmcAmount = Math.max(0, Math.floor(Number(input?.value || 0) || 0));
     const piReceive = calcPiFromPmc(pmcAmount);
-    const currentPmc = getPmcBalance();
 
     if (!preview) return;
 
@@ -7461,13 +7460,7 @@ function previewPmcToPiExchange() {
         return;
     }
 
-    if (pmcAmount > currentPmc) {
-        preview.innerText = "Số PMC không đủ";
-        return;
-    }
-
-    preview.innerText =
-        `Bạn sẽ nhận: ${formatPiExchangeValue(piReceive)} Pi`;
+    preview.innerText = `Bạn sẽ nhận: ${formatPiExchangeValue(piReceive)} Pi`;
 }
 async function confirmPmcToPiExchange() {
     const input = document.getElementById("pmc-to-pi-input");
@@ -7495,41 +7488,40 @@ async function confirmPmcToPiExchange() {
         const btns = document.querySelectorAll("#pmc-to-pi-modal button");
         btns.forEach(btn => btn.disabled = true);
 
-        const ref = walletRefByKey(walletKey);
+        const safeWalletKey = String(walletKey || "").replace(/[.#$\[\]\/]/g, "_");
+        const liveSnap = await walletRefByKey(walletKey).once("value");
+        const liveData = liveSnap.val() && typeof liveSnap.val() === "object" ? liveSnap.val() : {};
+        const livePmc = Math.floor(Number(liveData.pmcBalance ?? 0) || 0);
 
-        const tx = await runRefTransaction(ref, current => {
-            const safeCurrent = current && typeof current === "object" ? current : {};
+        console.log("walletKey đổi PMC→Pi =", walletKey);
+        console.log("PMC local =", getPmcBalance());
+        console.log("PMC realtime =", livePmc);
 
-            const currentPi = Number(safeCurrent.balance ?? 0) || 0;
-            const currentPmc = Math.floor(Number(safeCurrent.pmcBalance ?? 0) || 0);
-
-            if (currentPmc < pmcAmount) {
-                return;
-            }
-
-            const piAmount = pmcAmount / 1000;
-
-            return {
-                ...safeCurrent,
-                balance: currentPi + piAmount,
-                pmcBalance: currentPmc - pmcAmount,
-                updatedAt: firebase.database.ServerValue.TIMESTAMP,
-                name: safeCurrent.name || localStorage.getItem("user-name-display") || "Người chơi",
-                photo: safeCurrent.photo || localStorage.getItem("user-photo") || "images/do_tuong.png"
-            };
-        });
-
-        if (!tx?.committed || !tx?.snapshot) {
-            throw new Error("PMC không đủ hoặc giao dịch không hợp lệ.");
+        if (livePmc < pmcAmount) {
+            throw new Error("PMC không đủ trong ví Firebase.");
         }
 
-        const after = tx.snapshot.val() && typeof tx.snapshot.val() === "object"
-            ? tx.snapshot.val()
-            : {};
+        const res = await fetch("/api/exchange-pmc-to-pi", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "x-wallet-key": walletKey
+            },
+            body: JSON.stringify({
+                pmcAmount,
+                walletKey
+            })
+        });
 
-        const newPiBalance = Number(after.balance ?? 0) || 0;
-        const newPmcBalance = Math.floor(Number(after.pmcBalance ?? 0) || 0);
-        const piAmount = pmcAmount / 1000;
+        const data = await res.json();
+        console.log("PMC→PI data =", data);
+
+        if (!res.ok || !data?.ok) {
+            throw new Error(data?.error || "Không đổi PMC sang Pi được.");
+        }
+
+        const newPiBalance = Number(data.newPiBalance ?? 0) || 0;
+        const newPmcBalance = Math.floor(Number(data.newPmcBalance ?? 0) || 0);
 
         currentWalletBalance = newPiBalance;
         currentPmcBalance = newPmcBalance;
@@ -7540,23 +7532,11 @@ async function confirmPmcToPiExchange() {
         updateBalanceUI(newPiBalance);
         updatePmcUI(newPmcBalance);
 
-        db.ref("walletTransactions").push({
-            type: "pmc_to_pi",
-            walletKey: String(walletKey || "").replace(/[.#$\[\]\/]/g, "_"),
-            pmcAmount,
-            piAmount,
-            rate: 1000,
-            createdAt: Date.now(),
-            status: "done"
-        }).catch(err => {
-            console.error("Lỗi ghi lịch sử đổi PMC → Pi:", err);
-        });
-
         closePmcToPiModal();
         alert(
             `Đổi thành công!\n` +
             `-${pmcAmount.toLocaleString("vi-VN")} PMC\n` +
-            `+${formatPiExchangeValue(piAmount)} Pi`
+            `+${formatPiExchangeValue(data.piAmount)} Pi`
         );
     } catch (err) {
         console.error("Lỗi đổi PMC → Pi:", err);
@@ -7618,12 +7598,31 @@ async function confirmStakeSelection() {
         return;
     }
 
-    const currentPmc = getPmcBalance();
-    if (finalStake > currentPmc) {
-        isJoiningStakeRoom = false;
-        alert("PMC không đủ. Hiện còn " + formatPMC(currentPmc) + " PMC");
-        return;
-    }
+    // 🔥 LẤY PMC REALTIME TỪ FIREBASE
+let livePmc = 0;
+
+try {
+  const walletKey =
+    currentUser?.uid ||
+    localStorage.getItem("walletKey") ||
+    makeWalletDbKey(currentUser);
+
+  const snap = await walletRefByKey(walletKey).once("value");
+  livePmc = Math.floor(Number(snap.val()?.pmcBalance || 0));
+} catch (e) {
+  console.error("❌ Không đọc được PMC realtime:", e);
+  alert("Lỗi đọc số dư PMC.");
+  return;
+}
+
+console.log("PMC local =", getPmcBalance());
+console.log("PMC realtime =", livePmc);
+
+// 🔥 CHỈ CHECK THEO REALTIME
+if (pmcValue > livePmc) {
+  alert("PMC không đủ (theo server).");
+  return;
+}
 
     try {
         closeStakeRoomModal();

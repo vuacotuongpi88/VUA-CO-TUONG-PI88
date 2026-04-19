@@ -53,11 +53,11 @@ export default async function handler(req, res) {
 
       const currentPi = Number(safeCurrent.balance ?? 0) || 0;
       const currentPmc = Math.floor(Number(safeCurrent.pmcBalance ?? 0) || 0);
-
+      console.log("server currentPmc =", currentPmc);
+      console.log("server safePmc =", safePmc);
       if (currentPmc < safePmc) {
         return;
       }
-
       const piAmount = safePmc / PMC_PER_PI;
       const newPmcBalance = currentPmc - safePmc;
       const newPiBalance = currentPi + piAmount;
