@@ -4709,44 +4709,23 @@ function startTimer() {
         return;
     }
 
-    // Chỉ bên đang tới lượt mới được chạy timer thật
-    if (mySide !== luotDi) {
-        return;
-    }
-
     interval = setInterval(() => {
         if (isGameOver || !currentRoomId || currentRoomStatus !== "playing") {
             clearInterval(interval);
             return;
         }
 
-        if (luotDi === "do") {
+        if (luotDi === 'do') {
             timeDo--;
-            if (timeDo === 30) playSnd("timeout");
-            if (timeDo <= 0) {
-                renderTimerUI();
-                clearInterval(interval);
-                endGame("HẾT GIỜ", "ĐEN THẮNG");
-                return;
-            }
+            if (timeDo === 30) playSnd('timeout');
+            renderTimerUI();
+            if (timeDo <= 0) endGame("HẾT GIỜ", "ĐEN THẮNG");
         } else {
             timeDen--;
-            if (timeDen === 30) playSnd("timeout");
-            if (timeDen <= 0) {
-                renderTimerUI();
-                clearInterval(interval);
-                endGame("HẾT GIỜ", "ĐỎ THẮNG");
-                return;
-            }
+            if (timeDen === 30) playSnd('timeout');
+            renderTimerUI();
+            if (timeDen <= 0) endGame("HẾT GIỜ", "ĐỎ THẮNG");
         }
-
-        renderTimerUI();
-
-        db.ref("matches/" + currentRoomId).update({
-            timeDo,
-            timeDen,
-            updatedAt: firebase.database.ServerValue.TIMESTAMP
-        }).catch(err => console.error("Sync timer lỗi:", err));
     }, 1000);
 }
 const FULL_TURN_SECONDS = 9 * 60;
@@ -5842,7 +5821,6 @@ if (hasEnoughPlayersWaiting) {
     selectedPiece = null;
     clearMoveHints();
     hideVictoryPopup();
-    clearInterval(interval);
     renderTimerUI();
 
     if (!readyOverlayWaitingShown) {
@@ -5852,7 +5830,6 @@ if (hasEnoughPlayersWaiting) {
 } else {
     readyOverlayWaitingShown = false;
     closeReadyOverlay();
-    clearInterval(interval);
     renderTimerUI();
 }
 
