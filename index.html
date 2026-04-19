@@ -7489,18 +7489,24 @@ async function confirmPmcToPiExchange() {
         return;
     }
 
-    const res = await fetch("/api/exchange-pmc-to-pi", {
-    method: "POST",
-    headers: {
-        "Content-Type": "application/json",
-        "x-wallet-key": walletKey
-    },
-    body: JSON.stringify({ pmcAmount })
-});
+    const currentUser = firebase.auth().currentUser;
+    const walletKey =
+        currentUser?.uid ||
+        localStorage.getItem("uid") ||
+        localStorage.getItem("walletKey") ||
+        localStorage.getItem("currentUserUid") ||
+        (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "");
+
+    if (!walletKey) {
+        alert("Không lấy được mã ví để đổi PMC sang Pi.");
+        return;
+    }
 
     try {
         const btns = document.querySelectorAll("#pmc-to-pi-modal button");
         btns.forEach(btn => btn.disabled = true);
+
+        console.log("walletKey gửi lên API =", walletKey);
 
         const res = await fetch("/api/exchange-pmc-to-pi", {
             method: "POST",
@@ -7508,7 +7514,7 @@ async function confirmPmcToPiExchange() {
                 "Content-Type": "application/json",
                 "x-wallet-key": walletKey
             },
-            body: JSON.stringify({ pmcAmount })
+            body: JSON.stringify({ pmcAmount, walletKey })
         });
 
         const data = await res.json().catch(() => ({}));
