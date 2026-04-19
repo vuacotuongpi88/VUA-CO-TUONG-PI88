@@ -25,7 +25,8 @@ export default async function handler(req, res) {
     if (!walletKey) {
       return res.status(401).json({ ok: false, error: "Thiếu định danh ví." });
     }
-
+    console.log("exchange-pmc-to-pi pmcAmount =", pmcAmount);
+    console.log("exchange-pmc-to-pi walletKey =", walletKey);
     const db = firebaseAdmin.database();
    const walletPath = "wallets/" + String(walletKey).replace(/[.#$\[\]/]/g, "_");
     const walletRef = db.ref(walletPath);
@@ -33,6 +34,7 @@ export default async function handler(req, res) {
     let exchangeResult = null;
 
     await walletRef.transaction(current => {
+      console.log("exchangeResult =", exchangeResult);
       const safeCurrent = current && typeof current === "object" ? current : {};
 
       const currentPi = Number(safeCurrent.balance ?? 0) || 0;
@@ -84,5 +86,11 @@ export default async function handler(req, res) {
   } catch (err) {
     console.error("exchange-pmc-to-pi error:", err);
     return res.status(500).json({ ok: false, error: "Lỗi server khi đổi PMC sang Pi." });
+    console.error("exchange-pmc-to-pi error full:", err);
+return res.status(500).json({
+    ok: false,
+    error: err?.message || "Lỗi server khi đổi PMC sang Pi."
+});
   }
+  
 }

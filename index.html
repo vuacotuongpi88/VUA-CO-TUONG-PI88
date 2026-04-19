@@ -7461,11 +7461,6 @@ function previewPmcToPiExchange() {
         return;
     }
 
-    if (!pmcAmount || pmcAmount <= 0) {
-    alert("Nhập số PMC muốn đổi trước đã.");
-    return;
-}
-
     if (pmcAmount > currentPmc) {
         preview.innerText = "Số PMC không đủ";
         return;
@@ -7518,6 +7513,8 @@ async function confirmPmcToPiExchange() {
         });
 
         const data = await res.json().catch(() => ({}));
+        console.log("PMC→PI status =", res.status);
+        console.log("PMC→PI data =", data);
 
         if (!res.ok || !data?.ok) {
             throw new Error(data?.error || "Đổi PMC sang Pi thất bại.");
@@ -7539,7 +7536,7 @@ async function confirmPmcToPiExchange() {
         );
     } catch (err) {
         console.error("Lỗi đổi PMC → Pi:", err);
-        alert(err.message || "Đổi PMC sang Pi lỗi.");
+        alert("Đổi PMC sang Pi lỗi: " + (err.message || "Không rõ lỗi"));
     } finally {
         const btns = document.querySelectorAll("#pmc-to-pi-modal button");
         btns.forEach(btn => btn.disabled = false);
