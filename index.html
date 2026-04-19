@@ -4709,23 +4709,44 @@ function startTimer() {
         return;
     }
 
+    // Chỉ bên đang tới lượt mới được chạy timer thật
+    if (mySide !== luotDi) {
+        return;
+    }
+
     interval = setInterval(() => {
         if (isGameOver || !currentRoomId || currentRoomStatus !== "playing") {
             clearInterval(interval);
             return;
         }
 
-        if (luotDi === 'do') {
+        if (luotDi === "do") {
             timeDo--;
-            if (timeDo === 30) playSnd('timeout');
-            renderTimerUI();
-            if (timeDo <= 0) endGame("HẾT GIỜ", "ĐEN THẮNG");
+            if (timeDo === 30) playSnd("timeout");
+            if (timeDo <= 0) {
+                renderTimerUI();
+                clearInterval(interval);
+                endGame("HẾT GIỜ", "ĐEN THẮNG");
+                return;
+            }
         } else {
             timeDen--;
-            if (timeDen === 30) playSnd('timeout');
-            renderTimerUI();
-            if (timeDen <= 0) endGame("HẾT GIỜ", "ĐỎ THẮNG");
+            if (timeDen === 30) playSnd("timeout");
+            if (timeDen <= 0) {
+                renderTimerUI();
+                clearInterval(interval);
+                endGame("HẾT GIỜ", "ĐỎ THẮNG");
+                return;
+            }
         }
+
+        renderTimerUI();
+
+        db.ref("matches/" + currentRoomId).update({
+            timeDo,
+            timeDen,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        }).catch(err => console.error("Sync timer lỗi:", err));
     }, 1000);
 }
 const FULL_TURN_SECONDS = 9 * 60;
@@ -5841,30 +5862,29 @@ if (room.status === "playing" && !room.winner) {
     const overlay = document.getElementById("ready-overlay");
     if (overlay) overlay.style.display = "none";
 }
-        const newBoardHash = JSON.stringify(room.board || []);
-        if (newBoardHash && newBoardHash !== lastRoomBoardHash) {
-            lastRoomBoardHash = newBoardHash;
+        luotDi = room.turn || "do";
+timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
+timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
+renderTimerUI();
 
-            applyBoardStateFromRoom(room.board || []);
-            isCoUp = !!room.isCoUp;
-            luotDi = room.turn || "do";
-            timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
-            timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
+const newBoardHash = JSON.stringify(room.board || []);
+if (newBoardHash && newBoardHash !== lastRoomBoardHash) {
+    lastRoomBoardHash = newBoardHash;
 
-            timerDoEl.innerText = formatTime(timeDo);
-            timerDenEl.innerText = formatTime(timeDen);
+    applyBoardStateFromRoom(room.board || []);
+    isCoUp = !!room.isCoUp;
 
-            lastMoveFrom = room.lastMoveFrom || null;
-            lastMoveTo = room.lastMoveTo || null;
+    lastMoveFrom = room.lastMoveFrom || null;
+    lastMoveTo = room.lastMoveTo || null;
 
-            updateTurnUIOnly();
+    updateTurnUIOnly();
 
-            if (lastMoveFrom && lastMoveTo) {
-                drawLastMoveMarks();
-            }
+    if (lastMoveFrom && lastMoveTo) {
+        drawLastMoveMarks();
+    }
 
-            startTimer();
-        }
+    startTimer();
+}
 
         if (room.drawRequest && room.drawRequest.from !== mySide && room.drawRequest.at !== lastDrawRequestAt) {
             lastDrawRequestAt = room.drawRequest.at;
