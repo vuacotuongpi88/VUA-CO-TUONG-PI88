@@ -7476,13 +7476,21 @@ async function confirmPmcToPiExchange() {
     const pmcAmount = Math.max(0, Math.floor(Number(input?.value || 0) || 0));
     const currentPmc = getPmcBalance();
 
-    if (pmcAmount < MIN_PMC_TO_PI) {
-        alert(`Tối thiểu phải đổi ${MIN_PMC_TO_PI.toLocaleString("vi-VN")} PMC.`);
+    if (!pmcAmount || pmcAmount <= 0) {
+        alert("Nhập số PMC muốn đổi trước đã.");
         return;
     }
 
     if (pmcAmount > currentPmc) {
         alert("PMC không đủ để đổi.");
+        return;
+    }
+
+    const currentUser = firebase.auth().currentUser;
+    const walletKey = currentUser?.uid;
+
+    if (!walletKey) {
+        alert("Chưa đăng nhập nên không đổi PMC sang Pi được.");
         return;
     }
 
@@ -7492,7 +7500,10 @@ async function confirmPmcToPiExchange() {
 
         const res = await fetch("/api/exchange-pmc-to-pi", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "x-wallet-key": walletKey
+            },
             body: JSON.stringify({ pmcAmount })
         });
 
@@ -7505,6 +7516,7 @@ async function confirmPmcToPiExchange() {
         if (typeof data.newPmcBalance === "number") {
             setPmcBalance(data.newPmcBalance);
         }
+
         if (typeof data.newPiBalance === "number") {
             setPiBalance(data.newPiBalance);
         }
