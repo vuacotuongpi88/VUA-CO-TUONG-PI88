@@ -5862,29 +5862,30 @@ if (room.status === "playing" && !room.winner) {
     const overlay = document.getElementById("ready-overlay");
     if (overlay) overlay.style.display = "none";
 }
-        luotDi = room.turn || "do";
-timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
-timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
-renderTimerUI();
+        const newBoardHash = JSON.stringify(room.board || []);
+        if (newBoardHash && newBoardHash !== lastRoomBoardHash) {
+            lastRoomBoardHash = newBoardHash;
 
-const newBoardHash = JSON.stringify(room.board || []);
-if (newBoardHash && newBoardHash !== lastRoomBoardHash) {
-    lastRoomBoardHash = newBoardHash;
+            applyBoardStateFromRoom(room.board || []);
+            isCoUp = !!room.isCoUp;
+            luotDi = room.turn || "do";
+            timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
+            timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
 
-    applyBoardStateFromRoom(room.board || []);
-    isCoUp = !!room.isCoUp;
+            timerDoEl.innerText = formatTime(timeDo);
+            timerDenEl.innerText = formatTime(timeDen);
 
-    lastMoveFrom = room.lastMoveFrom || null;
-    lastMoveTo = room.lastMoveTo || null;
+            lastMoveFrom = room.lastMoveFrom || null;
+            lastMoveTo = room.lastMoveTo || null;
 
-    updateTurnUIOnly();
+            updateTurnUIOnly();
 
-    if (lastMoveFrom && lastMoveTo) {
-        drawLastMoveMarks();
-    }
+            if (lastMoveFrom && lastMoveTo) {
+                drawLastMoveMarks();
+            }
 
-    startTimer();
-}
+            startTimer();
+        }
 
         if (room.drawRequest && room.drawRequest.from !== mySide && room.drawRequest.at !== lastDrawRequestAt) {
             lastDrawRequestAt = room.drawRequest.at;
