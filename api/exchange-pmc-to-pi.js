@@ -13,7 +13,7 @@ export default async function handler(req, res) {
 let firebaseAdmin;
 
 try {
-  const mod = await import("./_firebaseAdmin.js?ts=" + Date.now());
+ const mod = await import("./firebaseAdmin.js");
   firebaseAdmin = mod.default || mod;
   console.log("firebaseAdmin loaded OK");
 } catch (e) {
