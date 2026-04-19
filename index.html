@@ -6462,7 +6462,18 @@ console.log("walletKey:", walletKey);
             body: JSON.stringify({ roomId })
         });
 
-        const data = await res.json().catch(() => ({}));
+        const rawText = await res.text();
+let data = {};
+
+try {
+    data = rawText ? JSON.parse(rawText) : {};
+} catch (parseErr) {
+    console.error("PMC→PI raw response =", rawText);
+    throw new Error(
+        "API không trả JSON. Response thật: " +
+        String(rawText || "").slice(0, 200)
+    );
+}
 
         if (!res.ok || data.ok === false) {
             console.error("Lỗi settle PMC qua API:", data);
@@ -7488,17 +7499,18 @@ async function confirmPmcToPiExchange() {
         const btns = document.querySelectorAll("#pmc-to-pi-modal button");
         btns.forEach(btn => btn.disabled = true);
 
-        const safeWalletKey = String(walletKey || "").replace(/[.#$\[\]\/]/g, "_");
         const liveSnap = await walletRefByKey(walletKey).once("value");
         const liveData = liveSnap.val() && typeof liveSnap.val() === "object" ? liveSnap.val() : {};
         const livePmc = Math.floor(Number(liveData.pmcBalance ?? 0) || 0);
 
-        console.log("walletKey đổi PMC→Pi =", walletKey);
+        console.log("walletKey gửi lên API =", walletKey);
         console.log("PMC local =", getPmcBalance());
         console.log("PMC realtime =", livePmc);
+        console.log("walletData realtime =", liveData);
 
-        if (livePmc < pmcAmount) {
-            throw new Error("PMC không đủ trong ví Firebase.");
+        if (pmcAmount > livePmc) {
+            alert("PMC trong ví thật không đủ để đổi.");
+            return;
         }
 
         const res = await fetch("/api/exchange-pmc-to-pi", {
@@ -7507,36 +7519,42 @@ async function confirmPmcToPiExchange() {
                 "Content-Type": "application/json",
                 "x-wallet-key": walletKey
             },
-            body: JSON.stringify({
-                pmcAmount,
-                walletKey
-            })
+            body: JSON.stringify({ pmcAmount, walletKey })
         });
 
-        const data = await res.json();
+        const rawText = await res.text();
+        let data = {};
+
+        try {
+            data = rawText ? JSON.parse(rawText) : {};
+        } catch (parseErr) {
+            console.error("PMC→PI raw response =", rawText);
+            throw new Error(
+                "API không trả JSON. Response thật: " +
+                String(rawText || "").slice(0, 200)
+            );
+        }
+
+        console.log("PMC→PI status =", res.status);
         console.log("PMC→PI data =", data);
 
         if (!res.ok || !data?.ok) {
-            throw new Error(data?.error || "Không đổi PMC sang Pi được.");
+            throw new Error(data?.error || "Đổi PMC sang Pi thất bại.");
         }
 
-        const newPiBalance = Number(data.newPiBalance ?? 0) || 0;
-        const newPmcBalance = Math.floor(Number(data.newPmcBalance ?? 0) || 0);
+        if (typeof data.newPmcBalance === "number") {
+            setPmcBalance(data.newPmcBalance);
+        }
 
-        currentWalletBalance = newPiBalance;
-        currentPmcBalance = newPmcBalance;
-
-        localStorage.setItem(getBalanceCacheKey(), String(newPiBalance));
-        localStorage.setItem(getPmcCacheKey(), String(newPmcBalance));
-
-        updateBalanceUI(newPiBalance);
-        updatePmcUI(newPmcBalance);
+        if (typeof data.newPiBalance === "number") {
+            setPiBalance(data.newPiBalance);
+        }
 
         closePmcToPiModal();
         alert(
             `Đổi thành công!\n` +
             `-${pmcAmount.toLocaleString("vi-VN")} PMC\n` +
-            `+${formatPiExchangeValue(data.piAmount)} Pi`
+            `+${formatPiExchangeValue(data.piAmount || calcPiFromPmc(pmcAmount))} Pi`
         );
     } catch (err) {
         console.error("Lỗi đổi PMC → Pi:", err);

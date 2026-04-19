@@ -3,6 +3,7 @@ import firebaseAdmin from "./firebaseAdmin.js";
 const PMC_PER_PI = 1000;
 
 export default async function handler(req, res) {
+  console.log("exchange-pmc-to-pi HIT", req.method);
   let stage = "start";
 
   if (req.method !== "POST") {
