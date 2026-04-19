@@ -4705,8 +4705,15 @@ function startTimer() {
     clearInterval(interval);
     renderTimerUI();
 
+    if (!currentRoomId || currentRoomStatus !== "playing" || isGameOver) {
+        return;
+    }
+
     interval = setInterval(() => {
-        if (isGameOver) return;
+        if (isGameOver || !currentRoomId || currentRoomStatus !== "playing") {
+            clearInterval(interval);
+            return;
+        }
 
         if (luotDi === 'do') {
             timeDo--;
@@ -5807,13 +5814,15 @@ if (typeof applyBoardPerspective === "function") {
         renderPlayersFromRoom(room);
         updateReadyUI();
 
-    const hasEnoughPlayersWaiting = !!room.players?.do && !!room.players?.den && room.status === "waiting";
+const hasEnoughPlayersWaiting = !!room.players?.do && !!room.players?.den && room.status === "waiting";
 
 if (hasEnoughPlayersWaiting) {
     isGameOver = false;
     selectedPiece = null;
     clearMoveHints();
     hideVictoryPopup();
+    clearInterval(interval);
+    renderTimerUI();
 
     if (!readyOverlayWaitingShown) {
         readyOverlayWaitingShown = true;
@@ -5822,6 +5831,8 @@ if (hasEnoughPlayersWaiting) {
 } else {
     readyOverlayWaitingShown = false;
     closeReadyOverlay();
+    clearInterval(interval);
+    renderTimerUI();
 }
 
 if (room.status === "playing" && !room.winner) {
