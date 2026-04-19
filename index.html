@@ -7566,7 +7566,7 @@ async function confirmPmcToPiExchange() {
 
         const rawText = await res.text();
         pmcDebugLog("API status =", res.status);
-        pmcDebugLog("API raw =", rawText);
+        console.log("API RAW TEXT =", rawText);
 
         let data = {};
         try {

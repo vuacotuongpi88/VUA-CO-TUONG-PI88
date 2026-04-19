@@ -1,5 +1,3 @@
-const mod = await import("./_firebaseAdmin.js");
-
 const PMC_PER_PI = 1000;
 
 export default async function handler(req, res) {
@@ -15,7 +13,7 @@ export default async function handler(req, res) {
 let firebaseAdmin;
 
 try {
-  const mod = await import("./_firebaseAdmin.js");
+  const mod = await import("./_firebaseAdmin.js?ts=" + Date.now());
   firebaseAdmin = mod.default || mod;
   console.log("firebaseAdmin loaded OK");
 } catch (e) {
@@ -123,8 +121,8 @@ try {
     console.error("exchange-pmc-to-pi error =", err);
 
     return res.status(500).json({
-      ok: false,
-      error: `stage=${stage} | ${err?.message || String(err)}`
-    });
+  ok: false,
+  error: err.message || "Server error"
+});
   }
 }
