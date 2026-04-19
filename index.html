@@ -4136,7 +4136,7 @@ margin-bottom: 14px;
 
         <div style="font-size:13px; color:#dfe6e9;">Tỷ lệ cố định: <b style="color:#7dffb3;">1 Pi = 1000 PMC</b></div>
 
-        <input id="exchange-pi-input" class="modal-input-dark" type="number" min="0.01" step="0.01" placeholder="Nhập số Pi muốn đổi">
+       <input id="exchange-pi-input" class="modal-input-dark" type="number" min="0" step="0.01" placeholder="Nhập số Pi muốn đổi">
 
         <div id="exchange-preview" class="exchange-preview">Nhận: 0 PMC</div>
 
@@ -4159,23 +4159,22 @@ margin-bottom: 14px;
         </div>
 
         <input
-            id="pmc-to-pi-input"
-            class="modal-input-dark"
-            type="number"
-            min="100"
-            step="1"
-            placeholder="Nhập số PMC muốn đổi"
-            oninput="previewPmcToPiExchange()"
-        >
+    id="pmc-to-pi-input"
+    class="modal-input-dark"
+    type="number"
+    min="0"
+    step="1"
+    placeholder="Nhập số PMC muốn đổi"
+    oninput="previewPmcToPiExchange()"
+>
 
         <div id="pmc-to-pi-preview" class="exchange-preview">
             Bạn sẽ nhận: 0 Pi
         </div>
 
         <div class="pmc-note">
-            Tối thiểu: <strong>100 PMC</strong><br>
-            Chỉ preview ở client, khi bấm xác nhận sẽ gửi yêu cầu lên server.
-        </div>
+    Chỉ preview ở client, khi bấm xác nhận sẽ gửi yêu cầu lên server.
+</div>
 
         <div class="stake-actions">
             <button class="stake-cancel-btn" onclick="closePmcToPiModal()">HỦY</button>
@@ -7408,7 +7407,7 @@ async function submitExchangeToPMC() {
     closeExchangeModal();
 }
 const PMC_PER_PI = 10000;
-const MIN_PMC_TO_PI = 100;
+const MIN_PMC_TO_PI = 0;
 
 function formatPiExchangeValue(value) {
     const num = Number(value || 0) || 0;
@@ -7459,10 +7458,10 @@ function previewPmcToPiExchange() {
         return;
     }
 
-    if (pmcAmount < MIN_PMC_TO_PI) {
-        preview.innerText = `Tối thiểu phải đổi ${MIN_PMC_TO_PI.toLocaleString("vi-VN")} PMC`;
-        return;
-    }
+    if (!pmcAmount || pmcAmount <= 0) {
+    alert("Nhập số PMC muốn đổi trước đã.");
+    return;
+}
 
     if (pmcAmount > currentPmc) {
         preview.innerText = "Số PMC không đủ";
