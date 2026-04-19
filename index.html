@@ -7512,7 +7512,7 @@ async function confirmPmcToPiExchange() {
             alert("PMC trong ví thật không đủ để đổi.");
             return;
         }
-
+alert("walletKey=" + walletKey + " | livePmc=" + livePmc + " | pmcAmount=" + pmcAmount);
         const res = await fetch("/api/exchange-pmc-to-pi", {
             method: "POST",
             headers: {
@@ -7528,8 +7528,10 @@ async function confirmPmcToPiExchange() {
         console.log("PMC→PI data =", data);
 
         if (!res.ok || !data?.ok) {
-            throw new Error(data?.error || "Đổi PMC sang Pi thất bại.");
-        }
+    throw new Error(
+        `status=${res.status} | error=${data?.error || "Đổi PMC sang Pi thất bại."}`
+    );
+}
 
         if (typeof data.newPmcBalance === "number") {
             setPmcBalance(data.newPmcBalance);
