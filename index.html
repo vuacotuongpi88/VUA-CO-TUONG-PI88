@@ -7565,20 +7565,47 @@ async function confirmPmcToPiExchange() {
         });
 
         const rawText = await res.text();
-pmcDebugLog("API status =", res.status);
-pmcDebugLog("API raw =", rawText);
+        pmcDebugLog("API status =", res.status);
+        pmcDebugLog("API raw =", rawText);
 
-let data = null;
+        let data = {};
+        try {
+            data = rawText ? JSON.parse(rawText) : {};
+        } catch (parseErr) {
+            pmcDebugLog("JSON parse fail");
+            throw new Error("API trả text không parse được JSON");
+        }
 
-try {
-    data = rawText ? JSON.parse(rawText) : {};
-} catch (parseErr) {
-    pmcDebugLog("JSON parse FAIL");
-    pmcDebugLog("RAW TEXT KHÔNG PARSE ĐƯỢC =", rawText);
-    throw new Error("API trả text không parse được JSON: " + String(rawText || "").slice(0, 200));
+        pmcDebugLog("API json =", data);
+
+        if (!res.ok || !data?.ok) {
+            throw new Error(data?.error || "Đổi PMC sang Pi thất bại.");
+        }
+
+        if (typeof data.newPmcBalance === "number") {
+            setPmcBalance(data.newPmcBalance);
+            pmcDebugLog("newPmcBalance =", data.newPmcBalance);
+        }
+
+        if (typeof data.newPiBalance === "number") {
+            setPiBalance(data.newPiBalance);
+            pmcDebugLog("newPiBalance =", data.newPiBalance);
+        }
+
+        closePmcToPiModal();
+        alert(
+            `Đổi thành công!\n` +
+            `-${pmcAmount.toLocaleString("vi-VN")} PMC\n` +
+            `+${formatPiExchangeValue(data.piAmount || 0)} Pi`
+        );
+    } catch (err) {
+        pmcDebugLog("Lỗi đổi PMC -> PI =", err?.message || String(err));
+        alert("Đổi PMC sang Pi lỗi: " + (err.message || "Không rõ lỗi"));
+    } finally {
+        const btns = document.querySelectorAll("#pmc-to-pi-modal button");
+        btns.forEach(btn => btn.disabled = false);
+    }
 }
-
-pmcDebugLog("API json =", data);
 function openStakeRoomModal(mode) {
     selectedRoomMode = mode || "co-tuong";
     selectedRoomStakePMC = 0;
