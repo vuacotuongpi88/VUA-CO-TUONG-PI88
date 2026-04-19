@@ -1,8 +1,7 @@
-// api/exchange-pmc-to-pi.js
 import firebaseAdmin from "./firebaseAdmin.js";
 
-const PI_TO_PMC_RATE = 1000;
-const MIN_PMC_TO_PI = 100;
+const PMC_PER_PI = 1000;
+const MIN_PMC_TO_PI = 0;
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -10,8 +9,15 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { pmcAmount } = req.body || {};
+    const { pmcAmount, walletKey: bodyWalletKey } = req.body || {};
     const safePmc = Math.max(0, Math.floor(Number(pmcAmount || 0) || 0));
+
+    if (!safePmc || safePmc <= 0) {
+      return res.status(400).json({
+        ok: false,
+        error: "Nhập số PMC muốn đổi trước đã."
+      });
+    }
 
     if (safePmc < MIN_PMC_TO_PI) {
       return res.status(400).json({
@@ -20,21 +26,27 @@ export default async function handler(req, res) {
       });
     }
 
-    // TODO: thay bằng user thật từ auth / session / token Pi / Firebase Auth
-     const walletKey = req.headers["x-wallet-key"] || req.body?.walletKey;
+    const walletKey = req.headers["x-wallet-key"] || bodyWalletKey;
     if (!walletKey) {
-      return res.status(401).json({ ok: false, error: "Thiếu định danh ví." });
+      return res.status(401).json({
+        ok: false,
+        error: "Thiếu định danh ví."
+      });
     }
+
     console.log("exchange-pmc-to-pi pmcAmount =", pmcAmount);
     console.log("exchange-pmc-to-pi walletKey =", walletKey);
+
     const db = firebaseAdmin.database();
-   const walletPath = "wallets/" + String(walletKey).replace(/[.#$\[\]/]/g, "_");
+    const safeWalletKey = String(walletKey || "").replace(/[.#$\[\]/]/g, "_");
+    const walletPath = "wallets/" + safeWalletKey;
     const walletRef = db.ref(walletPath);
+
+    console.log("walletPath =", walletPath);
 
     let exchangeResult = null;
 
     await walletRef.transaction(current => {
-      console.log("exchangeResult =", exchangeResult);
       const safeCurrent = current && typeof current === "object" ? current : {};
 
       const currentPi = Number(safeCurrent.balance ?? 0) || 0;
@@ -62,13 +74,18 @@ export default async function handler(req, res) {
       };
     });
 
+    console.log("exchangeResult =", exchangeResult);
+
     if (!exchangeResult) {
-      return res.status(400).json({ ok: false, error: "PMC không đủ hoặc giao dịch không hợp lệ." });
+      return res.status(400).json({
+        ok: false,
+        error: "PMC không đủ hoặc giao dịch không hợp lệ."
+      });
     }
 
     await db.ref("walletTransactions").push({
       type: "pmc_to_pi",
-      walletKey,
+      walletKey: safeWalletKey,
       pmcAmount: safePmc,
       piAmount: exchangeResult.piAmount,
       rate: PMC_PER_PI,
@@ -84,13 +101,10 @@ export default async function handler(req, res) {
       newPiBalance: exchangeResult.newPiBalance
     });
   } catch (err) {
-    console.error("exchange-pmc-to-pi error:", err);
-    return res.status(500).json({ ok: false, error: "Lỗi server khi đổi PMC sang Pi." });
     console.error("exchange-pmc-to-pi error full:", err);
-return res.status(500).json({
-    ok: false,
-    error: err?.message || "Lỗi server khi đổi PMC sang Pi."
-});
+    return res.status(500).json({
+      ok: false,
+      error: err?.message || "Lỗi server khi đổi PMC sang Pi."
+    });
   }
-  
 }
