@@ -7829,8 +7829,10 @@ let liveFriendRequestCache = [];
 let liveFriendSentCache = [];
 let activeFriendTab = "friends";
 let roomInviteInboxRef = null;
+let roomInviteSentRef = null;
 let liveRoomInviteCache = [];
 let activeRoomInvite = null;
+let lastHostInviteNotifyKey = "";
 
 function normalizeFriendName(name = "") {
     return String(name || "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -8466,6 +8468,61 @@ async function bindRoomInviteInbox() {
 
     setPlayerPresence(currentRoomId ? "arena" : "home");
 }
+async function bindRoomInviteSentWatcher() {
+    const me = await ensureFriendProfileSynced().catch(() => getCurrentFriendProfile());
+    if (!me?.walletKey) return;
+
+    if (roomInviteSentRef) roomInviteSentRef.off();
+
+    roomInviteSentRef = db.ref("social/roomInvitesSent/" + me.walletKey);
+    roomInviteSentRef.on("value", snap => {
+        let newestDeclined = null;
+
+        snap.forEach(child => {
+            const v = child.val() || {};
+            const isDeclined =
+                v.status === "declined" ||
+                v.status === "room_busy" ||
+                v.status === "room_missing";
+
+            if (!isDeclined) return;
+
+            const declinedAt = Number(v.declinedAt || 0);
+            const acceptedAt = Number(v.acceptedAt || 0);
+            const createdAt = Number(v.createdAt || 0);
+            const sortTime = Math.max(declinedAt, acceptedAt, createdAt);
+
+            if (!newestDeclined || sortTime > newestDeclined.sortTime) {
+                newestDeclined = {
+                    inviteId: child.key,
+                    ...v,
+                    sortTime
+                };
+            }
+        });
+
+        if (!newestDeclined) return;
+
+        const notifyKey = `${newestDeclined.inviteId}:${newestDeclined.status}:${newestDeclined.sortTime}`;
+        if (lastHostInviteNotifyKey === notifyKey) return;
+
+        lastHostInviteNotifyKey = notifyKey;
+
+        const targetName = newestDeclined.toName || "Người được mời";
+        const declinedName = newestDeclined.declinedByName || targetName;
+
+        if (newestDeclined.status === "declined") {
+            alert(`${declinedName} đã từ chối lời mời vào phòng.`);
+        } else if (newestDeclined.status === "room_busy") {
+            alert(`${targetName} không vào được vì phòng không còn ở trạng thái chờ.`);
+        } else if (newestDeclined.status === "room_missing") {
+            alert(`${targetName} không vào được vì phòng đã không còn.`);
+        }
+
+        // dọn luôn bản ghi phản hồi sau khi đã báo cho host
+        db.ref(`social/roomInvitesSent/${me.walletKey}/${newestDeclined.inviteId}`).remove().catch(() => {});
+    });
+}
 async function declineRoomInvite(reason = "declined") {
     if (!activeRoomInvite) return;
 
@@ -8477,7 +8534,9 @@ async function declineRoomInvite(reason = "declined") {
     updates[`social/roomInvitesSent/${invite.fromWalletKey}/${invite.inviteId}`] = {
         ...invite,
         status: reason,
-        declinedAt: Date.now()
+        declinedAt: Date.now(),
+        declinedBy: me.walletKey,
+        declinedByName: me.displayName || me.username || "Người chơi"
     };
 
     await db.ref().update(updates);
@@ -8656,9 +8715,12 @@ async function bindFriendSystem() {
         renderFriendList();
     });
     await bindRoomInviteInbox();
+    await bindRoomInviteInbox();
+    await bindRoomInviteSentWatcher();
 }
 bindLobbyRoomList();
 bindFriendSystem();
+
 function hoaTran() {
     isGameOver = true;
     clearInterval(interval);
