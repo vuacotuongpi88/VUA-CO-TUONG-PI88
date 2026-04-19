@@ -1,5 +1,3 @@
-import firebaseAdmin from "./_firebaseAdmin.js";
-
 const PMC_PER_PI = 1000;
 
 export default async function handler(req, res) {
@@ -12,7 +10,19 @@ export default async function handler(req, res) {
       error: "Method not allowed"
     });
   }
+let firebaseAdmin;
 
+try {
+  const mod = await import("./_firebaseAdmin.js");
+  firebaseAdmin = mod.default || mod;
+  console.log("firebaseAdmin loaded OK");
+} catch (e) {
+  console.error("load _firebaseAdmin failed =", e);
+  return res.status(500).json({
+    ok: false,
+    error: "load _firebaseAdmin failed: " + (e?.message || String(e))
+  });
+}
   try {
     stage = "read-body";
     const { pmcAmount, walletKey: bodyWalletKey } = req.body || {};
