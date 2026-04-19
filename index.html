@@ -7472,15 +7472,9 @@ function previewPmcToPiExchange() {
 async function confirmPmcToPiExchange() {
     const input = document.getElementById("pmc-to-pi-input");
     const pmcAmount = Math.max(0, Math.floor(Number(input?.value || 0) || 0));
-    const currentPmc = getPmcBalance();
 
     if (!pmcAmount || pmcAmount <= 0) {
         alert("Nhập số PMC muốn đổi trước đã.");
-        return;
-    }
-
-    if (pmcAmount > currentPmc) {
-        alert("PMC không đủ để đổi.");
         return;
     }
 
@@ -7501,7 +7495,23 @@ async function confirmPmcToPiExchange() {
         const btns = document.querySelectorAll("#pmc-to-pi-modal button");
         btns.forEach(btn => btn.disabled = true);
 
+        // đọc ví thật theo đúng walletKey đang gửi lên API
+        const walletSnap = await walletRefByKey(walletKey).once("value");
+        const walletData = walletSnap.val() && typeof walletSnap.val() === "object"
+            ? walletSnap.val()
+            : {};
+
+        const livePmc = Math.floor(Number(walletData.pmcBalance ?? 0) || 0);
+
         console.log("walletKey gửi lên API =", walletKey);
+        console.log("PMC local =", getPmcBalance());
+        console.log("PMC realtime =", livePmc);
+        console.log("walletData realtime =", walletData);
+
+        if (pmcAmount > livePmc) {
+            alert("PMC trong ví thật không đủ để đổi.");
+            return;
+        }
 
         const res = await fetch("/api/exchange-pmc-to-pi", {
             method: "POST",
@@ -7513,6 +7523,7 @@ async function confirmPmcToPiExchange() {
         });
 
         const data = await res.json().catch(() => ({}));
+
         console.log("PMC→PI status =", res.status);
         console.log("PMC→PI data =", data);
 
