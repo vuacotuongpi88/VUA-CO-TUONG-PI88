@@ -21,7 +21,7 @@ export default async function handler(req, res) {
     }
 
     // TODO: thay bằng user thật từ auth / session / token Pi / Firebase Auth
-    const walletKey = req.headers["x-wallet-key"];
+     const walletKey = req.headers["x-wallet-key"] || req.body?.walletKey;
     if (!walletKey) {
       return res.status(401).json({ ok: false, error: "Thiếu định danh ví." });
     }

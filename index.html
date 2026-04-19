@@ -6453,6 +6453,9 @@ async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
 }
 async function settlePmcViaApi(roomId) {
     try {
+        console.log("firebase uid:", firebase.auth().currentUser?.uid);
+console.log("local uid:", localStorage.getItem("uid"));
+console.log("walletKey:", walletKey);
         const res = await fetch("/api/pmc/settle", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -7486,13 +7489,14 @@ async function confirmPmcToPiExchange() {
         return;
     }
 
-    const currentUser = firebase.auth().currentUser;
-    const walletKey = currentUser?.uid;
-
-    if (!walletKey) {
-        alert("Chưa đăng nhập nên không đổi PMC sang Pi được.");
-        return;
-    }
+    const res = await fetch("/api/exchange-pmc-to-pi", {
+    method: "POST",
+    headers: {
+        "Content-Type": "application/json",
+        "x-wallet-key": walletKey
+    },
+    body: JSON.stringify({ pmcAmount })
+});
 
     try {
         const btns = document.querySelectorAll("#pmc-to-pi-modal button");
