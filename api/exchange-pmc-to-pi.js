@@ -1,4 +1,4 @@
-import firebaseAdmin from "./firebaseAdmin.js";
+import firebaseAdmin from "./_firebaseAdmin.js";
 
 const PMC_PER_PI = 1000;
 
