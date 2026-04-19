@@ -3750,6 +3750,10 @@ margin-bottom: 14px;
     <span class="menu-icon">🔁</span>
     <span>ĐỔI PI → PMC</span>
 </div>
+<div class="menu-item" onclick="openPmcToPiModal()">
+    <span class="menu-icon">💱</span>
+    <span>ĐỔI PMC → PI</span>
+</div>
 <div class="menu-item" onclick="openWallet('rut')">
     <span class="menu-icon">💸</span>
     <span>RÚT PI</span>
@@ -4146,7 +4150,39 @@ margin-bottom: 14px;
         </div>
     </div>
 </div>
+<div id="pmc-to-pi-modal" class="modal" style="display:none;">
+    <div class="modal-box">
+        <div class="room-mode-title">ĐỔI PMC → PI</div>
 
+        <div class="pmc-note" style="margin-top:0;">
+            Tỷ lệ hiện tại: <strong id="pmc-to-pi-rate-label">10,000 PMC = 1 Pi</strong>
+        </div>
+
+        <input
+            id="pmc-to-pi-input"
+            class="modal-input-dark"
+            type="number"
+            min="100"
+            step="1"
+            placeholder="Nhập số PMC muốn đổi"
+            oninput="previewPmcToPiExchange()"
+        >
+
+        <div id="pmc-to-pi-preview" class="exchange-preview">
+            Bạn sẽ nhận: 0 Pi
+        </div>
+
+        <div class="pmc-note">
+            Tối thiểu: <strong>100 PMC</strong><br>
+            Chỉ preview ở client, khi bấm xác nhận sẽ gửi yêu cầu lên server.
+        </div>
+
+        <div class="stake-actions">
+            <button class="stake-cancel-btn" onclick="closePmcToPiModal()">HỦY</button>
+            <button class="stake-ok-btn" onclick="confirmPmcToPiExchange()">XÁC NHẬN</button>
+        </div>
+    </div>
+</div>
 <div id="stake-room-modal" class="modal" style="display:none;">
     <div class="modal-content" style="width:min(92vw, 420px);">
         <span class="close" onclick="closeStakeRoomModal()">&times;</span>
@@ -7371,7 +7407,123 @@ async function submitExchangeToPMC() {
     alert("Đổi thành công " + piAmount.toFixed(2) + " π → " + formatPMC(pmcAdd) + " PMC");
     closeExchangeModal();
 }
+const PMC_PER_PI = 10000;
+const MIN_PMC_TO_PI = 100;
 
+function formatPiExchangeValue(value) {
+    const num = Number(value || 0) || 0;
+    return num.toFixed(6).replace(/\.?0+$/, "");
+}
+
+function calcPiFromPmc(pmcAmount) {
+    const safePmc = Math.max(0, Math.floor(Number(pmcAmount || 0) || 0));
+    return safePmc / PMC_PER_PI;
+}
+
+function openPmcToPiModal() {
+    const modal = document.getElementById("pmc-to-pi-modal");
+    const input = document.getElementById("pmc-to-pi-input");
+    const rateLabel = document.getElementById("pmc-to-pi-rate-label");
+
+    if (rateLabel) {
+        rateLabel.innerText = `${PMC_PER_PI.toLocaleString("vi-VN")} PMC = 1 Pi`;
+    }
+
+    if (input) {
+        input.value = "";
+    }
+
+    previewPmcToPiExchange();
+
+    if (modal) modal.style.display = "flex";
+    closeProfileMenu?.();
+}
+
+function closePmcToPiModal() {
+    const modal = document.getElementById("pmc-to-pi-modal");
+    if (modal) modal.style.display = "none";
+}
+
+function previewPmcToPiExchange() {
+    const input = document.getElementById("pmc-to-pi-input");
+    const preview = document.getElementById("pmc-to-pi-preview");
+
+    const pmcAmount = Math.max(0, Math.floor(Number(input?.value || 0) || 0));
+    const piReceive = calcPiFromPmc(pmcAmount);
+    const currentPmc = getPmcBalance();
+
+    if (!preview) return;
+
+    if (!pmcAmount) {
+        preview.innerText = "Bạn sẽ nhận: 0 Pi";
+        return;
+    }
+
+    if (pmcAmount < MIN_PMC_TO_PI) {
+        preview.innerText = `Tối thiểu phải đổi ${MIN_PMC_TO_PI.toLocaleString("vi-VN")} PMC`;
+        return;
+    }
+
+    if (pmcAmount > currentPmc) {
+        preview.innerText = "Số PMC không đủ";
+        return;
+    }
+
+    preview.innerText =
+        `Bạn sẽ nhận: ${formatPiExchangeValue(piReceive)} Pi`;
+}
+async function confirmPmcToPiExchange() {
+    const input = document.getElementById("pmc-to-pi-input");
+    const pmcAmount = Math.max(0, Math.floor(Number(input?.value || 0) || 0));
+    const currentPmc = getPmcBalance();
+
+    if (pmcAmount < MIN_PMC_TO_PI) {
+        alert(`Tối thiểu phải đổi ${MIN_PMC_TO_PI.toLocaleString("vi-VN")} PMC.`);
+        return;
+    }
+
+    if (pmcAmount > currentPmc) {
+        alert("PMC không đủ để đổi.");
+        return;
+    }
+
+    try {
+        const btns = document.querySelectorAll("#pmc-to-pi-modal button");
+        btns.forEach(btn => btn.disabled = true);
+
+        const res = await fetch("/api/exchange-pmc-to-pi", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pmcAmount })
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok || !data?.ok) {
+            throw new Error(data?.error || "Đổi PMC sang Pi thất bại.");
+        }
+
+        if (typeof data.newPmcBalance === "number") {
+            setPmcBalance(data.newPmcBalance);
+        }
+        if (typeof data.newPiBalance === "number") {
+            setPiBalance(data.newPiBalance);
+        }
+
+        closePmcToPiModal();
+        alert(
+            `Đổi thành công!\n` +
+            `-${pmcAmount.toLocaleString("vi-VN")} PMC\n` +
+            `+${formatPiExchangeValue(data.piAmount || calcPiFromPmc(pmcAmount))} Pi`
+        );
+    } catch (err) {
+        console.error("Lỗi đổi PMC → Pi:", err);
+        alert(err.message || "Đổi PMC sang Pi lỗi.");
+    } finally {
+        const btns = document.querySelectorAll("#pmc-to-pi-modal button");
+        btns.forEach(btn => btn.disabled = false);
+    }
+}
 function openStakeRoomModal(mode) {
     selectedRoomMode = mode || "co-tuong";
     selectedRoomStakePMC = 0;
