@@ -7565,16 +7565,19 @@ async function confirmPmcToPiExchange() {
         });
 
         const rawText = await res.text();
-        pmcDebugLog("API status =", res.status);
-        console.log("API RAW TEXT =", rawText);
+pmcDebugLog("API status =", res.status);
+pmcDebugLog("API raw =", rawText);
 
-        let data = {};
-        try {
-            data = rawText ? JSON.parse(rawText) : {};
-        } catch (parseErr) {
-            pmcDebugLog("JSON parse fail");
-            throw new Error("API trả text không parse được JSON");
-        }
+let data = null;
+
+try {
+    data = rawText ? JSON.parse(rawText) : {};
+} catch (parseErr) {
+    pmcDebugLog("JSON parse FAIL");
+    pmcDebugLog("RAW TEXT KHÔNG PARSE ĐƯỢC =", rawText);
+    alert("RAW API = " + String(rawText || "").slice(0, 300));
+    throw new Error("API trả text không parse được JSON: " + String(rawText || "").slice(0, 300));
+}
 
         pmcDebugLog("API json =", data);
         if (data?.debug) {
