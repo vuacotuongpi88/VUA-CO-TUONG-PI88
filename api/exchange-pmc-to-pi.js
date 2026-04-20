@@ -11,27 +11,26 @@ module.exports = async function handler(req, res) {
     });
   }
 
+  let getDatabase;
+  let adminApp;
+  let adminDatabaseURL;
 
-let firebaseAdmin;
-let getDatabase;
-let adminApp;
-let adminDatabaseURL;
+  try {
+    const adminBundle = require("./_firebaseAdmin.js");
+    ({ getDatabase } = require("firebase-admin/database"));
+    adminApp = adminBundle.app;
+    adminDatabaseURL = adminBundle.databaseURL;
 
-try {
-  const adminBundle = require("./_firebaseAdmin.js");
-  ({ getDatabase } = require("firebase-admin/database"));
-  adminApp = adminBundle.app;
-  adminDatabaseURL = adminBundle.databaseURL;
+    console.log("firebaseAdmin loaded OK");
+    console.log("adminDatabaseURL =", adminDatabaseURL);
+  } catch (e) {
+    console.error("load _firebaseAdmin failed =", e);
+    return res.status(500).json({
+      ok: false,
+      error: "load _firebaseAdmin failed: " + (e?.message || String(e))
+    });
+  }
 
-  console.log("firebaseAdmin loaded OK");
-  console.log("adminDatabaseURL =", adminDatabaseURL);
-} catch (e) {
-  console.error("load _firebaseAdmin failed =", e);
-  return res.status(500).json({
-    ok: false,
-    error: "load _firebaseAdmin failed: " + (e?.message || String(e))
-  });
-}
   try {
     stage = "read-body";
     const { pmcAmount, walletKey: bodyWalletKey } = req.body || {};
@@ -61,32 +60,44 @@ try {
     const walletPath = "wallets/" + safeWalletKey;
     const walletRef = db.ref(walletPath);
 
+    console.log("admin db ref url =", db.ref().toString());
+    console.log("wallet ref url =", walletRef.toString());
     console.log("exchange-pmc-to-pi pmcAmount =", safePmc);
     console.log("exchange-pmc-to-pi walletKey =", walletKey);
     console.log("walletPath =", walletPath);
 
     stage = "transaction";
     let exchangeResult = null;
+
     let serverSeen = {
-  currentPi: null,
-  currentPmc: null,
-  rawCurrent: null
-};
+      rootUrl: db.ref().toString(),
+      walletUrl: walletRef.toString(),
+      currentPi: null,
+      currentPmc: null,
+      rawCurrent: null
+    };
+
     const txResult = await walletRef.transaction(current => {
       const safeCurrent = current && typeof current === "object" ? current : {};
 
       const currentPi = Number(safeCurrent.balance ?? 0) || 0;
       const currentPmc = Math.floor(Number(safeCurrent.pmcBalance ?? 0) || 0);
-     serverSeen = {
-  currentPi,
-  currentPmc,
-  rawCurrent: safeCurrent
-};;
+
+      serverSeen = {
+        rootUrl: db.ref().toString(),
+        walletUrl: walletRef.toString(),
+        currentPi,
+        currentPmc,
+        rawCurrent: safeCurrent
+      };
+
       console.log("server currentPmc =", currentPmc);
       console.log("server safePmc =", safePmc);
+
       if (currentPmc < safePmc) {
         return;
       }
+
       const piAmount = safePmc / PMC_PER_PI;
       const newPmcBalance = currentPmc - safePmc;
       const newPiBalance = currentPi + piAmount;
@@ -109,19 +120,20 @@ try {
     console.log("exchangeResult =", exchangeResult);
 
     if (!exchangeResult) {
-  return res.status(400).json({
-    ok: false,
-    error: "PMC không đủ hoặc giao dịch không hợp lệ.",
-    debug: {
-      walletKey,
-      safeWalletKey,
-      walletPath,
-      safePmc,
-      txCommitted: !!txResult?.committed,
-      serverSeen
+      return res.status(400).json({
+        ok: false,
+        error: "PMC không đủ hoặc giao dịch không hợp lệ.",
+        debug: {
+          walletKey,
+          safeWalletKey,
+          walletPath,
+          safePmc,
+          txCommitted: !!txResult?.committed,
+          serverSeen
+        }
+      });
     }
-  });
-}
+
     stage = "write-history";
     await db.ref("walletTransactions").push({
       type: "pmc_to_pi",
@@ -146,8 +158,8 @@ try {
     console.error("exchange-pmc-to-pi error =", err);
 
     return res.status(500).json({
-  ok: false,
-  error: err.message || "Server error"
-});
+      ok: false,
+      error: err.message || "Server error"
+    });
   }
-}
+};
