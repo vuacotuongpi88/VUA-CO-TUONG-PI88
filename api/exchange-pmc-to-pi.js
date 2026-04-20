@@ -59,12 +59,19 @@ const db = getDatabase();
 
     stage = "transaction";
     let exchangeResult = null;
-
+    let serverSeen = {
+  currentPi: null,
+  currentPmc: null
+};
     const txResult = await walletRef.transaction(current => {
       const safeCurrent = current && typeof current === "object" ? current : {};
 
       const currentPi = Number(safeCurrent.balance ?? 0) || 0;
       const currentPmc = Math.floor(Number(safeCurrent.pmcBalance ?? 0) || 0);
+      serverSeen = {
+  currentPi,
+  currentPmc
+};
       console.log("server currentPmc =", currentPmc);
       console.log("server safePmc =", safePmc);
       if (currentPmc < safePmc) {
@@ -92,11 +99,19 @@ const db = getDatabase();
     console.log("exchangeResult =", exchangeResult);
 
     if (!exchangeResult) {
-      return res.status(400).json({
-        ok: false,
-        error: "PMC không đủ hoặc giao dịch không hợp lệ."
-      });
+  return res.status(400).json({
+    ok: false,
+    error: "PMC không đủ hoặc giao dịch không hợp lệ.",
+    debug: {
+      walletKey,
+      safeWalletKey,
+      walletPath,
+      safePmc,
+      txCommitted: !!txResult?.committed,
+      serverSeen
     }
+  });
+}
 
     stage = "write-history";
     await db.ref("walletTransactions").push({
