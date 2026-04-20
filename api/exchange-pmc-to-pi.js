@@ -73,10 +73,9 @@ const preRead = preSnap.val();
 console.log("PRE-READ wallet url =", walletRef.toString());
 console.log("PRE-READ wallet value =", preRead);
 
-    stage = "transaction";
-    let exchangeResult = null;
-
-    let serverSeen = {
+   stage = "transaction";
+let exchangeResult = null;
+let serverSeen = {
   rootUrl: db.ref().toString(),
   walletUrl: walletRef.toString(),
   preRead,
@@ -85,45 +84,45 @@ console.log("PRE-READ wallet value =", preRead);
   rawCurrent: null
 };
 
-    const txResult = await walletRef.transaction(current => {
-      const safeCurrent = current && typeof current === "object" ? current : {};
+const txResult = await walletRef.transaction(current => {
+  const baseCurrent =
+    current && typeof current === "object"
+      ? current
+      : (preRead && typeof preRead === "object" ? preRead : {});
 
-      const currentPi = Number(safeCurrent.balance ?? 0) || 0;
-      const currentPmc = Math.floor(Number(safeCurrent.pmcBalance ?? 0) || 0);
+  const currentPi = Number(baseCurrent.balance ?? 0) || 0;
+  const currentPmc = Math.floor(Number(baseCurrent.pmcBalance ?? 0) || 0);
 
-      serverSeen = {
-  rootUrl: db.ref().toString(),
-  walletUrl: walletRef.toString(),
-  preRead,
-  currentPi,
-  currentPmc,
-  rawCurrent: safeCurrent
-};
-      console.log("server currentPmc =", currentPmc);
-      console.log("server safePmc =", safePmc);
+  serverSeen = {
+    rootUrl: db.ref().toString(),
+    walletUrl: walletRef.toString(),
+    preRead,
+    currentPi,
+    currentPmc,
+    rawCurrent: baseCurrent
+  };
 
-      if (currentPmc < safePmc) {
-        return;
-      }
+  if (currentPmc < safePmc) {
+    return;
+  }
 
-      const piAmount = safePmc / PMC_PER_PI;
-      const newPmcBalance = currentPmc - safePmc;
-      const newPiBalance = currentPi + piAmount;
+  const piAmount = safePmc / PMC_PER_PI;
+  const newPmcBalance = currentPmc - safePmc;
+  const newPiBalance = currentPi + piAmount;
 
-      exchangeResult = {
-        piAmount,
-        newPmcBalance,
-        newPiBalance
-      };
+  exchangeResult = {
+    piAmount,
+    newPmcBalance,
+    newPiBalance
+  };
 
-      return {
-        ...safeCurrent,
-        balance: newPiBalance,
-        pmcBalance: newPmcBalance,
-        updatedAt: Date.now()
-      };
-    });
-
+  return {
+    ...baseCurrent,
+    balance: newPiBalance,
+    pmcBalance: newPmcBalance,
+    updatedAt: Date.now()
+  };
+});
     console.log("txResult committed =", txResult?.committed);
     console.log("exchangeResult =", exchangeResult);
 
