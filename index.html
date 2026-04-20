@@ -3593,7 +3593,6 @@ margin-bottom: 14px;
 </script>
 </head>
 <body>
-  <div id="build-stamp" style="position:fixed;top:6px;left:50%;transform:translateX(-50%);z-index:999999;pointer-events:none;background:rgba(0,0,0,.55);color:#ffeaa7;padding:2px 6px;border:1px solid rgba(85,239,196,.7);border-radius:999px;font:700 10px Arial">BUILD PMC-FEE V10</div>  
 <div id="edit-profile-modal" class="modal" style="display:none;">
     <div class="modal-content">
         <span class="close" onclick="closeEditProfile()">&times;</span>
@@ -3758,7 +3757,10 @@ margin-bottom: 14px;
     <span class="menu-icon">💸</span>
     <span>RÚT PI</span>
 </div>
-
+<div id="menu-admin-fee-wallet" class="menu-item" onclick="openAdminFeeTreasuryModal()" style="display:none;">
+    <span class="menu-icon">🏦</span>
+    <span>VÍ PHÍ HỆ THỐNG</span>
+</div>
 <div class="menu-item" onclick="switchAccount()">
     <span class="menu-icon">🔄</span>
     <span>ĐỔI TÀI KHOẢN</span>
@@ -7667,6 +7669,199 @@ async function confirmPmcToPiExchange() {
         btns.forEach(btn => btn.disabled = false);
     }
 }
+const ADMIN_FEE_WALLET_KEY = "pi_admin_master";
+
+function getAdminClientPiKeyList() {
+    return [
+        "pi_0962903406"
+    ];
+}
+
+function isCurrentPiAdminKey() {
+    const currentKey = getAccountKey();
+    return getAdminClientPiKeyList().includes(currentKey);
+}
+
+function syncAdminFeeMenuVisibility() {
+    const menu = document.getElementById("menu-admin-fee-wallet");
+    if (!menu) return;
+    menu.style.display = isCurrentPiAdminKey() ? "flex" : "none";
+}
+
+function closeAdminFeeTreasuryModal() {
+    const modal = document.getElementById("admin-fee-wallet-modal");
+    if (modal) modal.style.display = "none";
+}
+
+function previewAdminFeePmcToPi() {
+    const input = document.getElementById("admin-fee-pmc-input");
+    const preview = document.getElementById("admin-fee-pi-preview");
+    const pmcAmount = Math.max(0, Math.floor(Number(input?.value || 0) || 0));
+    const piReceive = pmcAmount / PMC_RATE;
+
+    if (!preview) return;
+
+    if (!pmcAmount) {
+        preview.innerText = "Bạn sẽ nhận: 0 Pi";
+        return;
+    }
+
+    preview.innerText = `Bạn sẽ nhận: ${formatPiExchangeValue(piReceive)} Pi`;
+}
+
+async function refreshAdminFeeTreasury() {
+    const box = document.getElementById("admin-fee-wallet-balance-box");
+    const note = document.getElementById("admin-fee-wallet-note");
+    const rateLabel = document.getElementById("admin-fee-rate-label");
+
+    try {
+        if (!isCurrentPiAdminKey()) {
+            throw new Error("Tài khoản Pi này không có quyền ví phí hệ thống.");
+        }
+
+        if (box) box.innerHTML = "Đang tải ví phí hệ thống...";
+        if (rateLabel) {
+            rateLabel.innerText = `${PMC_RATE.toLocaleString("vi-VN")} PMC = 1 Pi`;
+        }
+
+        const walletKey = makeWalletDbKey();
+
+        const res = await fetch("/api/convert-fee-pmc-to-pi?v=" + Date.now(), {
+            method: "GET",
+            headers: {
+                "x-wallet-key": walletKey
+            }
+        });
+
+        const raw = await res.text();
+        let data = {};
+        try {
+            data = raw ? JSON.parse(raw) : {};
+        } catch (_) {
+            throw new Error("API ví phí trả dữ liệu không hợp lệ.");
+        }
+
+        if (!res.ok || !data?.ok) {
+            throw new Error(data?.error || "Không tải được ví phí hệ thống.");
+        }
+
+        if (box) {
+            box.innerHTML =
+                `PMC phí hiện có: ${(Number(data.pmcBalance || 0)).toLocaleString("vi-VN")} PMC<br>` +
+                `Pi nội bộ hiện có: ${formatPiExchangeValue(data.piBalance || 0)} Pi`;
+        }
+
+        if (note) {
+            note.innerText = `Ví phí: ${data.walletKey || ADMIN_FEE_WALLET_KEY}`;
+        }
+    } catch (err) {
+        if (box) box.innerHTML = "Không tải được ví phí hệ thống.";
+        if (note) note.innerText = "Lỗi: " + (err.message || "Không rõ lỗi");
+        throw err;
+    }
+}
+
+async function openAdminFeeTreasuryModal() {
+    const modal = document.getElementById("admin-fee-wallet-modal");
+    const pmcInput = document.getElementById("admin-fee-pmc-input");
+    const secretInput = document.getElementById("admin-fee-secret-input");
+    const preview = document.getElementById("admin-fee-pi-preview");
+
+    if (!isCurrentPiAdminKey()) {
+        alert("Tài khoản Pi này không có quyền mở ví phí hệ thống.");
+        return;
+    }
+
+    if (pmcInput) pmcInput.value = "";
+    if (secretInput) secretInput.value = "";
+    if (preview) preview.innerText = "Bạn sẽ nhận: 0 Pi";
+
+    if (modal) modal.style.display = "flex";
+    if (typeof closeProfileMenu === "function") closeProfileMenu();
+
+    try {
+        await refreshAdminFeeTreasury();
+    } catch (_) {}
+}
+
+async function confirmAdminFeePmcToPi() {
+    const pmcInput = document.getElementById("admin-fee-pmc-input");
+    const secretInput = document.getElementById("admin-fee-secret-input");
+
+    const pmcAmount = Math.max(0, Math.floor(Number(pmcInput?.value || 0) || 0));
+    const adminSecret = String(secretInput?.value || "").trim();
+    const walletKey = makeWalletDbKey();
+
+    if (!isCurrentPiAdminKey()) {
+        alert("Tài khoản Pi này không có quyền đổi ví phí hệ thống.");
+        return;
+    }
+
+    if (!adminSecret) {
+        alert("Nhập mã bí mật admin trước đã.");
+        return;
+    }
+
+    if (!pmcAmount || pmcAmount <= 0) {
+        alert("Nhập số PMC muốn đổi trước đã.");
+        return;
+    }
+
+    if (pmcAmount % PMC_RATE !== 0) {
+        alert(`PMC phải chia hết cho ${PMC_RATE}.`);
+        return;
+    }
+
+    try {
+        const btns = document.querySelectorAll("#admin-fee-wallet-modal button");
+        btns.forEach(btn => btn.disabled = true);
+
+        const res = await fetch("/api/convert-fee-pmc-to-pi?v=" + Date.now(), {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "x-wallet-key": walletKey
+            },
+            body: JSON.stringify({
+                pmcAmount,
+                adminSecret
+            })
+        });
+
+        const raw = await res.text();
+        let data = {};
+        try {
+            data = raw ? JSON.parse(raw) : {};
+        } catch (_) {
+            throw new Error("API ví phí trả dữ liệu không hợp lệ.");
+        }
+
+        if (!res.ok || !data?.ok) {
+            throw new Error(data?.error || "Đổi PMC phí sang Pi thất bại.");
+        }
+
+        await refreshAdminFeeTreasury();
+
+        if (secretInput) secretInput.value = "";
+        if (pmcInput) pmcInput.value = "";
+
+        alert(
+            `Đổi phí thành công!\n` +
+            `-${pmcAmount.toLocaleString("vi-VN")} PMC\n` +
+            `+${formatPiExchangeValue(data.piAmount || 0)} Pi`
+        );
+    } catch (err) {
+        alert("Đổi ví phí lỗi: " + (err.message || "Không rõ lỗi"));
+    } finally {
+        const btns = document.querySelectorAll("#admin-fee-wallet-modal button");
+        btns.forEach(btn => btn.disabled = false);
+    }
+}
+
+setTimeout(syncAdminFeeMenuVisibility, 0);
+firebase.auth().onAuthStateChanged(() => {
+    syncAdminFeeMenuVisibility();
+});
 function openStakeRoomModal(mode) {
     selectedRoomMode = mode || "co-tuong";
     selectedRoomStakePMC = 0;
@@ -9203,6 +9398,55 @@ document.addEventListener("click", function(e) {
     }
 });
 </script>
+<div id="admin-fee-wallet-modal" class="rank-modal" style="z-index:27000;">
+    <div class="rank-modal-box" style="width:min(92vw,430px); background:rgba(10,10,10,0.98); border:2px solid #f4c542;">
+        <div class="rank-modal-header" style="background:linear-gradient(180deg,#7b2ff7,#4d1d95); color:#fff8d6;">
+            <span>VÍ PHÍ HỆ THỐNG</span>
+            <span class="rank-close" onclick="closeAdminFeeTreasuryModal()">✕</span>
+        </div>
+
+        <div style="padding:14px;">
+            <div class="exchange-preview" id="admin-fee-wallet-balance-box">
+                PMC phí hiện có: 0 PMC<br>
+                Pi nội bộ hiện có: 0 Pi
+            </div>
+
+            <div class="pmc-note">
+                Ví này là ví hệ thống ăn phí trận thắng.<br>
+                Tỷ lệ đổi: <span id="admin-fee-rate-label">1,000 PMC = 1 Pi</span>
+            </div>
+
+            <input
+                id="admin-fee-pmc-input"
+                class="modal-input-dark"
+                type="number"
+                min="1000"
+                step="1000"
+                placeholder="Nhập PMC muốn đổi, ví dụ 1000 hoặc 10000"
+                oninput="previewAdminFeePmcToPi()"
+            >
+            <input
+                id="admin-fee-secret-input"
+                class="modal-input-dark"
+                type="password"
+                placeholder="Nhập mã bí mật admin"
+                autocomplete="off"
+>
+            <div class="exchange-preview" id="admin-fee-pi-preview">
+                Bạn sẽ nhận: 0 Pi
+            </div>
+
+            <div class="stake-actions">
+                <button class="stake-cancel-btn" onclick="refreshAdminFeeTreasury()">TẢI LẠI</button>
+                <button class="stake-ok-btn" onclick="confirmAdminFeePmcToPi()">ĐỔI SANG PI</button>
+            </div>
+
+            <div class="pmc-note" id="admin-fee-wallet-note">
+                Chỉ tài khoản admin mới mở và đổi được ví này.
+            </div>
+        </div>
+    </div>
+</div>
 </body>
 
 </html>
