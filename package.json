@@ -19,6 +19,7 @@
   },
   "homepage": "https://github.com/vuacotuongpi88/VUA-CO-TUONG-PI88#readme",
   "dependencies": {
-    "firebase-admin": "^13.8.0"
+    "firebase-admin": "^13.8.0",
+    "stellar-sdk": "^13.3.0"
   }
 }
