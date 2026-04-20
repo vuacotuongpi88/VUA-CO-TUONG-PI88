@@ -56,26 +56,34 @@ module.exports = async function handler(req, res) {
     const db = getDatabase(adminApp);
 
     stage = "build-wallet-path";
-    const safeWalletKey = String(walletKey || "").replace(/[.#$\[\]\/]/g, "_");
-    const walletPath = "wallets/" + safeWalletKey;
-    const walletRef = db.ref(walletPath);
+const safeWalletKey = String(walletKey || "").replace(/[.#$\[\]\/]/g, "_");
+const walletPath = "wallets/" + safeWalletKey;
+const walletRef = db.ref(walletPath);
 
-    console.log("admin db ref url =", db.ref().toString());
-    console.log("wallet ref url =", walletRef.toString());
-    console.log("exchange-pmc-to-pi pmcAmount =", safePmc);
-    console.log("exchange-pmc-to-pi walletKey =", walletKey);
-    console.log("walletPath =", walletPath);
+console.log("admin db ref url =", db.ref().toString());
+console.log("wallet ref url =", walletRef.toString());
+console.log("exchange-pmc-to-pi pmcAmount =", safePmc);
+console.log("exchange-pmc-to-pi walletKey =", walletKey);
+console.log("walletPath =", walletPath);
+
+stage = "pre-read-wallet";
+const preSnap = await walletRef.once("value");
+const preRead = preSnap.val();
+
+console.log("PRE-READ wallet url =", walletRef.toString());
+console.log("PRE-READ wallet value =", preRead);
 
     stage = "transaction";
     let exchangeResult = null;
 
     let serverSeen = {
-      rootUrl: db.ref().toString(),
-      walletUrl: walletRef.toString(),
-      currentPi: null,
-      currentPmc: null,
-      rawCurrent: null
-    };
+  rootUrl: db.ref().toString(),
+  walletUrl: walletRef.toString(),
+  preRead,
+  currentPi: null,
+  currentPmc: null,
+  rawCurrent: null
+};
 
     const txResult = await walletRef.transaction(current => {
       const safeCurrent = current && typeof current === "object" ? current : {};
@@ -84,13 +92,13 @@ module.exports = async function handler(req, res) {
       const currentPmc = Math.floor(Number(safeCurrent.pmcBalance ?? 0) || 0);
 
       serverSeen = {
-        rootUrl: db.ref().toString(),
-        walletUrl: walletRef.toString(),
-        currentPi,
-        currentPmc,
-        rawCurrent: safeCurrent
-      };
-
+  rootUrl: db.ref().toString(),
+  walletUrl: walletRef.toString(),
+  preRead,
+  currentPi,
+  currentPmc,
+  rawCurrent: safeCurrent
+};
       console.log("server currentPmc =", currentPmc);
       console.log("server safePmc =", safePmc);
 
