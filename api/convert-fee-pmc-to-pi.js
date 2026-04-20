@@ -1,6 +1,6 @@
 const PMC_PER_PI = 1000;
 const ADMIN_WALLET_KEY = "pi_admin_master";
-const ALLOW_FEE_FRACTION_TEST = true; // test tạm, xong nhớ đổi lại false
+const MIN_ADMIN_FEE_PMC_WITHDRAW = 1000;
 
 function safeKey(value) {
   return String(value || "").replace(/[.#$\[\]\/]/g, "_");
@@ -143,12 +143,12 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    if (!ALLOW_FEE_FRACTION_TEST && safePmc % PMC_PER_PI !== 0) {
-      return res.status(400).json({
-        ok: false,
-        error: `PMC phải chia hết cho ${PMC_PER_PI}.`
-      });
-    }
+    if (safePmc < MIN_ADMIN_FEE_PMC_WITHDRAW) {
+  return res.status(400).json({
+    ok: false,
+    error: `Mức rút tối thiểu là ${MIN_ADMIN_FEE_PMC_WITHDRAW.toLocaleString("vi-VN")} PMC.`
+  });
+}
 
     stage = "read-treasury-before";
     const treasuryPreSnap = await treasuryRef.once("value");

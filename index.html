@@ -7811,12 +7811,12 @@ async function confirmAdminFeePmcToPi() {
         return;
     }
 
-    const ALLOW_FEE_FRACTION_TEST = true; // test tạm, xong nhớ đổi lại false
+    const MIN_ADMIN_FEE_PMC_WITHDRAW = 1000;
 
-    if (!ALLOW_FEE_FRACTION_TEST && pmcAmount % PMC_RATE !== 0) {
-        alert(`PMC phải chia hết cho ${PMC_RATE}.`);
-        return;
-    }
+if (pmcAmount < MIN_ADMIN_FEE_PMC_WITHDRAW) {
+    alert(`Mức rút tối thiểu là ${MIN_ADMIN_FEE_PMC_WITHDRAW.toLocaleString("vi-VN")} PMC.`);
+    return;
+}
 
     try {
         const btns = document.querySelectorAll("#admin-fee-wallet-modal button");
@@ -9422,7 +9422,7 @@ document.addEventListener("click", function(e) {
 
             <div class="pmc-note">
                 PMC bị trừ từ ví phí hệ thống, Pi sẽ cộng thẳng vào tài khoản Pi admin đang đăng nhập.<br>
-                Tỷ lệ đổi: <span id="admin-fee-rate-label">1,000 PMC = 1 Pi (đang mở test đổi lẻ)</span>
+                Tỷ lệ đổi: <span id="admin-fee-rate-label">1,000 PMC = 1 Pi</span>
             </div>
 
             <input
@@ -9430,8 +9430,8 @@ document.addEventListener("click", function(e) {
                 class="modal-input-dark"
                 type="number"
                 min="1000"
-                step="1000"
-                placeholder="Nhập PMC muốn đổi, ví dụ 1000 hoặc 10000"
+                step="1""
+                placeholder="Nhập PMC muốn đổi từ 1000 trở lên, ví dụ 1000 hoặc 1961"
                 oninput="previewAdminFeePmcToPi()"
             >
             <input
