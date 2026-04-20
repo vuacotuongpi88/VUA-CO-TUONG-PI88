@@ -6722,31 +6722,141 @@ if (!winLock.committed) {
     return;
 }
 
-const paid = await adjustPmcWalletByKey(myWalletKey, stake * 2, myProfile);
+const totalPot = stake * 2;
+const feePMC = Math.max(0, Math.floor(totalPot * 0.02));
+const winnerReceivePMC = totalPot - feePMC;
+const adminWalletKey = "pi_admin_master";
+const settleDebugRef = db.ref(`matches/${roomId}/settlement/debug`);
 
-if (paid == null) {
-    await winnerPaidRef.update({
-        done: false,
-        error: "winner_payout_failed",
-        errorAt: Date.now()
+try {
+    await settleDebugRef.update({
+        stage: "before_winner_credit",
+        at: Date.now(),
+        myWalletKey,
+        adminWalletKey,
+        totalPot,
+        feePMC,
+        winnerReceivePMC
     });
 
-    alert(
-        "SETTLE FAIL: cộng ví bên thắng thất bại\n" +
-        "wallet: " + myWalletKey + "\n" +
-        "stake*2: " + (stake * 2)
-    );
-    return;
+    // 1) cộng cho winner sau khi trừ phí
+    const paid = await adjustPmcWalletByKey(myWalletKey, winnerReceivePMC, myProfile);
+
+    if (paid == null) {
+        await winnerPaidRef.update({
+            done: false,
+            error: "winner_payout_failed",
+            errorAt: Date.now()
+        });
+
+        await settleDebugRef.update({
+            stage: "winner_credit_failed",
+            at: Date.now()
+        });
+
+        alert(
+            "SETTLE FAIL: cộng ví bên thắng thất bại\n" +
+            "wallet: " + myWalletKey + "\n" +
+            "winnerReceivePMC: " + winnerReceivePMC
+        );
+        return;
+    }
+
+    await settleDebugRef.update({
+        stage: "after_winner_credit",
+        at: Date.now(),
+        paid
+    });
+
+    // 2) cộng phí vào ví admin nội bộ
+    let adminPaid = null;
+
+    if (feePMC > 0) {
+        await settleDebugRef.update({
+            stage: "before_admin_credit",
+            at: Date.now()
+        });
+
+        adminPaid = await adjustPmcWalletByKey(adminWalletKey, feePMC, {
+            name: "Ví phí hệ thống",
+            photo: "images/do_tuong.png"
+        });
+
+        if (adminPaid == null) {
+            await winnerPaidRef.update({
+                done: false,
+                error: "admin_fee_credit_failed",
+                errorAt: Date.now()
+            });
+
+            await settleDebugRef.update({
+                stage: "admin_credit_failed",
+                at: Date.now()
+            });
+
+            alert(
+                "SETTLE FAIL: cộng phí về ví admin thất bại\n" +
+                "adminWalletKey: " + adminWalletKey + "\n" +
+                "feePMC: " + feePMC
+            );
+            return;
+        }
+
+        await settleDebugRef.update({
+            stage: "after_admin_credit",
+            at: Date.now(),
+            adminPaid
+        });
+
+        await db.ref("walletTransactions").push({
+            type: "match_fee_credit",
+            roomId,
+            walletKey: adminWalletKey,
+            feePMC,
+            winnerWalletKey: myWalletKey,
+            stakePMC: stake,
+            totalPot,
+            createdAt: Date.now(),
+            status: "done"
+        });
+
+        await settleDebugRef.update({
+            stage: "after_fee_log",
+            at: Date.now()
+        });
+    }
+
+    await settleDebugRef.update({
+        stage: "before_settlement_update",
+        at: Date.now()
+    });
+
+    await db.ref(`matches/${roomId}/settlement`).update({
+        paid: true,
+        paidAt: Date.now(),
+        winner: room.winner,
+        stakePMC: stake,
+        totalPot,
+        feePMC,
+        winnerReceivePMC,
+        adminWalletKey
+    });
+
+    await settleDebugRef.update({
+        stage: "done",
+        at: Date.now()
+    });
+
+    await loadWalletBalance().catch(() => {});
+} catch (err) {
+    console.error("SETTLE THROW:", err);
+
+    await settleDebugRef.update({
+        stage: "thrown",
+        at: Date.now(),
+        message: err?.message || String(err)
+    });
 }
-
-await db.ref(`matches/${roomId}/settlement`).update({
-    paid: true,
-    paidAt: Date.now(),
-    winner: room.winner,
-    stakePMC: stake
-});
-
-await loadWalletBalance().catch(() => {});
 }
 async function chargeStakeForReady(roomId, side) {
     try {
