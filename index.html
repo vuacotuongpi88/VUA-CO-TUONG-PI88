@@ -7118,12 +7118,13 @@ async function processWithdraw() {
         });
 
         const raw = await res.text();
-        let data = {};
-        try {
-            data = raw ? JSON.parse(raw) : {};
-        } catch (_) {
-            throw new Error("API rút Pi trả dữ liệu không hợp lệ.");
-        }
+let data = {};
+try {
+    data = raw ? JSON.parse(raw) : {};
+} catch (_) {
+    alert("RAW withdraw API = " + String(raw || "").slice(0, 500));
+    throw new Error("API rút Pi trả dữ liệu không hợp lệ.");
+}
 
         if (!res.ok || !data?.ok) {
             throw new Error(data?.error || "Rút Pi thất bại.");
