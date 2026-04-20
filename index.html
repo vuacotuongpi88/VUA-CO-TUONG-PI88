@@ -7609,41 +7609,52 @@ async function confirmStakeSelection() {
         return;
     }
 
-    // 🔥 LẤY PMC REALTIME TỪ FIREBASE
-let livePmc = 0;
+    let livePmc = 0;
 
-try {
-  const walletKey =
-    currentUser?.uid ||
-    localStorage.getItem("walletKey") ||
-    makeWalletDbKey(currentUser);
+    try {
+        const currentUser = firebase.auth().currentUser;
+        const walletKey =
+            currentUser?.uid ||
+            localStorage.getItem("uid") ||
+            localStorage.getItem("walletKey") ||
+            localStorage.getItem("currentUserUid") ||
+            (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "");
 
-  const snap = await walletRefByKey(walletKey).once("value");
-  livePmc = Math.floor(Number(snap.val()?.pmcBalance || 0));
-} catch (e) {
-  console.error("❌ Không đọc được PMC realtime:", e);
-  alert("Lỗi đọc số dư PMC.");
-  return;
-}
+        if (!walletKey) {
+            isJoiningStakeRoom = false;
+            alert("Không lấy được mã ví người chơi.");
+            return;
+        }
 
-console.log("PMC local =", getPmcBalance());
-console.log("PMC realtime =", livePmc);
+        const snap = await walletRefByKey(walletKey).once("value");
+        const liveData = snap.val() && typeof snap.val() === "object" ? snap.val() : {};
+        livePmc = Math.floor(Number(liveData.pmcBalance ?? 0) || 0);
+    } catch (e) {
+        console.error("❌ Không đọc được PMC realtime:", e);
+        isJoiningStakeRoom = false;
+        alert("Lỗi đọc số dư PMC.");
+        return;
+    }
 
-// 🔥 CHỈ CHECK THEO REALTIME
-if (pmcValue > livePmc) {
-  alert("PMC không đủ (theo server).");
-  return;
-}
+    console.log("PMC local =", getPmcBalance());
+    console.log("PMC realtime =", livePmc);
+    console.log("finalStake =", finalStake);
+
+    if (finalStake > livePmc) {
+        isJoiningStakeRoom = false;
+        alert("PMC không đủ (theo server).");
+        return;
+    }
 
     try {
         closeStakeRoomModal();
         await joinOrCreateRealtimeMatch(selectedRoomMode, finalStake);
     } catch (err) {
-    console.error("Lỗi vào phòng:", err);
-    alert("Vào phòng lỗi: " + (err && err.message ? err.message : err));
-} finally {
-    isJoiningStakeRoom = false;
-}
+        console.error("Lỗi vào phòng:", err);
+        alert("Vào phòng lỗi: " + (err && err.message ? err.message : err));
+    } finally {
+        isJoiningStakeRoom = false;
+    }
 }
 
 // Thêm sự kiện nhấn phím Enter để gửi
