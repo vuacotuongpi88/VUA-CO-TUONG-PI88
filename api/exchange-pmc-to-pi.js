@@ -1,7 +1,6 @@
 const PMC_PER_PI = 1000;
 
 module.exports = async function handler(req, res) {
-  console.log("exchange-pmc-to-pi HIT", req.method);
   let stage = "start";
 
   if (req.method !== "POST") {
@@ -13,18 +12,12 @@ module.exports = async function handler(req, res) {
 
   let getDatabase;
   let adminApp;
-  let adminDatabaseURL;
 
   try {
     const adminBundle = require("./_firebaseAdmin.js");
     ({ getDatabase } = require("firebase-admin/database"));
     adminApp = adminBundle.app;
-    adminDatabaseURL = adminBundle.databaseURL;
-
-    console.log("firebaseAdmin loaded OK");
-    console.log("adminDatabaseURL =", adminDatabaseURL);
   } catch (e) {
-    console.error("load _firebaseAdmin failed =", e);
     return res.status(500).json({
       ok: false,
       error: "load _firebaseAdmin failed: " + (e?.message || String(e))
@@ -56,88 +49,52 @@ module.exports = async function handler(req, res) {
     const db = getDatabase(adminApp);
 
     stage = "build-wallet-path";
-const safeWalletKey = String(walletKey || "").replace(/[.#$\[\]\/]/g, "_");
-const walletPath = "wallets/" + safeWalletKey;
-const walletRef = db.ref(walletPath);
+    const safeWalletKey = String(walletKey || "").replace(/[.#$\[\]\/]/g, "_");
+    const walletPath = "wallets/" + safeWalletKey;
+    const walletRef = db.ref(walletPath);
 
-console.log("admin db ref url =", db.ref().toString());
-console.log("wallet ref url =", walletRef.toString());
-console.log("exchange-pmc-to-pi pmcAmount =", safePmc);
-console.log("exchange-pmc-to-pi walletKey =", walletKey);
-console.log("walletPath =", walletPath);
+    stage = "pre-read-wallet";
+    const preSnap = await walletRef.once("value");
+    const preRead = preSnap.val();
 
-stage = "pre-read-wallet";
-const preSnap = await walletRef.once("value");
-const preRead = preSnap.val();
+    stage = "transaction";
+    let exchangeResult = null;
 
-console.log("PRE-READ wallet url =", walletRef.toString());
-console.log("PRE-READ wallet value =", preRead);
+    const txResult = await walletRef.transaction(current => {
+      const baseCurrent =
+        current && typeof current === "object"
+          ? current
+          : (preRead && typeof preRead === "object" ? preRead : {});
 
-   stage = "transaction";
-let exchangeResult = null;
-let serverSeen = {
-  rootUrl: db.ref().toString(),
-  walletUrl: walletRef.toString(),
-  preRead,
-  currentPi: null,
-  currentPmc: null,
-  rawCurrent: null
-};
+      const currentPi = Number(baseCurrent.balance ?? 0) || 0;
+      const currentPmc = Math.floor(Number(baseCurrent.pmcBalance ?? 0) || 0);
 
-const txResult = await walletRef.transaction(current => {
-  const baseCurrent =
-    current && typeof current === "object"
-      ? current
-      : (preRead && typeof preRead === "object" ? preRead : {});
+      if (currentPmc < safePmc) {
+        return;
+      }
 
-  const currentPi = Number(baseCurrent.balance ?? 0) || 0;
-  const currentPmc = Math.floor(Number(baseCurrent.pmcBalance ?? 0) || 0);
+      const piAmount = safePmc / PMC_PER_PI;
+      const newPmcBalance = currentPmc - safePmc;
+      const newPiBalance = currentPi + piAmount;
 
-  serverSeen = {
-    rootUrl: db.ref().toString(),
-    walletUrl: walletRef.toString(),
-    preRead,
-    currentPi,
-    currentPmc,
-    rawCurrent: baseCurrent
-  };
+      exchangeResult = {
+        piAmount,
+        newPmcBalance,
+        newPiBalance
+      };
 
-  if (currentPmc < safePmc) {
-    return;
-  }
+      return {
+        ...baseCurrent,
+        balance: newPiBalance,
+        pmcBalance: newPmcBalance,
+        updatedAt: Date.now()
+      };
+    });
 
-  const piAmount = safePmc / PMC_PER_PI;
-  const newPmcBalance = currentPmc - safePmc;
-  const newPiBalance = currentPi + piAmount;
-
-  exchangeResult = {
-    piAmount,
-    newPmcBalance,
-    newPiBalance
-  };
-
-  return {
-    ...baseCurrent,
-    balance: newPiBalance,
-    pmcBalance: newPmcBalance,
-    updatedAt: Date.now()
-  };
-});
-    console.log("txResult committed =", txResult?.committed);
-    console.log("exchangeResult =", exchangeResult);
-
-    if (!exchangeResult) {
+    if (!exchangeResult || !txResult?.committed) {
       return res.status(400).json({
         ok: false,
-        error: "PMC không đủ hoặc giao dịch không hợp lệ.",
-        debug: {
-          walletKey,
-          safeWalletKey,
-          walletPath,
-          safePmc,
-          txCommitted: !!txResult?.committed,
-          serverSeen
-        }
+        error: "PMC không đủ hoặc giao dịch không hợp lệ."
       });
     }
 
@@ -161,12 +118,11 @@ const txResult = await walletRef.transaction(current => {
       newPiBalance: exchangeResult.newPiBalance
     });
   } catch (err) {
-    console.error("exchange-pmc-to-pi crash stage =", stage);
-    console.error("exchange-pmc-to-pi error =", err);
+    console.error("exchange-pmc-to-pi crash stage =", stage, err);
 
     return res.status(500).json({
       ok: false,
-      error: err.message || "Server error"
+      error: err?.message || "Server error"
     });
   }
 };

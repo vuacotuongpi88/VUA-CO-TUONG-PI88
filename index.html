@@ -7473,46 +7473,15 @@ function previewPmcToPiExchange() {
 
     preview.innerText = `Bạn sẽ nhận: ${formatPiExchangeValue(piReceive)} Pi`;
 }
-function pmcDebugLog(...args) {
-    const box = document.getElementById("pmc-debug-box");
-    const line = args.map(v => {
-        if (typeof v === "string") return v;
-        try {
-            return JSON.stringify(v, null, 2);
-        } catch (_) {
-            return String(v);
-        }
-    }).join(" ");
+function pmcDebugLog() {}
+function clearPmcDebugLog() {}
 
-    if (box) {
-        box.style.display = "block";
-        box.textContent += line + "\n";
-        box.scrollTop = box.scrollHeight;
-    }
-
-    try {
-        console.log(...args);
-    } catch (_) {}
-}
-
-function clearPmcDebugLog() {
-    const box = document.getElementById("pmc-debug-box");
-    if (box) {
-        box.textContent = "";
-        box.style.display = "none";
-    }
-}
 async function confirmPmcToPiExchange() {
-    clearPmcDebugLog();
-    pmcDebugLog("=== BẮT ĐẦU ĐỔI PMC -> PI ===");
-
     const input = document.getElementById("pmc-to-pi-input");
     const pmcAmount = Math.max(0, Math.floor(Number(input?.value || 0) || 0));
-    pmcDebugLog("pmcAmount =", pmcAmount);
 
     if (!pmcAmount || pmcAmount <= 0) {
         alert("Nhập số PMC muốn đổi trước đã.");
-        pmcDebugLog("Dừng: pmcAmount không hợp lệ");
         return;
     }
 
@@ -7524,11 +7493,8 @@ async function confirmPmcToPiExchange() {
         localStorage.getItem("currentUserUid") ||
         (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "");
 
-    pmcDebugLog("walletKey =", walletKey);
-
     if (!walletKey) {
         alert("Không lấy được mã ví để đổi PMC sang Pi.");
-        pmcDebugLog("Dừng: không có walletKey");
         return;
     }
 
@@ -7536,21 +7502,14 @@ async function confirmPmcToPiExchange() {
         const btns = document.querySelectorAll("#pmc-to-pi-modal button");
         btns.forEach(btn => btn.disabled = true);
 
-        pmcDebugLog("Chuẩn bị đọc ví realtime...");
         const liveSnap = await walletRefByKey(walletKey).once("value");
         const liveData = liveSnap.val() && typeof liveSnap.val() === "object" ? liveSnap.val() : {};
         const livePmc = Math.floor(Number(liveData.pmcBalance ?? 0) || 0);
 
-        pmcDebugLog("PMC realtime =", livePmc);
-        pmcDebugLog("walletData realtime =", liveData);
-
         if (pmcAmount > livePmc) {
             alert("PMC trong ví thật không đủ để đổi.");
-            pmcDebugLog("Dừng: PMC không đủ");
             return;
         }
-
-        pmcDebugLog("Chuẩn bị gọi API /api/exchange-pmc-to-pi");
 
         const res = await fetch("/api/exchange-pmc-to-pi?v=" + Date.now(), {
             method: "POST",
@@ -7565,43 +7524,24 @@ async function confirmPmcToPiExchange() {
         });
 
         const rawText = await res.text();
-pmcDebugLog("API status =", res.status);
-pmcDebugLog("API raw =", rawText);
+        let data = {};
 
-let data = null;
-
-try {
-    data = rawText ? JSON.parse(rawText) : {};
-} catch (parseErr) {
-    pmcDebugLog("JSON parse FAIL");
-    pmcDebugLog("RAW TEXT KHÔNG PARSE ĐƯỢC =", rawText);
-    alert("RAW API = " + String(rawText || "").slice(0, 300));
-    throw new Error("API trả text không parse được JSON: " + String(rawText || "").slice(0, 300));
-}
-
-        pmcDebugLog("API json =", data);
-        if (data?.debug) {
-    pmcDebugLog("API debug =", data.debug);
-}
+        try {
+            data = rawText ? JSON.parse(rawText) : {};
+        } catch (_) {
+            throw new Error("API trả dữ liệu không hợp lệ.");
+        }
 
         if (!res.ok || !data?.ok) {
-    if (data?.debug) {
-        pmcDebugLog("SERVER DEBUG =", data.debug);
-    }
-    throw new Error(
-        (data?.error || "Đổi PMC sang Pi thất bại.") +
-        (data?.debug ? " | " + JSON.stringify(data.debug).slice(0, 300) : "")
-    );
-}
+            throw new Error(data?.error || "Đổi PMC sang Pi thất bại.");
+        }
 
         if (typeof data.newPmcBalance === "number") {
             setPmcBalance(data.newPmcBalance);
-            pmcDebugLog("newPmcBalance =", data.newPmcBalance);
         }
 
         if (typeof data.newPiBalance === "number") {
             setPiBalance(data.newPiBalance);
-            pmcDebugLog("newPiBalance =", data.newPiBalance);
         }
 
         closePmcToPiModal();
@@ -7611,7 +7551,6 @@ try {
             `+${formatPiExchangeValue(data.piAmount || 0)} Pi`
         );
     } catch (err) {
-        pmcDebugLog("Lỗi đổi PMC -> PI =", err?.message || String(err));
         alert("Đổi PMC sang Pi lỗi: " + (err.message || "Không rõ lỗi"));
     } finally {
         const btns = document.querySelectorAll("#pmc-to-pi-modal button");
@@ -9143,24 +9082,6 @@ document.addEventListener("click", function(e) {
     }
 });
 </script>
-<div id="pmc-debug-box" style="
-position: fixed;
-left: 8px;
-right: 8px;
-bottom: 8px;
-z-index: 999999;
-max-height: 32vh;
-overflow: auto;
-background: rgba(0,0,0,0.92);
-color: #55efc4;
-border: 1px solid #55efc4;
-border-radius: 10px;
-padding: 8px;
-font-size: 12px;
-line-height: 1.45;
-white-space: pre-wrap;
-display: none;
-"></div>
 </body>
 
 </html>
