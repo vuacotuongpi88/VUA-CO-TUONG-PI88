@@ -7721,7 +7721,7 @@ async function refreshAdminFeeTreasury() {
 
         if (box) box.innerHTML = "Đang tải ví phí hệ thống...";
         if (rateLabel) {
-            rateLabel.innerText = `${PMC_RATE.toLocaleString("vi-VN")} PMC = 1 Pi`;
+            rateLabel.innerText = `${PMC_RATE.toLocaleString("vi-VN")} PMC = 1 Pi (đang mở test đổi lẻ)`;
         }
 
         const walletKey = makeWalletDbKey();
@@ -7747,12 +7747,17 @@ async function refreshAdminFeeTreasury() {
 
         if (box) {
             box.innerHTML =
-                `PMC phí hiện có: ${(Number(data.pmcBalance || 0)).toLocaleString("vi-VN")} PMC<br>` +
-                `Pi nội bộ hiện có: ${formatPiExchangeValue(data.piBalance || 0)} Pi`;
+                `PMC phí hiện có: ${(Number(data.treasuryPmcBalance || 0)).toLocaleString("vi-VN")} PMC<br>` +
+                `Pi tài khoản admin hiện có: ${formatPiExchangeValue(data.targetPiBalance || 0)} Pi`;
+        }
+
+        if (typeof data.targetPiBalance === "number") {
+            setPiBalance(data.targetPiBalance);
         }
 
         if (note) {
-            note.innerText = `Ví phí: ${data.walletKey || ADMIN_FEE_WALLET_KEY}`;
+            note.innerText =
+                `Ví phí: ${data.treasuryWalletKey || "pi_admin_master"} → cộng vào: ${data.targetWalletKey || makeWalletDbKey()}`;
         }
     } catch (err) {
         if (box) box.innerHTML = "Không tải được ví phí hệ thống.";
@@ -7760,7 +7765,6 @@ async function refreshAdminFeeTreasury() {
         throw err;
     }
 }
-
 async function openAdminFeeTreasuryModal() {
     const modal = document.getElementById("admin-fee-wallet-modal");
     const pmcInput = document.getElementById("admin-fee-pmc-input");
@@ -7809,10 +7813,10 @@ async function confirmAdminFeePmcToPi() {
 
     const ALLOW_FEE_FRACTION_TEST = true; // test tạm, xong nhớ đổi lại false
 
-if (!ALLOW_FEE_FRACTION_TEST && pmcAmount % PMC_RATE !== 0) {
-    alert(`PMC phải chia hết cho ${PMC_RATE}.`);
-    return;
-}
+    if (!ALLOW_FEE_FRACTION_TEST && pmcAmount % PMC_RATE !== 0) {
+        alert(`PMC phải chia hết cho ${PMC_RATE}.`);
+        return;
+    }
 
     try {
         const btns = document.querySelectorAll("#admin-fee-wallet-modal button");
@@ -7842,6 +7846,10 @@ if (!ALLOW_FEE_FRACTION_TEST && pmcAmount % PMC_RATE !== 0) {
             throw new Error(data?.error || "Đổi PMC phí sang Pi thất bại.");
         }
 
+        if (typeof data.newPlayerPiBalance === "number") {
+            setPiBalance(data.newPlayerPiBalance);
+        }
+
         await refreshAdminFeeTreasury();
 
         if (secretInput) secretInput.value = "";
@@ -7849,8 +7857,8 @@ if (!ALLOW_FEE_FRACTION_TEST && pmcAmount % PMC_RATE !== 0) {
 
         alert(
             `Đổi phí thành công!\n` +
-            `-${pmcAmount.toLocaleString("vi-VN")} PMC\n` +
-            `+${formatPiExchangeValue(data.piAmount || 0)} Pi`
+            `-${pmcAmount.toLocaleString("vi-VN")} PMC từ ví phí hệ thống\n` +
+            `+${formatPiExchangeValue(data.piAmount || 0)} Pi vào tài khoản hiện tại`
         );
     } catch (err) {
         alert("Đổi ví phí lỗi: " + (err.message || "Không rõ lỗi"));
@@ -7859,7 +7867,6 @@ if (!ALLOW_FEE_FRACTION_TEST && pmcAmount % PMC_RATE !== 0) {
         btns.forEach(btn => btn.disabled = false);
     }
 }
-
 setTimeout(syncAdminFeeMenuVisibility, 0);
 firebase.auth().onAuthStateChanged(() => {
     syncAdminFeeMenuVisibility();
@@ -9410,11 +9417,11 @@ document.addEventListener("click", function(e) {
         <div style="padding:14px;">
             <div class="exchange-preview" id="admin-fee-wallet-balance-box">
                 PMC phí hiện có: 0 PMC<br>
-                Pi nội bộ hiện có: 0 Pi
+                Pi tài khoản admin hiện có: 0 Pi
             </div>
 
             <div class="pmc-note">
-                Ví này là ví hệ thống ăn phí trận thắng.<br>
+                PMC bị trừ từ ví phí hệ thống, Pi sẽ cộng thẳng vào tài khoản Pi admin đang đăng nhập.<br>
                 Tỷ lệ đổi: <span id="admin-fee-rate-label">1,000 PMC = 1 Pi (đang mở test đổi lẻ)</span>
             </div>
 

@@ -2,6 +2,18 @@ const PMC_PER_PI = 1000;
 const ADMIN_WALLET_KEY = "pi_admin_master";
 const ALLOW_FEE_FRACTION_TEST = true; // test tạm, xong nhớ đổi lại false
 
+function safeKey(value) {
+  return String(value || "").replace(/[.#$\[\]\/]/g, "_");
+}
+
+function readPiBalance(obj) {
+  return Number(
+    obj && obj.balance != null
+      ? obj.balance
+      : (obj && obj.piBalance != null ? obj.piBalance : 0)
+  ) || 0;
+}
+
 module.exports = async function handler(req, res) {
   let stage = "start";
 
@@ -50,16 +62,16 @@ module.exports = async function handler(req, res) {
     }
 
     stage = "read-wallet-key";
-    const clientWalletKey = String(req.headers["x-wallet-key"] || "").trim().toLowerCase();
+    const clientWalletKeyRaw = String(req.headers["x-wallet-key"] || "").trim().toLowerCase();
 
-    if (!clientWalletKey) {
+    if (!clientWalletKeyRaw) {
       return res.status(401).json({
         ok: false,
         error: "Thiếu định danh ví Pi admin."
       });
     }
 
-    if (!allowedPiKeys.includes(clientWalletKey)) {
+    if (!allowedPiKeys.includes(clientWalletKeyRaw)) {
       return res.status(403).json({
         ok: false,
         error: "Ví Pi này không có quyền thao tác ví phí hệ thống."
@@ -69,28 +81,38 @@ module.exports = async function handler(req, res) {
     stage = "get-db";
     const db = getDatabase(adminApp);
 
-    stage = "build-wallet-path";
-    const safeWalletKey = String(ADMIN_WALLET_KEY).replace(/[.#$\[\]\/]/g, "_");
-    const walletRef = db.ref("wallets/" + safeWalletKey);
+    const treasuryWalletKey = safeKey(ADMIN_WALLET_KEY);
+    const targetWalletKey = safeKey(clientWalletKeyRaw);
+
+    const treasuryRef = db.ref("wallets/" + treasuryWalletKey);
+    const targetRef = db.ref("wallets/" + targetWalletKey);
 
     if (req.method === "GET") {
-      stage = "read-wallet";
-      const snap = await walletRef.once("value");
-      const data = snap.val() && typeof snap.val() === "object" ? snap.val() : {};
+      stage = "read-wallets";
+      const [treasurySnap, targetSnap] = await Promise.all([
+        treasuryRef.once("value"),
+        targetRef.once("value")
+      ]);
 
-      const pmcBalance = Math.floor(Number(data.pmcBalance ?? 0) || 0);
-      const piBalance =
-        Number(
-          data.balance != null
-            ? data.balance
-            : (data.piBalance != null ? data.piBalance : 0)
-        ) || 0;
+      const treasuryData =
+        treasurySnap.val() && typeof treasurySnap.val() === "object"
+          ? treasurySnap.val()
+          : {};
+
+      const targetData =
+        targetSnap.val() && typeof targetSnap.val() === "object"
+          ? targetSnap.val()
+          : {};
+
+      const treasuryPmcBalance = Math.floor(Number(treasuryData.pmcBalance ?? 0) || 0);
+      const targetPiBalance = readPiBalance(targetData);
 
       return res.status(200).json({
         ok: true,
-        walletKey: safeWalletKey,
-        pmcBalance,
-        piBalance,
+        treasuryWalletKey,
+        targetWalletKey,
+        treasuryPmcBalance,
+        targetPiBalance,
         rate: PMC_PER_PI
       });
     }
@@ -122,104 +144,143 @@ module.exports = async function handler(req, res) {
     }
 
     if (!ALLOW_FEE_FRACTION_TEST && safePmc % PMC_PER_PI !== 0) {
-  return res.status(400).json({
-    ok: false,
-    error: `PMC phải chia hết cho ${PMC_PER_PI}.`
-  });
-}
+      return res.status(400).json({
+        ok: false,
+        error: `PMC phải chia hết cho ${PMC_PER_PI}.`
+      });
+    }
 
-    stage = "pre-read-wallet";
-    const preSnap = await walletRef.once("value");
-    const preRead = preSnap.val();
+    stage = "read-treasury-before";
+    const treasuryPreSnap = await treasuryRef.once("value");
+    const treasuryPreRead =
+      treasuryPreSnap.val() && typeof treasuryPreSnap.val() === "object"
+        ? treasuryPreSnap.val()
+        : {};
 
-    stage = "transaction";
-    let exchangeResult = null;
+    stage = "debit-treasury-pmc";
+    let treasuryResult = null;
 
-    const txResult = await walletRef.transaction(current => {
+    const treasuryTx = await treasuryRef.transaction(current => {
       const baseCurrent =
-        current && typeof current === "object"
-          ? current
-          : (preRead && typeof preRead === "object" ? preRead : {});
-
-      const currentPi =
-        Number(
-          baseCurrent.balance != null
-            ? baseCurrent.balance
-            : (baseCurrent.piBalance != null ? baseCurrent.piBalance : 0)
-        ) || 0;
+        current && typeof current === "object" ? current : treasuryPreRead;
 
       const currentPmc = Math.floor(Number(baseCurrent.pmcBalance ?? 0) || 0);
-
       if (currentPmc < safePmc) {
         return;
       }
 
+      const newTreasuryPmcBalance = currentPmc - safePmc;
       const piAmount = safePmc / PMC_PER_PI;
-      const newPmcBalance = currentPmc - safePmc;
-      const newPiBalance = currentPi + piAmount;
 
-      exchangeResult = {
+      treasuryResult = {
         piAmount,
-        newPmcBalance,
-        newPiBalance,
-        oldPmcBalance: currentPmc,
-        oldPiBalance: currentPi
+        oldTreasuryPmcBalance: currentPmc,
+        newTreasuryPmcBalance
       };
 
       return {
         ...baseCurrent,
-        balance: newPiBalance,
-        piBalance: newPiBalance,
-        pmcBalance: newPmcBalance,
-        role: baseCurrent.role || "admin",
-        name: baseCurrent.name || "Ví phí hệ thống",
-        photo: baseCurrent.photo || "images/do_tuong.png",
+        pmcBalance: newTreasuryPmcBalance,
         updatedAt: Date.now()
       };
     });
 
-    if (!exchangeResult || !txResult?.committed) {
+    if (!treasuryResult || !treasuryTx?.committed) {
       return res.status(400).json({
         ok: false,
         error: "PMC phí hệ thống không đủ hoặc giao dịch không hợp lệ."
       });
     }
 
+    stage = "read-target-before";
+    const targetPreSnap = await targetRef.once("value");
+    const targetPreRead =
+      targetPreSnap.val() && typeof targetPreSnap.val() === "object"
+        ? targetPreSnap.val()
+        : {};
+
+    stage = "credit-player-pi";
+    let playerResult = null;
+
+    const playerTx = await targetRef.transaction(current => {
+      const baseCurrent =
+        current && typeof current === "object" ? current : targetPreRead;
+
+      const currentPi = readPiBalance(baseCurrent);
+      const newPlayerPiBalance = currentPi + treasuryResult.piAmount;
+
+      playerResult = {
+        oldPlayerPiBalance: currentPi,
+        newPlayerPiBalance
+      };
+
+      return {
+        ...baseCurrent,
+        balance: newPlayerPiBalance,
+        piBalance: newPlayerPiBalance,
+        updatedAt: Date.now()
+      };
+    });
+
+    if (!playerResult || !playerTx?.committed) {
+      stage = "rollback-treasury";
+      await treasuryRef.transaction(current => {
+        const baseCurrent =
+          current && typeof current === "object" ? current : treasuryPreRead;
+
+        const currentPmc = Math.floor(Number(baseCurrent.pmcBalance ?? 0) || 0);
+
+        return {
+          ...baseCurrent,
+          pmcBalance: currentPmc + safePmc,
+          updatedAt: Date.now()
+        };
+      });
+
+      return res.status(500).json({
+        ok: false,
+        error: "Cộng Pi vào tài khoản admin thất bại, đã hoàn PMC về ví phí."
+      });
+    }
+
     stage = "write-history";
     await db.ref("walletTransactions").push({
-      type: "admin_fee_pmc_to_pi",
-      walletKey: safeWalletKey,
+      type: "admin_fee_pmc_to_player_pi",
+      treasuryWalletKey,
+      targetWalletKey,
       pmcAmount: safePmc,
-      piAmount: exchangeResult.piAmount,
+      piAmount: treasuryResult.piAmount,
       rate: PMC_PER_PI,
       createdAt: Date.now(),
       status: "done",
-      byWalletKey: clientWalletKey
+      byWalletKey: clientWalletKeyRaw
     });
 
     await db.ref("adminTreasuryConversions").push({
-      type: "admin_fee_pmc_to_pi",
-      walletKey: safeWalletKey,
+      type: "admin_fee_pmc_to_player_pi",
+      treasuryWalletKey,
+      targetWalletKey,
       pmcAmount: safePmc,
-      piAmount: exchangeResult.piAmount,
-      oldPmcBalance: exchangeResult.oldPmcBalance,
-      oldPiBalance: exchangeResult.oldPiBalance,
-      newPmcBalance: exchangeResult.newPmcBalance,
-      newPiBalance: exchangeResult.newPiBalance,
+      piAmount: treasuryResult.piAmount,
+      oldTreasuryPmcBalance: treasuryResult.oldTreasuryPmcBalance,
+      newTreasuryPmcBalance: treasuryResult.newTreasuryPmcBalance,
+      oldPlayerPiBalance: playerResult.oldPlayerPiBalance,
+      newPlayerPiBalance: playerResult.newPlayerPiBalance,
       rate: PMC_PER_PI,
       createdAt: Date.now(),
       status: "done",
-      byWalletKey: clientWalletKey
+      byWalletKey: clientWalletKeyRaw
     });
 
     stage = "done";
     return res.status(200).json({
       ok: true,
-      walletKey: safeWalletKey,
+      treasuryWalletKey,
+      targetWalletKey,
       pmcAmount: safePmc,
-      piAmount: exchangeResult.piAmount,
-      newPmcBalance: exchangeResult.newPmcBalance,
-      newPiBalance: exchangeResult.newPiBalance
+      piAmount: treasuryResult.piAmount,
+      newTreasuryPmcBalance: treasuryResult.newTreasuryPmcBalance,
+      newPlayerPiBalance: playerResult.newPlayerPiBalance
     });
   } catch (err) {
     console.error("convert-fee-pmc-to-pi crash stage =", stage, err);
