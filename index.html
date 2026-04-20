@@ -7577,10 +7577,19 @@ async function confirmPmcToPiExchange() {
         }
 
         pmcDebugLog("API json =", data);
+        if (data?.debug) {
+    pmcDebugLog("API debug =", data.debug);
+}
 
         if (!res.ok || !data?.ok) {
-            throw new Error(data?.error || "Đổi PMC sang Pi thất bại.");
-        }
+    if (data?.debug) {
+        pmcDebugLog("SERVER DEBUG =", data.debug);
+    }
+    throw new Error(
+        (data?.error || "Đổi PMC sang Pi thất bại.") +
+        (data?.debug ? " | " + JSON.stringify(data.debug).slice(0, 300) : "")
+    );
+}
 
         if (typeof data.newPmcBalance === "number") {
             setPmcBalance(data.newPmcBalance);

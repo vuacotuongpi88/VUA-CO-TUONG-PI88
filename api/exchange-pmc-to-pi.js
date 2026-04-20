@@ -61,6 +61,11 @@ const db = getDatabase();
     let exchangeResult = null;
     let serverSeen = {
   currentPi: null,
+  currentPmc: null,
+  rawCurrent: null
+};
+    let serverSeen = {
+  currentPi: null,
   currentPmc: null
 };
     const txResult = await walletRef.transaction(current => {
@@ -68,10 +73,11 @@ const db = getDatabase();
 
       const currentPi = Number(safeCurrent.balance ?? 0) || 0;
       const currentPmc = Math.floor(Number(safeCurrent.pmcBalance ?? 0) || 0);
-      serverSeen = {
+     serverSeen = {
   currentPi,
-  currentPmc
-};
+  currentPmc,
+  rawCurrent: safeCurrent
+};;
       console.log("server currentPmc =", currentPmc);
       console.log("server safePmc =", safePmc);
       if (currentPmc < safePmc) {
@@ -112,7 +118,6 @@ const db = getDatabase();
     }
   });
 }
-
     stage = "write-history";
     await db.ref("walletTransactions").push({
       type: "pmc_to_pi",
