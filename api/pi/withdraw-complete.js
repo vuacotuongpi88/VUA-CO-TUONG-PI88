@@ -1,58 +1,3 @@
-const { getDatabase } = require("firebase-admin/database");
-const adminBundle = require("./_firebaseAdmin.js");
-
-const adminApp = adminBundle.app || adminBundle;
-
-function safeKey(value = "") {
-  return String(value || "").replace(/[.#$[\]/]/g, "_");
-}
-
-function readPiBalance(obj = {}) {
-  return Number(
-    obj.balance != null
-      ? obj.balance
-      : (obj.piBalance != null ? obj.piBalance : 0)
-  ) || 0;
-}
-
-async function runDbTransaction(ref, updater) {
-  return await new Promise((resolve, reject) => {
-    ref.transaction(
-      updater,
-      (error, committed, snapshot) => {
-        if (error) return reject(error);
-        resolve({ committed, snapshot });
-      },
-      false
-    );
-  });
-}
-
-async function parseJsonResponse(res) {
-  const raw = await res.text();
-  let data = {};
-  try {
-    data = raw ? JSON.parse(raw) : {};
-  } catch (_) {
-    data = { raw };
-  }
-  return data;
-}
-
-async function callPiComplete(apiKey, paymentId, txid) {
-  const res = await fetch(`https://api.minepi.com/v2/payments/${paymentId}/complete`, {
-    method: "POST",
-    headers: {
-      Authorization: `Key ${apiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ txid })
-  });
-
-  const data = await parseJsonResponse(res);
-  return { ok: res.ok, status: res.status, data };
-}
-
 module.exports = async function handler(req, res) {
   let stage = "start";
 
@@ -60,6 +5,83 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({
       ok: false,
       error: "Method not allowed"
+    });
+  }
+
+  function safeKey(value = "") {
+    return String(value || "").replace(/[.#$[\]/]/g, "_");
+  }
+
+  function readPiBalance(obj = {}) {
+    return Number(
+      obj.balance != null
+        ? obj.balance
+        : (obj.piBalance != null ? obj.piBalance : 0)
+    ) || 0;
+  }
+
+  async function runDbTransaction(ref, updater) {
+    return await new Promise((resolve, reject) => {
+      ref.transaction(
+        updater,
+        (error, committed, snapshot) => {
+          if (error) return reject(error);
+          resolve({ committed, snapshot });
+        },
+        false
+      );
+    });
+  }
+
+  async function parseJsonResponse(fetchRes) {
+    const raw = await fetchRes.text();
+    let data = {};
+    try {
+      data = raw ? JSON.parse(raw) : {};
+    } catch (_) {
+      data = { raw };
+    }
+    return data;
+  }
+
+  async function callPiComplete(piApiKey, paymentId, txid) {
+    const fetchRes = await fetch(`https://api.minepi.com/v2/payments/${paymentId}/complete`, {
+      method: "POST",
+      headers: {
+        Authorization: `Key ${piApiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ txid })
+    });
+
+    const data = await parseJsonResponse(fetchRes);
+    return { ok: fetchRes.ok, status: fetchRes.status, data };
+  }
+
+  function getRequestBody(req) {
+    if (!req.body) return {};
+    if (typeof req.body === "string") {
+      try {
+        return JSON.parse(req.body);
+      } catch (_) {
+        return {};
+      }
+    }
+    return req.body;
+  }
+
+  let getDatabase;
+  let adminApp;
+
+  try {
+    stage = "load-deps";
+    const adminBundle = require("../_firebaseAdmin.js");
+    ({ getDatabase } = require("firebase-admin/database"));
+    adminApp = adminBundle.app || adminBundle;
+  } catch (e) {
+    return res.status(500).json({
+      ok: false,
+      error: "load deps failed: " + (e?.message || String(e))
     });
   }
 
@@ -74,7 +96,8 @@ module.exports = async function handler(req, res) {
     }
 
     stage = "read-body";
-    const withdrawId = String(req.body?.withdrawId || "").trim();
+    const body = getRequestBody(req);
+    const withdrawId = String(body.withdrawId || "").trim();
 
     if (!withdrawId) {
       return res.status(400).json({
@@ -87,7 +110,7 @@ module.exports = async function handler(req, res) {
     const db = getDatabase(adminApp);
     const requestRef = db.ref("piWithdrawRequests/" + withdrawId);
     const snap = await requestRef.once("value");
-    const data = snap.val() && typeof snap.val() === "object" ? snap.val() : null;
+    const data = snap.val() && typeof data !== "string" ? snap.val() : null;
 
     if (!data) {
       return res.status(404).json({
@@ -100,6 +123,8 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({
         ok: true,
         withdrawId,
+        paymentId: data.paymentId || "",
+        txid: data.txid || "",
         newBalance: Number(data.newInternalBalance || 0)
       });
     }

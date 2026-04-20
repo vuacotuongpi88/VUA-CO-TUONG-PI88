@@ -1,80 +1,3 @@
-const { getDatabase } = require("firebase-admin/database");
-const StellarSdk = require("stellar-sdk");
-const adminBundle = require("./_firebaseAdmin.js");
-
-const adminApp = adminBundle.app || adminBundle;
-
-const MAX_WITHDRAW_PER_TX = 1000;
-const LOCK_TTL_MS = 2 * 60 * 1000;
-
-function safeKey(value = "") {
-  return String(value || "").replace(/[.#$[\]/]/g, "_");
-}
-
-function readPiBalance(obj = {}) {
-  return Number(
-    obj.balance != null
-      ? obj.balance
-      : (obj.piBalance != null ? obj.piBalance : 0)
-  ) || 0;
-}
-
-function nowMs() {
-  return Date.now();
-}
-
-async function runDbTransaction(ref, updater) {
-  return await new Promise((resolve, reject) => {
-    ref.transaction(
-      updater,
-      (error, committed, snapshot) => {
-        if (error) return reject(error);
-        resolve({ committed, snapshot });
-      },
-      false
-    );
-  });
-}
-
-async function parseJsonResponse(res) {
-  const raw = await res.text();
-  let data = {};
-  try {
-    data = raw ? JSON.parse(raw) : {};
-  } catch (_) {
-    data = { raw };
-  }
-  return data;
-}
-
-async function callPiCreatePayment(apiKey, body) {
-  const res = await fetch("https://api.minepi.com/v2/payments", {
-    method: "POST",
-    headers: {
-      Authorization: `Key ${apiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(body)
-  });
-
-  const data = await parseJsonResponse(res);
-  return { ok: res.ok, status: res.status, data };
-}
-
-async function callPiComplete(apiKey, paymentId, txid) {
-  const res = await fetch(`https://api.minepi.com/v2/payments/${paymentId}/complete`, {
-    method: "POST",
-    headers: {
-      Authorization: `Key ${apiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ txid })
-  });
-
-  const data = await parseJsonResponse(res);
-  return { ok: res.ok, status: res.status, data };
-}
-
 module.exports = async function handler(req, res) {
   let stage = "start";
 
@@ -82,6 +5,103 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({
       ok: false,
       error: "Method not allowed"
+    });
+  }
+
+  function safeKey(value = "") {
+    return String(value || "").replace(/[.#$[\]/]/g, "_");
+  }
+
+  function readPiBalance(obj = {}) {
+    return Number(
+      obj.balance != null
+        ? obj.balance
+        : (obj.piBalance != null ? obj.piBalance : 0)
+    ) || 0;
+  }
+
+  function nowMs() {
+    return Date.now();
+  }
+
+  async function runDbTransaction(ref, updater) {
+    return await new Promise((resolve, reject) => {
+      ref.transaction(
+        updater,
+        (error, committed, snapshot) => {
+          if (error) return reject(error);
+          resolve({ committed, snapshot });
+        },
+        false
+      );
+    });
+  }
+
+  async function parseJsonResponse(fetchRes) {
+    const raw = await fetchRes.text();
+    let data = {};
+    try {
+      data = raw ? JSON.parse(raw) : {};
+    } catch (_) {
+      data = { raw };
+    }
+    return data;
+  }
+
+  async function callPiCreatePayment(piApiKey, body) {
+    const fetchRes = await fetch("https://api.minepi.com/v2/payments", {
+      method: "POST",
+      headers: {
+        Authorization: `Key ${piApiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+
+    const data = await parseJsonResponse(fetchRes);
+    return { ok: fetchRes.ok, status: fetchRes.status, data };
+  }
+
+  async function callPiComplete(piApiKey, paymentId, txid) {
+    const fetchRes = await fetch(`https://api.minepi.com/v2/payments/${paymentId}/complete`, {
+      method: "POST",
+      headers: {
+        Authorization: `Key ${piApiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ txid })
+    });
+
+    const data = await parseJsonResponse(fetchRes);
+    return { ok: fetchRes.ok, status: fetchRes.status, data };
+  }
+
+  function getRequestBody(req) {
+    if (!req.body) return {};
+    if (typeof req.body === "string") {
+      try {
+        return JSON.parse(req.body);
+      } catch (_) {
+        return {};
+      }
+    }
+    return req.body;
+  }
+
+  let getDatabase;
+  let adminApp;
+  let StellarSdk;
+
+  try {
+    stage = "load-deps";
+    const adminBundle = require("../_firebaseAdmin.js");
+    ({ getDatabase } = require("firebase-admin/database"));
+    StellarSdk = require("stellar-sdk");
+    adminApp = adminBundle.app || adminBundle;
+  } catch (e) {
+    return res.status(500).json({
+      ok: false,
+      error: "load deps failed: " + (e?.message || String(e))
     });
   }
 
@@ -104,14 +124,14 @@ module.exports = async function handler(req, res) {
     }
 
     stage = "read-body";
-    const amount = Number(req.body?.amount || 0);
-    const piUid = String(req.body?.piUid || "").trim();
-    const piUsername = String(req.body?.piUsername || "").trim();
-    const walletKeyRaw = String(
-      req.headers["x-wallet-key"] ||
-      req.body?.walletKey ||
-      ""
-    ).trim();
+    const body = getRequestBody(req);
+    const amount = Number(body.amount || 0);
+    const piUid = String(body.piUid || "").trim();
+    const piUsername = String(body.piUsername || "").trim();
+    const walletKeyRaw = String(req.headers["x-wallet-key"] || body.walletKey || "").trim();
+
+    const MAX_WITHDRAW_PER_TX = 1000;
+    const LOCK_TTL_MS = 2 * 60 * 1000;
 
     if (!walletKeyRaw) {
       return res.status(401).json({ ok: false, error: "Thiếu walletKey." });
