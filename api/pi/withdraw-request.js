@@ -233,16 +233,18 @@ module.exports = async function handler(req, res) {
 
       stage = "pi-create-payment";
       const createResult = await callPiCreatePayment(PI_API_KEY, {
-        uid: piUid,
-        amount,
-        memo: `Rut ${amount.toFixed(2)} Pi tu app`,
-        metadata: {
-          kind: "wallet_withdraw",
-          withdrawId,
-          walletKey: safeWalletKey,
-          piUsername
-        }
-      });
+  payment: {
+    uid: piUid,
+    amount,
+    memo: `Rut ${amount.toFixed(2)} Pi tu app`,
+    metadata: {
+      kind: "wallet_withdraw",
+      withdrawId,
+      walletKey: safeWalletKey,
+      piUsername
+    }
+  }
+});
 
       if (!createResult.ok) {
         await requestRef.update({
