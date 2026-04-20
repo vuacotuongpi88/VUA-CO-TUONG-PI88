@@ -1,4 +1,4 @@
-const { initializeApp, cert, getApps } = require("firebase-admin/app");
+const { initializeApp, cert, getApps, getApp } = require("firebase-admin/app");
 
 const projectId = process.env.FIREBASE_PROJECT_ID || "";
 const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || "";
@@ -17,15 +17,15 @@ if (!projectId || !clientEmail || !privateKey || !databaseURL) {
   );
 }
 
-if (!getApps().length) {
-  initializeApp({
-    credential: cert({
-      projectId,
-      clientEmail,
-      privateKey,
-    }),
-    databaseURL,
-  });
-}
+const app = getApps().length
+  ? getApp()
+  : initializeApp({
+      credential: cert({
+        projectId,
+        clientEmail,
+        privateKey,
+      }),
+      databaseURL,
+    });
 
-module.exports = true;
+module.exports = { app, databaseURL };

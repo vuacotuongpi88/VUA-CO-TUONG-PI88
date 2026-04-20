@@ -14,16 +14,22 @@ module.exports = async function handler(req, res) {
 
 let firebaseAdmin;
 let getDatabase;
+let adminApp;
+let adminDatabaseURL;
 
 try {
-  require("./_firebaseAdmin.js");
+  const adminBundle = require("./_firebaseAdmin.js");
   ({ getDatabase } = require("firebase-admin/database"));
+  adminApp = adminBundle.app;
+  adminDatabaseURL = adminBundle.databaseURL;
+
   console.log("firebaseAdmin loaded OK");
+  console.log("adminDatabaseURL =", adminDatabaseURL);
 } catch (e) {
   console.error("load _firebaseAdmin failed =", e);
   return res.status(500).json({
     ok: false,
-    error: "load _firebaseAdmin failed: " + (e?.message || String(e)),
+    error: "load _firebaseAdmin failed: " + (e?.message || String(e))
   });
 }
   try {
@@ -48,7 +54,7 @@ try {
     }
 
     stage = "get-db";
-    const db = getDatabase();
+    const db = getDatabase(adminApp);
 
     stage = "build-wallet-path";
     const safeWalletKey = String(walletKey || "").replace(/[.#$\[\]\/]/g, "_");
