@@ -4504,7 +4504,8 @@ function logout() {
     localStorage.removeItem("user-name-display");
     localStorage.removeItem("user-photo");
     localStorage.removeItem("currentUsername");
-
+    localStorage.removeItem(PI_VERIFIED_UID_KEY);
+    localStorage.removeItem(PI_VERIFIED_USERNAME_KEY);
     auth.signOut()
         .then(() => location.reload())
         .catch(err => {
@@ -7067,29 +7068,22 @@ async function submitWithdrawLock() {
 }
 
 async function processWithdraw() {
-    if (!hasWithdrawPassword()) {
-        const created = await requestWithdrawLock("create");
-        if (!created) return;
-    }
-
-    const unlocked = await requestWithdrawLock("verify");
-    if (!unlocked) return;
-
     const state = getWithdrawState();
     if (state.count >= MAX_WITHDRAW_PER_DAY) {
         alert("Hôm nay đã rút đủ 5 lần rồi. Mai quay lại nhé!");
         return;
     }
 
-   const amount = await openWithdrawAmount(MAX_WITHDRAW_PER_DAY - state.count);
-if (amount === null) return;
+    const amount = await openWithdrawAmount(MAX_WITHDRAW_PER_DAY - state.count);
+    if (amount === null) return;
+
     if (!Number.isFinite(amount) || amount <= 0) {
         alert("Số Pi rút không hợp lệ.");
         return;
     }
 
     if (amount > MAX_WITHDRAW_PER_TX) {
-        alert("Mỗi lần chỉ được rút tối đa 1000 Pi.");
+        alert(`Mỗi lần chỉ được rút tối đa ${MAX_WITHDRAW_PER_TX} Pi.`);
         return;
     }
 
@@ -7099,20 +7093,68 @@ if (amount === null) return;
         return;
     }
 
-    state.count += 1;
-    state.history.push({
-        amount,
-        time: new Date().toISOString()
-    });
-    saveWithdrawState(state);
+    const walletKey = makeWalletDbKey();
+    const piUid = getVerifiedPiUid();
+    const piUsername = getVerifiedPiUsername() || String(localStorage.getItem("pi-user-name") || "").trim();
 
-    setPiBalance(currentBalance - amount);
+    if (!piUid) {
+    alert("Chưa có verified Pi uid. Mày phải đăng nhập lại bằng Pi Browser để app verify qua /api/pi/me.");
+    return;
+}
 
-    alert(
-        `Rút thành công ${amount.toFixed(2)} Pi.\n` +
-        `Đã rút hôm nay: ${state.count}/${MAX_WITHDRAW_PER_DAY} lượt.\n` +
-        `Số dư còn lại: ${(currentBalance - amount).toFixed(2)} Pi.`
-    );
+    try {
+        const res = await fetch("/api/pi/withdraw-request?v=" + Date.now(), {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "x-wallet-key": walletKey
+            },
+            body: JSON.stringify({
+                amount,
+                piUid,
+                piUsername,
+                walletKey
+            })
+        });
+
+        const raw = await res.text();
+        let data = {};
+        try {
+            data = raw ? JSON.parse(raw) : {};
+        } catch (_) {
+            throw new Error("API rút Pi trả dữ liệu không hợp lệ.");
+        }
+
+        if (!res.ok || !data?.ok) {
+            throw new Error(data?.error || "Rút Pi thất bại.");
+        }
+
+        state.count += 1;
+        state.history.push({
+            amount,
+            time: new Date().toISOString(),
+            withdrawId: data.withdrawId || "",
+            paymentId: data.paymentId || "",
+            txid: data.txid || ""
+        });
+        saveWithdrawState(state);
+
+        if (typeof data.newBalance === "number") {
+            setPiBalance(data.newBalance);
+        } else {
+            await loadWalletBalance().catch(() => {});
+        }
+
+        alert(
+            `Rút Pi thành công!\n` +
+            `Số Pi rút: ${amount.toFixed(2)} Pi\n` +
+            `paymentId: ${data.paymentId || "N/A"}\n` +
+            `txid: ${data.txid || "N/A"}\n` +
+            `Đã rút hôm nay: ${state.count}/${MAX_WITHDRAW_PER_DAY} lượt.`
+        );
+    } catch (err) {
+        alert("Rút Pi lỗi: " + (err.message || "Không rõ lỗi"));
+    }
 }
 
 async function openWallet(type) {
@@ -9280,7 +9322,21 @@ document.getElementById("withdraw-lock-confirm")?.addEventListener("keypress", f
     if (e.key === "Enter") submitWithdrawLock();
 });
 let piAuth = null;
+const PI_VERIFIED_UID_KEY = "pi-verified-uid";
+const PI_VERIFIED_USERNAME_KEY = "pi-verified-username";
 
+function saveVerifiedPiUser(uid, username) {
+    localStorage.setItem(PI_VERIFIED_UID_KEY, String(uid || ""));
+    localStorage.setItem(PI_VERIFIED_USERNAME_KEY, String(username || ""));
+}
+
+function getVerifiedPiUid() {
+    return String(localStorage.getItem(PI_VERIFIED_UID_KEY) || "").trim();
+}
+
+function getVerifiedPiUsername() {
+    return String(localStorage.getItem(PI_VERIFIED_USERNAME_KEY) || "").trim();
+}
 async function onIncompletePaymentFound(payment) {
   try {
     if (payment?.identifier && payment?.transaction?.txid) {
@@ -9322,79 +9378,62 @@ ensureFriendProfileSynced()
     }
 }
 
-async function startPiDeposit(amount = 1) {
-  try {
-    if (!window.Pi) {
-      alert("Nạp Pi chỉ chạy trong Pi Browser.");
-      return;
-    }
-    if (!piAuth) {
-      const auth = await loginPi();
-      if (!auth) return;
-    }
-
-    const napSo = Number(amount);
-    if (!Number.isFinite(napSo) || napSo <= 0) {
-      alert("Số Pi nạp không hợp lệ.");
-      return;
-    }
-
-    window.Pi.createPayment(
-      {
-        amount: napSo,
-        memo: `Nạp ${napSo} Pi vào game`,
-        metadata: {
-          type: "deposit",
-          amount: napSo,
-          time: Date.now()
+async function loginPi() {
+    try {
+        if (!window.Pi) {
+            alert("Nút này chỉ chạy trong Pi Browser.");
+            return null;
         }
-      },
-      {
-        onReadyForServerApproval: async function (paymentId) {
-          const res = await fetch("/api/pi/approve", {
+
+        const scopes = ["username", "payments", "wallet_address"];
+        piAuth = await window.Pi.authenticate(scopes, onIncompletePaymentFound);
+
+        const accessToken = String(piAuth?.accessToken || "").trim();
+        if (!accessToken) {
+            throw new Error("Pi authenticate không trả accessToken.");
+        }
+
+        const meRes = await fetch("/api/pi/me", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ paymentId })
-          });
+            body: JSON.stringify({ accessToken })
+        });
 
-          const data = await res.json();
-          if (!res.ok || !data.ok) {
-            throw new Error("Approve payment thất bại");
-          }
-        },
-
-        onReadyForServerCompletion: async function (paymentId, txid) {
-          const res = await fetch("/api/pi/complete", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ paymentId, txid })
-          });
-
-          const data = await res.json();
-          if (!res.ok || !data.ok) {
-            throw new Error("Complete payment thất bại");
-          }
-
-          const currentBalance = getPiBalance();
-          setPiBalance(currentBalance + napSo);
-
-          alert(`Nạp thành công ${napSo} Pi test.`);
-        },
-
-        onCancel: function () {
-          alert("Người chơi đã hủy nạp Pi.");
-        },
-
-        onError: function (error) {
-          console.error("Pi payment lỗi:", error);
-          alert("Nạp Pi lỗi.");
+        const meData = await meRes.json();
+        if (!meRes.ok || !meData?.ok) {
+            throw new Error(meData?.error || "Không verify được Pi user với /me");
         }
-      }
-    );
-  } catch (err) {
-    console.error(err);
-    alert(err.message || "Không nạp Pi được.");
-  }
+
+        const verifiedUid = String(meData?.user?.uid || "").trim();
+        const verifiedUsername =
+            String(meData?.user?.username || "").trim() ||
+            String(piAuth?.user?.username || "").trim() ||
+            "Pi User";
+
+        if (!verifiedUid) {
+            throw new Error("Pi /me không trả verified uid.");
+        }
+
+        saveVerifiedPiUser(verifiedUid, verifiedUsername);
+        savePiUser(verifiedUsername);
+        applyLoggedInUI(verifiedUsername, "images/do_tuong.png");
+
+        ensureFriendProfileSynced()
+            .then(() => bindFriendSystem())
+            .catch(err => console.error("Lỗi sync bạn bè sau login Pi:", err));
+
+        return {
+            ...piAuth,
+            verifiedUser: {
+                uid: verifiedUid,
+                username: verifiedUsername
+            }
+        };
+    } catch (err) {
+        console.error("Pi authenticate lỗi:", err);
+        alert("Không đăng nhập Pi được: " + (err.message || err));
+        return null;
+    }
 }
 document.addEventListener("click", function(e) {
     const menu = document.getElementById("emoji-menu");
