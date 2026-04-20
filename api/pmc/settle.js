@@ -32,16 +32,25 @@ async function adjustPmcWalletByKey(db, walletKey, delta, profile = {}) {
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({ ok: false, error: "method_not_allowed" });
+    return res.status(405).json({
+      ok: false,
+      error: "method_not_allowed"
+    });
   }
 
   try {
     const body =
-      typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+      typeof req.body === "string"
+        ? JSON.parse(req.body || "{}")
+        : (req.body || {});
+
     const roomId = String(body.roomId || "").trim();
 
     if (!roomId) {
-      return res.status(400).json({ ok: false, error: "missing_roomId" });
+      return res.status(400).json({
+        ok: false,
+        error: "missing_roomId"
+      });
     }
 
     const db = admin.database();
@@ -51,114 +60,189 @@ module.exports = async function handler(req, res) {
     const roomSnap = await roomRef.once("value");
     const room = roomSnap.val() || {};
 
-    const winner = room.winner;
+    const winnerRaw = String(room.winner || "").trim().toLowerCase();
     const stake = Math.max(0, Math.floor(Number(room.stakePMC || 0) || 0));
+
     const doPlayer = room.players?.do || {};
     const denPlayer = room.players?.den || {};
 
-    if (!winner) {
-      return res.status(400).json({ ok: false, error: "winner_missing" });
+    const doWalletKey = String(doPlayer.walletKey || doPlayer.uid || "").trim();
+    const denWalletKey = String(denPlayer.walletKey || denPlayer.uid || "").trim();
+
+    if (!winnerRaw) {
+      return res.status(400).json({
+        ok: false,
+        error: "missing_winner"
+      });
     }
 
     if (!stake) {
-      return res.status(400).json({ ok: false, error: "stake_zero" });
+      return res.status(400).json({
+        ok: false,
+        error: "invalid_stakePMC"
+      });
     }
 
-    const lock = await settlementRef.transaction((current) => {
-      if (current && (current.done || current.processing)) return;
+    if (!doWalletKey || !denWalletKey) {
+      return res.status(400).json({
+        ok: false,
+        error: "missing_player_walletKey"
+      });
+    }
+
+    // khóa settle để không chia tiền 2 lần
+    const lockResult = await settlementRef.transaction(current => {
+      if (current?.done || current?.locking) return;
       return {
-        ...(current || {}),
-        processing: true,
+        locking: true,
         done: false,
-        paid: false,
-        winner,
-        stakePMC: stake,
-        at: Date.now(),
-        by: "api-server",
+        at: Date.now()
       };
     });
 
-    if (!lock.committed) {
+    if (!lockResult.committed) {
       return res.status(200).json({
         ok: true,
-        skipped: true,
-        reason: "already_processed",
+        alreadySettled: true
       });
     }
 
-    try {
-      if (winner === "hoa") {
-        if (!doPlayer.walletKey || !denPlayer.walletKey) {
-          throw new Error("draw_missing_wallet");
-        }
+    // HÒA => HOÀN ĐỦ, KHÔNG ĂN PHÍ
+    if (winnerRaw === "hoa" || winnerRaw === "draw") {
+      const doAfter = await adjustPmcWalletByKey(db, doWalletKey, stake, {
+        name: doPlayer.name || doPlayer.usernameNorm || doPlayer.username || "Người chơi đỏ",
+        photo: doPlayer.photo || "images/do_tuong.png"
+      });
 
-        const paidDo = await adjustPmcWalletByKey(db, doPlayer.walletKey, stake, {
-          name: doPlayer.name,
-          photo: doPlayer.photo,
-        });
+      const denAfter = await adjustPmcWalletByKey(db, denWalletKey, stake, {
+        name: denPlayer.name || denPlayer.usernameNorm || denPlayer.username || "Người chơi đen",
+        photo: denPlayer.photo || "images/do_tuong.png"
+      });
 
-        const paidDen = await adjustPmcWalletByKey(db, denPlayer.walletKey, stake, {
-          name: denPlayer.name,
-          photo: denPlayer.photo,
-        });
-
-        if (!paidDo || !paidDen) {
-          throw new Error("draw_refund_failed");
-        }
-      } else {
-        const winnerPlayer = winner === "do" ? doPlayer : denPlayer;
-
-        if (!winnerPlayer.walletKey) {
-          throw new Error("winner_wallet_missing");
-        }
-
-        const paid = await adjustPmcWalletByKey(
-          db,
-          winnerPlayer.walletKey,
-          stake * 2,
-          {
-            name: winnerPlayer.name,
-            photo: winnerPlayer.photo,
-          }
-        );
-
-        if (!paid) {
-          throw new Error("winner_payout_failed");
-        }
-      }
-
-      await settlementRef.update({
-        processing: false,
+      await settlementRef.set({
         done: true,
-        paid: true,
-        paidAt: Date.now(),
-        winner,
-        stakePMC: stake,
-        by: "api-server",
+        type: "draw_refund",
+        refundedEach: stake,
+        feePmc: 0,
+        at: Date.now()
       });
 
-      return res.status(200).json({ ok: true, paid: true, roomId, winner, stake });
-    } catch (err) {
-      await settlementRef.update({
-        processing: false,
-        done: false,
-        paid: false,
-        error: String(err?.message || err || "settle_failed"),
-        errorAt: Date.now(),
-        winner,
-        stakePMC: stake,
-        by: "api-server",
+      await db.ref("walletTransactions").push({
+        type: "match_draw_refund",
+        roomId,
+        refundedEach: stake,
+        doWalletKey: safeWalletKey(doWalletKey),
+        denWalletKey: safeWalletKey(denWalletKey),
+        createdAt: Date.now(),
+        status: "done"
       });
 
-      return res.status(500).json({
-        ok: false,
-        error: String(err?.message || err || "settle_failed"),
+      return res.status(200).json({
+        ok: true,
+        type: "draw_refund",
+        refundedEach: stake,
+        doPmcBalance: doAfter?.pmcBalance ?? null,
+        denPmcBalance: denAfter?.pmcBalance ?? null
       });
     }
+
+    let winnerWalletKey = "";
+    let winnerProfile = {};
+
+    if (winnerRaw === "do" || winnerRaw === "red") {
+      winnerWalletKey = doWalletKey;
+      winnerProfile = {
+        name: doPlayer.name || doPlayer.usernameNorm || doPlayer.username || "Người chơi đỏ",
+        photo: doPlayer.photo || "images/do_tuong.png"
+      };
+    } else if (winnerRaw === "den" || winnerRaw === "black") {
+      winnerWalletKey = denWalletKey;
+      winnerProfile = {
+        name: denPlayer.name || denPlayer.usernameNorm || denPlayer.username || "Người chơi đen",
+        photo: denPlayer.photo || "images/do_tuong.png"
+      };
+    } else {
+      await settlementRef.remove();
+      return res.status(400).json({
+        ok: false,
+        error: "invalid_winner_value"
+      });
+    }
+
+    // THẮNG => ĂN PHÍ 2% TỪ TỔNG POT
+    const grossPot = stake * 2;
+    const feePmc = Math.floor(grossPot * 0.02);
+    const winnerReceivePmc = grossPot - feePmc;
+
+    const winnerAfter = await adjustPmcWalletByKey(
+      db,
+      winnerWalletKey,
+      winnerReceivePmc,
+      winnerProfile
+    );
+
+    const adminAfter = await adjustPmcWalletByKey(
+      db,
+      "pi_admin_master",
+      feePmc,
+      {
+        name: "Ví phí hệ thống",
+        photo: "images/do_tuong.png"
+      }
+    );
+
+    await settlementRef.set({
+      done: true,
+      type: "winner_settle",
+      grossPot,
+      feePmc,
+      winnerReceivePmc,
+      winnerWalletKey: safeWalletKey(winnerWalletKey),
+      adminWalletKey: "pi_admin_master",
+      at: Date.now()
+    });
+
+    await db.ref("matchFeeTransactions").push({
+      roomId,
+      type: "match_fee_pmc",
+      grossPot,
+      feeRate: 0.02,
+      feePmc,
+      winnerReceivePmc,
+      winnerWalletKey: safeWalletKey(winnerWalletKey),
+      adminWalletKey: "pi_admin_master",
+      createdAt: Date.now(),
+      status: "done"
+    });
+
+    await db.ref("walletTransactions").push({
+      type: "match_winner_settle",
+      roomId,
+      grossPot,
+      feePmc,
+      winnerReceivePmc,
+      winnerWalletKey: safeWalletKey(winnerWalletKey),
+      adminWalletKey: "pi_admin_master",
+      createdAt: Date.now(),
+      status: "done"
+    });
+
+    return res.status(200).json({
+      ok: true,
+      type: "winner_settle",
+      grossPot,
+      feePmc,
+      winnerReceivePmc,
+      winnerWalletKey: safeWalletKey(winnerWalletKey),
+      adminWalletKey: "pi_admin_master",
+      winnerPmcBalance: winnerAfter?.pmcBalance ?? null,
+      adminPmcBalance: adminAfter?.pmcBalance ?? null
+    });
   } catch (err) {
+    console.error("pmc settle error =", err);
     return res.status(500).json({
       ok: false,
-      error: String(err?.message || err || "server_error"),
+      error: err?.message || "server_error"
     });
   }
 };
