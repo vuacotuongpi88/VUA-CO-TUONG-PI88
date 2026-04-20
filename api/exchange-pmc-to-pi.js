@@ -16,14 +16,14 @@ let firebaseAdmin;
 let getDatabase;
 
 try {
-  firebaseAdmin = require("./_firebaseAdmin.js");
+  require("./_firebaseAdmin.js");
   ({ getDatabase } = require("firebase-admin/database"));
   console.log("firebaseAdmin loaded OK");
 } catch (e) {
   console.error("load _firebaseAdmin failed =", e);
   return res.status(500).json({
     ok: false,
-    error: "load _firebaseAdmin failed: " + (e?.message || String(e))
+    error: "load _firebaseAdmin failed: " + (e?.message || String(e)),
   });
 }
   try {
