@@ -1,5 +1,6 @@
 const PMC_PER_PI = 1000;
 const ADMIN_WALLET_KEY = "pi_admin_master";
+const ALLOW_FEE_FRACTION_TEST = true; // test tạm, xong nhớ đổi lại false
 
 module.exports = async function handler(req, res) {
   let stage = "start";
@@ -120,12 +121,12 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    if (safePmc % PMC_PER_PI !== 0) {
-      return res.status(400).json({
-        ok: false,
-        error: `PMC phải chia hết cho ${PMC_PER_PI}.`
-      });
-    }
+    if (!ALLOW_FEE_FRACTION_TEST && safePmc % PMC_PER_PI !== 0) {
+  return res.status(400).json({
+    ok: false,
+    error: `PMC phải chia hết cho ${PMC_PER_PI}.`
+  });
+}
 
     stage = "pre-read-wallet";
     const preSnap = await walletRef.once("value");

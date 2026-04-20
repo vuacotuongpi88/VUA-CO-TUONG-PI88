@@ -7807,10 +7807,12 @@ async function confirmAdminFeePmcToPi() {
         return;
     }
 
-    if (pmcAmount % PMC_RATE !== 0) {
-        alert(`PMC phải chia hết cho ${PMC_RATE}.`);
-        return;
-    }
+    const ALLOW_FEE_FRACTION_TEST = true; // test tạm, xong nhớ đổi lại false
+
+if (!ALLOW_FEE_FRACTION_TEST && pmcAmount % PMC_RATE !== 0) {
+    alert(`PMC phải chia hết cho ${PMC_RATE}.`);
+    return;
+}
 
     try {
         const btns = document.querySelectorAll("#admin-fee-wallet-modal button");
@@ -9413,7 +9415,7 @@ document.addEventListener("click", function(e) {
 
             <div class="pmc-note">
                 Ví này là ví hệ thống ăn phí trận thắng.<br>
-                Tỷ lệ đổi: <span id="admin-fee-rate-label">1,000 PMC = 1 Pi</span>
+                Tỷ lệ đổi: <span id="admin-fee-rate-label">1,000 PMC = 1 Pi (đang mở test đổi lẻ)</span>
             </div>
 
             <input
