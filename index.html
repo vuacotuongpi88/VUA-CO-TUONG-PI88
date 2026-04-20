@@ -3593,7 +3593,7 @@ margin-bottom: 14px;
 </script>
 </head>
 <body>
- <div id="build-stamp" style="position:fixed;left:8px;bottom:8px;z-index:999999;background:rgba(0,0,0,.88);color:#ffeaa7;padding:4px 8px;border:1px solid #55efc4;border-radius:8px;font:700 12px Arial">BUILD PMC-FEE V10</div>   
+  <div id="build-stamp" style="position:fixed;top:6px;left:50%;transform:translateX(-50%);z-index:999999;pointer-events:none;background:rgba(0,0,0,.55);color:#ffeaa7;padding:2px 6px;border:1px solid rgba(85,239,196,.7);border-radius:999px;font:700 10px Arial">BUILD PMC-FEE V10</div>  
 <div id="edit-profile-modal" class="modal" style="display:none;">
     <div class="modal-content">
         <span class="close" onclick="closeEditProfile()">&times;</span>
@@ -6722,13 +6722,7 @@ if (!winLock.committed) {
     return;
 }
 
-const totalPot = stake * 2;
-const feePMC = Math.max(0, Math.floor(totalPot * 0.02));
-const winnerReceivePMC = totalPot - feePMC;
-const adminWalletKey = "pi_admin_master";
-
-// 1) cộng cho winner sau khi trừ phí
-const paid = await adjustPmcWalletByKey(myWalletKey, winnerReceivePMC, myProfile);
+const paid = await adjustPmcWalletByKey(myWalletKey, stake * 2, myProfile);
 
 if (paid == null) {
     await winnerPaidRef.update({
@@ -6740,57 +6734,16 @@ if (paid == null) {
     alert(
         "SETTLE FAIL: cộng ví bên thắng thất bại\n" +
         "wallet: " + myWalletKey + "\n" +
-        "winnerReceivePMC: " + winnerReceivePMC
+        "stake*2: " + (stake * 2)
     );
     return;
-}
-
-// 2) cộng phí vào ví admin nội bộ
-let adminPaid = null;
-
-if (feePMC > 0) {
-    adminPaid = await adjustPmcWalletByKey(adminWalletKey, feePMC, {
-        name: "Ví phí hệ thống",
-        photo: "images/do_tuong.png"
-    });
-
-    if (adminPaid == null) {
-        await winnerPaidRef.update({
-            done: false,
-            error: "admin_fee_credit_failed",
-            errorAt: Date.now()
-        });
-
-        alert(
-            "SETTLE FAIL: cộng phí về ví admin thất bại\n" +
-            "adminWalletKey: " + adminWalletKey + "\n" +
-            "feePMC: " + feePMC
-        );
-        return;
-    }
-
-    await db.ref("walletTransactions").push({
-        type: "match_fee_credit",
-        roomId,
-        walletKey: adminWalletKey,
-        feePMC,
-        winnerWalletKey: myWalletKey,
-        stakePMC: stake,
-        totalPot,
-        createdAt: Date.now(),
-        status: "done"
-    });
 }
 
 await db.ref(`matches/${roomId}/settlement`).update({
     paid: true,
     paidAt: Date.now(),
     winner: room.winner,
-    stakePMC: stake,
-    totalPot,
-    feePMC,
-    winnerReceivePMC,
-    adminWalletKey
+    stakePMC: stake
 });
 
 await loadWalletBalance().catch(() => {});
