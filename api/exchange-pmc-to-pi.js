@@ -45,7 +45,8 @@ try {
     }
 
     stage = "get-db";
-    const db = firebaseAdmin.database();
+    const { getDatabase } = await import("firebase-admin/database");
+const db = getDatabase();
 
     stage = "build-wallet-path";
     const safeWalletKey = String(walletKey || "").replace(/[.#$\[\]\/]/g, "_");
