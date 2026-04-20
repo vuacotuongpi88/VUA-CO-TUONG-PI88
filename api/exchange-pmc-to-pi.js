@@ -66,10 +66,6 @@ try {
   currentPmc: null,
   rawCurrent: null
 };
-    let serverSeen = {
-  currentPi: null,
-  currentPmc: null
-};
     const txResult = await walletRef.transaction(current => {
       const safeCurrent = current && typeof current === "object" ? current : {};
 
