@@ -1,6 +1,6 @@
 const PMC_PER_PI = 1000;
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   console.log("exchange-pmc-to-pi HIT", req.method);
   let stage = "start";
 
@@ -12,9 +12,12 @@ export default async function handler(req, res) {
   }
 let firebaseAdmin;
 
+let firebaseAdmin;
+let getDatabase;
+
 try {
- const mod = await import("./_firebaseAdmin.js");
-  firebaseAdmin = mod.default || mod;
+  firebaseAdmin = require("./_firebaseAdmin.js");
+  ({ getDatabase } = require("firebase-admin/database"));
   console.log("firebaseAdmin loaded OK");
 } catch (e) {
   console.error("load _firebaseAdmin failed =", e);
@@ -45,8 +48,7 @@ try {
     }
 
     stage = "get-db";
-    const { getDatabase } = await import("firebase-admin/database");
-const db = getDatabase();
+    const db = getDatabase();
 
     stage = "build-wallet-path";
     const safeWalletKey = String(walletKey || "").replace(/[.#$\[\]\/]/g, "_");
