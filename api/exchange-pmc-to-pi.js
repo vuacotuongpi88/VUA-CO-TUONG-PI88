@@ -10,7 +10,7 @@ module.exports = async function handler(req, res) {
       error: "Method not allowed"
     });
   }
-let firebaseAdmin;
+
 
 let firebaseAdmin;
 let getDatabase;

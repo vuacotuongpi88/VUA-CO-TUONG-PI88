@@ -1,4 +1,4 @@
-const admin = require("firebase-admin");
+const admin = require("./_firebaseAdmin.js")
 
 const projectId = process.env.FIREBASE_PROJECT_ID || "";
 const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || "";
