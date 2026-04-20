@@ -6722,7 +6722,13 @@ if (!winLock.committed) {
     return;
 }
 
-const paid = await adjustPmcWalletByKey(myWalletKey, stake * 2, myProfile);
+const totalPot = stake * 2;
+const feePMC = Math.max(0, Math.floor(totalPot * 0.02));
+const winnerReceivePMC = totalPot - feePMC;
+const adminWalletKey = "pi_admin_master";
+
+// 1) cộng cho winner sau khi trừ phí
+const paid = await adjustPmcWalletByKey(myWalletKey, winnerReceivePMC, myProfile);
 
 if (paid == null) {
     await winnerPaidRef.update({
@@ -6734,16 +6740,57 @@ if (paid == null) {
     alert(
         "SETTLE FAIL: cộng ví bên thắng thất bại\n" +
         "wallet: " + myWalletKey + "\n" +
-        "stake*2: " + (stake * 2)
+        "winnerReceivePMC: " + winnerReceivePMC
     );
     return;
+}
+
+// 2) cộng phí vào ví admin nội bộ
+let adminPaid = null;
+
+if (feePMC > 0) {
+    adminPaid = await adjustPmcWalletByKey(adminWalletKey, feePMC, {
+        name: "Ví phí hệ thống",
+        photo: "images/do_tuong.png"
+    });
+
+    if (adminPaid == null) {
+        await winnerPaidRef.update({
+            done: false,
+            error: "admin_fee_credit_failed",
+            errorAt: Date.now()
+        });
+
+        alert(
+            "SETTLE FAIL: cộng phí về ví admin thất bại\n" +
+            "adminWalletKey: " + adminWalletKey + "\n" +
+            "feePMC: " + feePMC
+        );
+        return;
+    }
+
+    await db.ref("walletTransactions").push({
+        type: "match_fee_credit",
+        roomId,
+        walletKey: adminWalletKey,
+        feePMC,
+        winnerWalletKey: myWalletKey,
+        stakePMC: stake,
+        totalPot,
+        createdAt: Date.now(),
+        status: "done"
+    });
 }
 
 await db.ref(`matches/${roomId}/settlement`).update({
     paid: true,
     paidAt: Date.now(),
     winner: room.winner,
-    stakePMC: stake
+    stakePMC: stake,
+    totalPot,
+    feePMC,
+    winnerReceivePMC,
+    adminWalletKey
 });
 
 await loadWalletBalance().catch(() => {});
