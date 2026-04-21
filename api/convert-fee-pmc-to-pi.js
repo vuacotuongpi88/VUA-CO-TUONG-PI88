@@ -89,7 +89,19 @@ try {
 
   if (req.method === "GET") {
   stage = "get-balances";
-
+return res.status(200).json({
+  ok: true,
+  systemWalletKey: ADMIN_WALLET_KEY,
+  currentAdminWalletKey,
+  pmcBalance: Math.max(0, Math.floor(Number(systemWallet.pmcBalance || 0) || 0)),
+  piBalance: Number(
+    adminWallet.balance != null
+      ? adminWallet.balance
+      : (adminWallet.piBalance || 0)
+  ) || 0,
+  debugDatabaseUrl: process.env.FIREBASE_DATABASE_URL || "",
+  debugSystemWallet: systemWallet
+});
   const systemWalletKey = safeKey(ADMIN_WALLET_KEY);
   const currentAdminWalletKey = safeKey(
     req.headers["x-wallet-key"] || ADMIN_WALLET_KEY
