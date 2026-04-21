@@ -7710,60 +7710,70 @@ function previewAdminFeePmcToPi() {
 }
 
 async function refreshAdminFeeTreasury() {
-    const box = document.getElementById("admin-fee-wallet-balance-box");
-    const note = document.getElementById("admin-fee-wallet-note");
-    const rateLabel = document.getElementById("admin-fee-rate-label");
+  const noteEl = document.getElementById("admin-fee-wallet-note");
+  const balanceEl = document.getElementById("admin-fee-wallet-balance-box");
+  const previewEl = document.getElementById("admin-fee-pi-preview");
+  const inputEl = document.getElementById("admin-fee-pmc-input");
+  const secretEl = document.getElementById("admin-fee-secret-input");
 
+  if (noteEl) {
+    noteEl.textContent = "Đang tải ví phí hệ thống...";
+    noteEl.style.color = "#7fffd4";
+  }
+
+  if (balanceEl) {
+    balanceEl.innerHTML = "PMC phí hiện có: ...<br>Pi admin hiện có: ...";
+  }
+
+  if (previewEl) {
+    previewEl.textContent = "Pi admin sẽ nhận: 0 Pi";
+  }
+
+  try {
+    const res = await fetch("/api/convert-fee-pmc-to-pi?v=" + Date.now(), {
+      method: "GET",
+      headers: { "Content-Type": "application/json" }
+    });
+
+    const raw = await res.text();
+    let data = {};
     try {
-        if (!isCurrentPiAdminKey()) {
-            throw new Error("Tài khoản Pi này không có quyền ví phí hệ thống.");
-        }
-
-        if (box) box.innerHTML = "Đang tải ví phí hệ thống...";
-        if (rateLabel) {
-            rateLabel.innerText = `${PMC_RATE.toLocaleString("vi-VN")} PMC = 1 Pi (đang mở test đổi lẻ)`;
-        }
-
-        const walletKey = makeWalletDbKey();
-
-        const res = await fetch("/api/convert-fee-pmc-to-pi?v=" + Date.now(), {
-            method: "GET",
-            headers: {
-                "x-wallet-key": walletKey
-            }
-        });
-
-        const raw = await res.text();
-        let data = {};
-        try {
-            data = raw ? JSON.parse(raw) : {};
-        } catch (_) {
-            throw new Error("API ví phí trả dữ liệu không hợp lệ.");
-        }
-
-        if (!res.ok || !data?.ok) {
-            throw new Error(data?.error || "Không tải được ví phí hệ thống.");
-        }
-
-        if (box) {
-            box.innerHTML =
-                `PMC phí hiện có: ${(Number(data.treasuryPmcBalance || 0)).toLocaleString("vi-VN")} PMC<br>` +
-                `Pi tài khoản admin hiện có: ${formatPiExchangeValue(data.targetPiBalance || 0)} Pi`;
-        }
-
-        if (typeof data.targetPiBalance === "number") {
-            setPiBalance(data.targetPiBalance);
-        }
-
-        if (note) {
-            note.innerText =
-                `Ví phí: ${data.treasuryWalletKey || "pi_admin_master"} → cộng vào: ${data.targetWalletKey || makeWalletDbKey()}`;
-        }
-    } catch (err) {
-        if (box) box.innerHTML = "Không tải được ví phí hệ thống.";
-        if (note) note.innerText = "Lỗi: " + (err.message || "Không rõ lỗi");
-        throw err;
+      data = raw ? JSON.parse(raw) : {};
+    } catch (_) {
+      throw new Error("API trả dữ liệu không hợp lệ.");
     }
+
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || "Không tải được ví phí hệ thống.");
+    }
+
+    const pmcBalance = Math.floor(Number(data.pmcBalance || 0) || 0);
+    const piBalance = Number(data.piBalance || 0) || 0;
+
+    if (balanceEl) {
+      balanceEl.innerHTML =
+        "PMC phí hiện có: " + pmcBalance + " PMC<br>" +
+        "Pi admin hiện có: " + piBalance + " Pi";
+    }
+
+    if (noteEl) {
+      noteEl.textContent = "Đã tải ví phí hệ thống.";
+      noteEl.style.color = "#8fffaa";
+    }
+
+    if (inputEl) inputEl.value = "";
+    if (secretEl) secretEl.value = "";
+    if (previewEl) previewEl.textContent = "Pi admin sẽ nhận: 0 Pi";
+  } catch (err) {
+    if (balanceEl) {
+      balanceEl.innerHTML = "PMC phí hiện có: --<br>Pi admin hiện có: --";
+    }
+
+    if (noteEl) {
+      noteEl.textContent = "Không tải được ví phí hệ thống. " + (err?.message || "");
+      noteEl.style.color = "#ff9b9b";
+    }
+  }
 }
 async function openAdminFeeTreasuryModal() {
     const modal = document.getElementById("admin-fee-wallet-modal");
