@@ -47,7 +47,13 @@ module.exports = async function handler(req, res) {
     }
     return data;
   }
-
+function cleanForFirebase(value) {
+  try {
+    return JSON.parse(JSON.stringify(value ?? null));
+  } catch (_) {
+    return value == null ? null : String(value);
+  }
+}
   async function callPiCreatePayment(piApiKey, body) {
     const fetchRes = await fetch("https://api.minepi.com/v2/payments", {
       method: "POST",
@@ -250,11 +256,11 @@ module.exports = async function handler(req, res) {
   const createErr = String(createResult.data?.error || "").trim();
 
   await requestRef.update({
-    status: createErr || "pi_create_payment_failed",
-    piCreateStatus: createResult.status,
-    piCreateData: createResult.data,
-    failedAt: nowMs()
-  });
+  status: createErr || "pi_create_payment_failed",
+  piCreateStatus: createResult.status,
+  piCreateData: cleanForFirebase(createResult.data),
+  failedAt: nowMs()
+});
 
   if (createErr === "ongoing_payment_found") {
     const allSnap = await db.ref("piWithdrawRequests").once("value");
@@ -315,10 +321,10 @@ module.exports = async function handler(req, res) {
 
       if (!paymentId || !recipientAddress) {
         await requestRef.update({
-          status: "pi_create_payment_missing_fields",
-          piCreateData: createResult.data,
-          failedAt: nowMs()
-        });
+  status: "pi_create_payment_missing_fields",
+  piCreateData: cleanForFirebase(createResult.data),
+  failedAt: nowMs()
+});
 
         return res.status(502).json({
           ok: false,
@@ -329,12 +335,12 @@ module.exports = async function handler(req, res) {
       }
 
       await requestRef.update({
-        status: "payment_created",
-        paymentId,
-        recipientAddress,
-        piCreateData: createResult.data,
-        updatedAt: nowMs()
-      });
+  status: "payment_created",
+  paymentId,
+  recipientAddress,
+  piCreateData: cleanForFirebase(createResult.data),
+  updatedAt: nowMs()
+});
 
       stage = "load-stellar";
       const HorizonServer =
@@ -372,10 +378,10 @@ module.exports = async function handler(req, res) {
 
       if (!txid) {
         await requestRef.update({
-          status: "blockchain_submit_missing_txid",
-          submitResult,
-          failedAt: nowMs()
-        });
+  status: "blockchain_submit_missing_txid",
+  submitResult: cleanForFirebase(submitResult),
+  failedAt: nowMs()
+});
 
         return res.status(502).json({
           ok: false,
@@ -385,23 +391,23 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      await requestRef.update({
-        status: "chain_submitted",
-        txid,
-        submitResult,
-        updatedAt: nowMs()
-      });
+  await requestRef.update({
+  status: "chain_submitted",
+  txid,
+  submitResult: cleanForFirebase(submitResult),
+  updatedAt: nowMs()
+});
 
       stage = "pi-complete";
       const completeResult = await callPiComplete(PI_API_KEY, paymentId, txid);
 
       if (!completeResult.ok) {
         await requestRef.update({
-          status: "pi_complete_failed",
-          piCompleteStatus: completeResult.status,
-          piCompleteData: completeResult.data,
-          updatedAt: nowMs()
-        });
+  status: "pi_complete_failed",
+  piCompleteStatus: completeResult.status,
+  piCompleteData: cleanForFirebase(completeResult.data),
+  updatedAt: nowMs()
+});
 
         return res.status(502).json({
           ok: false,
@@ -414,10 +420,10 @@ module.exports = async function handler(req, res) {
       }
 
       await requestRef.update({
-        status: "pi_completed",
-        piCompleteData: completeResult.data,
-        updatedAt: nowMs()
-      });
+  status: "pi_completed",
+  piCompleteData: cleanForFirebase(completeResult.data),
+  updatedAt: nowMs()
+});
 
       stage = "deduct-internal-balance";
       const deductTx = await runDbTransaction(walletRef, current => {
