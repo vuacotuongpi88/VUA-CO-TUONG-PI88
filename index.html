@@ -7726,31 +7726,51 @@ async function refreshAdminFeeTreasury() {
     if (!balanceEl) return;
     balanceEl.innerHTML =
       "PMC phí hiện có: " + pmcText + "<br>" +
-      "Pi admin hiện có: " + piText;
+      "Pi tài khoản admin hiện có: " + piText;
   }
 
- setNote(
-  "Đã tải ví phí hệ thống. " +
-  "system=" + (data.systemWalletKey || "") +
-  " | current=" + (data.currentAdminWalletKey || ""),
-  "#8fffaa"
-);
+  function getCurrentAdminWalletKey() {
+    try {
+      if (typeof makeWalletDbKey === "function") {
+        const made = String(makeWalletDbKey() || "").trim();
+        if (made) return made;
+      }
+    } catch (_) {}
+
+    const candidates = [
+      "walletKey",
+      "wallet-key",
+      "current-wallet-key",
+      "pi-wallet-key",
+      "uid",
+      "currentUid"
+    ];
+
+    for (const key of candidates) {
+      const val = String(localStorage.getItem(key) || "").trim();
+      if (val) return val;
+    }
+
+    return "";
+  }
+
+  setNote("Đang tải ví phí hệ thống...", "#7fffd4");
+  setBalance("...", "...");
+  if (previewEl) previewEl.textContent = "Bạn sẽ nhận: 0 Pi";
 
   try {
-    const walletKey = typeof makeWalletDbKey === "function"
-      ? String(makeWalletDbKey() || "").trim()
-      : "";
+    const walletKey = getCurrentAdminWalletKey();
+    const headers = { "Content-Type": "application/json" };
+    if (walletKey) headers["x-wallet-key"] = walletKey;
 
     const res = await fetch("/api/convert-fee-pmc-to-pi?v=" + Date.now(), {
       method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        ...(walletKey ? { "x-wallet-key": walletKey } : {})
-      }
+      headers
     });
-console.log("ADMIN FEE DEBUG", data);
+
     const raw = await res.text();
     let data = {};
+
     try {
       data = raw ? JSON.parse(raw) : {};
     } catch (_) {
@@ -7763,27 +7783,29 @@ console.log("ADMIN FEE DEBUG", data);
 
     const pmcBalance = Math.max(0, Math.floor(Number(data.pmcBalance || 0) || 0));
 
-    // Dòng Pi dưới PMC bám theo số Pi UI hiện tại của tài khoản đang đăng nhập
     const livePi = typeof getPiBalance === "function"
       ? (Number(getPiBalance()) || 0)
       : (Number(data.piBalance || 0) || 0);
 
     setBalance(
-  pmcBalance + " PMC",
-  (Number(piBalance || 0).toFixed(3).replace(/\.?0+$/, "")) + " Pi"
-);
+      pmcBalance.toLocaleString("vi-VN") + " PMC",
+      (Number(livePi || 0).toFixed(3).replace(/\.?0+$/, "")) + " Pi"
+    );
 
     setNote("Đã tải ví phí hệ thống.", "#8fffaa");
 
     if (inputEl) inputEl.value = "";
     if (secretEl) secretEl.value = "";
-    if (previewEl) previewEl.textContent = "Pi admin sẽ nhận: 0 Pi";
+    if (previewEl) previewEl.textContent = "Bạn sẽ nhận: 0 Pi";
+
+    return data;
   } catch (err) {
     setBalance("--", "--");
     setNote(
-      "Không tải được ví phí hệ thống. " + (err?.message || ""),
+      "Không tải được ví phí hệ thống. " + (err && err.message ? err.message : ""),
       "#ff9b9b"
     );
+    throw err;
   }
 }
 async function openAdminFeeTreasuryModal() {
