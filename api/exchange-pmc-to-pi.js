@@ -14,7 +14,7 @@ module.exports = async function handler(req, res) {
   let adminApp;
 
   try {
-    const adminBundle = require("../pi/_firebaseAdmin.js");
+    const adminBundle = require("./_firebaseAdmin.js");
     ({ getDatabase } = require("firebase-admin/database"));
     adminApp = adminBundle.app;
   } catch (e) {
