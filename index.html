@@ -7127,32 +7127,8 @@ try {
 }
 
         if (!res.ok || !data?.ok) {
-    if (data?.error === "ongoing_payment_found" && data?.pendingWithdrawId) {
-        const retryRes = await fetch("/api/pi/withdraw-complete?v=" + Date.now(), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                withdrawId: data.pendingWithdrawId
-            })
-        });
-
-        const retryRaw = await retryRes.text();
-        let retryData = {};
-        try {
-            retryData = retryRaw ? JSON.parse(retryRaw) : {};
-        } catch (_) {
-            throw new Error("API retry complete trả dữ liệu không hợp lệ.");
+            throw new Error(data?.error || "Rút Pi thất bại.");
         }
-
-        if (!retryRes.ok || !retryData?.ok) {
-            throw new Error(retryData?.error || "Có payment đang dở nhưng retry complete thất bại.");
-        }
-
-        data = retryData;
-    } else {
-        throw new Error(data?.error || "Rút Pi thất bại.");
-    }
-}
 
         state.count += 1;
         state.history.push({
@@ -9362,10 +9338,7 @@ function getVerifiedPiUid() {
 function getVerifiedPiUsername() {
     return String(localStorage.getItem(PI_VERIFIED_USERNAME_KEY) || "").trim();
 }
-
 async function onIncompletePaymentFound(payment) {
-    alert("INCOMPLETE PAYMENT SDK\nidentifier = " + (payment?.identifier || "") + "\ntxid = " + (payment?.transaction?.txid || ""));
-console.log("INCOMPLETE PAYMENT SDK =", payment);
   try {
     if (payment?.identifier && payment?.transaction?.txid) {
       await fetch("/api/pi/complete", {
