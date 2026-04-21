@@ -632,47 +632,74 @@ const sourceKeypair = Keypair.fromSecret(DEV_SECRET);
       };
     });
 
-    if (!deductResult.committed) {
-  const safePaymentId = typeof paymentId !== "undefined" ? paymentId : "";
-  const safeTxid = typeof txid !== "undefined" ? txid : "";
-  const safeAmount = typeof amount !== "undefined" ? amount : 0;
+ let walletAfter = deductResult.snap.val() || {};
+let newInternalBalance = readPiBalance(walletAfter);
 
-  try {
-    if (activeRequestRef) {
-      await activeRequestRef.update({
-        status: "internal_deduct_failed_after_chain_success",
-        withdrawId: activeWithdrawId || "",
-        paymentId: safePaymentId,
-        txid: safeTxid,
-        amount: safeAmount,
-        chainCompletedAt: nowMs(),
-        internalDeductFailedAt: nowMs(),
-        updatedAt: nowMs()
-      });
-    }
-  } catch (_) {}
+if (!deductResult.committed) {
+  stage = "deduct-fallback-read";
 
-  try {
-    if (lockRef) {
-      await lockRef.set({
-        active: false,
-        releasedAt: nowMs(),
-        reason: "internal_deduct_failed_after_chain_success"
-      });
-    }
-  } catch (_) {}
+  const latestSnap = await walletRef.once("value");
+  const latestVal = latestSnap.val() || {};
+  const latestPi = readPiBalance(latestVal);
 
-  return res.status(409).json({
-    ok: false,
-    error: "Chain đã chạy xong nhưng trừ số dư nội bộ thất bại.",
-    withdrawId: activeWithdrawId || "",
-    paymentId: safePaymentId,
-    txid: safeTxid
-  });
+  if (latestPi >= amount) {
+    stage = "deduct-fallback-update";
+
+    const nextPi = latestPi - amount;
+    const nextUpdatedAt = nowMs();
+
+    await walletRef.update({
+      piBalance: nextPi,
+      balance: nextPi,
+      updatedAt: nextUpdatedAt
+    });
+
+    walletAfter = {
+      ...latestVal,
+      piBalance: nextPi,
+      balance: nextPi,
+      updatedAt: nextUpdatedAt
+    };
+    newInternalBalance = nextPi;
+  } else {
+    const safePaymentId = typeof paymentId !== "undefined" ? paymentId : "";
+    const safeTxid = typeof txid !== "undefined" ? txid : "";
+    const safeAmount = typeof amount !== "undefined" ? amount : 0;
+
+    try {
+      if (activeRequestRef) {
+        await activeRequestRef.update({
+          status: "internal_deduct_failed_after_chain_success",
+          withdrawId: activeWithdrawId || "",
+          paymentId: safePaymentId,
+          txid: safeTxid,
+          amount: safeAmount,
+          chainCompletedAt: nowMs(),
+          internalDeductFailedAt: nowMs(),
+          updatedAt: nowMs()
+        });
+      }
+    } catch (_) {}
+
+    try {
+      if (lockRef) {
+        await lockRef.set({
+          active: false,
+          releasedAt: nowMs(),
+          reason: "internal_deduct_failed_after_chain_success"
+        });
+      }
+    } catch (_) {}
+
+    return res.status(409).json({
+      ok: false,
+      error: "Chain đã chạy xong nhưng trừ số dư nội bộ thất bại.",
+      withdrawId: activeWithdrawId || "",
+      paymentId: safePaymentId,
+      txid: safeTxid
+    });
+  }
 }
-
-    const walletAfter = deductResult.snap.val() || {};
-    const newInternalBalance = readPiBalance(walletAfter);
 
     await db.ref("walletTransactions").push({
       type: "wallet_withdraw",
