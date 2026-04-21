@@ -6974,18 +6974,34 @@ async function processWithdraw() {
         return;
     }
 
-    const currentBalance = getPiBalance();
+    const currentBalance = Number(getPiBalance() || 0);
     if (amount > currentBalance) {
         alert(`Số dư không đủ. Hiện còn ${currentBalance.toFixed(2)} Pi.`);
         return;
     }
 
-    const walletKey = makeWalletDbKey();
-    const piUid = getVerifiedPiUid();
-    const piUsername = getVerifiedPiUsername() || String(localStorage.getItem("pi-user-name") || "").trim();
+    const walletKey =
+        typeof makeWalletDbKey === "function"
+            ? String(makeWalletDbKey() || "").trim()
+            : "";
+
+    const piUid =
+        (typeof getVerifiedPiUid === "function" ? String(getVerifiedPiUid() || "").trim() : "") ||
+        String(localStorage.getItem("pi-verified-uid") || "").trim() ||
+        String(localStorage.getItem("uid") || "").trim();
+
+    const piUsername =
+        (typeof getVerifiedPiUsername === "function" ? String(getVerifiedPiUsername() || "").trim() : "") ||
+        String(localStorage.getItem("pi-verified-username") || "").trim() ||
+        String(localStorage.getItem("pi-user-name") || "").trim();
+
+    if (!walletKey) {
+        alert("Thiếu walletKey nội bộ.");
+        return;
+    }
 
     if (!piUid) {
-        alert("Chưa có verified Pi uid. Mày phải đăng nhập lại bằng Pi Browser để app verify qua /api/pi/me.");
+        alert("Chưa có verified Pi uid. Đăng nhập lại bằng Pi Browser trước.");
         return;
     }
 
@@ -7009,10 +7025,12 @@ async function processWithdraw() {
         try {
             data = raw ? JSON.parse(raw) : {};
         } catch (_) {
+            alert("RAW withdraw API = " + String(raw || "").slice(0, 500));
             throw new Error("API rút Pi trả dữ liệu không hợp lệ.");
         }
 
         if (!res.ok || !data?.ok) {
+            alert("RAW withdraw error = " + JSON.stringify(data).slice(0, 500));
             throw new Error(data?.error || "Rút Pi thất bại.");
         }
 
@@ -7028,18 +7046,19 @@ async function processWithdraw() {
 
         if (typeof data.newBalance === "number") {
             setPiBalance(data.newBalance);
-        } else {
+        } else if (typeof loadWalletBalance === "function") {
             await loadWalletBalance().catch(() => {});
         }
 
         alert(
-            `Rút Pi thành công!\n` +
+            "Rút Pi thành công!\n" +
             `Số Pi rút: ${amount.toFixed(2)} Pi\n` +
             `paymentId: ${data.paymentId || "N/A"}\n` +
             `txid: ${data.txid || "N/A"}\n` +
             `Đã rút hôm nay: ${state.count}/${MAX_WITHDRAW_PER_DAY} lượt.`
         );
     } catch (err) {
+        console.error("RÚT PI LỖI:", err);
         alert("Rút Pi lỗi: " + (err.message || "Không rõ lỗi"));
     }
 }
