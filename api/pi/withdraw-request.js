@@ -463,13 +463,49 @@ module.exports = async function handler(req, res) {
     }
 
     if (!skipSubmitChain) {
-      stage = "load-stellar";
-      const HorizonServer =
-        StellarSdk.Horizon && StellarSdk.Horizon.Server
-          ? StellarSdk.Horizon.Server
-          : StellarSdk.Server;
+    stage = "load-stellar";
 
-      const server = new HorizonServer(BLOCKCHAIN_URL);
+let StellarSdk = null;
+try {
+  try {
+    StellarSdk = require("@stellar/stellar-sdk");
+  } catch (_) {
+    StellarSdk = require("stellar-sdk");
+  }
+} catch (e) {
+  return res.status(500).json({
+    ok: false,
+    error: "Không load được Stellar SDK: " + (e?.message || String(e)),
+    stage
+  });
+}
+
+const S = StellarSdk?.default || StellarSdk;
+const Keypair = S?.Keypair;
+const TransactionBuilder = S?.TransactionBuilder;
+const Operation = S?.Operation;
+const Asset = S?.Asset;
+const Networks = S?.Networks;
+const ServerCtor = S?.Horizon?.Server || S?.Server;
+const BASE_FEE = Number(S?.BASE_FEE || 100000);
+
+if (
+  !Keypair ||
+  !TransactionBuilder ||
+  !Operation ||
+  !Asset ||
+  !Networks ||
+  !ServerCtor
+) {
+  return res.status(500).json({
+    ok: false,
+    error: "Stellar SDK load thiếu object cần thiết.",
+    stage
+  });
+}
+
+const server = new ServerCtor(PI_BLOCKCHAIN_API_URL);
+const sourceKeypair = Keypair.fromSecret(DEV_SECRET);
       const sourceAccount = await server.loadAccount(DEV_PUBLIC);
       const baseFee = await server.fetchBaseFee();
 
