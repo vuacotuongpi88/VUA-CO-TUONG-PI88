@@ -4218,26 +4218,6 @@ margin-bottom: 14px;
         </div>
     </div>
 </div>
-<div id="withdraw-lock-modal" style="display:none;">
-    <div class="withdraw-lock-box">
-        <div class="withdraw-lock-icon">🔒</div>
-        <div id="withdraw-lock-title">KHÓA RÚT PI</div>
-        <div id="withdraw-lock-sub">Nhập mật khẩu để tiếp tục</div>
-
-        <input id="withdraw-lock-input" type="password" placeholder="Nhập mật khẩu">
-        <input id="withdraw-lock-confirm" type="password" placeholder="Nhập lại mật khẩu" style="display:none;">
-
-        <div class="withdraw-lock-hint">
-            <span>🛡️</span>
-            <span>Mật khẩu này cố định, không có đổi lại.</span>
-        </div>
-
-        <div class="withdraw-lock-actions">
-            <button type="button" class="lock-cancel-btn" onclick="closeWithdrawLock(false)">HỦY</button>
-            <button type="button" class="lock-ok-btn" onclick="submitWithdrawLock()">XÁC NHẬN</button>
-        </div>
-    </div>
-</div>
 <div id="withdraw-amount-modal" style="display:none;">
     <div class="withdraw-amount-box">
         <div class="withdraw-amount-icon">💸</div>
@@ -6927,56 +6907,7 @@ async function chargeStakeForReady(roomId, side) {
         return { ok: false, stage: "exception", error: String(err?.message || err) };
     }
 }
-function hasWithdrawPassword() {
-    return !!localStorage.getItem(getWithdrawPassKey());
-}
 
-function openWithdrawLock(mode = "verify") {
-    withdrawLockMode = mode;
-
-    const modal = document.getElementById("withdraw-lock-modal");
-    const title = document.getElementById("withdraw-lock-title");
-    const sub = document.getElementById("withdraw-lock-sub");
-    const input = document.getElementById("withdraw-lock-input");
-    const confirm = document.getElementById("withdraw-lock-confirm");
-
-    if (!modal || !title || !sub || !input || !confirm) return;
-
-    input.value = "";
-    confirm.value = "";
-
-    if (mode === "create") {
-        title.innerText = "TẠO MẬT KHẨU RÚT PI";
-        sub.innerText = "Lần đầu tiên, mầy phải tạo mật khẩu cố định để rút Pi.";
-        confirm.style.display = "block";
-        input.placeholder = "Tạo mật khẩu";
-    } else {
-        title.innerText = "KHÓA RÚT PI";
-        sub.innerText = "Nhập mật khẩu để xác nhận rút Pi.";
-        confirm.style.display = "none";
-        input.placeholder = "Nhập mật khẩu";
-    }
-
-    modal.style.display = "flex";
-    setTimeout(() => input.focus(), 50);
-}
-
-function closeWithdrawLock(result = false) {
-    const modal = document.getElementById("withdraw-lock-modal");
-    if (modal) modal.style.display = "none";
-
-    if (withdrawLockResolve) {
-        withdrawLockResolve(result);
-        withdrawLockResolve = null;
-    }
-}
-
-function requestWithdrawLock(mode = "verify") {
-    openWithdrawLock(mode);
-    return new Promise(resolve => {
-        withdrawLockResolve = resolve;
-    });
-}
 let withdrawAmountResolve = null;
 
 function openWithdrawAmount(leftCount) {
@@ -7023,73 +6954,23 @@ function submitWithdrawAmount() {
 document.getElementById("withdraw-amount-input")?.addEventListener("keypress", function(e) {
     if (e.key === "Enter") submitWithdrawAmount();
 });
-async function submitWithdrawLock() {
-    const input = document.getElementById("withdraw-lock-input");
-    const confirm = document.getElementById("withdraw-lock-confirm");
-    if (!input) return;
-
-    const pass = input.value.trim();
-    if (pass.length < 4) {
-        alert("Mật khẩu phải từ 4 ký tự trở lên.");
-        return;
-    }
-
-    if (withdrawLockMode === "create") {
-        if (!confirm) return;
-
-        const pass2 = confirm.value.trim();
-        if (pass !== pass2) {
-            alert("Mật khẩu nhập lại không khớp.");
-            return;
-        }
-
-        const hashed = await sha256(pass);
-        localStorage.setItem(getWithdrawPassKey(), hashed);
-        alert("Đã tạo mật khẩu rút Pi cố định. Không có đổi lại đâu nha.");
-        closeWithdrawLock(true);
-        return;
-    }
-
-    const savedHash = localStorage.getItem(getWithdrawPassKey());
-    if (!savedHash) {
-        alert("Chưa có mật khẩu rút Pi.");
-        closeWithdrawLock(false);
-        return;
-    }
-
-    const hashed = await sha256(pass);
-    if (hashed !== savedHash) {
-        alert("Sai mật khẩu rút Pi.");
-        return;
-    }
-
-    closeWithdrawLock(true);
-}
-
 async function processWithdraw() {
-    if (!hasWithdrawPassword()) {
-        const created = await requestWithdrawLock("create");
-        if (!created) return;
-    }
-
-    const unlocked = await requestWithdrawLock("verify");
-    if (!unlocked) return;
-
     const state = getWithdrawState();
     if (state.count >= MAX_WITHDRAW_PER_DAY) {
         alert("Hôm nay đã rút đủ 5 lần rồi. Mai quay lại nhé!");
         return;
     }
 
-   const amount = await openWithdrawAmount(MAX_WITHDRAW_PER_DAY - state.count);
-if (amount === null) return;
+    const amount = await openWithdrawAmount(MAX_WITHDRAW_PER_DAY - state.count);
+    if (amount === null) return;
+
     if (!Number.isFinite(amount) || amount <= 0) {
         alert("Số Pi rút không hợp lệ.");
         return;
     }
 
     if (amount > MAX_WITHDRAW_PER_TX) {
-        alert("Mỗi lần chỉ được rút tối đa 1000 Pi.");
+        alert(`Mỗi lần chỉ được rút tối đa ${MAX_WITHDRAW_PER_TX} Pi.`);
         return;
     }
 
@@ -7099,20 +6980,68 @@ if (amount === null) return;
         return;
     }
 
-    state.count += 1;
-    state.history.push({
-        amount,
-        time: new Date().toISOString()
-    });
-    saveWithdrawState(state);
+    const walletKey = makeWalletDbKey();
+    const piUid = getVerifiedPiUid();
+    const piUsername = getVerifiedPiUsername() || String(localStorage.getItem("pi-user-name") || "").trim();
 
-    setPiBalance(currentBalance - amount);
+    if (!piUid) {
+        alert("Chưa có verified Pi uid. Mày phải đăng nhập lại bằng Pi Browser để app verify qua /api/pi/me.");
+        return;
+    }
 
-    alert(
-        `Rút thành công ${amount.toFixed(2)} Pi.\n` +
-        `Đã rút hôm nay: ${state.count}/${MAX_WITHDRAW_PER_DAY} lượt.\n` +
-        `Số dư còn lại: ${(currentBalance - amount).toFixed(2)} Pi.`
-    );
+    try {
+        const res = await fetch("/api/pi/withdraw-request?v=" + Date.now(), {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "x-wallet-key": walletKey
+            },
+            body: JSON.stringify({
+                amount,
+                piUid,
+                piUsername,
+                walletKey
+            })
+        });
+
+        const raw = await res.text();
+        let data = {};
+        try {
+            data = raw ? JSON.parse(raw) : {};
+        } catch (_) {
+            throw new Error("API rút Pi trả dữ liệu không hợp lệ.");
+        }
+
+        if (!res.ok || !data?.ok) {
+            throw new Error(data?.error || "Rút Pi thất bại.");
+        }
+
+        state.count += 1;
+        state.history.push({
+            amount,
+            time: new Date().toISOString(),
+            withdrawId: data.withdrawId || "",
+            paymentId: data.paymentId || "",
+            txid: data.txid || ""
+        });
+        saveWithdrawState(state);
+
+        if (typeof data.newBalance === "number") {
+            setPiBalance(data.newBalance);
+        } else {
+            await loadWalletBalance().catch(() => {});
+        }
+
+        alert(
+            `Rút Pi thành công!\n` +
+            `Số Pi rút: ${amount.toFixed(2)} Pi\n` +
+            `paymentId: ${data.paymentId || "N/A"}\n` +
+            `txid: ${data.txid || "N/A"}\n` +
+            `Đã rút hôm nay: ${state.count}/${MAX_WITHDRAW_PER_DAY} lượt.`
+        );
+    } catch (err) {
+        alert("Rút Pi lỗi: " + (err.message || "Không rõ lỗi"));
+    }
 }
 
 async function openWallet(type) {
@@ -9304,24 +9233,6 @@ function hoaTran() {
 
     autoResetNextMatch();
 }
-document.getElementById("withdraw-lock-input")?.addEventListener("keypress", function(e) {
-    if (e.key === "Enter") {
-        if (withdrawLockMode === "create") {
-            const confirm = document.getElementById("withdraw-lock-confirm");
-            if (confirm && confirm.style.display !== "none") {
-                confirm.focus();
-            } else {
-                submitWithdrawLock();
-            }
-        } else {
-            submitWithdrawLock();
-        }
-    }
-});
-
-document.getElementById("withdraw-lock-confirm")?.addEventListener("keypress", function(e) {
-    if (e.key === "Enter") submitWithdrawLock();
-});
 let piAuth = null;
 
 async function onIncompletePaymentFound(payment) {
