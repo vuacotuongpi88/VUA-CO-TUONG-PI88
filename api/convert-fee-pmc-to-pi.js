@@ -25,18 +25,18 @@ module.exports = async function handler(req, res) {
   }
 
   let getDatabase;
-  let adminApp;
+let adminApp;
 
-  try {
-    require("./_firebaseAdmin.js")
-    ({ getDatabase } = require("firebase-admin/database"));
-    adminApp = adminBundle.app;
-  } catch (e) {
-    return res.status(500).json({
-      ok: false,
-      error: "load _firebaseAdmin failed: " + (e?.message || String(e))
-    });
-  }
+try {
+  const adminBundle = require("./pi/_firebaseAdmin.js");
+  ({ getDatabase } = require("firebase-admin/database"));
+  adminApp = adminBundle.app || adminBundle;
+} catch (e) {
+  return res.status(500).json({
+    ok: false,
+    error: "load_firebaseAdmin failed. " + (e?.message || String(e))
+  });
+}
 
   try {
     stage = "read-env";
