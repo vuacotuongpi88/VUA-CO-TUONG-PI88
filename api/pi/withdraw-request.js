@@ -300,10 +300,33 @@ module.exports = async function handler(req, res) {
     });
 
     if (!lockResult.committed) {
-      return res.status(409).json({
-        ok: false,
-        error: "Đang có yêu cầu rút Pi khác đang xử lý."
+      if (String(errCode || "") === "cancelled_payment") {
+  try {
+    if (requestRef) {
+      await requestRef.update({
+        status: "cancelled_payment",
+        cancelledAt: nowMs(),
+        debug: piResult?.data || null
       });
+    }
+  } catch (_) {}
+
+  try {
+    if (lockRef) {
+      await lockRef.set({
+        active: false,
+        releasedAt: nowMs(),
+        reason: "cancelled_payment"
+      });
+    }
+  } catch (_) {}
+
+  return res.status(409).json({
+    ok: false,
+    error: "cancelled_payment",
+    msg: "Bạn đã hủy giao dịch trong ví Pi. Bấm rút lại để tạo giao dịch mới."
+  });
+}
     }
 
     let paymentId = "";
