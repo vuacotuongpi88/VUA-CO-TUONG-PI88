@@ -110,7 +110,8 @@ module.exports = async function handler(req, res) {
     const db = getDatabase(adminApp);
     const requestRef = db.ref("piWithdrawRequests/" + withdrawId);
     const snap = await requestRef.once("value");
-    const data = snap.val() && typeof data !== "string" ? snap.val() : null;
+    const snapValue = snap.val();
+const data = snapValue && typeof snapValue === "object" ? snapValue : null;
 
     if (!data) {
       return res.status(404).json({
