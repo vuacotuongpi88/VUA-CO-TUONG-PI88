@@ -153,6 +153,7 @@ function wrapRefTransaction(ref, updateFn) {
   });
 }
 let db = null;
+
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({
@@ -161,20 +162,21 @@ module.exports = async function handler(req, res) {
     });
   }
 
- let stage = "start";
-let requestRef = null;
-let withdrawId = "";
-let lockRef = null;
-let piUid = "";
-let piUsername = "";
+  let stage = "start";
+  let requestRef = null;
+  let withdrawId = "";
+  let lockRef = null;
+  let piUid = "";
+  let piUsername = "";
 
   try {
     stage = "db-init";
     try {
-      const adminBundle = require("../_firebaseAdmin.js");
+      const adminBundle = require("./_firebaseAdmin.js");
       const { getDatabase } = require("firebase-admin/database");
       const adminApp = adminBundle.app || adminBundle;
       db = getDatabase(adminApp);
+      console.log("WITHDRAW_DB_OK", { hasDb: !!db });
     } catch (e) {
       return res.status(500).json({
         ok: false,
@@ -198,16 +200,24 @@ let piUsername = "";
     }
 
     stage = "read-body";
-const body =
-  typeof req.body === "string"
-    ? JSON.parse(req.body || "{}")
-    : (req.body || {});
+    const body =
+      typeof req.body === "string"
+        ? JSON.parse(req.body || "{}")
+        : req.body || {};
 
-const amount = Number(body.amount || 0);
-const walletKeyRaw = String(
-  req.headers["x-wallet-key"] || body.walletKey || ""
-).trim();
+    const amount = Number(body.amount || 0);
+    piUid = String(body.piUid || "").trim();
+    piUsername = String(body.piUsername || "").trim();
+    const walletKeyRaw = String(
+      req.headers["x-wallet-key"] || body.walletKey || ""
+    ).trim();
 
+    console.log("WITHDRAW_STAGE", {
+      stage,
+      amount,
+      walletKeyRaw,
+      piUid
+    });
 if (!walletKeyRaw) {
   return res.status(401).json({
     ok: false,
@@ -732,23 +742,21 @@ if (!deductResult.committed) {
       currentBalance: newInternalBalance
     });
   } catch (err) {
-    try {
-      if (requestRef) {
-        await requestRef.update({
-          status: "exception",
-          stage,
-          error: err?.message || String(err),
-          failedAt: nowMs()
-        });
-      }
-    } catch (_) {}
+  console.error("WITHDRAW_FATAL", {
+    stage,
+    message: err?.message || String(err),
+    stack: err?.stack || "",
+    withdrawId,
+  });
 
-    return res.status(500).json({
-      ok: false,
-      error: err?.message || "server error",
-      stage
-    });
-  } finally {
+  return res.status(500).json({
+    ok: false,
+    error: err?.message || "Lỗi rút Pi",
+    stage,
+    withdrawId
+  });
+ } 
+ finally {
     try {
       if (lockRef && withdrawId) {
         await wrapRefTransaction(lockRef, (current) => {
