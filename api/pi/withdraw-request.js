@@ -1,11 +1,5 @@
 const StellarSdk = require("stellar-sdk");
 
-const adminBundle = require("./_firebaseAdmin.js");
-const { getDatabase } = require("firebase-admin/database");
-
-const adminApp = adminBundle.app || adminBundle;
-const db = getDatabase(adminApp);
-
 const PI_API_KEY = String(
   process.env.PI_API_KEY ||
     process.env.PI_SERVER_API_KEY ||
@@ -168,16 +162,31 @@ module.exports = async function handler(req, res) {
   let requestRef = null;
   let withdrawId = "";
   let lockRef = null;
+  let db = null;
 
+ try {
+  stage = "db-init";
   try {
-    if (!PI_API_KEY) {
-      return res.status(500).json({
-        ok: false,
-        error: "Thiếu PI_API_KEY."
-      });
-    }
+    const adminBundle = require("./_firebaseAdmin.js");
+    const { getDatabase } = require("firebase-admin/database");
+    const adminApp = adminBundle.app || adminBundle;
+    db = getDatabase(adminApp);
+  } catch (e) {
+    return res.status(500).json({
+      ok: false,
+      error: "load_firebaseAdmin failed: " + (e?.message || String(e)),
+      stage
+    });
+  }
 
-    if (!DEV_PUBLIC || !DEV_SECRET) {
+  if (!PI_API_KEY) {
+    return res.status(500).json({
+      ok: false,
+      error: "Thiếu PI_API_KEY."
+    });
+  }
+
+  if (!DEV_PUBLIC || !DEV_SECRET) {
       return res.status(500).json({
         ok: false,
         error: "Thiếu DEV_PUBLIC/DEV_SECRET."
