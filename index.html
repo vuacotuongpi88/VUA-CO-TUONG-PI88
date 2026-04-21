@@ -7716,63 +7716,89 @@ async function refreshAdminFeeTreasury() {
   const inputEl = document.getElementById("admin-fee-pmc-input");
   const secretEl = document.getElementById("admin-fee-secret-input");
 
-  if (noteEl) {
-    noteEl.textContent = "Đang tải ví phí hệ thống...";
-    noteEl.style.color = "#7fffd4";
+  function setNote(text, color) {
+    if (!noteEl) return;
+    noteEl.textContent = String(text || "");
+    if (color) noteEl.style.color = color;
   }
 
-  if (balanceEl) {
-    balanceEl.innerHTML = "PMC phí hiện có: ...<br>Pi admin hiện có: ...";
+  function setBalance(pmcText, piText) {
+    if (!balanceEl) return;
+    balanceEl.innerHTML =
+      "PMC phí hiện có: " + pmcText + "<br>" +
+      "Pi admin hiện có: " + piText;
   }
 
-  if (previewEl) {
-    previewEl.textContent = "Pi admin sẽ nhận: 0 Pi";
+  function getCurrentAdminWalletKey() {
+    try {
+      if (typeof makeWalletDbKey === "function") {
+        const made = String(makeWalletDbKey() || "").trim();
+        if (made) return made;
+      }
+    } catch (_) {}
+
+    const candidates = [
+      "walletKey",
+      "wallet-key",
+      "current-wallet-key",
+      "pi-wallet-key",
+      "uid",
+      "currentUid"
+    ];
+
+    for (const key of candidates) {
+      const val = String(localStorage.getItem(key) || "").trim();
+      if (val) return val;
+    }
+
+    return "";
   }
+
+  setNote("Đang tải ví phí hệ thống...", "#7fffd4");
+  setBalance("...", "...");
+  if (previewEl) previewEl.textContent = "Pi admin sẽ nhận: 0 Pi";
 
   try {
+    const walletKey = getCurrentAdminWalletKey();
+    const headers = { "Content-Type": "application/json" };
+    if (walletKey) headers["x-wallet-key"] = walletKey;
+
     const res = await fetch("/api/convert-fee-pmc-to-pi?v=" + Date.now(), {
       method: "GET",
-      headers: { "Content-Type": "application/json" }
+      headers
     });
 
     const raw = await res.text();
     let data = {};
+
     try {
       data = raw ? JSON.parse(raw) : {};
     } catch (_) {
-      throw new Error("API trả dữ liệu không hợp lệ.");
+      throw new Error("API trả dữ liệu không hợp lệ. " + String(raw || "").slice(0, 200));
     }
 
     if (!res.ok || !data.ok) {
       throw new Error(data.error || "Không tải được ví phí hệ thống.");
     }
 
-    const pmcBalance = Math.floor(Number(data.pmcBalance || 0) || 0);
+    const pmcBalance = Math.max(0, Math.floor(Number(data.pmcBalance || 0) || 0));
     const piBalance = Number(data.piBalance || 0) || 0;
 
-    if (balanceEl) {
-      balanceEl.innerHTML =
-        "PMC phí hiện có: " + pmcBalance + " PMC<br>" +
-        "Pi admin hiện có: " + piBalance + " Pi";
-    }
-
-    if (noteEl) {
-      noteEl.textContent = "Đã tải ví phí hệ thống.";
-      noteEl.style.color = "#8fffaa";
-    }
+    setBalance(pmcBalance + " PMC", piBalance + " Pi");
+    setNote("Đã tải ví phí hệ thống.", "#8fffaa");
 
     if (inputEl) inputEl.value = "";
     if (secretEl) secretEl.value = "";
     if (previewEl) previewEl.textContent = "Pi admin sẽ nhận: 0 Pi";
-  } catch (err) {
-    if (balanceEl) {
-      balanceEl.innerHTML = "PMC phí hiện có: --<br>Pi admin hiện có: --";
-    }
 
-    if (noteEl) {
-      noteEl.textContent = "Không tải được ví phí hệ thống. " + (err?.message || "");
-      noteEl.style.color = "#ff9b9b";
-    }
+    return data;
+  } catch (err) {
+    setBalance("--", "--");
+    setNote(
+      "Không tải được ví phí hệ thống. " + (err && err.message ? err.message : ""),
+      "#ff9b9b"
+    );
+    throw err;
   }
 }
 async function openAdminFeeTreasuryModal() {
