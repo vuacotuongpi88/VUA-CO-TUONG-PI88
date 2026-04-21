@@ -2,29 +2,32 @@ const StellarSdk = require("stellar-sdk");
 
 const PI_API_KEY = String(
   process.env.PI_API_KEY ||
-    process.env.PI_SERVER_API_KEY ||
-    process.env.PI_APIKEY ||
-    ""
+  process.env.PI_SERVER_API_KEY ||
+  process.env.PI_APIKEY ||
+  ""
 ).trim();
 
 const DEV_PUBLIC = String(
   process.env.DEV_PUBLIC ||
-    process.env.PI_WALLET_PUBLIC_KEY ||
-    process.env.PI_PUBLIC_KEY ||
-    ""
+  process.env.PI_DEVELOPER_WALLET_PUBLIC_KEY ||
+  process.env.PI_WALLET_PUBLIC_KEY ||
+  process.env.PI_PUBLIC_KEY ||
+  ""
 ).trim();
 
 const DEV_SECRET = String(
   process.env.DEV_SECRET ||
-    process.env.PI_WALLET_PRIVATE_KEY ||
-    process.env.PI_SECRET_KEY ||
-    ""
+  process.env.PI_DEVELOPER_WALLET_SECRET_SEED ||
+  process.env.PI_WALLET_PRIVATE_KEY ||
+  process.env.PI_SECRET_KEY ||
+  ""
 ).trim();
 
-const BLOCKCHAIN_URL = String(
+const PI_BLOCKCHAIN_API_URL = String(
+  process.env.PI_BLOCKCHAIN_API_URL ||
   process.env.PI_BLOCKCHAIN_URL ||
-    process.env.PI_HORIZON_URL ||
-    "https://api.mainnet.minepi.com"
+  process.env.PI_HORIZON_URL ||
+  "https://api.mainnet.minepi.com"
 ).trim();
 
 const NETWORK_PASSPHRASE = String(
