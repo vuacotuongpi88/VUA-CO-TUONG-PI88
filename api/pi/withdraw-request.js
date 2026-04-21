@@ -1,37 +1,41 @@
 const StellarSdk = require("stellar-sdk");
 
+const PI_API_BASE = String(
+  process.env.PI_API_BASE_URL || "https://api.minepi.com"
+).trim();
+
 const PI_API_KEY = String(
   process.env.PI_API_KEY ||
-  process.env.PI_SERVER_API_KEY ||
-  process.env.PI_APIKEY ||
-  ""
+    process.env.PI_SERVER_API_KEY ||
+    process.env.PI_APIKEY ||
+    ""
 ).trim();
 
 const DEV_PUBLIC = String(
   process.env.DEV_PUBLIC ||
-  process.env.PI_DEVELOPER_WALLET_PUBLIC_KEY ||
-  process.env.PI_WALLET_PUBLIC_KEY ||
-  process.env.PI_PUBLIC_KEY ||
-  ""
+    process.env.PI_DEVELOPER_WALLET_PUBLIC_KEY ||
+    process.env.PI_WALLET_PUBLIC_KEY ||
+    process.env.PI_PUBLIC_KEY ||
+    ""
 ).trim();
 
 const DEV_SECRET = String(
   process.env.DEV_SECRET ||
-  process.env.PI_DEVELOPER_WALLET_SECRET_SEED ||
-  process.env.PI_WALLET_PRIVATE_KEY ||
-  process.env.PI_SECRET_KEY ||
-  ""
+    process.env.PI_DEVELOPER_WALLET_SECRET_SEED ||
+    process.env.PI_WALLET_PRIVATE_KEY ||
+    process.env.PI_SECRET_KEY ||
+    ""
 ).trim();
 
 const PI_BLOCKCHAIN_API_URL = String(
   process.env.PI_BLOCKCHAIN_API_URL ||
-  process.env.PI_BLOCKCHAIN_URL ||
-  process.env.PI_HORIZON_URL ||
-  "https://api.mainnet.minepi.com"
+    process.env.PI_BLOCKCHAIN_URL ||
+    process.env.PI_HORIZON_URL ||
+    "https://api.testnet.minepi.com"
 ).trim();
 
-const NETWORK_PASSPHRASE = String(
-  process.env.PI_NETWORK_PASSPHRASE || "Pi Network"
+const PI_NETWORK_PASSPHRASE = String(
+  process.env.PI_NETWORK_PASSPHRASE || "Pi Testnet"
 ).trim();
 
 const MAX_WITHDRAW_PER_TX = Number(process.env.MAX_WITHDRAW_PER_TX || 1000);
@@ -51,80 +55,130 @@ function dayStartMs(ts = Date.now()) {
 }
 
 function safeKey(value) {
-  return String(value || "").replace(/[.#$\[\]/]/g, "_");
+  return String(value || "").replace(/[.#$/[\]]/g, "_");
+}
+
+function pickString(...values) {
+  for (const v of values) {
+    const s = String(v ?? "").trim();
+    if (s) return s;
+  }
+  return "";
+}
+
+function cleanForFirebase(input) {
+  if (input === undefined) return null;
+  if (input === null) return null;
+
+  if (Array.isArray(input)) {
+    return input.map((x) => cleanForFirebase(x)).filter((x) => x !== undefined);
+  }
+
+  if (typeof input === "object") {
+    const out = {};
+    for (const [k, v] of Object.entries(input)) {
+      if (v === undefined) continue;
+      out[k] = cleanForFirebase(v);
+    }
+    return out;
+  }
+
+  return input;
 }
 
 function readPiBalance(obj) {
-  return Number(
-    obj && obj.balance != null
-      ? obj.balance
-      : obj && obj.piBalance != null
+  const raw =
+    obj && typeof obj === "object"
+      ? obj.piBalance != null
         ? obj.piBalance
+        : obj.balance != null
+        ? obj.balance
         : 0
-  ) || 0;
+      : 0;
+
+  const n = Number(raw || 0);
+  return Number.isFinite(n) ? n : 0;
 }
 
-function cleanForFirebase(value) {
+function toChainAmount(amount) {
+  return Number(amount || 0).toFixed(7);
+}
+
+function safeMemoText(text) {
+  const s = String(text || "").trim();
+  return s.length <= 28 ? s : s.slice(0, 28);
+}
+
+async function readResponseData(res) {
+  const raw = await res.text();
+  if (!raw) return {};
   try {
-    return JSON.parse(JSON.stringify(value ?? null));
+    return JSON.parse(raw);
   } catch (_) {
-    return value == null ? null : String(value);
+    return { raw };
   }
 }
 
-async function parseJsonResponse(fetchRes) {
-  const raw = await fetchRes.text();
-  let data = {};
-  try {
-    data = raw ? JSON.parse(raw) : {};
-  } catch (_) {
-    data = { raw };
-  }
-  return { raw, data };
-}
-
-async function callPiCreatePayment(apiKey, payload) {
-  const res = await fetch("https://api.minepi.com/v2/payments", {
-    method: "POST",
-    headers: {
-      Authorization: `Key ${apiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(payload)
-  });
-
-  const { raw, data } = await parseJsonResponse(res);
-  return {
-    ok: res.ok,
-    status: res.status,
-    raw,
-    data
-  };
-}
-
-async function callPiCompletePayment(apiKey, paymentId, txid) {
-  const res = await fetch(
-    `https://api.minepi.com/v2/payments/${encodeURIComponent(paymentId)}/complete`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Key ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ txid })
-    }
+function extractApiError(data) {
+  return pickString(
+    data?.error,
+    data?.message,
+    data?.error_message,
+    data?.raw,
+    data?.data?.error,
+    data?.data?.message,
+    data?.status?.error,
+    "Pi API error"
   );
-
-  const { raw, data } = await parseJsonResponse(res);
-  return {
-    ok: res.ok,
-    status: res.status,
-    raw,
-    data
-  };
 }
 
-async function countTodayWithdraws(safeWalletKey) {
+function extractPaymentId(data) {
+  return pickString(
+    data?.identifier,
+    data?.paymentId,
+    data?.payment_id,
+    data?.id,
+    data?.payment?.identifier,
+    data?.payment?.paymentId,
+    data?.payment?.payment_id,
+    data?.payment?.id
+  );
+}
+
+function extractRecipientAddress(data) {
+  return pickString(
+    data?.recipientAddress,
+    data?.recipient_address,
+    data?.to,
+    data?.to_address,
+    data?.recipient,
+    data?.payment?.recipientAddress,
+    data?.payment?.recipient_address,
+    data?.payment?.to,
+    data?.payment?.to_address,
+    data?.payment?.recipient,
+    data?.transaction?.to,
+    data?.transaction?.to_address,
+    data?.transaction?.destination,
+    data?.tx?.to,
+    data?.tx?.destination
+  );
+}
+
+async function wrapRefTransaction(ref, updateFn) {
+  return new Promise((resolve, reject) => {
+    ref.transaction(
+      updateFn,
+      (err, committed, snap) => {
+        if (err) return reject(err);
+        resolve({ committed, snap });
+      },
+      false
+    );
+  });
+}
+
+async function countTodayWithdraws(db, safeWalletKey) {
   const snap = await db.ref("walletTransactions").once("value");
   const start = dayStartMs();
   let count = 0;
@@ -140,19 +194,155 @@ async function countTodayWithdraws(safeWalletKey) {
   return count;
 }
 
-function wrapRefTransaction(ref, updateFn) {
-  return new Promise((resolve, reject) => {
-    ref.transaction(
-      updateFn,
-      (err, committed, snap) => {
-        if (err) return reject(err);
-        resolve({ committed, snap });
-      },
-      false
-    );
+async function acquireWithdrawLock(lockRef) {
+  const now = nowMs();
+  const tx = await wrapRefTransaction(lockRef, (current) => {
+    const cur = current && typeof current === "object" ? current : {};
+    const active = cur.active === true;
+    const expired = now - Number(cur.createdAt || 0) > LOCK_TTL_MS;
+
+    if (active && !expired) return;
+
+    return {
+      active: true,
+      createdAt: now,
+      expiresAt: now + LOCK_TTL_MS
+    };
   });
+
+  return !!tx.committed;
 }
-let db = null;
+
+async function releaseWithdrawLock(lockRef, reason) {
+  if (!lockRef) return;
+  try {
+    await lockRef.set({
+      active: false,
+      releasedAt: nowMs(),
+      reason: String(reason || "")
+    });
+  } catch (_) {}
+}
+
+async function createPiPayment({ amount, piUid, memo, metadata }) {
+  const res = await fetch(`${PI_API_BASE}/v2/payments`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Key ${PI_API_KEY}`,
+      "Pi-Api-Key": PI_API_KEY
+    },
+    body: JSON.stringify({
+      payment: {
+        uid: piUid,
+        amount: Number(amount),
+        memo,
+        metadata
+      }
+    })
+  });
+
+  const data = await readResponseData(res);
+
+  if (!res.ok) {
+    return {
+      ok: false,
+      status: res.status,
+      error: extractApiError(data),
+      data
+    };
+  }
+
+  return {
+    ok: true,
+    status: res.status,
+    data
+  };
+}
+
+async function completePiPayment(paymentId, txid) {
+  const res = await fetch(
+    `${PI_API_BASE}/v2/payments/${encodeURIComponent(paymentId)}/complete`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Key ${PI_API_KEY}`,
+        "Pi-Api-Key": PI_API_KEY
+      },
+      body: JSON.stringify({ txid })
+    }
+  );
+
+  const data = await readResponseData(res);
+
+  if (!res.ok) {
+    return {
+      ok: false,
+      status: res.status,
+      error: extractApiError(data),
+      data
+    };
+  }
+
+  return {
+    ok: true,
+    status: res.status,
+    data
+  };
+}
+
+async function cancelPiPayment(paymentId) {
+  const res = await fetch(
+    `${PI_API_BASE}/v2/payments/${encodeURIComponent(paymentId)}/cancel`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Key ${PI_API_KEY}`,
+        "Pi-Api-Key": PI_API_KEY
+      }
+    }
+  );
+
+  const data = await readResponseData(res);
+  return {
+    ok: res.ok,
+    status: res.status,
+    data
+  };
+}
+
+async function submitOnChain({ recipientAddress, amount, memo }) {
+  const server = new StellarSdk.Horizon.Server(PI_BLOCKCHAIN_API_URL);
+  const source = await server.loadAccount(DEV_PUBLIC);
+  const baseFee = await server.fetchBaseFee();
+
+  const tx = new StellarSdk.TransactionBuilder(source, {
+    fee: String(baseFee),
+    networkPassphrase: PI_NETWORK_PASSPHRASE
+  })
+    .addOperation(
+      StellarSdk.Operation.payment({
+        destination: recipientAddress,
+        asset: StellarSdk.Asset.native(),
+        amount: toChainAmount(amount)
+      })
+    )
+    .addMemo(StellarSdk.Memo.text(safeMemoText(memo)))
+    .setTimeout(180)
+    .build();
+
+  tx.sign(StellarSdk.Keypair.fromSecret(DEV_SECRET));
+
+  const submitted = await server.submitTransaction(tx);
+
+  return {
+    ok: true,
+    txid: pickString(submitted?.hash, submitted?.id),
+    data: submitted
+  };
+}
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
@@ -164,26 +354,17 @@ module.exports = async function handler(req, res) {
 
   let stage = "start";
   let requestRef = null;
-  let withdrawId = "";
   let lockRef = null;
-  let piUid = "";
-  let piUsername = "";
+  let withdrawId = "";
+  let paymentId = "";
+  let txid = "";
 
   try {
     stage = "db-init";
-    try {
-      const adminBundle = require("./_firebaseAdmin.js");
-      const { getDatabase } = require("firebase-admin/database");
-      const adminApp = adminBundle.app || adminBundle;
-      db = getDatabase(adminApp);
-      console.log("WITHDRAW_DB_OK", { hasDb: !!db });
-    } catch (e) {
-      return res.status(500).json({
-        ok: false,
-        error: "load_firebaseAdmin failed: " + (e?.message || String(e)),
-        stage
-      });
-    }
+    const adminBundle = require("../_firebaseAdmin.js");
+    const { getDatabase } = require("firebase-admin/database");
+    const adminApp = adminBundle.app || adminBundle;
+    const db = getDatabase(adminApp);
 
     if (!PI_API_KEY) {
       return res.status(500).json({
@@ -206,43 +387,75 @@ module.exports = async function handler(req, res) {
         : req.body || {};
 
     const amount = Number(body.amount || 0);
-    piUid = String(body.piUid || "").trim();
-    piUsername = String(body.piUsername || "").trim();
     const walletKeyRaw = String(
       req.headers["x-wallet-key"] || body.walletKey || ""
     ).trim();
+
+    if (!walletKeyRaw) {
+      return res.status(400).json({
+        ok: false,
+        error: "Thiếu walletKey từ frontend."
+      });
+    }
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({
+        ok: false,
+        error: "Số Pi rút không hợp lệ."
+      });
+    }
+
+    if (amount > MAX_WITHDRAW_PER_TX) {
+      return res.status(400).json({
+        ok: false,
+        error: `Mỗi lần chỉ được rút tối đa ${MAX_WITHDRAW_PER_TX} Pi.`
+      });
+    }
+
+    const safeWalletKey = safeKey(walletKeyRaw);
 
     console.log("WITHDRAW_STAGE", {
       stage,
       amount,
       walletKeyRaw,
-      piUid
+      safeWalletKey
     });
-if (!walletKeyRaw) {
-  return res.status(401).json({
-    ok: false,
-    error: "Thiếu định danh ví."
-  });
-}
 
-if (!Number.isFinite(amount) || amount <= 0) {
-  return res.status(400).json({
-    ok: false,
-    error: "Số Pi rút không hợp lệ."
-  });
-}
+    stage = "wallet-read";
+    const walletRef = db.ref(`wallets/${safeWalletKey}`);
+    const walletSnap = await walletRef.once("value");
+    const walletVal = walletSnap.val() || {};
 
-if (amount > MAX_WITHDRAW_PER_TX) {
-  return res.status(400).json({
-    ok: false,
-    error: `Mỗi lần chỉ được rút tối đa ${MAX_WITHDRAW_PER_TX} Pi.`
-  });
-}
+    if (!walletVal || typeof walletVal !== "object") {
+      return res.status(404).json({
+        ok: false,
+        error: "Không tìm thấy ví nội bộ."
+      });
+    }
 
-const safeWalletKey = safeKey(walletKeyRaw);
+    if (walletVal.piVerified !== true || !String(walletVal.piUid || "").trim()) {
+      return res.status(400).json({
+        ok: false,
+        error: "Chưa có verified Pi uid. Đăng nhập lại bằng Pi Browser trước."
+      });
+    }
+
+    const piUid = String(walletVal.piUid || "").trim();
+    const piUsername = String(
+      walletVal.piUsername || walletVal.username || ""
+    ).trim();
+    const currentInternalBalance = readPiBalance(walletVal);
+
+    if (amount > currentInternalBalance) {
+      return res.status(400).json({
+        ok: false,
+        error: `Số dư không đủ. Hiện còn ${currentInternalBalance.toFixed(2)} Pi.`,
+        currentBalance: currentInternalBalance
+      });
+    }
 
     stage = "daily-limit";
-    const todayCount = await countTodayWithdraws(safeWalletKey);
+    const todayCount = await countTodayWithdraws(db, safeWalletKey);
     if (todayCount >= MAX_WITHDRAW_PER_DAY_COUNT) {
       return res.status(400).json({
         ok: false,
@@ -251,526 +464,272 @@ const safeWalletKey = safeKey(walletKeyRaw);
       });
     }
 
-    stage = "wallet-read";
-    const walletRef = db.ref("wallets/" + safeWalletKey);
-    const walletSnap = await walletRef.once("value");
-    const walletVal = walletSnap.val() || {};
-    const currentBalance = readPiBalance(walletVal);
-    const piVerified = walletVal.piVerified === true;
-piUid = String(walletVal.piUid || "").trim();
-piUsername = String(walletVal.piUsername || "").trim();
+    stage = "lock";
+    lockRef = db.ref(`wallets/${safeWalletKey}/withdrawLock`);
+    const locked = await acquireWithdrawLock(lockRef);
 
-if (!piVerified || !piUid) {
-  return res.status(400).json({
-    ok: false,
-    error: "Chưa có verified Pi uid. Đăng nhập lại bằng Pi Browser trước."
-  });
-}
-    if (amount > currentBalance) {
-      return res.status(400).json({
+    if (!locked) {
+      return res.status(409).json({
         ok: false,
-        error: `Số dư không đủ. Hiện còn ${currentBalance.toFixed(2)} Pi.`,
-        currentBalance
+        error: "Đang có lệnh rút khác xử lý. Chờ chút rồi thử lại."
       });
     }
 
-    stage = "create-request-record";
+    stage = "create-request";
     requestRef = db.ref("piWithdrawRequests").push();
     withdrawId = requestRef.key || "";
 
-    await requestRef.set({
-      status: "initiated",
-      walletKey: safeWalletKey,
-      walletKeyRaw,
-      piUid,
-      piUsername,
-      amount,
-      internalBalanceBefore: currentBalance,
-      createdAt: nowMs()
-    });
+    const memo = `Rut ${Number(amount).toFixed(2)} Pi tu app`;
 
-    stage = "lock-wallet";
-    lockRef = db.ref("wallets/" + safeWalletKey + "/withdrawLock");
-
-    const lockResult = await wrapRefTransaction(lockRef, (current) => {
-      const safeCurrent =
-        current && typeof current === "object" ? current : null;
-      const active = !!safeCurrent?.active;
-      const expiresAt = Number(safeCurrent?.expiresAt || 0);
-
-      if (active && expiresAt > nowMs()) {
-        return;
-      }
-
-      return {
-        active: true,
-        withdrawId,
-        at: nowMs(),
-        expiresAt: nowMs() + LOCK_TTL_MS
-      };
-    });
-
-    if (!lockResult.committed) {
-      if (String(errCode || "") === "cancelled_payment") {
-  try {
-    if (requestRef) {
-      await requestRef.update({
-        status: "cancelled_payment",
-        cancelledAt: nowMs(),
-        debug: piResult?.data || null
-      });
-    }
-  } catch (_) {}
-
-  try {
-    if (lockRef) {
-      await lockRef.set({
-        active: false,
-        releasedAt: nowMs(),
-        reason: "cancelled_payment"
-      });
-    }
-  } catch (_) {}
-
-  return res.status(409).json({
-    ok: false,
-    error: "cancelled_payment",
-    msg: "Bạn đã hủy giao dịch trong ví Pi. Bấm rút lại để tạo giao dịch mới."
-  });
-}
-    }
-
-    let paymentId = "";
-    let txid = "";
-    let recipientAddress = "";
-
-    let activeWithdrawId = withdrawId;
-    let activeRequestRef = requestRef;
-
-    let resumeFromPending = false;
-    let skipSubmitChain = false;
-
-    let createResult = null;
-    let pending = null;
-
-    stage = "pi-create-payment";
-    createResult = await callPiCreatePayment(PI_API_KEY, {
-      payment: {
-        uid: piUid,
+    await requestRef.set(
+      cleanForFirebase({
+        status: "initiated",
+        type: "wallet_withdraw",
+        walletKey: safeWalletKey,
+        walletKeyRaw,
+        piUid,
+        piUsername,
         amount,
-        memo: `Rut ${amount.toFixed(2)} Pi tu app`,
-        metadata: {
-          kind: "wallet_withdraw",
-          withdrawId,
-          walletKey: safeWalletKey,
-          piUsername
-        }
-      }
-    });
-
-    if (!createResult.ok) {
-      const createErr = String(createResult.data?.error || "").trim();
-
-      await requestRef.update({
-        status: createErr || "pi_create_payment_failed",
-        piCreateStatus: createResult.status,
-        piCreateData: cleanForFirebase(createResult.data),
-        failedAt: nowMs()
-      });
-
-      if (createErr === "ongoing_payment_found") {
-        const allSnap = await db.ref("piWithdrawRequests").once("value");
-
-        allSnap.forEach((child) => {
-          const v = child.val() || {};
-          if (child.key === withdrawId) return;
-          if (String(v.walletKey || "") !== safeWalletKey) return;
-          if (String(v.piUid || "") !== piUid) return;
-          if (Number(v.amount || 0) !== amount) return;
-
-          const st = String(v.status || "");
-          if (
-            ![
-  "payment_created",
-  "chain_submitted",
-  "pi_complete_failed",
-  "blockchain_submit_missing_txid",
-  "linked_to_pending_payment",
-  "internal_deduct_failed_after_chain_success"
-].includes(st)
-          ) {
-            return;
-          }
-
-          if (
-            !pending ||
-            Number(v.createdAt || 0) > Number(pending.createdAt || 0)
-          ) {
-            pending = { id: child.key, ...v };
-          }
-        });
-
-        if (pending) {
-          paymentId = String(pending.paymentId || "").trim();
-          txid = String(pending.txid || "").trim();
-          recipientAddress = String(
-            pending.recipientAddress ||
-              pending.piCreateData?.recipient_address ||
-              pending.piCreateData?.recipient ||
-              pending.piCreateData?.to_address ||
-              pending.piCreateData?.payment?.recipient_address ||
-              pending.piCreateData?.payment?.to_address ||
-              pending.piCreateData?.transaction?.to ||
-              pending.piCreateData?.transaction?.to_address ||
-              ""
-          ).trim();
-
-          if (paymentId && (recipientAddress || txid)) {
-            await requestRef.update({
-              status: "linked_to_pending_payment",
-              linkedWithdrawId: pending.id,
-              paymentId,
-              txid,
-              recipientAddress,
-              updatedAt: nowMs()
-            });
-
-            activeWithdrawId = pending.id;
-            activeRequestRef = db.ref("piWithdrawRequests/" + pending.id);
-            resumeFromPending = true;
-            skipSubmitChain = !!txid;
-          }
-        }
-      }
-
-      if (!resumeFromPending) {
-        return res.status(createErr === "ongoing_payment_found" ? 409 : 502).json({
-          ok: false,
-          error: createErr || "Tạo payment rút Pi thất bại.",
-          pendingWithdrawId: pending?.id || "",
-          pendingStatus: pending?.status || "",
-          paymentId: pending?.paymentId || "",
-          txid: pending?.txid || "",
-          withdrawId,
-          debug: createResult.data
-        });
-      }
-    }
-
-    if (!resumeFromPending) {
-      paymentId = String(
-        createResult.data?.identifier ||
-          createResult.data?.paymentId ||
-          createResult.data?.payment?.identifier ||
-          ""
-      ).trim();
-
-      recipientAddress = String(
-        createResult.data?.recipient_address ||
-          createResult.data?.recipient ||
-          createResult.data?.to_address ||
-          createResult.data?.payment?.recipient_address ||
-          createResult.data?.payment?.to_address ||
-          createResult.data?.transaction?.to ||
-          createResult.data?.transaction?.to_address ||
-          ""
-      ).trim();
-
-      if (!paymentId || !recipientAddress) {
-        await requestRef.update({
-          status: "pi_create_payment_missing_fields",
-          piCreateData: cleanForFirebase(createResult.data),
-          failedAt: nowMs()
-        });
-
-        return res.status(502).json({
-          ok: false,
-          error: "Pi API không trả đủ paymentId/recipientAddress.",
-          withdrawId,
-          debug: createResult.data
-        });
-      }
-
-      await requestRef.update({
-        status: "payment_created",
-        paymentId,
-        recipientAddress,
-        piCreateData: cleanForFirebase(createResult.data),
+        memo,
+        createdAt: nowMs(),
         updatedAt: nowMs()
-      });
-    }
-
-    if (!skipSubmitChain) {
-    stage = "load-stellar";
-
-let StellarSdk = null;
-try {
-  try {
-    StellarSdk = require("@stellar/stellar-sdk");
-  } catch (_) {
-    StellarSdk = require("stellar-sdk");
-  }
-} catch (e) {
-  return res.status(500).json({
-    ok: false,
-    error: "Không load được Stellar SDK: " + (e?.message || String(e)),
-    stage
-  });
-}
-
-const S = StellarSdk?.default || StellarSdk;
-const Keypair = S?.Keypair;
-const TransactionBuilder = S?.TransactionBuilder;
-const Operation = S?.Operation;
-const Asset = S?.Asset;
-const Networks = S?.Networks;
-const ServerCtor = S?.Horizon?.Server || S?.Server;
-const BASE_FEE = Number(S?.BASE_FEE || 100000);
-
-if (
-  !Keypair ||
-  !TransactionBuilder ||
-  !Operation ||
-  !Asset ||
-  !Networks ||
-  !ServerCtor
-) {
-  return res.status(500).json({
-    ok: false,
-    error: "Stellar SDK load thiếu object cần thiết.",
-    stage
-  });
-}
-
-const server = new ServerCtor(PI_BLOCKCHAIN_API_URL);
-const sourceKeypair = Keypair.fromSecret(DEV_SECRET);
-      const sourceAccount = await server.loadAccount(DEV_PUBLIC);
-      const baseFee = await server.fetchBaseFee();
-
-      stage = "build-transaction";
-      const tx = new StellarSdk.TransactionBuilder(sourceAccount, {
-        fee: String(baseFee),
-        networkPassphrase: NETWORK_PASSPHRASE
       })
-        .addOperation(
-          StellarSdk.Operation.payment({
-            destination: recipientAddress,
-            asset: StellarSdk.Asset.native(),
-            amount: amount.toString()
-          })
-        )
-        .addMemo(StellarSdk.Memo.text(paymentId.slice(0, 28)))
-        .setTimeout(180)
-        .build();
-
-      stage = "sign-transaction";
-      const keypair = StellarSdk.Keypair.fromSecret(DEV_SECRET);
-      tx.sign(keypair);
-
-      stage = "submit-transaction";
-      const submitResult = await server.submitTransaction(tx);
-      txid = String(submitResult?.hash || submitResult?.id || "").trim();
-
-      if (!txid) {
-        await activeRequestRef.update({
-          status: "blockchain_submit_missing_txid",
-          submitResult: cleanForFirebase(submitResult),
-          failedAt: nowMs()
-        });
-
-        return res.status(502).json({
-          ok: false,
-          error: "Submit blockchain không trả txid.",
-          withdrawId: activeWithdrawId,
-          debug: submitResult
-        });
-      }
-
-      await activeRequestRef.update({
-        status: "chain_submitted",
-        txid,
-        submitResult: cleanForFirebase(submitResult),
-        updatedAt: nowMs()
-      });
-    }
-
-    stage = "pi-complete";
-    const completeResult = await callPiCompletePayment(
-      PI_API_KEY,
-      paymentId,
-      txid
     );
 
-    if (!completeResult.ok) {
-      await activeRequestRef.update({
-        status: "pi_complete_failed",
-        piCompleteStatus: completeResult.status,
-        piCompleteData: cleanForFirebase(completeResult.data),
-        updatedAt: nowMs()
-      });
+    console.log("WITHDRAW_REQUEST_CREATED", { withdrawId });
 
-      return res.status(502).json({
+    stage = "create-payment";
+    const createResult = await createPiPayment({
+      amount,
+      piUid,
+      memo,
+      metadata: {
+        kind: "wallet_withdraw",
+        withdrawId,
+        walletKey: safeWalletKey
+      }
+    });
+
+    console.log("WITHDRAW_CREATE_RESULT", createResult?.status, createResult?.data);
+
+    if (!createResult.ok) {
+      const errText = String(createResult.error || "").trim();
+
+      await requestRef.update(
+        cleanForFirebase({
+          status: "create_payment_failed",
+          paymentCreateStatus: createResult.status,
+          paymentCreateData: createResult.data || null,
+          failReason: errText || "create_payment_failed",
+          updatedAt: nowMs()
+        })
+      );
+
+      await releaseWithdrawLock(lockRef, "create_payment_failed");
+
+      return res.status(400).json({
         ok: false,
-        error: String(completeResult.data?.error || "pi_complete_failed"),
-        withdrawId: activeWithdrawId,
-        paymentId,
-        txid,
-        debug: completeResult.data
+        error: errText || "Tạo payout thất bại."
       });
     }
 
-    await activeRequestRef.update({
-      status: "pi_completed",
-      piCompleteData: cleanForFirebase(completeResult.data),
-      updatedAt: nowMs()
-    });
+    const createData = createResult.data || {};
+    paymentId = extractPaymentId(createData);
 
-    stage = "internal-deduct";
-    const deductResult = await wrapRefTransaction(walletRef, (current) => {
-      const safeCurrent =
-        current && typeof current === "object" ? current : { piBalance: 0 };
-
-      const currentPi = readPiBalance(safeCurrent);
-      if (currentPi < amount) return;
-
-      const nextPi = currentPi - amount;
-
-      return {
-        ...safeCurrent,
-        piBalance: nextPi,
-        balance: nextPi,
-        updatedAt: nowMs()
-      };
-    });
-
- let walletAfter = deductResult.snap.val() || {};
-let newInternalBalance = readPiBalance(walletAfter);
-
-if (!deductResult.committed) {
-  stage = "deduct-fallback-read";
-
-  const latestSnap = await walletRef.once("value");
-  const latestVal = latestSnap.val() || {};
-  const latestPi = readPiBalance(latestVal);
-
-  if (latestPi >= amount) {
-    stage = "deduct-fallback-update";
-
-    const nextPi = latestPi - amount;
-    const nextUpdatedAt = nowMs();
-
-    await walletRef.update({
-      piBalance: nextPi,
-      balance: nextPi,
-      updatedAt: nextUpdatedAt
-    });
-
-    walletAfter = {
-      ...latestVal,
-      piBalance: nextPi,
-      balance: nextPi,
-      updatedAt: nextUpdatedAt
-    };
-    newInternalBalance = nextPi;
-  } else {
-    const safePaymentId = typeof paymentId !== "undefined" ? paymentId : "";
-    const safeTxid = typeof txid !== "undefined" ? txid : "";
-    const safeAmount = typeof amount !== "undefined" ? amount : 0;
-
-    try {
-      if (activeRequestRef) {
-        await activeRequestRef.update({
-          status: "internal_deduct_failed_after_chain_success",
-          withdrawId: activeWithdrawId || "",
-          paymentId: safePaymentId,
-          txid: safeTxid,
-          amount: safeAmount,
-          chainCompletedAt: nowMs(),
-          internalDeductFailedAt: nowMs(),
+    const recipientAddress = extractRecipientAddress(createData);
+    if (!recipientAddress) {
+      await requestRef.update(
+        cleanForFirebase({
+          status: "missing_recipient_address",
+          paymentId,
+          paymentCreateData: createData,
           updatedAt: nowMs()
-        });
-      }
-    } catch (_) {}
+        })
+      );
+
+      await releaseWithdrawLock(lockRef, "missing_recipient_address");
+
+      return res.status(500).json({
+        ok: false,
+        error: "Pi payout đã tạo nhưng thiếu địa chỉ nhận."
+      });
+    }
+
+    stage = "submit-chain";
+    const chainResult = await submitOnChain({
+      recipientAddress,
+      amount,
+      memo
+    });
+
+    txid = pickString(chainResult?.txid);
+
+    await requestRef.update(
+      cleanForFirebase({
+        status: "chain_submitted",
+        paymentId,
+        txid,
+        recipientAddress,
+        chainSubmitData: chainResult?.data || null,
+        updatedAt: nowMs()
+      })
+    );
+
+    stage = "complete-payment";
+    let completeResult = { ok: true, status: 200, data: {} };
+    if (paymentId) {
+      completeResult = await completePiPayment(paymentId, txid);
+      await requestRef.update(
+        cleanForFirebase({
+          paymentCompleteStatus: completeResult.status,
+          paymentCompleteData: completeResult.data || null,
+          updatedAt: nowMs()
+        })
+      );
+    }
+
+    stage = "deduct-internal";
+    let deductOk = false;
+    let newInternalBalance = currentInternalBalance;
 
     try {
-      if (lockRef) {
-        await lockRef.set({
-          active: false,
-          releasedAt: nowMs(),
-          reason: "internal_deduct_failed_after_chain_success"
-        });
+      const deductTx = await wrapRefTransaction(walletRef, (current) => {
+        const safeCurrent =
+          current && typeof current === "object"
+            ? current
+            : { piBalance: 0, balance: 0 };
+
+        const currentPi = readPiBalance(safeCurrent);
+        if (currentPi < amount) return;
+
+        const nextPi = Number((currentPi - amount).toFixed(7));
+
+        return {
+          ...safeCurrent,
+          piBalance: nextPi,
+          balance: nextPi,
+          updatedAt: nowMs()
+        };
+      });
+
+      if (deductTx.committed) {
+        deductOk = true;
+        const after = deductTx.snap.val() || {};
+        newInternalBalance = readPiBalance(after);
       }
     } catch (_) {}
 
-    return res.status(409).json({
-      ok: false,
-      error: "Chain đã chạy xong nhưng trừ số dư nội bộ thất bại.",
-      withdrawId: activeWithdrawId || "",
-      paymentId: safePaymentId,
-      txid: safeTxid
-    });
-  }
-}
+    if (!deductOk) {
+      try {
+        const latestSnap = await walletRef.once("value");
+        const latestVal = latestSnap.val() || {};
+        const latestPi = readPiBalance(latestVal);
 
-    await db.ref("walletTransactions").push({
-      type: "wallet_withdraw",
-      walletKey: safeWalletKey,
-      walletKeyRaw,
-      piUid,
-      piUsername,
-      amount,
-      paymentId,
-      txid,
-      withdrawId: activeWithdrawId,
-      internalBalanceAfter: newInternalBalance,
-      createdAt: nowMs()
-    });
+        if (latestPi >= amount) {
+          const nextPi = Number((latestPi - amount).toFixed(7));
+          await walletRef.update({
+            piBalance: nextPi,
+            balance: nextPi,
+            updatedAt: nowMs()
+          });
+          deductOk = true;
+          newInternalBalance = nextPi;
+        }
+      } catch (_) {}
+    }
 
-    await activeRequestRef.update({
-      status: "done",
-      internalBalanceAfter: newInternalBalance,
-      doneAt: nowMs()
-    });
+    if (!deductOk) {
+      await requestRef.update(
+        cleanForFirebase({
+          status: "internal_deduct_failed_after_chain_success",
+          paymentId,
+          txid,
+          updatedAt: nowMs()
+        })
+      );
+
+      await releaseWithdrawLock(lockRef, "internal_deduct_failed_after_chain_success");
+
+      return res.status(200).json({
+        ok: true,
+        warning: true,
+        error:
+          "Pi đã về ví ngoài nhưng app chưa trừ nội bộ. Tao đã đánh dấu để xử lý tiếp.",
+        withdrawId,
+        paymentId,
+        txid
+      });
+    }
+
+    stage = "write-transaction";
+    await db.ref("walletTransactions").push().set(
+      cleanForFirebase({
+        type: "wallet_withdraw",
+        walletKey: safeWalletKey,
+        walletKeyRaw,
+        piUid,
+        piUsername,
+        amount,
+        paymentId,
+        txid,
+        withdrawId,
+        internalBalanceAfter: newInternalBalance,
+        createdAt: nowMs()
+      })
+    );
+
+    stage = "finish-request";
+    await requestRef.update(
+      cleanForFirebase({
+        status: "done",
+        paymentId,
+        txid,
+        internalBalanceAfter: newInternalBalance,
+        doneAt: nowMs(),
+        updatedAt: nowMs()
+      })
+    );
+
+    await releaseWithdrawLock(lockRef, "done");
 
     return res.status(200).json({
       ok: true,
-      withdrawId: activeWithdrawId,
+      withdrawId,
       paymentId,
       txid,
       amount,
-      leftToday: Math.max(0, MAX_WITHDRAW_PER_DAY_COUNT - (todayCount + 1)),
-      currentBalance: newInternalBalance
+      leftToday: Math.max(0, MAX_WITHDRAW_PER_DAY_COUNT - (todayCount + 1))
     });
   } catch (err) {
-  console.error("WITHDRAW_FATAL", {
-    stage,
-    message: err?.message || String(err),
-    stack: err?.stack || "",
-    withdrawId,
-  });
+    const msg = err?.message || String(err);
 
-  return res.status(500).json({
-    ok: false,
-    error: err?.message || "Lỗi rút Pi",
-    stage,
-    withdrawId
-  });
- } 
- finally {
     try {
-      if (lockRef && withdrawId) {
-        await wrapRefTransaction(lockRef, (current) => {
-          const safeCurrent =
-            current && typeof current === "object" ? current : null;
-
-          if (!safeCurrent) return null;
-          if (String(safeCurrent.withdrawId || "") !== String(withdrawId)) {
-            return;
-          }
-
-          return null;
-        });
+      if (requestRef) {
+        await requestRef.update(
+          cleanForFirebase({
+            status: "failed",
+            failReason: msg,
+            stage,
+            paymentId,
+            txid,
+            updatedAt: nowMs()
+          })
+        );
       }
     } catch (_) {}
+
+    try {
+      if (paymentId && !txid) {
+        await cancelPiPayment(paymentId);
+      }
+    } catch (_) {}
+
+    await releaseWithdrawLock(lockRef, "failed");
+
+    return res.status(500).json({
+      ok: false,
+      error: msg,
+      stage
+    });
   }
 };
