@@ -149,7 +149,7 @@ function wrapRefTransaction(ref, updateFn) {
     );
   });
 }
-
+  let db = null;
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({
@@ -162,7 +162,7 @@ module.exports = async function handler(req, res) {
   let requestRef = null;
   let withdrawId = "";
   let lockRef = null;
-  let db = null;
+
 
   try {
     stage = "db-init";
@@ -192,7 +192,7 @@ module.exports = async function handler(req, res) {
         error: "Thiếu DEV_PUBLIC/DEV_SECRET."
       });
     }
-    
+
     stage = "read-body";
     const body =
       typeof req.body === "string"
