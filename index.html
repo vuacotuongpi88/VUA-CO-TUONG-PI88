@@ -9362,7 +9362,10 @@ function getVerifiedPiUid() {
 function getVerifiedPiUsername() {
     return String(localStorage.getItem(PI_VERIFIED_USERNAME_KEY) || "").trim();
 }
+
 async function onIncompletePaymentFound(payment) {
+    alert("INCOMPLETE PAYMENT SDK\nidentifier = " + (payment?.identifier || "") + "\ntxid = " + (payment?.transaction?.txid || ""));
+console.log("INCOMPLETE PAYMENT SDK =", payment);
   try {
     if (payment?.identifier && payment?.transaction?.txid) {
       await fetch("/api/pi/complete", {
