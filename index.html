@@ -7729,52 +7729,29 @@ async function refreshAdminFeeTreasury() {
       "Pi admin hiện có: " + piText;
   }
 
-  function getCurrentAdminWalletKey() {
-    try {
-      if (typeof makeWalletDbKey === "function") {
-        const made = String(makeWalletDbKey() || "").trim();
-        if (made) return made;
-      }
-    } catch (_) {}
-
-    const candidates = [
-      "walletKey",
-      "wallet-key",
-      "current-wallet-key",
-      "pi-wallet-key",
-      "uid",
-      "currentUid"
-    ];
-
-    for (const key of candidates) {
-      const val = String(localStorage.getItem(key) || "").trim();
-      if (val) return val;
-    }
-
-    return "";
-  }
-
   setNote("Đang tải ví phí hệ thống...", "#7fffd4");
   setBalance("...", "...");
   if (previewEl) previewEl.textContent = "Pi admin sẽ nhận: 0 Pi";
 
   try {
-    const walletKey = getCurrentAdminWalletKey();
-    const headers = { "Content-Type": "application/json" };
-    if (walletKey) headers["x-wallet-key"] = walletKey;
+    const walletKey = typeof makeWalletDbKey === "function"
+      ? String(makeWalletDbKey() || "").trim()
+      : "";
 
     const res = await fetch("/api/convert-fee-pmc-to-pi?v=" + Date.now(), {
       method: "GET",
-      headers
+      headers: {
+        "Content-Type": "application/json",
+        ...(walletKey ? { "x-wallet-key": walletKey } : {})
+      }
     });
 
     const raw = await res.text();
     let data = {};
-
     try {
       data = raw ? JSON.parse(raw) : {};
     } catch (_) {
-      throw new Error("API trả dữ liệu không hợp lệ. " + String(raw || "").slice(0, 200));
+      throw new Error("API trả dữ liệu không hợp lệ.");
     }
 
     if (!res.ok || !data.ok) {
@@ -7782,23 +7759,28 @@ async function refreshAdminFeeTreasury() {
     }
 
     const pmcBalance = Math.max(0, Math.floor(Number(data.pmcBalance || 0) || 0));
-    const piBalance = Number(data.piBalance || 0) || 0;
 
-    setBalance(pmcBalance + " PMC", piBalance + " Pi");
+    // Dòng Pi dưới PMC bám theo số Pi UI hiện tại của tài khoản đang đăng nhập
+    const livePi = typeof getPiBalance === "function"
+      ? (Number(getPiBalance()) || 0)
+      : (Number(data.piBalance || 0) || 0);
+
+    setBalance(
+      pmcBalance.toLocaleString("vi-VN") + " PMC",
+      livePi + " Pi"
+    );
+
     setNote("Đã tải ví phí hệ thống.", "#8fffaa");
 
     if (inputEl) inputEl.value = "";
     if (secretEl) secretEl.value = "";
     if (previewEl) previewEl.textContent = "Pi admin sẽ nhận: 0 Pi";
-
-    return data;
   } catch (err) {
     setBalance("--", "--");
     setNote(
-      "Không tải được ví phí hệ thống. " + (err && err.message ? err.message : ""),
+      "Không tải được ví phí hệ thống. " + (err?.message || ""),
       "#ff9b9b"
     );
-    throw err;
   }
 }
 async function openAdminFeeTreasuryModal() {
