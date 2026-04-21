@@ -152,7 +152,6 @@ function wrapRefTransaction(ref, updateFn) {
     );
   });
 }
-  let db = null;
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({
@@ -161,11 +160,13 @@ module.exports = async function handler(req, res) {
     });
   }
 
-  let stage = "start";
-  let requestRef = null;
-  let withdrawId = "";
-  let lockRef = null;
-
+ let stage = "start";
+let requestRef = null;
+let withdrawId = "";
+let lockRef = null;
+let db = null;
+let piUid = "";
+let piUsername = "";
 
   try {
     stage = "db-init";
@@ -197,47 +198,38 @@ module.exports = async function handler(req, res) {
     }
 
     stage = "read-body";
-    const body =
-      typeof req.body === "string"
-        ? JSON.parse(req.body || "{}")
-        : req.body || {};
+const body =
+  typeof req.body === "string"
+    ? JSON.parse(req.body || "{}")
+    : (req.body || {});
 
-    const amount = Number(body.amount || 0);
-    const piUid = String(body.piUid || "").trim();
-    const piUsername = String(body.piUsername || "").trim();
-    const walletKeyRaw = String(
-      req.headers["x-wallet-key"] || body.walletKey || ""
-    ).trim();
+const amount = Number(body.amount || 0);
+const walletKeyRaw = String(
+  req.headers["x-wallet-key"] || body.walletKey || ""
+).trim();
 
-    if (!walletKeyRaw) {
-      return res.status(401).json({
-        ok: false,
-        error: "Thiếu định danh ví."
-      });
-    }
+if (!walletKeyRaw) {
+  return res.status(401).json({
+    ok: false,
+    error: "Thiếu định danh ví."
+  });
+}
 
-    if (!piUid) {
-      return res.status(400).json({
-        ok: false,
-        error: "Thiếu verified Pi uid của người nhận."
-      });
-    }
+if (!Number.isFinite(amount) || amount <= 0) {
+  return res.status(400).json({
+    ok: false,
+    error: "Số Pi rút không hợp lệ."
+  });
+}
 
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return res.status(400).json({
-        ok: false,
-        error: "Số Pi rút không hợp lệ."
-      });
-    }
+if (amount > MAX_WITHDRAW_PER_TX) {
+  return res.status(400).json({
+    ok: false,
+    error: `Mỗi lần chỉ được rút tối đa ${MAX_WITHDRAW_PER_TX} Pi.`
+  });
+}
 
-    if (amount > MAX_WITHDRAW_PER_TX) {
-      return res.status(400).json({
-        ok: false,
-        error: `Mỗi lần chỉ được rút tối đa ${MAX_WITHDRAW_PER_TX} Pi.`
-      });
-    }
-
-    const safeWalletKey = safeKey(walletKeyRaw);
+const safeWalletKey = safeKey(walletKeyRaw);
 
     stage = "daily-limit";
     const todayCount = await countTodayWithdraws(safeWalletKey);
@@ -254,7 +246,16 @@ module.exports = async function handler(req, res) {
     const walletSnap = await walletRef.once("value");
     const walletVal = walletSnap.val() || {};
     const currentBalance = readPiBalance(walletVal);
+    const piVerified = walletVal.piVerified === true;
+piUid = String(walletVal.piUid || "").trim();
+piUsername = String(walletVal.piUsername || "").trim();
 
+if (!piVerified || !piUid) {
+  return res.status(400).json({
+    ok: false,
+    error: "Chưa có verified Pi uid. Đăng nhập lại bằng Pi Browser trước."
+  });
+}
     if (amount > currentBalance) {
       return res.status(400).json({
         ok: false,

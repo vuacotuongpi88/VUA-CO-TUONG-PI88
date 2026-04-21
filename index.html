@@ -6909,8 +6909,157 @@ async function chargeStakeForReady(roomId, side) {
 }
 
 let withdrawAmountResolve = null;
+async function ensurePiSdkReady() {
+  if (!window.Pi) {
+    await new Promise((resolve, reject) => {
+      const old = document.getElementById("pi-sdk-js");
+      if (old) {
+        old.addEventListener("load", resolve, { once: true });
+        old.addEventListener("error", () => reject(new Error("Không tải được Pi SDK.")), { once: true });
+        return;
+      }
 
-function openWithdrawAmount(leftCount) {
+      const s = document.createElement("script");
+      s.id = "pi-sdk-js";
+      s.src = "https://sdk.minepi.com/pi-sdk.js";
+      s.async = true;
+      s.onload = resolve;
+      s.onerror = () => reject(new Error("Không tải được Pi SDK."));
+      document.head.appendChild(s);
+    });
+  }
+
+  if (!window.Pi) {
+    throw new Error("Pi SDK chưa sẵn sàng.");
+  }
+
+  if (!window.__piSdkInited) {
+    window.Pi.init({
+      version: "2.0",
+      sandbox: location.hostname.includes("sandbox.minepi.com")
+    });
+    window.__piSdkInited = true;
+  }
+
+  return window.Pi;
+}
+
+function getCurrentWalletKeyForPi() {
+  if (typeof makeWalletDbKey === "function") {
+    const k = String(makeWalletDbKey() || "").trim();
+    if (k) return k;
+  }
+  return "";
+}
+
+async function getPiLinkState() {
+  const walletKey = getCurrentWalletKeyForPi();
+
+  if (!walletKey) {
+    return {
+      ok: false,
+      error: "Không xác định được walletKey hiện tại."
+    };
+  }
+
+  if (!window.firebase || !firebase.database) {
+    return {
+      ok: false,
+      error: "Firebase client chưa sẵn sàng."
+    };
+  }
+
+  const snap = await firebase.database().ref("wallets/" + walletKey).once("value");
+  const val = snap.val() || {};
+
+  return {
+    ok: true,
+    walletKey,
+    piVerified: val.piVerified === true,
+    piUid: String(val.piUid || "").trim(),
+    piUsername: String(val.piUsername || "").trim(),
+    piWalletAddress: String(val.piWalletAddress || "").trim()
+  };
+}
+
+async function linkPiBrowser() {
+  const Pi = await ensurePiSdkReady();
+  const state = await getPiLinkState();
+  const walletKey = state.walletKey || getCurrentWalletKeyForPi();
+
+  if (!walletKey) {
+    throw new Error("Không xác định được walletKey.");
+  }
+
+  const auth = await Pi.authenticate(
+    ["username", "payments", "wallet_address"],
+    function onIncompletePaymentFound(_) {}
+  );
+
+  const res = await fetch("/api/pi/link-account?v=" + Date.now(), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-wallet-key": walletKey
+    },
+    body: JSON.stringify({
+      accessToken: auth.accessToken,
+      walletKey
+    })
+  });
+
+  const raw = await res.text();
+  let data = {};
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch (_) {
+    throw new Error("API link-account trả dữ liệu không hợp lệ.");
+  }
+
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || "Liên kết Pi Browser thất bại.");
+  }
+
+  return data;
+}
+
+async function ensurePiLinkBeforeWithdraw() {
+  const state = await getPiLinkState();
+
+  if (state.ok && state.piVerified && state.piUid) {
+    return state;
+  }
+
+  const ok = confirm("Tài khoản này chưa liên kết Pi Browser. Bấm OK để liên kết ngay.");
+  if (!ok) return null;
+
+  const data = await linkPiBrowser();
+
+  alert(
+    "Liên kết Pi Browser thành công!\n" +
+    "uid: " + (data.piUid || "") + "\n" +
+    "username: " + (data.piUsername || "")
+  );
+
+  return {
+    ok: true,
+    walletKey: getCurrentWalletKeyForPi(),
+    piVerified: true,
+    piUid: data.piUid || "",
+    piUsername: data.piUsername || "",
+    piWalletAddress: data.piWalletAddress || ""
+  };
+}
+async function openWithdrawAmount(leftCount) {
+      try {
+    const linkState = await ensurePiLinkBeforeWithdraw();
+    if (!linkState || !linkState.piVerified) {
+      return null;
+    }
+  } catch (err) {
+    alert("Liên kết Pi Browser thất bại: " + (err?.message || String(err)));
+    return null;
+  }
     const modal = document.getElementById("withdraw-amount-modal");
     const input = document.getElementById("withdraw-amount-input");
     const left = document.getElementById("withdraw-left-count");
