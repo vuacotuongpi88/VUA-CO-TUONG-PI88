@@ -7834,8 +7834,26 @@ if (pmcAmount < MIN_ADMIN_FEE_PMC_WITHDRAW) {
         }
 
         if (!res.ok || !data?.ok) {
-            throw new Error(data?.error || "Đổi PMC phí sang Pi thất bại.");
-        }
+    const errCode = String(data?.error || "").trim();
+
+    if (errCode === "cancelled_payment") {
+        throw new Error("Mày đã hủy giao dịch trong ví Pi. Bấm rút lại nếu muốn tạo giao dịch mới.");
+    }
+
+    if (errCode === "ongoing_payment_found") {
+        throw new Error("Đang có giao dịch rút Pi trước đó chưa xong. Đợi chút rồi bấm rút lại.");
+    }
+
+    if (errCode === "Thiếu PI_API_KEY.") {
+        throw new Error("Server đang thiếu PI_API_KEY trên Vercel.");
+    }
+
+    if (errCode === "Thiếu DEV_PUBLIC/DEV_SECRET.") {
+        throw new Error("Server đang thiếu DEV_PUBLIC hoặc DEV_SECRET trên Vercel.");
+    }
+
+    throw new Error(errCode || "Rút Pi thất bại.");
+}
 
         if (typeof data.newPlayerPiBalance === "number") {
             setPiBalance(data.newPlayerPiBalance);
