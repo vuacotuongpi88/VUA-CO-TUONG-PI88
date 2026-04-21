@@ -167,10 +167,10 @@ module.exports = async function handler(req, res) {
  try {
   stage = "db-init";
   try {
-    const adminBundle = require("./_firebaseAdmin.js");
-    const { getDatabase } = require("firebase-admin/database");
-    const adminApp = adminBundle.app || adminBundle;
-    db = getDatabase(adminApp);
+    const adminBundle = require("../_firebaseAdmin.js");
+const { getDatabase } = require("firebase-admin/database");
+const adminApp = adminBundle.app || adminBundle;
+db = getDatabase(adminApp);
   } catch (e) {
     return res.status(500).json({
       ok: false,
