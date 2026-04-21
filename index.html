@@ -7127,8 +7127,32 @@ try {
 }
 
         if (!res.ok || !data?.ok) {
-            throw new Error(data?.error || "Rút Pi thất bại.");
+    if (data?.error === "ongoing_payment_found" && data?.pendingWithdrawId) {
+        const retryRes = await fetch("/api/pi/withdraw-complete?v=" + Date.now(), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                withdrawId: data.pendingWithdrawId
+            })
+        });
+
+        const retryRaw = await retryRes.text();
+        let retryData = {};
+        try {
+            retryData = retryRaw ? JSON.parse(retryRaw) : {};
+        } catch (_) {
+            throw new Error("API retry complete trả dữ liệu không hợp lệ.");
         }
+
+        if (!retryRes.ok || !retryData?.ok) {
+            throw new Error(retryData?.error || "Có payment đang dở nhưng retry complete thất bại.");
+        }
+
+        data = retryData;
+    } else {
+        throw new Error(data?.error || "Rút Pi thất bại.");
+    }
+}
 
         state.count += 1;
         state.history.push({

@@ -246,22 +246,57 @@ module.exports = async function handler(req, res) {
   }
 });
 
-      if (!createResult.ok) {
-        await requestRef.update({
-          status: "pi_create_payment_failed",
-          piCreateStatus: createResult.status,
-          piCreateData: createResult.data,
-          failedAt: nowMs()
-        });
+     if (!createResult.ok) {
+  const createErr = String(createResult.data?.error || "").trim();
 
-        return res.status(502).json({
-          ok: false,
-          error: createResult.data?.error || "Tạo payment rút Pi thất bại.",
-          withdrawId,
-          debug: createResult.data
-        });
+  await requestRef.update({
+    status: createErr || "pi_create_payment_failed",
+    piCreateStatus: createResult.status,
+    piCreateData: createResult.data,
+    failedAt: nowMs()
+  });
+
+  if (createErr === "ongoing_payment_found") {
+    const allSnap = await db.ref("piWithdrawRequests").once("value");
+    let pending = null;
+
+    allSnap.forEach(child => {
+      const v = child.val() || {};
+      if (child.key === withdrawId) return;
+      if (String(v.walletKey || "") !== safeWalletKey) return;
+      if (String(v.piUid || "") !== piUid) return;
+
+      const st = String(v.status || "");
+      if (![
+        "payment_created",
+        "chain_submitted",
+        "pi_complete_failed",
+        "pi_completed",
+        "internal_deduct_failed_after_chain_success"
+      ].includes(st)) return;
+
+      if (!pending || Number(v.createdAt || 0) > Number(pending.createdAt || 0)) {
+        pending = { id: child.key, ...v };
       }
+    });
 
+    return res.status(409).json({
+      ok: false,
+      error: "ongoing_payment_found",
+      pendingWithdrawId: pending?.id || "",
+      pendingStatus: pending?.status || "",
+      paymentId: pending?.paymentId || "",
+      txid: pending?.txid || ""
+    });
+  }
+
+  return res.status(502).json({
+    ok: false,
+    error: createErr || "Tạo payment rút Pi thất bại.",
+    withdrawId,
+    debug: createResult.data
+  });
+}
       paymentId = String(
         createResult.data?.identifier ||
         createResult.data?.paymentId ||
