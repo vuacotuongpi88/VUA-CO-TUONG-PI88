@@ -164,35 +164,35 @@ module.exports = async function handler(req, res) {
   let lockRef = null;
   let db = null;
 
- try {
-  stage = "db-init";
   try {
-    const adminBundle = require("../_firebaseAdmin.js");
-const { getDatabase } = require("firebase-admin/database");
-const adminApp = adminBundle.app || adminBundle;
-db = getDatabase(adminApp);
-  } catch (e) {
-    return res.status(500).json({
-      ok: false,
-      error: "load_firebaseAdmin failed: " + (e?.message || String(e)),
-      stage
-    });
-  }
+    stage = "db-init";
+    try {
+      const adminBundle = require("../_firebaseAdmin.js");
+      const { getDatabase } = require("firebase-admin/database");
+      const adminApp = adminBundle.app || adminBundle;
+      db = getDatabase(adminApp);
+    } catch (e) {
+      return res.status(500).json({
+        ok: false,
+        error: "load_firebaseAdmin failed: " + (e?.message || String(e)),
+        stage
+      });
+    }
 
-  if (!PI_API_KEY) {
-    return res.status(500).json({
-      ok: false,
-      error: "Thiếu PI_API_KEY."
-    });
-  }
+    if (!PI_API_KEY) {
+      return res.status(500).json({
+        ok: false,
+        error: "Thiếu PI_API_KEY."
+      });
+    }
 
-  if (!DEV_PUBLIC || !DEV_SECRET) {
+    if (!DEV_PUBLIC || !DEV_SECRET) {
       return res.status(500).json({
         ok: false,
         error: "Thiếu DEV_PUBLIC/DEV_SECRET."
       });
     }
-
+    
     stage = "read-body";
     const body =
       typeof req.body === "string"
