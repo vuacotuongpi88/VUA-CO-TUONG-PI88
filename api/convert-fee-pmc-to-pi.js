@@ -87,35 +87,42 @@ try {
     const treasuryRef = db.ref("wallets/" + treasuryWalletKey);
     const targetRef = db.ref("wallets/" + targetWalletKey);
 
-    if (req.method === "GET") {
-      stage = "read-wallets";
-      const [treasurySnap, targetSnap] = await Promise.all([
-        treasuryRef.once("value"),
-        targetRef.once("value")
-      ]);
+  if (req.method === "GET") {
+  stage = "get-balances";
 
-      const treasuryData =
-        treasurySnap.val() && typeof treasurySnap.val() === "object"
-          ? treasurySnap.val()
-          : {};
+  const systemWalletKey = safeKey(ADMIN_WALLET_KEY);
+  const currentAdminWalletKey = safeKey(
+    req.headers["x-wallet-key"] || ADMIN_WALLET_KEY
+  );
 
-      const targetData =
-        targetSnap.val() && typeof targetSnap.val() === "object"
-          ? targetSnap.val()
-          : {};
+  const [systemSnap, adminSnap] = await Promise.all([
+    db.ref("wallets/" + systemWalletKey).once("value"),
+    db.ref("wallets/" + currentAdminWalletKey).once("value")
+  ]);
 
-      const treasuryPmcBalance = Math.floor(Number(treasuryData.pmcBalance ?? 0) || 0);
-      const targetPiBalance = readPiBalance(targetData);
+  const systemWallet = systemSnap.val() || {};
+  const adminWallet = adminSnap.val() || {};
 
-      return res.status(200).json({
-        ok: true,
-        treasuryWalletKey,
-        targetWalletKey,
-        treasuryPmcBalance,
-        targetPiBalance,
-        rate: PMC_PER_PI
-      });
-    }
+  return res.status(200).json({
+    ok: true,
+    systemWalletKey: ADMIN_WALLET_KEY,
+    currentAdminWalletKey,
+    pmcBalance: Math.max(
+      0,
+      Math.floor(Number(systemWallet.pmcBalance ?? systemWallet.pmc ?? 0) || 0)
+    ),
+    piBalance: Number(
+      adminWallet.balance != null
+        ? adminWallet.balance
+        : (adminWallet.piBalance || 0)
+    ) || 0,
+
+    // debug tạm
+    debugSystemWallet: systemWallet,
+    debugAdminWallet: adminWallet,
+    debugDatabaseUrl: process.env.FIREBASE_DATABASE_URL || ""
+  });
+}
 
     stage = "read-body";
     const { pmcAmount, adminSecret } = req.body || {};

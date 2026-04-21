@@ -7747,6 +7747,7 @@ async function refreshAdminFeeTreasury() {
     });
 
     const raw = await res.text();
+    console.log("ADMIN FEE DEBUG", data);
     let data = {};
     try {
       data = raw ? JSON.parse(raw) : {};
@@ -7770,8 +7771,12 @@ async function refreshAdminFeeTreasury() {
       livePi + " Pi"
     );
 
-    setNote("Đã tải ví phí hệ thống.", "#8fffaa");
-
+    setNote(
+  "PMC raw=" + JSON.stringify(data.debugSystemWallet || {}) +
+  " | PI raw=" + JSON.stringify(data.debugAdminWallet || {}),
+  "#8fffaa"
+);
+    
     if (inputEl) inputEl.value = "";
     if (secretEl) secretEl.value = "";
     if (previewEl) previewEl.textContent = "Pi admin sẽ nhận: 0 Pi";
