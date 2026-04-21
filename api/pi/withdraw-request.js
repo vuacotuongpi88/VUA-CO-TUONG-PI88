@@ -380,12 +380,13 @@ module.exports = async function handler(req, res) {
           const st = String(v.status || "");
           if (
             ![
-              "payment_created",
-              "chain_submitted",
-              "pi_complete_failed",
-              "blockchain_submit_missing_txid",
-              "linked_to_pending_payment"
-            ].includes(st)
+  "payment_created",
+  "chain_submitted",
+  "pi_complete_failed",
+  "blockchain_submit_missing_txid",
+  "linked_to_pending_payment",
+  "internal_deduct_failed_after_chain_success"
+].includes(st)
           ) {
             return;
           }
@@ -632,19 +633,43 @@ const sourceKeypair = Keypair.fromSecret(DEV_SECRET);
     });
 
     if (!deductResult.committed) {
+  const safePaymentId = typeof paymentId !== "undefined" ? paymentId : "";
+  const safeTxid = typeof txid !== "undefined" ? txid : "";
+  const safeAmount = typeof amount !== "undefined" ? amount : 0;
+
+  try {
+    if (activeRequestRef) {
       await activeRequestRef.update({
         status: "internal_deduct_failed_after_chain_success",
+        withdrawId: activeWithdrawId || "",
+        paymentId: safePaymentId,
+        txid: safeTxid,
+        amount: safeAmount,
+        chainCompletedAt: nowMs(),
+        internalDeductFailedAt: nowMs(),
         updatedAt: nowMs()
       });
+    }
+  } catch (_) {}
 
-      return res.status(409).json({
-        ok: false,
-        error: "Chain đã chạy xong nhưng trừ số dư nội bộ thất bại.",
-        withdrawId: activeWithdrawId,
-        paymentId,
-        txid
+  try {
+    if (lockRef) {
+      await lockRef.set({
+        active: false,
+        releasedAt: nowMs(),
+        reason: "internal_deduct_failed_after_chain_success"
       });
     }
+  } catch (_) {}
+
+  return res.status(409).json({
+    ok: false,
+    error: "Chain đã chạy xong nhưng trừ số dư nội bộ thất bại.",
+    withdrawId: activeWithdrawId || "",
+    paymentId: safePaymentId,
+    txid: safeTxid
+  });
+}
 
     const walletAfter = deductResult.snap.val() || {};
     const newInternalBalance = readPiBalance(walletAfter);
