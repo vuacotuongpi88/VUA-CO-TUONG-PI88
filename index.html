@@ -6981,7 +6981,37 @@ async function getPiLinkState() {
     piWalletAddress: String(val.piWalletAddress || "").trim()
   };
 }
+async function onIncompletePaymentFound(payment) {
+  try {
+    if (!payment?.identifier || !payment?.transaction?.txid) return;
 
+    const res = await fetch("/api/pi/complete?v=" + Date.now(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        paymentId: payment.identifier,
+        txid: payment.transaction.txid
+      })
+    });
+
+    const raw = await res.text();
+    let data = {};
+    try {
+      data = raw ? JSON.parse(raw) : {};
+    } catch (_) {
+      data = { raw };
+    }
+
+    console.log("HTML_INCOMPLETE_PAYMENT_COMPLETE", {
+      paymentId: payment.identifier,
+      txid: payment.transaction.txid,
+      status: res.status,
+      data
+    });
+  } catch (e) {
+    console.error("Xử lý incomplete payment lỗi:", e);
+  }
+}
 async function linkPiBrowser() {
   const Pi = await ensurePiSdkReady();
   const state = await getPiLinkState();
@@ -6992,9 +7022,9 @@ async function linkPiBrowser() {
   }
 
   const auth = await Pi.authenticate(
-    ["username", "payments", "wallet_address"],
-    function onIncompletePaymentFound(_) {}
-  );
+  ["username", "payments", "wallet_address"],
+  onIncompletePaymentFound
+);
 
   const res = await fetch("/api/pi/link-account?v=" + Date.now(), {
     method: "POST",
@@ -7103,7 +7133,19 @@ function submitWithdrawAmount() {
 document.getElementById("withdraw-amount-input")?.addEventListener("keypress", function(e) {
     if (e.key === "Enter") submitWithdrawAmount();
 });
+async function syncPiPendingBeforeWithdraw() {
+  try {
+    const Pi = await ensurePiSdkReady();
+    await Pi.authenticate(
+      ["username", "payments", "wallet_address"],
+      onIncompletePaymentFound
+    );
+  } catch (err) {
+    console.warn("SYNC_PI_PENDING_BEFORE_WITHDRAW_FAIL", err);
+  }
+}
 async function processWithdraw() {
+    await syncPiPendingBeforeWithdraw();
     const state = getWithdrawState();
     if (state.count >= MAX_WITHDRAW_PER_DAY) {
         alert("Hôm nay đã rút đủ 5 lần rồi. Mai quay lại nhé!");
