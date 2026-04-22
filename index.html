@@ -7157,7 +7157,7 @@ if (!walletKey) {
 }
 
 const withdrawUrl =
-  "https://vua-co-tuong-pi-88.vercel.app/api/pi/withdraw-probe-v3?v=" + Date.now();
+    "https://vua-co-tuong-pi-88.vercel.app/api/pi/withdraw-probe-v3?v=" + Date.now();
 
 alert("WITHDRAW URL = " + withdrawUrl);
 
@@ -7175,7 +7175,11 @@ const res = await fetch(withdrawUrl, {
     })
 });
 
+alert("FETCH DONE, status = " + res.status);
+
 const raw = await res.text();
+alert("RAW = " + String(raw || "").slice(0, 300));
+
 let data = {};
 try {
     data = raw ? JSON.parse(raw) : {};
