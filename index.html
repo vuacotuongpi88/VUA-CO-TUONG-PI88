@@ -6997,9 +6997,16 @@ async function linkPiBrowser() {
 
 const linkedWalletAddress = String(
   auth?.user?.wallet?.address ||
+  auth?.user?.wallet_address ||
+  auth?.user?.walletAddress ||
+  auth?.user?.payment_address ||
   auth?.wallet?.address ||
+  auth?.wallet?.publicKey ||
   auth?.walletAddress ||
+  auth?.wallet_address ||
   auth?.publicKey ||
+  auth?.public_key ||
+  state?.piWalletAddress ||
   ""
 ).trim();
 
@@ -7018,6 +7025,12 @@ const linkedPiUsername = String(
 ).trim();
 
 if (!linkedWalletAddress) {
+  alert(
+    "AUTH KEYS = " +
+    Object.keys(auth || {}).join(", ") +
+    "\nUSER KEYS = " +
+    Object.keys(auth?.user || {}).join(", ")
+  );
   throw new Error("Không lấy được địa chỉ ví Pi từ Pi Browser.");
 }
 
