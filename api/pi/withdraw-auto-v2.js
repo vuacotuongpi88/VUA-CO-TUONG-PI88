@@ -1,36 +1,32 @@
-const { getDatabase } = require("firebase-admin/database");
-const adminBundle = require("../_firebaseAdmin.js");
+function loadDeps() {
+  const { getDatabase } = require("firebase-admin/database");
+  const adminBundle = require("../_firebaseAdmin.js");
+  const core = require("../../lib/withdraw-auto-core.js");
 
-const {
-  CONFIG,
-  nowMs,
-  safeKey,
-  cleanForFirebase,
-  readPiBalance,
-  acquireWithdrawLock,
-  releaseWithdrawLock,
-  submitOnChain,
-  countTodayWithdraws,
-  inspectWithdrawQueue,
-  buildRiskFlags,
-  shouldQueueForAdmin
-} = require("../../lib/withdraw-auto-core.js");
+  const SOURCE_WALLET_PUBLIC = String(
+    process.env.DEV_PUBLIC ||
+      process.env.PI_DEVELOPER_WALLET_PUBLIC_KEY ||
+      process.env.PI_WALLET_PUBLIC_KEY ||
+      process.env.PI_PUBLIC_KEY ||
+      ""
+  ).trim();
 
-const SOURCE_WALLET_PUBLIC = String(
-  process.env.DEV_PUBLIC ||
-    process.env.PI_DEVELOPER_WALLET_PUBLIC_KEY ||
-    process.env.PI_WALLET_PUBLIC_KEY ||
-    process.env.PI_PUBLIC_KEY ||
-    ""
-).trim();
+  const SOURCE_WALLET_SECRET = String(
+    process.env.DEV_SECRET ||
+      process.env.PI_DEVELOPER_WALLET_SECRET_SEED ||
+      process.env.PI_WALLET_PRIVATE_KEY ||
+      process.env.PI_SECRET_KEY ||
+      ""
+  ).trim();
 
-const SOURCE_WALLET_SECRET = String(
-  process.env.DEV_SECRET ||
-    process.env.PI_DEVELOPER_WALLET_SECRET_SEED ||
-    process.env.PI_WALLET_PRIVATE_KEY ||
-    process.env.PI_SECRET_KEY ||
-    ""
-).trim();
+  return {
+    getDatabase,
+    adminBundle,
+    SOURCE_WALLET_PUBLIC,
+    SOURCE_WALLET_SECRET,
+    ...core
+  };
+}
 
 function pickString(...values) {
   for (const value of values) {
@@ -76,7 +72,7 @@ function pickRecipientAddressInfo(walletVal) {
   return { address: "", sourceField: "" };
 }
 
-function buildPendingAdminMessage(riskFlags) {
+function buildPendingAdminMessage(riskFlags, CONFIG) {
   const reasons = [];
 
   if (riskFlags?.overAutoMax) {
@@ -98,7 +94,8 @@ function buildPendingAdminMessage(riskFlags) {
   );
 }
 
-async function deductWalletBalance(walletRef, amount) {
+async function deductWalletBalance(walletRef, amount, deps) {
+  const { readPiBalance, nowMs } = deps;
   let deductOk = false;
   let newInternalBalance = 0;
 
@@ -153,6 +150,34 @@ async function deductWalletBalance(walletRef, amount) {
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
+      let deps;
+  try {
+    deps = loadDeps();
+  } catch (e) {
+    return res.status(500).json({
+      ok: false,
+      error: "loadDeps failed: " + (e?.message || String(e))
+    });
+  }
+
+  const {
+    getDatabase,
+    adminBundle,
+    CONFIG,
+    nowMs,
+    safeKey,
+    cleanForFirebase,
+    readPiBalance,
+    acquireWithdrawLock,
+    releaseWithdrawLock,
+    submitOnChain,
+    countTodayWithdraws,
+    inspectWithdrawQueue,
+    buildRiskFlags,
+    shouldQueueForAdmin,
+    SOURCE_WALLET_PUBLIC,
+    SOURCE_WALLET_SECRET
+  } = deps;
     return res.status(405).json({
       ok: false,
       error: "Method not allowed"
@@ -355,7 +380,7 @@ module.exports = async function handler(req, res) {
         ok: false,
         pendingAdmin: true,
         withdrawId,
-        error: buildPendingAdminMessage(riskFlags),
+        error: buildPendingAdminMessage(riskFlags, CONFIG),
         riskFlags
       });
     }
@@ -408,9 +433,10 @@ module.exports = async function handler(req, res) {
 
     stage = "deduct-internal";
     const { deductOk, newInternalBalance } = await deductWalletBalance(
-      walletRef,
-      amount
-    );
+  walletRef,
+  amount,
+  { readPiBalance, nowMs }
+);
 
     if (!deductOk) {
       await requestRef.update(
