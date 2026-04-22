@@ -8,7 +8,7 @@ const {
   releaseWithdrawLock,
   submitOnChain,
   deductWalletBalance
-} = require("../lib/withdraw-core")
+} = require("../../lib/withdraw-core")
 
 const ADMIN_FEE_SECRET = String(
   process.env.ADMIN_FEE_SECRET ||
@@ -100,7 +100,7 @@ module.exports = async function handler(req, res) {
     }
 
     stage = "db-init";
-    const adminBundle = require("../_firebaseAdmin.js");
+    const adminBundle = require("../../lib/withdraw-core")
     const { getDatabase } = require("firebase-admin/database");
     const adminApp = adminBundle.app || adminBundle;
     const db = getDatabase(adminApp);
