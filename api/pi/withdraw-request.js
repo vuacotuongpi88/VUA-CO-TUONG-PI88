@@ -364,9 +364,12 @@ async function cleanupOldPendingWithdraw(db, walletKey, piUid) {
       nestedPayment?.transaction?.txid
     );
 
-    const isDone =
-      String(v.status || "").trim() === "done" ||
-      nestedStatus.developer_completed === true;
+ const statusText = String(v.status || "").trim();
+
+const isDone =
+  statusText === "done" ||
+  statusText === "completed_old_pending_payment" ||
+  nestedStatus.developer_completed === true;
 
     const isCancelled =
       String(v.status || "").trim().startsWith("cancelled") ||
@@ -390,31 +393,45 @@ async function cleanupOldPendingWithdraw(db, walletKey, piUid) {
 
   // Nếu payment cũ đã có txid -> complete trước
   if (targetTxid) {
-    const completeRes = await completePiPayment(targetPaymentId, targetTxid);
+  const completeRes = await completePiPayment(targetPaymentId, targetTxid);
 
-    await db.ref(`piWithdrawRequests/${targetKey}`).update(
-      cleanForFirebase({
-        status: completeRes.ok
-          ? "completed_old_pending_payment"
-          : "complete_old_pending_failed",
-        oldPendingPaymentId: targetPaymentId,
-        oldPendingTxid: targetTxid,
-        completeStatus: completeRes.status,
-        completeData: completeRes.data || null,
-        updatedAt: nowMs()
-      })
-    );
+  const verifyErr = String(
+    completeRes?.data?.verification_error ||
+    completeRes?.data?.error ||
+    ""
+  ).trim();
 
-    return {
-      found: true,
-      cleaned: completeRes.ok,
-      action: "complete",
+  const treatAsCleaned =
+    completeRes.ok || verifyErr === "payment_already_linked_with_a_tx";
+
+  await db.ref(`piWithdrawRequests/${targetKey}`).update(
+    cleanForFirebase({
+      status: treatAsCleaned
+        ? "completed_old_pending_payment"
+        : "complete_old_pending_failed",
+      oldPendingPaymentId: targetPaymentId,
+      oldPendingTxid: targetTxid,
       paymentId: targetPaymentId,
       txid: targetTxid,
-      status: completeRes.status,
-      data: completeRes.data || null
-    };
-  }
+      completeStatus: completeRes.status,
+      completeData: completeRes.data || null,
+      cleanupNote: treatAsCleaned && !completeRes.ok
+        ? "Pi báo payment đã linked với tx cũ, tạm coi là đã sạch để không chặn rút mãi"
+        : "",
+      updatedAt: nowMs()
+    })
+  );
+
+  return {
+    found: true,
+    cleaned: treatAsCleaned,
+    action: "complete",
+    paymentId: targetPaymentId,
+    txid: targetTxid,
+    status: completeRes.status,
+    data: completeRes.data || null
+  };
+}
 
   // Nếu chưa có txid -> cancel
   const cancelRes = await cancelPiPayment(targetPaymentId);
