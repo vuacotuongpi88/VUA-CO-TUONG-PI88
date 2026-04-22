@@ -12,7 +12,7 @@ const {
   buildRiskFlags,
   shouldQueueForAdmin,
   deductWalletBalance
-} = require("../../lib/pi/withdraw-core")
+} = require("../lib/pi/withdraw-core")
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
