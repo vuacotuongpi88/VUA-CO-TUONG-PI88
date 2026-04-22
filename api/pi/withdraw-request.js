@@ -312,7 +312,7 @@ async function cancelPiPayment(paymentId) {
     data
   };
 }
-async function cleanupOldPendingWithdraw(db, safeWalletKey, piUid) {
+async function cleanupOldPendingWithdraw(db, piUid) {
   const snap = await db.ref("piWithdrawRequests").once("value");
   let targetKey = "";
   let target = null;
@@ -321,18 +321,16 @@ async function cleanupOldPendingWithdraw(db, safeWalletKey, piUid) {
     const v = child.val() || {};
 
     if (String(v.type || "") !== "wallet_withdraw") return;
-    if (String(v.walletKey || "") !== String(safeWalletKey || "")) return;
-    if (String(v.piUid || "") !== String(piUid || "")) return;
+    if (String(v.piUid || "").trim() !== String(piUid || "").trim()) return;
 
-    const status = String(v.status || "");
+    const status = String(v.status || "").trim();
     const paymentId = String(v.paymentId || "").trim();
     const txid = String(v.txid || "").trim();
 
-    // chỉ dọn payment cũ chưa lên chain, chưa xong
     if (!paymentId) return;
     if (txid) return;
     if (status === "done") return;
-    if (status === "cancelled") return;
+    if (status.startsWith("cancelled")) return;
 
     if (!target || Number(v.updatedAt || 0) > Number(target.updatedAt || 0)) {
       targetKey = child.key;
@@ -341,7 +339,10 @@ async function cleanupOldPendingWithdraw(db, safeWalletKey, piUid) {
   });
 
   if (!targetKey || !target) {
-    return { cleaned: false };
+    return {
+      found: false,
+      cleaned: false
+    };
   }
 
   const paymentId = String(target.paymentId || "").trim();
@@ -349,18 +350,21 @@ async function cleanupOldPendingWithdraw(db, safeWalletKey, piUid) {
 
   await db.ref(`piWithdrawRequests/${targetKey}`).update(
     cleanForFirebase({
-      status: cancelRes.ok ? "cancelled_old_pending_payment" : "cancel_old_pending_failed",
+      status: cancelRes.ok ? "cancelled" : "cancel_old_pending_failed",
       cancelStatus: cancelRes.status,
       cancelData: cancelRes.data || null,
+      cancelTriedAt: nowMs(),
       updatedAt: nowMs()
     })
   );
 
   return {
+    found: true,
     cleaned: cancelRes.ok,
     paymentId,
     requestKey: targetKey,
-    cancelRes
+    cancelStatus: cancelRes.status,
+    cancelData: cancelRes.data || null
   };
 }
 async function submitOnChain({ recipientAddress, amount, memo }) {
@@ -589,8 +593,18 @@ const currentInternalBalance = readPiBalance(walletVal);
       });
     }
     stage = "cleanup-old-pending";
-    await cleanupOldPendingWithdraw(db, safeWalletKey, piUid);
-    stage = "create-request";
+const cleanupResult = await cleanupOldPendingWithdraw(db, piUid);
+
+if (cleanupResult.found && !cleanupResult.cleaned) {
+  await releaseWithdrawLock(lockRef, "cleanup_old_pending_failed");
+  return res.status(409).json({
+    ok: false,
+    error: "Đang còn payment Pi cũ bị pending, app đã thử hủy nhưng chưa hủy được.",
+    cleanup: cleanupResult
+  });
+}
+
+stage = "create-request";
     requestRef = db.ref("piWithdrawRequests").push();
     withdrawId = requestRef.key || "";
 
