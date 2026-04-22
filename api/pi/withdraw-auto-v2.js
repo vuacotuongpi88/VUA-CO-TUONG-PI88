@@ -1,7 +1,7 @@
 function loadDeps() {
   const { getDatabase } = require("firebase-admin/database");
   const adminBundle = require("../_firebaseAdmin.js");
-  const core = require("../../lib/withdraw-auto-core.js");
+  const core = require("./_withdraw-auto-core.js");
 
   const SOURCE_WALLET_PUBLIC = String(
     process.env.DEV_PUBLIC ||
@@ -184,7 +184,7 @@ module.exports = async function handler(req, res) {
     SOURCE_WALLET_PUBLIC,
     SOURCE_WALLET_SECRET
   } = deps;
-  
+
   let stage = "start";
   let requestRef = null;
   let lockRef = null;
