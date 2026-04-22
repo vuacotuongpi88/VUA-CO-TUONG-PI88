@@ -12,7 +12,7 @@ const {
   buildRiskFlags,
   shouldQueueForAdmin,
   deductWalletBalance
-} = require("../firebaseAdmin.js")
+} = require("../_firebaseAdmin.js")
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
@@ -71,7 +71,7 @@ module.exports = async function handler(req, res) {
     }
 
     stage = "db-init";
-    const adminBundle = require("../firebaseAdmin.js")
+    const adminBundle = require("../_firebaseAdmin.js")
     const { getDatabase } = require("firebase-admin/database");
     const adminApp = adminBundle.app || adminBundle;
     const db = getDatabase(adminApp);
