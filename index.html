@@ -7000,6 +7000,10 @@ const linkedWalletAddress = String(
   auth?.user?.wallet_address ||
   auth?.user?.walletAddress ||
   auth?.user?.payment_address ||
+  auth?.user?.credentials?.wallet_address ||
+  auth?.user?.credentials?.walletAddress ||
+  auth?.user?.credentials?.address ||
+  auth?.user?.credentials?.publicKey ||
   auth?.wallet?.address ||
   auth?.wallet?.publicKey ||
   auth?.walletAddress ||
@@ -7026,10 +7030,9 @@ const linkedPiUsername = String(
 
 if (!linkedWalletAddress) {
   alert(
-    "AUTH KEYS = " +
-    Object.keys(auth || {}).join(", ") +
-    "\nUSER KEYS = " +
-    Object.keys(auth?.user || {}).join(", ")
+    "AUTH KEYS = " + Object.keys(auth || {}).join(", ") +
+    "\nUSER KEYS = " + Object.keys(auth?.user || {}).join(", ") +
+    "\nCREDENTIAL KEYS = " + Object.keys(auth?.user?.credentials || {}).join(", ")
   );
   throw new Error("Không lấy được địa chỉ ví Pi từ Pi Browser.");
 }
