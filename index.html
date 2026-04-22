@@ -7129,31 +7129,26 @@ async function processWithdraw() {
         return;
     }
 
-    const walletKey =
-        typeof makeWalletDbKey === "function"
-            ? String(makeWalletDbKey() || "").trim()
-            : "";
+    const linkState = await getPiLinkState().catch(() => ({ ok: false }));
 
-    const piUid =
-        (typeof getVerifiedPiUid === "function" ? String(getVerifiedPiUid() || "").trim() : "") ||
-        String(localStorage.getItem("pi-verified-uid") || "").trim() ||
-        String(localStorage.getItem("uid") || "").trim();
+const walletKey = String(
+    linkState?.walletKey ||
+    (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "") ||
+    ""
+).trim();
 
-    const piUsername =
-        (typeof getVerifiedPiUsername === "function" ? String(getVerifiedPiUsername() || "").trim() : "") ||
-        String(localStorage.getItem("pi-verified-username") || "").trim() ||
-        String(localStorage.getItem("pi-user-name") || "").trim();
+const piUid = String(linkState?.piUid || "").trim();
+const piUsername = String(linkState?.piUsername || "").trim();
 
-    if (!walletKey) {
-        alert("Thiếu walletKey nội bộ.");
-        return;
-    }
+if (!walletKey) {
+    alert("Thiếu walletKey nội bộ.");
+    return;
+}
 
-    if (!piUid) {
-        alert("Chưa có verified Pi uid. Đăng nhập lại bằng Pi Browser trước.");
-        return;
-    }
-
+if (!piUid) {
+    alert("Tài khoản này chưa liên kết Pi Browser. Bấm Liên kết Pi Browser trước.");
+    return;
+}
     try {
         const res = await fetch("/api/pi/withdraw-request?v=" + Date.now(), {
             method: "POST",
