@@ -312,7 +312,10 @@ async function cancelPiPayment(paymentId) {
     data
   };
 }
-async function cleanupOldPendingWithdraw(db, piUid) {
+async function cleanupOldPendingWithdraw(db, walletKey, piUid) {
+  const safeWalletKey = String(walletKey || "").trim();
+  const safePiUid = String(piUid || "").trim();
+
   const snap = await db.ref("piWithdrawRequests").once("value");
   let targetKey = "";
   let target = null;
@@ -323,7 +326,23 @@ async function cleanupOldPendingWithdraw(db, piUid) {
     const v = child.val() || {};
 
     if (String(v.type || "") !== "wallet_withdraw") return;
-    if (String(v.piUid || "").trim() !== String(piUid || "").trim()) return;
+
+    const candidateWalletKey = safeKey(
+      pickString(
+        v.walletKey,
+        v?.paymentCreateData?.metadata?.walletKey,
+        v?.paymentCreateData?.payment?.metadata?.walletKey,
+        v.walletKeyRaw
+      )
+    );
+
+    const candidatePiUid = String(v.piUid || "").trim();
+
+    // Chỉ đụng request cũ thuộc ĐÚNG ví hiện tại
+    if (safeWalletKey && candidateWalletKey !== safeWalletKey) return;
+
+    // Lớp chặn thêm: nếu record có piUid thì phải khớp piUid hiện tại
+    if (safePiUid && candidatePiUid && candidatePiUid !== safePiUid) return;
 
     const nestedPayment = v?.paymentCreateData?.payment || {};
     const nestedStatus = nestedPayment?.status || {};
@@ -527,94 +546,33 @@ module.exports = async function handler(req, res) {
       safeWalletKey
     });
 
-    stage = "wallet-read";
+        stage = "wallet-read";
     const walletRef = db.ref(`wallets/${safeWalletKey}`);
-const walletSnap = await walletRef.once("value");
-let walletVal = walletSnap.val() || {};
+    const walletSnap = await walletRef.once("value");
+    const walletVal = walletSnap.val() || {};
 
-if (!walletVal || typeof walletVal !== "object") {
-  return res.status(404).json({
-    ok: false,
-    error: "Không tìm thấy ví nội bộ."
-  });
-}
-
-// fallback: nếu ví hiện tại chưa có piVerified/piUid
-// thì đi tìm 1 ví đã link Pi trùng username / name / piUsername rồi đồng bộ ngược về ví hiện tại
-if (walletVal.piVerified !== true || !String(walletVal.piUid || "").trim()) {
-  const currentName = pickString(
-    walletVal.username,
-    walletVal.usernameNorm,
-    walletVal.piUsername,
-    walletVal.name
-  )
-    .replace(/^pi_/, "")
-    .trim();
-
-  if (currentName) {
-    const allWalletsSnap = await db.ref("wallets").once("value");
-    const allWallets = allWalletsSnap.val() || {};
-
-    let linkedWallet = null;
-
-    Object.entries(allWallets).some(([k, v]) => {
-      const item = v || {};
-      const candidateName = pickString(
-        item.username,
-        item.usernameNorm,
-        item.piUsername,
-        item.name
-      )
-        .replace(/^pi_/, "")
-        .trim();
-
-      const candidateUid = String(item.piUid || "").trim();
-
-      if (
-        item.piVerified === true &&
-        candidateUid &&
-        candidateName &&
-        candidateName === currentName
-      ) {
-        linkedWallet = item;
-        return true;
-      }
-
-      return false;
-    });
-
-    if (linkedWallet) {
-      const syncPatch = cleanForFirebase({
-        piVerified: true,
-        piUid: linkedWallet.piUid || "",
-        piUsername:
-          linkedWallet.piUsername ||
-          linkedWallet.username ||
-          linkedWallet.name ||
-          "",
-        verifiedAt: linkedWallet.verifiedAt || nowMs(),
-        piLinkSource: linkedWallet.piLinkSource || "pi_browser",
-        updatedAt: nowMs()
+    if (!walletVal || typeof walletVal !== "object") {
+      return res.status(404).json({
+        ok: false,
+        error: "Không tìm thấy ví nội bộ."
       });
-
-      await walletRef.update(syncPatch);
-      walletVal = { ...walletVal, ...syncPatch };
     }
-  }
-}
 
-if (walletVal.piVerified !== true || !String(walletVal.piUid || "").trim()) {
-  return res.status(400).json({
-    ok: false,
-    error: "Chưa có verified Pi uid. Bấm Liên kết Pi Browser trước."
-  });
-}
+    // KHÓA CHẶT:
+    // Chỉ dùng Pi UID đã link đúng trên CHÍNH walletKey hiện tại.
+    // Tuyệt đối không copy piUid từ ví khác theo username / name / piUsername.
+    if (walletVal.piVerified !== true || !String(walletVal.piUid || "").trim()) {
+      return res.status(400).json({
+        ok: false,
+        error: "Chưa có verified Pi uid cho đúng ví này. Bấm Liên kết Pi Browser trước."
+      });
+    }
 
-const piUid = String(walletVal.piUid || "").trim();
-const piUsername = String(
-  walletVal.piUsername || walletVal.username || walletVal.name || ""
-).trim();
-const currentInternalBalance = readPiBalance(walletVal);
+    const piUid = String(walletVal.piUid || "").trim();
+    const piUsername = String(
+      walletVal.piUsername || walletVal.username || walletVal.name || ""
+    ).trim();
+    const currentInternalBalance = readPiBalance(walletVal);
 
     if (amount > currentInternalBalance) {
       return res.status(400).json({
@@ -645,7 +603,7 @@ const currentInternalBalance = readPiBalance(walletVal);
       });
     }
     stage = "cleanup-old-pending";
-const cleanupResult = await cleanupOldPendingWithdraw(db, piUid);
+const cleanupResult = await cleanupOldPendingWithdraw(db, safeWalletKey, piUid);
 console.log("CLEANUP_RESULT", cleanupResult);
 
 if (cleanupResult.found && !cleanupResult.cleaned) {
