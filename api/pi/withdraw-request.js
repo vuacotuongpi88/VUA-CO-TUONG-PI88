@@ -316,6 +316,8 @@ async function cleanupOldPendingWithdraw(db, piUid) {
   const snap = await db.ref("piWithdrawRequests").once("value");
   let targetKey = "";
   let target = null;
+  let targetPaymentId = "";
+  let targetTxid = "";
 
   snap.forEach((child) => {
     const v = child.val() || {};
@@ -323,37 +325,87 @@ async function cleanupOldPendingWithdraw(db, piUid) {
     if (String(v.type || "") !== "wallet_withdraw") return;
     if (String(v.piUid || "").trim() !== String(piUid || "").trim()) return;
 
-    const status = String(v.status || "").trim();
-    const paymentId = String(v.paymentId || "").trim();
-    const txid = String(v.txid || "").trim();
+    const nestedPayment = v?.paymentCreateData?.payment || {};
+    const nestedStatus = nestedPayment?.status || {};
 
-    if (!paymentId) return;
-    if (txid) return;
-    if (status === "done") return;
-    if (status.startsWith("cancelled")) return;
+    const candidatePaymentId = pickString(
+      v.paymentId,
+      v?.paymentCreateData?.identifier,
+      v?.paymentCreateData?.paymentId,
+      v?.paymentCreateData?.payment_id,
+      nestedPayment?.identifier,
+      nestedPayment?.paymentId,
+      nestedPayment?.payment_id,
+      nestedPayment?.id
+    );
+
+    const candidateTxid = pickString(
+      v.txid,
+      v?.paymentCreateData?.transaction?.txid,
+      nestedPayment?.transaction?.txid
+    );
+
+    const isDone =
+      String(v.status || "").trim() === "done" ||
+      nestedStatus.developer_completed === true;
+
+    const isCancelled =
+      String(v.status || "").trim().startsWith("cancelled") ||
+      nestedStatus.cancelled === true ||
+      nestedStatus.user_cancelled === true;
+
+    if (!candidatePaymentId) return;
+    if (isDone || isCancelled) return;
 
     if (!target || Number(v.updatedAt || 0) > Number(target.updatedAt || 0)) {
       targetKey = child.key;
       target = v;
+      targetPaymentId = candidatePaymentId;
+      targetTxid = candidateTxid;
     }
   });
 
-  if (!targetKey || !target) {
+  if (!targetKey || !targetPaymentId) {
+    return { found: false, cleaned: false };
+  }
+
+  // Nếu payment cũ đã có txid -> complete trước
+  if (targetTxid) {
+    const completeRes = await completePiPayment(targetPaymentId, targetTxid);
+
+    await db.ref(`piWithdrawRequests/${targetKey}`).update(
+      cleanForFirebase({
+        status: completeRes.ok
+          ? "completed_old_pending_payment"
+          : "complete_old_pending_failed",
+        oldPendingPaymentId: targetPaymentId,
+        oldPendingTxid: targetTxid,
+        completeStatus: completeRes.status,
+        completeData: completeRes.data || null,
+        updatedAt: nowMs()
+      })
+    );
+
     return {
-      found: false,
-      cleaned: false
+      found: true,
+      cleaned: completeRes.ok,
+      action: "complete",
+      paymentId: targetPaymentId,
+      txid: targetTxid,
+      status: completeRes.status,
+      data: completeRes.data || null
     };
   }
 
-  const paymentId = String(target.paymentId || "").trim();
-  const cancelRes = await cancelPiPayment(paymentId);
+  // Nếu chưa có txid -> cancel
+  const cancelRes = await cancelPiPayment(targetPaymentId);
 
   await db.ref(`piWithdrawRequests/${targetKey}`).update(
     cleanForFirebase({
       status: cancelRes.ok ? "cancelled" : "cancel_old_pending_failed",
+      oldPendingPaymentId: targetPaymentId,
       cancelStatus: cancelRes.status,
       cancelData: cancelRes.data || null,
-      cancelTriedAt: nowMs(),
       updatedAt: nowMs()
     })
   );
@@ -361,10 +413,10 @@ async function cleanupOldPendingWithdraw(db, piUid) {
   return {
     found: true,
     cleaned: cancelRes.ok,
-    paymentId,
-    requestKey: targetKey,
-    cancelStatus: cancelRes.status,
-    cancelData: cancelRes.data || null
+    action: "cancel",
+    paymentId: targetPaymentId,
+    status: cancelRes.status,
+    data: cancelRes.data || null
   };
 }
 async function submitOnChain({ recipientAddress, amount, memo }) {
@@ -600,7 +652,7 @@ if (cleanupResult.found && !cleanupResult.cleaned) {
   await releaseWithdrawLock(lockRef, "cleanup_old_pending_failed");
   return res.status(409).json({
     ok: false,
-    error: "Đang còn payment Pi cũ bị pending, app đã thử hủy nhưng chưa hủy được.",
+    error: "Đang còn payment Pi cũ bị pending, app đã thử xử lý nhưng chưa xong.",
     cleanup: cleanupResult
   });
 }
@@ -663,9 +715,12 @@ stage = "create-request";
   await releaseWithdrawLock(lockRef, "create_payment_failed");
 
   return res.status(400).json({
-    ok: false,
-    error: errText || "Tạo payout thất bại."
-  });
+  ok: false,
+  error:
+    errText === "ongoing_payment_found"
+      ? "Tài khoản Pi này đang còn payment cũ chưa complete. App đang bị Pi chặn tạo lệnh mới."
+      : (errText || "Tạo payout thất bại.")
+});
 }
 
     const createData = createResult.data || {};
