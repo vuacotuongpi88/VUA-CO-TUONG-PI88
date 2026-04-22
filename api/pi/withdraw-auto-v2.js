@@ -150,7 +150,13 @@ async function deductWalletBalance(walletRef, amount, deps) {
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
-      let deps;
+    return res.status(405).json({
+      ok: false,
+      error: "Method not allowed"
+    });
+  }
+
+  let deps;
   try {
     deps = loadDeps();
   } catch (e) {
@@ -178,12 +184,7 @@ module.exports = async function handler(req, res) {
     SOURCE_WALLET_PUBLIC,
     SOURCE_WALLET_SECRET
   } = deps;
-    return res.status(405).json({
-      ok: false,
-      error: "Method not allowed"
-    });
-  }
-
+  
   let stage = "start";
   let requestRef = null;
   let lockRef = null;
