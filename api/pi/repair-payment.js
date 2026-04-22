@@ -9,9 +9,7 @@ const PI_API_KEY = String(
     ""
 ).trim();
 
-const REPAIR_API_KEY = String(
-  process.env.REPAIR_API_KEY || ""
-).trim();
+const REPAIR_API_KEY = String(process.env.REPAIR_API_KEY || "").trim();
 
 function nowMs() {
   return Date.now();
@@ -30,8 +28,7 @@ function pickString(...values) {
 }
 
 function cleanForFirebase(input) {
-  if (input === undefined) return null;
-  if (input === null) return null;
+  if (input === undefined || input === null) return null;
 
   if (Array.isArray(input)) {
     return input.map((x) => cleanForFirebase(x)).filter((x) => x !== undefined);
@@ -127,10 +124,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const sentRepairKey = String(
-      req.headers["x-repair-key"] || ""
-    ).trim();
-
+    const sentRepairKey = String(req.headers["x-repair-key"] || "").trim();
     if (!sentRepairKey || sentRepairKey !== REPAIR_API_KEY) {
       return res.status(401).json({
         ok: false,
@@ -146,6 +140,7 @@ module.exports = async function handler(req, res) {
     const paymentId = String(body.paymentId || "").trim();
     const txid = String(body.txid || "").trim();
     const walletKeyRaw = String(body.walletKey || "").trim();
+    const oldPendingWalletKeyRaw = String(body.oldPendingWalletKey || "").trim();
     const note = String(body.note || "manual repair old pending payment").trim();
 
     if (!paymentId) {
@@ -171,27 +166,31 @@ module.exports = async function handler(req, res) {
 
     const verifyErr = String(
       completeRes?.data?.verification_error ||
-      completeRes?.data?.error ||
-      ""
+        completeRes?.data?.error ||
+        ""
     ).trim();
 
     const repaired =
       completeRes.ok || verifyErr === "payment_already_linked_with_a_tx";
 
     const safeWalletKey = safeKey(walletKeyRaw);
-    const snap = await db.ref("piWithdrawRequests").once("value");
+    const safeOldPendingWalletKey = safeKey(oldPendingWalletKeyRaw);
 
-    const matchedKeys = [];
+    const snap = await db.ref("piWithdrawRequests").once("value");
+    const matchedKeySet = new Set();
 
     snap.forEach((child) => {
       const v = child.val() || {};
 
       const recordWalletKey = safeKey(
+        pickString(v.walletKey, v.walletKeyRaw)
+      );
+
+      const recordOldPendingWalletKey = safeKey(
         pickString(
-          v.walletKey,
-          v.walletKeyRaw,
-          v?.paymentCreateData?.metadata?.walletKey,
-          v?.paymentCreateData?.payment?.metadata?.walletKey
+          v.oldPendingWalletKey,
+          v?.paymentCreateData?.payment?.metadata?.walletKey,
+          v?.paymentCreateData?.metadata?.walletKey
         )
       );
 
@@ -213,14 +212,27 @@ module.exports = async function handler(req, res) {
         v?.paymentCreateData?.payment?.transaction?.txid
       );
 
-      const walletMatch = !safeWalletKey || recordWalletKey === safeWalletKey;
-      const paymentMatch = recordPaymentId === paymentId;
-      const txMatch = !recordTxid || recordTxid === txid;
+      const paymentMatch = !!paymentId && recordPaymentId === paymentId;
+      const txMatch = !txid || !recordTxid || recordTxid === txid;
 
-      if (walletMatch && paymentMatch && txMatch) {
-        matchedKeys.push(child.key);
+      const currentWalletMatch =
+        !!safeWalletKey &&
+        (recordWalletKey === safeWalletKey ||
+          recordOldPendingWalletKey === safeWalletKey);
+
+      const oldWalletMatch =
+        !!safeOldPendingWalletKey &&
+        (recordWalletKey === safeOldPendingWalletKey ||
+          recordOldPendingWalletKey === safeOldPendingWalletKey);
+
+      const walletHintMatch = currentWalletMatch || oldWalletMatch;
+
+      if ((paymentMatch && txMatch) || (walletHintMatch && (paymentMatch || txMatch))) {
+        matchedKeySet.add(child.key);
       }
     });
+
+    const matchedKeys = Array.from(matchedKeySet);
 
     const patch = cleanForFirebase({
       status: repaired
@@ -230,8 +242,10 @@ module.exports = async function handler(req, res) {
       txid,
       oldPendingPaymentId: paymentId,
       oldPendingTxid: txid,
+      oldPendingWalletKey: oldPendingWalletKeyRaw || "",
       repairStatus: completeRes.status,
       repairData: completeRes.data || null,
+      verifyErr,
       cleanupNote: repaired
         ? "manual repair: payment cũ đã được complete / linked tx, cho qua để không chặn rút mãi"
         : "",
@@ -249,6 +263,8 @@ module.exports = async function handler(req, res) {
       repaired,
       paymentId,
       txid,
+      walletKey: walletKeyRaw,
+      oldPendingWalletKey: oldPendingWalletKeyRaw,
       verifyErr,
       matchedKeys,
       repairStatus: completeRes.status,
