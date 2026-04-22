@@ -7161,31 +7161,81 @@ const withdrawUrl =
 
 alert("WITHDRAW URL = " + withdrawUrl);
 
-const res = await fetch(withdrawUrl, {
-    method: "POST",
-    headers: {
-        "Content-Type": "application/json",
-        "x-wallet-key": walletKey
-    },
-    body: JSON.stringify({
-        amount,
-        piUid,
-        piUsername,
-        walletKey
-    })
-});
-
-alert("FETCH DONE, status = " + res.status);
-
-const raw = await res.text();
-alert("RAW = " + String(raw || "").slice(0, 300));
-
-let data = {};
 try {
-    data = raw ? JSON.parse(raw) : {};
-} catch (_) {
-    alert("RAW withdraw API = " + String(raw || "").slice(0, 500));
-    throw new Error("API rút Pi trả dữ liệu không hợp lệ.");
+    const res = await fetch(withdrawUrl, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "x-wallet-key": walletKey
+        },
+        body: JSON.stringify({
+            amount,
+            piUid,
+            piUsername,
+            walletKey
+        })
+    });
+
+    alert("FETCH DONE, status = " + res.status);
+
+    const raw = await res.text();
+    alert("RAW = " + String(raw || "").slice(0, 300));
+
+    let data = {};
+    try {
+        data = raw ? JSON.parse(raw) : {};
+    } catch (_) {
+        alert("RAW withdraw API = " + String(raw || "").slice(0, 500));
+        throw new Error("API rút Pi trả dữ liệu không hợp lệ.");
+    }
+
+    alert("AFTER PARSE OK");
+
+    if (data?.pendingAdmin) {
+        alert(
+            data.message ||
+            "Lệnh rút đã được đưa vào hàng duyệt. Admin sẽ xử lý sớm."
+        );
+        return;
+    }
+
+    if (!res.ok || !data?.ok) {
+        alert("RAW withdraw error = " + JSON.stringify(data).slice(0, 500));
+        throw new Error(data?.error || "Rút Pi thất bại.");
+    }
+
+    alert("BEFORE SAVE STATE");
+
+    state.count += 1;
+    if (!Array.isArray(state.history)) state.history = [];
+    state.history.push({
+        amount,
+        time: new Date().toISOString(),
+        withdrawId: data.withdrawId || "",
+        paymentId: data.paymentId || "",
+        txid: data.txid || ""
+    });
+    saveWithdrawState(state);
+
+    if (typeof data.newBalance === "number") {
+        setPiBalance(data.newBalance);
+    } else if (typeof data.currentBalance === "number") {
+        setPiBalance(data.currentBalance);
+    } else if (typeof loadWalletBalance === "function") {
+        await loadWalletBalance().catch(() => {});
+    }
+
+    alert("BEFORE SUCCESS ALERT");
+
+    alert(
+        "Rút Pi thành công!\n" +
+        `Số Pi rút: ${amount.toFixed(2)} Pi\n` +
+        `txid: ${data.txid || "N/A"}\n` +
+        `Đã rút hôm nay: ${state.count}/${MAX_WITHDRAW_PER_DAY} lượt.`
+    );
+} catch (err) {
+    console.error("RÚT PI LỖI:", err);
+    alert("Rút Pi lỗi: " + (err.name || "") + " | " + (err.message || "Không rõ lỗi"));
 }
 }
 
