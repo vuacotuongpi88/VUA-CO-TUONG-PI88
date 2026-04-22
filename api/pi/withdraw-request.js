@@ -594,6 +594,7 @@ const currentInternalBalance = readPiBalance(walletVal);
     }
     stage = "cleanup-old-pending";
 const cleanupResult = await cleanupOldPendingWithdraw(db, piUid);
+console.log("CLEANUP_RESULT", cleanupResult);
 
 if (cleanupResult.found && !cleanupResult.cleaned) {
   await releaseWithdrawLock(lockRef, "cleanup_old_pending_failed");
@@ -642,25 +643,30 @@ stage = "create-request";
     console.log("WITHDRAW_CREATE_RESULT", createResult?.status, createResult?.data);
 
     if (!createResult.ok) {
-      const errText = String(createResult.error || "").trim();
+  const errText = String(createResult.error || "").trim();
 
-      await requestRef.update(
-        cleanForFirebase({
-          status: "create_payment_failed",
-          paymentCreateStatus: createResult.status,
-          paymentCreateData: createResult.data || null,
-          failReason: errText || "create_payment_failed",
-          updatedAt: nowMs()
-        })
-      );
+  console.log("WITHDRAW_CREATE_FAIL", {
+    errText,
+    createData: createResult.data || null
+  });
 
-      await releaseWithdrawLock(lockRef, "create_payment_failed");
+  await requestRef.update(
+    cleanForFirebase({
+      status: "create_payment_failed",
+      paymentCreateStatus: createResult.status,
+      paymentCreateData: createResult.data || null,
+      failReason: errText || "create_payment_failed",
+      updatedAt: nowMs()
+    })
+  );
 
-      return res.status(400).json({
-        ok: false,
-        error: errText || "Tạo payout thất bại."
-      });
-    }
+  await releaseWithdrawLock(lockRef, "create_payment_failed");
+
+  return res.status(400).json({
+    ok: false,
+    error: errText || "Tạo payout thất bại."
+  });
+}
 
     const createData = createResult.data || {};
     paymentId = extractPaymentId(createData);
