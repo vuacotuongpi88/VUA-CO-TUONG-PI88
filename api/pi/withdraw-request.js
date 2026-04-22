@@ -71,7 +71,7 @@ module.exports = async function handler(req, res) {
     }
 
     stage = "db-init";
-    const adminBundle = require("../../lib/firebaseAdmin.js")
+    const adminBundle = require("../lib/firebaseAdmin.js")
     const { getDatabase } = require("firebase-admin/database");
     const adminApp = adminBundle.app || adminBundle;
     const db = getDatabase(adminApp);

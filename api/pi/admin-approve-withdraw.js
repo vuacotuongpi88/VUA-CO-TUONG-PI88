@@ -8,7 +8,7 @@ const {
   releaseWithdrawLock,
   submitOnChain,
   deductWalletBalance
-} = require("../../lib/pi/withdraw-core")
+} = require("../lib/withdraw-core")
 
 const ADMIN_FEE_SECRET = String(
   process.env.ADMIN_FEE_SECRET ||
