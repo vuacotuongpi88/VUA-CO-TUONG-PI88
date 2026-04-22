@@ -649,10 +649,20 @@ const cleanupResult = await cleanupOldPendingWithdraw(db, piUid);
 console.log("CLEANUP_RESULT", cleanupResult);
 
 if (cleanupResult.found && !cleanupResult.cleaned) {
+  const verifyErr = String(
+    cleanupResult?.data?.verification_error ||
+    cleanupResult?.data?.error ||
+    ""
+  ).trim();
+
   await releaseWithdrawLock(lockRef, "cleanup_old_pending_failed");
+
   return res.status(409).json({
     ok: false,
-    error: "Đang còn payment Pi cũ bị pending, app đã thử xử lý nhưng chưa xong.",
+    error:
+      verifyErr === "payment_already_linked_with_a_tx"
+        ? `Đang kẹt payment Pi cũ ${cleanupResult.paymentId}. Payment này đã gắn với 1 tx cũ, cần xử lý thủ công trước khi rút tiếp.`
+        : "Đang còn payment Pi cũ bị pending, app đã thử xử lý nhưng chưa xong.",
     cleanup: cleanupResult
   });
 }
