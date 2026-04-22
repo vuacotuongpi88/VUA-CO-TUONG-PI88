@@ -13,16 +13,44 @@ const {
   countTodayWithdraws,
   inspectWithdrawQueue,
   buildRiskFlags,
-  shouldQueueForAdmin,
-  deductWalletBalance
+  shouldQueueForAdmin
 } = require("../../lib/withdraw-auto-core.js");
+
+const SOURCE_WALLET_PUBLIC = String(
+  process.env.DEV_PUBLIC ||
+    process.env.PI_DEVELOPER_WALLET_PUBLIC_KEY ||
+    process.env.PI_WALLET_PUBLIC_KEY ||
+    process.env.PI_PUBLIC_KEY ||
+    ""
+).trim();
+
+const SOURCE_WALLET_SECRET = String(
+  process.env.DEV_SECRET ||
+    process.env.PI_DEVELOPER_WALLET_SECRET_SEED ||
+    process.env.PI_WALLET_PRIVATE_KEY ||
+    process.env.PI_SECRET_KEY ||
+    ""
+).trim();
 
 function pickString(...values) {
   for (const value of values) {
-    const s = String(value || "").trim();
+    const s = String(value ?? "").trim();
     if (s) return s;
   }
   return "";
+}
+
+function wrapRefTransaction(ref, updateFn) {
+  return new Promise((resolve, reject) => {
+    ref.transaction(
+      updateFn,
+      (err, committed, snap) => {
+        if (err) return reject(err);
+        resolve({ committed, snap });
+      },
+      false
+    );
+  });
 }
 
 function pickRecipientAddressInfo(walletVal) {
@@ -52,9 +80,7 @@ function buildPendingAdminMessage(riskFlags) {
   const reasons = [];
 
   if (riskFlags?.overAutoMax) {
-    reasons.push(
-      `Số Pi rút vượt ngưỡng auto ${CONFIG.AUTO_WITHDRAW_MAX} Pi`
-    );
+    reasons.push(`Số Pi rút vượt ngưỡng auto ${CONFIG.AUTO_WITHDRAW_MAX} Pi`);
   }
   if (riskFlags?.burstRequests) {
     reasons.push("Ví bấm rút quá nhanh trong thời gian ngắn");
@@ -70,6 +96,59 @@ function buildPendingAdminMessage(riskFlags) {
     "Lệnh rút đã được đưa vào hàng duyệt thủ công. " +
     (reasons.length ? reasons.join(" | ") : "Admin sẽ xử lý sớm.")
   );
+}
+
+async function deductWalletBalance(walletRef, amount) {
+  let deductOk = false;
+  let newInternalBalance = 0;
+
+  try {
+    const deductTx = await wrapRefTransaction(walletRef, (current) => {
+      const safeCurrent =
+        current && typeof current === "object"
+          ? current
+          : { piBalance: 0, balance: 0 };
+
+      const currentPi = readPiBalance(safeCurrent);
+      if (currentPi < amount) return;
+
+      const nextPi = Number((currentPi - amount).toFixed(7));
+
+      return {
+        ...safeCurrent,
+        piBalance: nextPi,
+        balance: nextPi,
+        updatedAt: nowMs()
+      };
+    });
+
+    if (deductTx.committed) {
+      deductOk = true;
+      const after = deductTx.snap.val() || {};
+      newInternalBalance = readPiBalance(after);
+    }
+  } catch (_) {}
+
+  if (!deductOk) {
+    try {
+      const latestSnap = await walletRef.once("value");
+      const latestVal = latestSnap.val() || {};
+      const latestPi = readPiBalance(latestVal);
+
+      if (latestPi >= amount) {
+        const nextPi = Number((latestPi - amount).toFixed(7));
+        await walletRef.update({
+          piBalance: nextPi,
+          balance: nextPi,
+          updatedAt: nowMs()
+        });
+        deductOk = true;
+        newInternalBalance = nextPi;
+      }
+    } catch (_) {}
+  }
+
+  return { deductOk, newInternalBalance };
 }
 
 module.exports = async function handler(req, res) {
@@ -88,7 +167,8 @@ module.exports = async function handler(req, res) {
 
   try {
     stage = "env-check";
-    if (!CONFIG.DEV_PUBLIC || !CONFIG.DEV_SECRET) {
+
+    if (!SOURCE_WALLET_PUBLIC || !SOURCE_WALLET_SECRET) {
       return res.status(500).json({
         ok: false,
         error: "Thiếu DEV_PUBLIC/DEV_SECRET cho ví nguồn hệ thống."
@@ -153,20 +233,6 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const { address: recipientAddress, sourceField } =
-      pickRecipientAddressInfo(walletVal);
-
-    if (!recipientAddress) {
-      return res.status(400).json({
-        ok: false,
-        error:
-          "Tài khoản này chưa có ví Pi nhận tiền. Bấm Liên kết Pi Browser trước.",
-        debug: {
-          needRecipientAddress: true
-        }
-      });
-    }
-
     const piUid = pickString(walletVal.piUid, body.piUid);
     const piUsername = pickString(
       walletVal.piUsername,
@@ -174,6 +240,28 @@ module.exports = async function handler(req, res) {
       walletVal.name,
       body.piUsername
     );
+
+    const { address: recipientAddress, sourceField } =
+      pickRecipientAddressInfo(walletVal);
+
+    if (!recipientAddress) {
+      return res.status(400).json({
+        ok: false,
+        error:
+          "Tài khoản này chưa có ví Pi nhận tiền. Bấm Liên kết Pi Browser trước."
+      });
+    }
+
+    if (recipientAddress === SOURCE_WALLET_PUBLIC) {
+      return res.status(400).json({
+        ok: false,
+        error:
+          "Ví nhận của khách đang trùng ví nguồn hệ thống. Không cho auto rút kiểu này.",
+        recipientAddress,
+        sourceWallet: SOURCE_WALLET_PUBLIC
+      });
+    }
+
     const currentInternalBalance = readPiBalance(walletVal);
 
     if (amount > currentInternalBalance) {
@@ -197,10 +285,11 @@ module.exports = async function handler(req, res) {
     stage = "lock";
     lockRef = db.ref(`wallets/${safeWalletKey}/withdrawLock`);
     const locked = await acquireWithdrawLock(lockRef);
+
     if (!locked) {
       return res.status(409).json({
         ok: false,
-        error: "Đang có lệnh rút khác xử lý. Chờ xong rồi thử lại."
+        error: "Đang có lệnh rút khác xử lý. Chờ chút rồi thử lại."
       });
     }
 
@@ -209,23 +298,21 @@ module.exports = async function handler(req, res) {
 
     if (queueInfo.activeRequest) {
       await releaseWithdrawLock(lockRef, "active_request_exists");
-
       return res.status(409).json({
         ok: false,
-        error: "Đang có lệnh rút khác xử lý. Chờ xong rồi thử lại.",
+        error: "Đang có lệnh rút khác xử lý. Chờ chút rồi thử lại.",
         withdrawId: queueInfo.activeRequest.key
       });
     }
 
     if (queueInfo.pendingAdminRequest) {
       await releaseWithdrawLock(lockRef, "pending_admin_exists");
-
       return res.status(409).json({
         ok: false,
+        pendingAdmin: true,
         error:
           "Ví này đang có lệnh rút chờ duyệt. Không cần bấm thêm, admin sẽ xử lý.",
-        withdrawId: queueInfo.pendingAdminRequest.key,
-        pendingAdmin: true
+        withdrawId: queueInfo.pendingAdminRequest.key
       });
     }
 
@@ -245,14 +332,14 @@ module.exports = async function handler(req, res) {
       cleanForFirebase({
         status: queueForAdmin ? "pending_admin" : "initiated",
         type: "wallet_withdraw",
-        requestMode: queueForAdmin ? "admin_queue" : "auto",
+        requestMode: queueForAdmin ? "admin_queue" : "auto_direct_v2",
         walletKey: safeWalletKey,
         walletKeyRaw,
         piUid,
         piUsername,
         amount,
         memo,
-        sourceWalletAddress: CONFIG.DEV_PUBLIC,
+        sourceWalletAddress: SOURCE_WALLET_PUBLIC,
         recipientAddress,
         recipientAddressField: sourceField,
         autoEligible: !queueForAdmin,
@@ -264,7 +351,6 @@ module.exports = async function handler(req, res) {
 
     if (queueForAdmin) {
       await releaseWithdrawLock(lockRef, "queued_for_admin");
-
       return res.status(409).json({
         ok: false,
         pendingAdmin: true,
@@ -313,7 +399,7 @@ module.exports = async function handler(req, res) {
       cleanForFirebase({
         status: "chain_submitted",
         txid,
-        sourceWalletAddress: CONFIG.DEV_PUBLIC,
+        sourceWalletAddress: SOURCE_WALLET_PUBLIC,
         recipientAddress,
         chainSubmitData: chainResult?.data || null,
         updatedAt: nowMs()
@@ -335,7 +421,10 @@ module.exports = async function handler(req, res) {
         })
       );
 
-      await releaseWithdrawLock(lockRef, "internal_deduct_failed_after_chain_success");
+      await releaseWithdrawLock(
+        lockRef,
+        "internal_deduct_failed_after_chain_success"
+      );
 
       return res.status(200).json({
         ok: true,
@@ -345,7 +434,7 @@ module.exports = async function handler(req, res) {
         withdrawId,
         paymentId: "",
         txid,
-        sourceWallet: CONFIG.DEV_PUBLIC,
+        sourceWallet: SOURCE_WALLET_PUBLIC,
         recipientAddress
       });
     }
@@ -362,7 +451,7 @@ module.exports = async function handler(req, res) {
       paymentId: "",
       txid,
       withdrawId,
-      sourceWalletAddress: CONFIG.DEV_PUBLIC,
+      sourceWalletAddress: SOURCE_WALLET_PUBLIC,
       recipientAddress,
       recipientAddressField: sourceField,
       internalBalanceAfter: newInternalBalance,
@@ -379,7 +468,7 @@ module.exports = async function handler(req, res) {
         status: "done",
         requestMode: "auto_done",
         txid,
-        sourceWalletAddress: CONFIG.DEV_PUBLIC,
+        sourceWalletAddress: SOURCE_WALLET_PUBLIC,
         recipientAddress,
         internalBalanceAfter: newInternalBalance,
         doneAt: nowMs(),
@@ -401,7 +490,7 @@ module.exports = async function handler(req, res) {
         0,
         Number(CONFIG.MAX_WITHDRAW_PER_DAY_COUNT || 0) - (todayCount + 1)
       ),
-      sourceWallet: CONFIG.DEV_PUBLIC,
+      sourceWallet: SOURCE_WALLET_PUBLIC,
       recipientAddress
     });
   } catch (err) {
