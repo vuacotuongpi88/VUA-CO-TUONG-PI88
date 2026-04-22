@@ -7156,66 +7156,33 @@ if (!walletKey) {
     return;
 }
 
-if (!piUid) {
-    alert("Tài khoản này chưa liên kết Pi Browser. Bấm Liên kết Pi Browser trước.");
-    return;
+const withdrawUrl =
+  "https://vua-co-tuong-pi-88.vercel.app/api/pi/withdraw-probe-v3?v=" + Date.now();
+
+alert("WITHDRAW URL = " + withdrawUrl);
+
+const res = await fetch(withdrawUrl, {
+    method: "POST",
+    headers: {
+        "Content-Type": "application/json",
+        "x-wallet-key": walletKey
+    },
+    body: JSON.stringify({
+        amount,
+        piUid,
+        piUsername,
+        walletKey
+    })
+});
+
+const raw = await res.text();
+let data = {};
+try {
+    data = raw ? JSON.parse(raw) : {};
+} catch (_) {
+    alert("RAW withdraw API = " + String(raw || "").slice(0, 500));
+    throw new Error("API rút Pi trả dữ liệu không hợp lệ.");
 }
-    try {
-        const res = await fetch("/api/pi/withdraw-request?v=" + Date.now(), {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "x-wallet-key": walletKey
-            },
-            body: JSON.stringify({
-                amount,
-                piUid,
-                piUsername,
-                walletKey
-            })
-        });
-
-        const raw = await res.text();
-        let data = {};
-        try {
-            data = raw ? JSON.parse(raw) : {};
-        } catch (_) {
-            alert("RAW withdraw API = " + String(raw || "").slice(0, 500));
-            throw new Error("API rút Pi trả dữ liệu không hợp lệ.");
-        }
-
-        if (!res.ok || !data?.ok) {
-            alert("RAW withdraw error = " + JSON.stringify(data).slice(0, 500));
-            throw new Error(data?.error || "Rút Pi thất bại.");
-        }
-
-        state.count += 1;
-        state.history.push({
-            amount,
-            time: new Date().toISOString(),
-            withdrawId: data.withdrawId || "",
-            paymentId: data.paymentId || "",
-            txid: data.txid || ""
-        });
-        saveWithdrawState(state);
-
-        if (typeof data.newBalance === "number") {
-            setPiBalance(data.newBalance);
-        } else if (typeof loadWalletBalance === "function") {
-            await loadWalletBalance().catch(() => {});
-        }
-
-        alert(
-            "Rút Pi thành công!\n" +
-            `Số Pi rút: ${amount.toFixed(2)} Pi\n` +
-            `paymentId: ${data.paymentId || "N/A"}\n` +
-            `txid: ${data.txid || "N/A"}\n` +
-            `Đã rút hôm nay: ${state.count}/${MAX_WITHDRAW_PER_DAY} lượt.`
-        );
-    } catch (err) {
-        console.error("RÚT PI LỖI:", err);
-        alert("Rút Pi lỗi: " + (err.message || "Không rõ lỗi"));
-    }
 }
 
 async function openWallet(type) {
