@@ -6995,17 +6995,47 @@ async function linkPiBrowser() {
   onIncompletePaymentFound
 );
 
-  const res = await fetch("/api/pi/link-account?v=" + Date.now(), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-wallet-key": walletKey
-    },
-    body: JSON.stringify({
-      accessToken: auth.accessToken,
-      walletKey
-    })
-  });
+const linkedWalletAddress = String(
+  auth?.user?.wallet?.address ||
+  auth?.wallet?.address ||
+  auth?.walletAddress ||
+  auth?.publicKey ||
+  ""
+).trim();
+
+const linkedPiUid = String(
+  auth?.user?.uid ||
+  auth?.uid ||
+  state?.piUid ||
+  ""
+).trim();
+
+const linkedPiUsername = String(
+  auth?.user?.username ||
+  auth?.username ||
+  state?.piUsername ||
+  ""
+).trim();
+
+if (!linkedWalletAddress) {
+  throw new Error("Không lấy được địa chỉ ví Pi từ Pi Browser.");
+}
+
+const res = await fetch("/api/pi/link-account?v=" + Date.now(), {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "x-wallet-key": walletKey
+  },
+  body: JSON.stringify({
+    accessToken: auth.accessToken,
+    walletKey,
+    piUid: linkedPiUid,
+    piUsername: linkedPiUsername,
+    walletAddress: linkedWalletAddress,
+    publicKey: linkedWalletAddress
+  })
+});
 
   const raw = await res.text();
   let data = {};
