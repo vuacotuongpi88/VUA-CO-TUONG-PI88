@@ -590,20 +590,35 @@ module.exports = async function handler(req, res) {
       walletVal.piUsername || walletVal.username || walletVal.name || ""
     ).trim();
     const currentInternalBalance = readPiBalance(walletVal);
-       const withdrawBlockedUntil = Number(walletVal.withdrawBlockedUntil || 0);
-    const withdrawBlockedReason = String(walletVal.withdrawBlockedReason || "").trim();
-    const withdrawBlockedWalletKey = String(walletVal.withdrawBlockedWalletKey || "").trim();
+    const withdrawBlockedUntil = Number(walletVal.withdrawBlockedUntil || 0);
+const withdrawBlockedReason = String(walletVal.withdrawBlockedReason || "").trim();
+const withdrawBlockedWalletKey = String(walletVal.withdrawBlockedWalletKey || "").trim();
 
-    if (withdrawBlockedUntil > nowMs()) {
-      return res.status(409).json({
-        ok: false,
-        error:
-          withdrawBlockedReason ||
-          "Ví đang bị khóa tạm thời do pending cũ của Pi. Chờ admin xử lý rồi thử lại.",
-        oldPendingWalletKey: withdrawBlockedWalletKey || "",
-        blockedUntil: withdrawBlockedUntil
-      });
-    }
+const blockedByOtherWallet =
+  withdrawBlockedWalletKey &&
+  safeKey(withdrawBlockedWalletKey) !== safeWalletKey;
+
+// Nếu ví hiện tại từng bị khóa nhầm vì pending của ví khác,
+// tự gỡ khóa để không chặn oan ngay từ đầu.
+if (blockedByOtherWallet) {
+  await walletRef.update(
+    cleanForFirebase({
+      withdrawBlockedUntil: 0,
+      withdrawBlockedReason: "",
+      withdrawBlockedWalletKey: "",
+      updatedAt: nowMs()
+    })
+  );
+} else if (withdrawBlockedUntil > nowMs()) {
+  return res.status(409).json({
+    ok: false,
+    error:
+      withdrawBlockedReason ||
+      "Ví đang bị khóa tạm thời do pending cũ của Pi. Chờ admin xử lý rồi thử lại.",
+    oldPendingWalletKey: withdrawBlockedWalletKey || "",
+    blockedUntil: withdrawBlockedUntil
+  });
+}
     if (amount > currentInternalBalance) {
       return res.status(400).json({
         ok: false,
@@ -692,7 +707,7 @@ stage = "create-request";
 
     console.log("WITHDRAW_CREATE_RESULT", createResult?.status, createResult?.data);
 
-      if (!createResult.ok) {
+        if (!createResult.ok) {
       const createData = createResult.data || {};
       const errText = String(createResult.error || "").trim();
 
@@ -710,6 +725,11 @@ stage = "create-request";
 
       const oldPendingWalletKey = safeKey(oldPendingWalletKeyRaw);
 
+      const ongoingSameWallet =
+        errText === "ongoing_payment_found" &&
+        oldPendingWalletKey &&
+        oldPendingWalletKey === safeWalletKey;
+
       const ongoingFromOtherWallet =
         errText === "ongoing_payment_found" &&
         oldPendingWalletKey &&
@@ -719,7 +739,9 @@ stage = "create-request";
       const blockedUntil = nowMs() + blockMs;
 
       const humanErr = ongoingFromOtherWallet
-        ? `Tài khoản Pi này đang bị Pi giữ payment pending cũ từ ví ${oldPendingWalletKeyRaw}. Ví hiện tại là ${walletKeyRaw}. Tạm khóa rút 15 phút để tránh spam, chờ admin xử lý payment cũ rồi thử lại.`
+        ? `Tài khoản Pi này đang bị Pi giữ payment pending cũ từ ví ${oldPendingWalletKeyRaw}. Ví hiện tại là ${walletKeyRaw}. Không khóa ví hiện tại, nhưng chưa thể rút cho tới khi admin xử lý payment cũ.`
+        : ongoingSameWallet
+        ? `Ví ${walletKeyRaw} đang còn payment Pi cũ chưa complete. Tạm khóa rút 15 phút để tránh spam rồi thử lại sau.`
         : errText === "ongoing_payment_found"
         ? "Tài khoản Pi này đang còn payment cũ chưa complete. App đang bị Pi chặn tạo lệnh mới."
         : (errText || "Tạo payout thất bại.");
@@ -750,12 +772,14 @@ stage = "create-request";
         })
       );
 
-      if (ongoingFromOtherWallet) {
+      // Chỉ khóa khi pending thuộc CHÍNH ví hiện tại.
+      // Nếu pending thuộc ví khác (vd pi_0962903406) thì không khóa ví hiện tại nữa.
+      if (ongoingSameWallet) {
         await walletRef.update(
           cleanForFirebase({
             withdrawBlockedUntil: blockedUntil,
             withdrawBlockedReason: humanErr,
-            withdrawBlockedWalletKey: oldPendingWalletKeyRaw,
+            withdrawBlockedWalletKey: walletKeyRaw,
             updatedAt: nowMs()
           })
         );
@@ -763,16 +787,17 @@ stage = "create-request";
 
       await releaseWithdrawLock(lockRef, "create_payment_failed");
 
-      return res.status(ongoingFromOtherWallet ? 409 : 400).json({
+      return res.status(
+        errText === "ongoing_payment_found" ? 409 : 400
+      ).json({
         ok: false,
         error: humanErr,
         oldPendingPaymentId,
         oldPendingTxid,
         oldPendingWalletKey: oldPendingWalletKeyRaw,
-        blockedUntil: ongoingFromOtherWallet ? blockedUntil : 0
+        blockedUntil: ongoingSameWallet ? blockedUntil : 0
       });
     }
-
     const createData = createResult.data || {};
     paymentId = extractPaymentId(createData);
 
