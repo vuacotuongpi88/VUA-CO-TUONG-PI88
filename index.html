@@ -6180,8 +6180,8 @@ document.querySelectorAll("#profile-dropdown .menu-item").forEach(item => {
         this.classList.remove("touch-release");
     });
 });
-const MAX_WITHDRAW_PER_DAY = 5;
-const MAX_WITHDRAW_PER_TX = 1000;
+const MAX_WITHDRAW_PER_DAY = 50;
+const MAX_WITHDRAW_PER_TX = 10000;
 
 const WITHDRAW_PASS_KEY = "pi_withdraw_password_hash";
 const PI_BALANCE_KEY = "pi-balance"; // key cũ, giữ lại để migrate 1 lần
@@ -7159,8 +7159,6 @@ if (!walletKey) {
 const withdrawUrl =
     "https://vua-co-tuong-pi-88.vercel.app/api/pi/withdraw-auto-v2?v=" + Date.now();
 
-alert("WITHDRAW URL = " + withdrawUrl);
-
 try {
     const res = await fetch(withdrawUrl, {
         method: "POST",
@@ -7176,10 +7174,8 @@ try {
         })
     });
 
-    alert("FETCH DONE, status = " + res.status);
 
     const raw = await res.text();
-    alert("RAW = " + String(raw || "").slice(0, 300));
 
     let data = {};
     try {
@@ -7188,8 +7184,6 @@ try {
         alert("RAW withdraw API = " + String(raw || "").slice(0, 500));
         throw new Error("API rút Pi trả dữ liệu không hợp lệ.");
     }
-
-    alert("AFTER PARSE OK");
 
     if (data?.pendingAdmin) {
         alert(
@@ -7203,8 +7197,6 @@ try {
         alert("RAW withdraw error = " + JSON.stringify(data).slice(0, 500));
         throw new Error(data?.error || "Rút Pi thất bại.");
     }
-
-    alert("BEFORE SAVE STATE");
 
     state.count += 1;
     if (!Array.isArray(state.history)) state.history = [];
