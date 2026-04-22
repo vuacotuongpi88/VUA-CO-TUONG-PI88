@@ -691,7 +691,13 @@ stage = "create-request";
     cleanForFirebase({
       status: "create_payment_failed",
       paymentCreateStatus: createResult.status,
-      paymentCreateData: createResult.data || null,
+      paymentCreateData: {
+  error: createResult?.data?.error || "",
+  error_message: createResult?.data?.error_message || "",
+},
+oldPendingPaymentId: createResult?.data?.payment?.identifier || "",
+oldPendingTxid: createResult?.data?.payment?.transaction?.txid || "",
+oldPendingWalletKey: createResult?.data?.payment?.metadata?.walletKey || "",
       failReason: errText || "create_payment_failed",
       updatedAt: nowMs()
     })
