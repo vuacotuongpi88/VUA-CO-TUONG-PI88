@@ -312,7 +312,57 @@ async function cancelPiPayment(paymentId) {
     data
   };
 }
+async function cleanupOldPendingWithdraw(db, safeWalletKey, piUid) {
+  const snap = await db.ref("piWithdrawRequests").once("value");
+  let targetKey = "";
+  let target = null;
 
+  snap.forEach((child) => {
+    const v = child.val() || {};
+
+    if (String(v.type || "") !== "wallet_withdraw") return;
+    if (String(v.walletKey || "") !== String(safeWalletKey || "")) return;
+    if (String(v.piUid || "") !== String(piUid || "")) return;
+
+    const status = String(v.status || "");
+    const paymentId = String(v.paymentId || "").trim();
+    const txid = String(v.txid || "").trim();
+
+    // chỉ dọn payment cũ chưa lên chain, chưa xong
+    if (!paymentId) return;
+    if (txid) return;
+    if (status === "done") return;
+    if (status === "cancelled") return;
+
+    if (!target || Number(v.updatedAt || 0) > Number(target.updatedAt || 0)) {
+      targetKey = child.key;
+      target = v;
+    }
+  });
+
+  if (!targetKey || !target) {
+    return { cleaned: false };
+  }
+
+  const paymentId = String(target.paymentId || "").trim();
+  const cancelRes = await cancelPiPayment(paymentId);
+
+  await db.ref(`piWithdrawRequests/${targetKey}`).update(
+    cleanForFirebase({
+      status: cancelRes.ok ? "cancelled_old_pending_payment" : "cancel_old_pending_failed",
+      cancelStatus: cancelRes.status,
+      cancelData: cancelRes.data || null,
+      updatedAt: nowMs()
+    })
+  );
+
+  return {
+    cleaned: cancelRes.ok,
+    paymentId,
+    requestKey: targetKey,
+    cancelRes
+  };
+}
 async function submitOnChain({ recipientAddress, amount, memo }) {
   const server = new StellarSdk.Horizon.Server(PI_BLOCKCHAIN_API_URL);
   const source = await server.loadAccount(DEV_PUBLIC);
@@ -538,7 +588,8 @@ const currentInternalBalance = readPiBalance(walletVal);
         error: "Đang có lệnh rút khác xử lý. Chờ chút rồi thử lại."
       });
     }
-
+    stage = "cleanup-old-pending";
+    await cleanupOldPendingWithdraw(db, safeWalletKey, piUid);
     stage = "create-request";
     requestRef = db.ref("piWithdrawRequests").push();
     withdrawId = requestRef.key || "";
