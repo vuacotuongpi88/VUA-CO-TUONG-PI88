@@ -1,7 +1,7 @@
 const admin = require("../_firebaseAdmin.js");
 
 const ADMIN_WALLET_KEY = "pi_admin_master";
-const PMC_PER_PI = 1000;
+const PMC_PER_PI = 500;
 
 function safeWalletKey(walletKey) {
   return String(walletKey || "").replace(/[.#$\[\]\/]/g, "_");
