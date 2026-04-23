@@ -6245,7 +6245,7 @@ const WITHDRAW_PASS_KEY = "pi_withdraw_password_hash";
 const PI_BALANCE_KEY = "pi-balance"; // key cũ, giữ lại để migrate 1 lần
 const BALANCE_CACHE_KEY = "wallet_balance_cache";
 const PMC_BALANCE_KEY = "pmc_balance_cache";
-const PMC_RATE = 1000; // 1 Pi = 1000 PMC
+const PMC_RATE = 500; // 1 Pi = 500 PMC
 
 let withdrawLockResolve = null;
 let withdrawLockMode = "verify"; // verify | create
@@ -7767,7 +7767,7 @@ async function submitExchangeToPMC() {
     alert("Đổi thành công " + piAmount.toFixed(2) + " π → " + formatPMC(pmcAdd) + " PMC");
     closeExchangeModal();
 }
-const PMC_PER_PI = 1000;
+const PMC_PER_PI = 500;
 const MIN_PMC_TO_PI = 0;
 
 function formatPiExchangeValue(value) {
@@ -8089,7 +8089,7 @@ async function confirmAdminFeePmcToPi() {
         return;
     }
 
-    const MIN_ADMIN_FEE_PMC_WITHDRAW = 1000;
+    const MIN_ADMIN_FEE_PMC_WITHDRAW = 100;
 
 if (pmcAmount < MIN_ADMIN_FEE_PMC_WITHDRAW) {
     alert(`Mức rút tối thiểu là ${MIN_ADMIN_FEE_PMC_WITHDRAW.toLocaleString("vi-VN")} PMC.`);
