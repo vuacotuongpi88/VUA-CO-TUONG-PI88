@@ -521,7 +521,65 @@ font-size: 1rem;
         0 0 16px rgba(244, 197, 66, 0.12);
     border: 1px solid rgba(244, 197, 66, 0.42);
 }
+#arena-mission-btn {
+    position: fixed;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, #00c38a, #008f67);
+    color: #fff8d6;
+    font-size: 24px;
+    cursor: pointer;
+    z-index: 12019;
+    box-shadow:
+        0 0 14px rgba(0, 195, 138, 0.34),
+        0 0 16px rgba(244, 197, 66, 0.12);
+    border: 1px solid rgba(244, 197, 66, 0.42);
+}
 
+#arena-mission-btn .mission-badge-dot {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: #ff2d55;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 900;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 10px rgba(255,45,85,0.45);
+    border: 2px solid rgba(0,0,0,0.75);
+}
+
+#arena-mission-btn .mission-badge-dot.show {
+    display: inline-flex;
+}
+
+@media (max-width: 600px) {
+    #arena-mission-btn {
+        top: 16px;
+        right: 72px; /* nằm song song bên trái icon kết bạn */
+        bottom: auto;
+        display: flex;
+    }
+}
+
+@media (min-width: 601px) {
+    #arena-mission-btn {
+        right: 86px; /* nằm song song bên trái icon kết bạn desktop */
+        bottom: 24px;
+        top: auto;
+        display: flex;
+    }
+}
 #arena-friend-box {
     position: fixed;
     right: 18px;
@@ -10057,75 +10115,76 @@ document.addEventListener("click", function(e) {
     }
   }
 
-  function ensureMissionHubMounted() {
-    if (!document.getElementById('menu-mission-hub')) {
-      const menu = document.getElementById('profile-dropdown');
-      const logoutItem = menu ? menu.querySelector('.menu-item.menu-item-danger') : null;
-      if (menu && logoutItem) {
-        const item = document.createElement('div');
-        item.id = 'menu-mission-hub';
-        item.className = 'menu-item';
-        item.setAttribute('onclick', 'openMissionHub()');
-        item.innerHTML = '<span class="menu-icon">🎯</span><span>NHIỆM VỤ</span>';
-        menu.insertBefore(item, logoutItem);
-      }
-    }
+ function ensureMissionHubMounted() {
+  const oldMenuItem = document.getElementById('menu-mission-hub');
+  if (oldMenuItem) oldMenuItem.remove();
 
-    if (document.getElementById('mission-hub-modal')) return;
-
-    const modal = document.createElement('div');
-    modal.id = 'mission-hub-modal';
-    modal.innerHTML = `
-      <div class="mission-hub-box">
-        <div class="mission-hub-header">
-          <div class="mission-hub-title-wrap">
-            <div class="mission-hub-title">QUỸ THƯỞNG CAO THỦ</div>
-            <div class="mission-hub-sub">Chơi hay • mời mạnh • bấm nhận là phí nội bộ chảy ngay về ví</div>
-          </div>
-          <div class="mission-hub-close" onclick="closeMissionHub()">✕</div>
-        </div>
-        <div class="mission-hub-body">
-          <div class="mission-summary-grid">
-            <div class="mission-summary-card">
-              <strong>Quỹ nhiệm vụ hiện tại</strong>
-              <div class="mission-summary-value" id="mission-pool-value">0 PMC</div>
-              <div class="mission-summary-note">V1 đang lấy 35% từ ví phí hệ thống làm quỹ thưởng hoạt động.</div>
-            </div>
-            <div class="mission-summary-card">
-              <strong>Có thể nhận ngay</strong>
-              <div class="mission-summary-value" id="mission-claimable-value">0 PMC</div>
-              <div class="mission-summary-note" id="mission-claimable-note">Cày thêm chút nữa là nút nhận sáng lên.</div>
-            </div>
-            <div class="mission-summary-card">
-              <strong>Mốc mời hiện tại</strong>
-              <div class="mission-summary-value" id="mission-ref-summary">0 bạn</div>
-              <div class="mission-summary-note" id="mission-stats-note">Càng đông bạn hữu, quỹ cộng đồng càng đã.</div>
-            </div>
-          </div>
-
-          <div class="mission-top-tabs" id="mission-top-tabs">
-            <button class="mission-top-tab active" data-tab="day" onclick="switchMissionTab('day')">Ngày</button>
-            <button class="mission-top-tab" data-tab="week" onclick="switchMissionTab('week')">Tuần</button>
-            <button class="mission-top-tab" data-tab="month" onclick="switchMissionTab('month')">Tháng</button>
-            <button class="mission-top-tab" data-tab="referral" onclick="switchMissionTab('referral')">Mời bạn</button>
-          </div>
-
-          <div id="mission-pane-day" class="mission-pane show"><div class="mission-pane-grid"></div></div>
-          <div id="mission-pane-week" class="mission-pane"><div class="mission-pane-grid"></div></div>
-          <div id="mission-pane-month" class="mission-pane"><div class="mission-pane-grid"></div></div>
-          <div id="mission-pane-referral" class="mission-pane"><div class="mission-pane-grid"></div></div>
-
-          <div class="mission-marketing-note" id="mission-marketing-note">
-            Quỹ càng dày thì thưởng càng đậm. Đạt điều kiện là nhận thẳng vào ví PMC nội bộ, không chờ admin.
-          </div>
-          <div id="mission-hub-toast"></div>
-        </div>
-      </div>`;
-    modal.addEventListener('click', function (e) {
-      if (e.target === modal) closeMissionHub();
-    });
-    document.body.appendChild(modal);
+  if (!document.getElementById('arena-mission-btn')) {
+    const btn = document.createElement('div');
+    btn.id = 'arena-mission-btn';
+    btn.setAttribute('onclick', 'openMissionHub()');
+    btn.innerHTML = `
+      <span>🎯</span>
+      <span id="arena-mission-badge" class="mission-badge-dot">0</span>
+    `;
+    document.body.appendChild(btn);
   }
+
+  if (document.getElementById('mission-hub-modal')) return;
+
+  const modal = document.createElement('div');
+  modal.id = 'mission-hub-modal';
+  modal.innerHTML = `
+    <div class="mission-hub-box">
+      <div class="mission-hub-header">
+        <div class="mission-hub-title-wrap">
+          <div class="mission-hub-title">QUỸ THƯỞNG CAO THỦ</div>
+          <div class="mission-hub-sub">Chơi hay • mời mạnh • bấm nhận là phí nội bộ chảy ngay về ví</div>
+        </div>
+        <div class="mission-hub-close" onclick="closeMissionHub()">✕</div>
+      </div>
+      <div class="mission-hub-body">
+        <div class="mission-summary-grid">
+          <div class="mission-summary-card">
+            <strong>Quỹ nhiệm vụ hiện tại</strong>
+            <div class="mission-summary-value" id="mission-pool-value">0 PMC</div>
+            <div class="mission-summary-note">V1 đang lấy 35% từ ví phí hệ thống làm quỹ thưởng hoạt động.</div>
+          </div>
+          <div class="mission-summary-card">
+            <strong>Có thể nhận ngay</strong>
+            <div class="mission-summary-value" id="mission-claimable-value">0 PMC</div>
+            <div class="mission-summary-note" id="mission-claimable-note">Cày thêm chút nữa là nút nhận sáng lên.</div>
+          </div>
+          <div class="mission-summary-card">
+            <strong>Mốc mời hiện tại</strong>
+            <div class="mission-summary-value" id="mission-ref-summary">0 bạn</div>
+            <div class="mission-summary-note" id="mission-stats-note">Càng đông bạn hữu, quỹ cộng đồng càng đã.</div>
+          </div>
+        </div>
+
+        <div class="mission-top-tabs" id="mission-top-tabs">
+          <button class="mission-top-tab active" data-tab="day" onclick="switchMissionTab('day')">Ngày</button>
+          <button class="mission-top-tab" data-tab="week" onclick="switchMissionTab('week')">Tuần</button>
+          <button class="mission-top-tab" data-tab="month" onclick="switchMissionTab('month')">Tháng</button>
+          <button class="mission-top-tab" data-tab="referral" onclick="switchMissionTab('referral')">Mời bạn</button>
+        </div>
+
+        <div id="mission-pane-day" class="mission-pane show"><div class="mission-pane-grid"></div></div>
+        <div id="mission-pane-week" class="mission-pane"><div class="mission-pane-grid"></div></div>
+        <div id="mission-pane-month" class="mission-pane"><div class="mission-pane-grid"></div></div>
+        <div id="mission-pane-referral" class="mission-pane"><div class="mission-pane-grid"></div></div>
+
+        <div class="mission-marketing-note" id="mission-marketing-note">
+          Quỹ càng dày thì thưởng càng đậm. Đạt điều kiện là nhận thẳng vào ví PMC nội bộ, không chờ admin.
+        </div>
+        <div id="mission-hub-toast"></div>
+      </div>
+    </div>`;
+  modal.addEventListener('click', function (e) {
+    if (e.target === modal) closeMissionHub();
+  });
+  document.body.appendChild(modal);
+}
 
   async function fetchMissionBoard(force) {
     if (MISSION_UI_STATE.loading && !force) return;
@@ -10255,10 +10314,11 @@ document.addEventListener("click", function(e) {
     }
 
     renderMissionCards('day', tabs.day || []);
-    renderMissionCards('week', tabs.week || []);
-    renderMissionCards('month', tabs.month || []);
-    renderMissionCards('referral', tabs.referral || []);
-    switchMissionTab(MISSION_UI_STATE.activeTab || 'day');
+renderMissionCards('week', tabs.week || []);
+renderMissionCards('month', tabs.month || []);
+renderMissionCards('referral', tabs.referral || []);
+updateMissionLobbyBadge(board);
+switchMissionTab(MISSION_UI_STATE.activeTab || 'day');
   }
 
   function missionToast(text) {
@@ -10336,9 +10396,59 @@ document.addEventListener("click", function(e) {
   };
 
   document.addEventListener('DOMContentLoaded', function () {
-    ensureMissionHubMounted();
-  });
+  ensureMissionHubMounted();
+  refreshMissionLobbyBadgeSilently();
+
+  setInterval(function () {
+    const homeMenu = document.getElementById('home-menu');
+    if (homeMenu && homeMenu.style.display !== 'none') {
+      refreshMissionLobbyBadgeSilently();
+    }
+  }, 15000);
+});
 })();
+function updateMissionLobbyBadge(board) {
+  const badge = document.getElementById('arena-mission-badge');
+  const btn = document.getElementById('arena-mission-btn');
+  if (!badge || !btn) return;
+
+  const count = Math.max(0, Number(board?.claimableCount || 0));
+
+  if (count > 0) {
+    badge.textContent = count > 99 ? '99+' : String(count);
+    badge.classList.add('show');
+    btn.classList.add('has-ready-mission');
+  } else {
+    badge.textContent = '0';
+    badge.classList.remove('show');
+    btn.classList.remove('has-ready-mission');
+  }
+}
+
+async function refreshMissionLobbyBadgeSilently() {
+  try {
+    const walletKey = missionWalletKey();
+    if (!walletKey) {
+      updateMissionLobbyBadge({ claimableCount: 0 });
+      return;
+    }
+
+    const res = await fetch('/api/missions-v1?v=' + Date.now(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-wallet-key': walletKey
+      },
+      body: JSON.stringify({ action: 'board', walletKey })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) return;
+
+    MISSION_UI_STATE.board = data;
+    updateMissionLobbyBadge(data);
+  } catch (_) {}
+}
 </script>
 </body>
 
