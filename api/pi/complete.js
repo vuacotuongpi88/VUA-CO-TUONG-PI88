@@ -1,57 +1,96 @@
-export async function POST(request) {
+module.exports = async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ ok: false, error: "Method not allowed" });
+  }
+
   try {
-    console.log("COMPLETE HIT");
+    const body =
+      typeof req.body === "string"
+        ? JSON.parse(req.body || "{}")
+        : (req.body || {});
 
-    const { paymentId, txid } = await request.json();
+    const paymentId = String(body.paymentId || "").trim();
+    const txid = String(body.txid || "").trim();
 
-    console.log("COMPLETE paymentId:", paymentId);
-    console.log("COMPLETE txid:", txid);
-    console.log("HAS_KEY:", !!process.env.PI_API_KEY);
-    console.log("KEY_PREFIX:", (process.env.PI_API_KEY || "").slice(0, 6));
+    const PI_API_BASE = String(
+      process.env.PI_API_BASE_URL || "https://api.minepi.com"
+    ).trim();
 
-    if (!process.env.PI_API_KEY) {
-      return Response.json(
-        { ok: false, error: "Thiếu PI_API_KEY trên Vercel" },
-        { status: 500 }
-      );
+    const PI_API_KEY = String(
+      process.env.PI_API_KEY ||
+      process.env.PI_SERVER_API_KEY ||
+      process.env.PI_APIKEY ||
+      ""
+    ).trim();
+
+    console.log("COMPLETE HIT", {
+      paymentId,
+      txid,
+      hasKey: !!PI_API_KEY,
+      keyPrefix: PI_API_KEY.slice(0, 6)
+    });
+
+    if (!PI_API_KEY) {
+      return res.status(500).json({
+        ok: false,
+        error: "Thiếu PI_API_KEY / PI_SERVER_API_KEY trên Vercel."
+      });
     }
 
     if (!paymentId || !txid) {
-      return Response.json(
-        { ok: false, error: "Thiếu paymentId hoặc txid" },
-        { status: 400 }
-      );
+      return res.status(400).json({
+        ok: false,
+        error: "Thiếu paymentId hoặc txid"
+      });
     }
 
-    const res = await fetch(`https://api.minepi.com/v2/payments/${paymentId}/complete`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Key ${process.env.PI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ txid })
-    });
+    const piRes = await fetch(
+      `${PI_API_BASE}/v2/payments/${encodeURIComponent(paymentId)}/complete`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Key ${PI_API_KEY}`,
+          "Pi-Api-Key": PI_API_KEY
+        },
+        body: JSON.stringify({ txid })
+      }
+    );
 
-    const raw = await res.text();
+    const raw = await piRes.text();
     let data = {};
     try {
       data = raw ? JSON.parse(raw) : {};
-    } catch {
+    } catch (_) {
       data = { raw };
     }
 
-    console.log("COMPLETE STATUS:", res.status);
+    const verifyErr = String(
+      data?.verification_error ||
+      data?.error ||
+      data?.message ||
+      ""
+    ).trim();
+
+    console.log("COMPLETE STATUS:", piRes.status);
     console.log("COMPLETE DATA:", data);
 
-    return Response.json(
-      { ok: res.ok, status: res.status, data },
-      { status: res.status }
-    );
+    const treatAsOk =
+      piRes.ok || verifyErr === "payment_already_linked_with_a_tx";
+
+    return res.status(treatAsOk ? 200 : piRes.status).json({
+      ok: treatAsOk,
+      status: piRes.status,
+      data,
+      note: !piRes.ok && verifyErr === "payment_already_linked_with_a_tx"
+        ? "Pi báo payment đã linked với tx cũ, tạm coi là đã complete."
+        : ""
+    });
   } catch (err) {
     console.error("COMPLETE ERROR:", err);
-    return Response.json(
-      { ok: false, error: err?.message || "complete error" },
-      { status: 500 }
-    );
+    return res.status(500).json({
+      ok: false,
+      error: err?.message || "complete error"
+    });
   }
-}
+};
