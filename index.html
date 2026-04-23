@@ -7029,14 +7029,20 @@ const linkedPiUsername = String(
 ).trim();
 
 if (!linkedWalletAddress) {
-  alert(
-    "AUTH KEYS = " + Object.keys(auth || {}).join(", ") +
-    "\nUSER KEYS = " + Object.keys(auth?.user || {}).join(", ") +
-    "\nCREDENTIAL KEYS = " + Object.keys(auth?.user?.credentials || {}).join(", ")
-  );
+  const authDump = JSON.stringify(auth || {}, null, 2);
+  const userDump = JSON.stringify(auth?.user || {}, null, 2);
+  const credDump = JSON.stringify(auth?.user?.credentials || {}, null, 2);
+
+  console.log("PI AUTH FULL =", auth);
+  console.log("PI USER FULL =", auth?.user);
+  console.log("PI CREDENTIALS FULL =", auth?.user?.credentials);
+
+  alert("AUTH JSON = " + authDump.slice(0, 1200));
+  alert("USER JSON = " + userDump.slice(0, 1200));
+  alert("CREDENTIALS JSON = " + credDump.slice(0, 1200));
+
   throw new Error("Không lấy được địa chỉ ví Pi từ Pi Browser.");
 }
-
 if (!window.firebase || !firebase.database) {
   throw new Error("Firebase client chưa sẵn sàng.");
 }
