@@ -7223,8 +7223,7 @@ if (!walletKey) {
     return;
 }
 
-const withdrawUrl =
-    "https://vua-co-tuong-pi-88.vercel.app/api/pi/withdraw-auto-v2?v=" + Date.now();
+const withdrawUrl = "/api/pi/withdraw-auto-v2?v=" + Date.now();
 
 try {
     const res = await fetch(withdrawUrl, {
@@ -7241,14 +7240,12 @@ try {
         })
     });
 
-
     const raw = await res.text();
 
     let data = {};
     try {
         data = raw ? JSON.parse(raw) : {};
     } catch (_) {
-        alert("RAW withdraw API = " + String(raw || "").slice(0, 500));
         throw new Error("API rút Pi trả dữ liệu không hợp lệ.");
     }
 
@@ -7261,7 +7258,6 @@ try {
     }
 
     if (!res.ok || !data?.ok) {
-        alert("RAW withdraw error = " + JSON.stringify(data).slice(0, 500));
         throw new Error(data?.error || "Rút Pi thất bại.");
     }
 
@@ -7284,8 +7280,6 @@ try {
         await loadWalletBalance().catch(() => {});
     }
 
-    alert("BEFORE SUCCESS ALERT");
-
     alert(
         "Rút Pi thành công!\n" +
         `Số Pi rút: ${amount.toFixed(2)} Pi\n` +
@@ -7295,7 +7289,7 @@ try {
 } catch (err) {
     console.error("RÚT PI LỖI:", err);
     alert("Rút Pi lỗi: " + (err.name || "") + " | " + (err.message || "Không rõ lỗi"));
-}
+ }
 }
 
 async function openWallet(type) {
