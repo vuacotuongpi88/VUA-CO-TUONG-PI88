@@ -7185,18 +7185,9 @@ document.getElementById("withdraw-amount-input")?.addEventListener("keypress", f
     if (e.key === "Enter") submitWithdrawAmount();
 });
 async function syncPiPendingBeforeWithdraw() {
-  try {
-    const Pi = await ensurePiSdkReady();
-    await Pi.authenticate(
-      ["username", "payments", "wallet_address"],
-      onIncompletePaymentFound
-    );
-  } catch (err) {
-    console.warn("SYNC_PI_PENDING_BEFORE_WITHDRAW_FAIL", err);
-  }
+  return;
 }
 async function processWithdraw() {
-    await syncPiPendingBeforeWithdraw();
     const state = getWithdrawState();
     if (state.count >= MAX_WITHDRAW_PER_DAY) {
         alert("Hôm nay đã rút đủ 5 lần rồi. Mai quay lại nhé!");
