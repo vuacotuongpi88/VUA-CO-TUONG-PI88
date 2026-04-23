@@ -1,6 +1,6 @@
 const PMC_PER_PI = 500;
 const ADMIN_WALLET_KEY = "pi_admin_master";
-const MIN_ADMIN_FEE_PMC_WITHDRAW = 1000;
+const MIN_ADMIN_FEE_PMC_WITHDRAW = 500;
 
 function safeKey(value) {
   return String(value || "").replace(/[.#$\[\]\/]/g, "_");
