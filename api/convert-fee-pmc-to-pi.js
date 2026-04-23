@@ -1,4 +1,4 @@
-const PMC_PER_PI = 1000;
+const PMC_PER_PI = 500;
 const ADMIN_WALLET_KEY = "pi_admin_master";
 const MIN_ADMIN_FEE_PMC_WITHDRAW = 1000;
 
