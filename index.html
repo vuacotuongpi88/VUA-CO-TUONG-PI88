@@ -6994,10 +6994,22 @@ async function linkPiBrowser() {
     throw new Error("Firebase client chưa sẵn sàng.");
   }
 
-  const auth = await Pi.authenticate(
-    ["username", "payments", "wallet_address", "platform"],
-    onIncompletePaymentFound
-  );
+  let auth;
+  try {
+    // Link ví chỉ cần scope tối thiểu
+    auth = await Pi.authenticate(["username", "wallet_address"]);
+  } catch (err) {
+    console.error("PI_LINK_AUTH_FAIL", err);
+    const msg = String(err?.message || err || "").trim();
+
+    if (/cancelled|canceled|consent/i.test(msg)) {
+      throw new Error(
+        "Pi Browser chưa xác nhận hoàn tất. Hãy mở bằng app Pi Browser thật, bấm Allow xong chờ 2-3 giây rồi quay lại."
+      );
+    }
+
+    throw new Error(msg || "Liên kết Pi Browser thất bại.");
+  }
 
   const linkedPiUid = String(
     auth?.user?.uid ||
@@ -7031,7 +7043,6 @@ async function linkPiBrowser() {
     ""
   ).trim();
 
-  // Fallback tạm: SDK không xổ ví thì cho user dán ví nhận tiền
   if (!linkedWalletAddress) {
     const typed = prompt(
       "Pi Browser chưa trả ví tự động.\n" +
@@ -7057,7 +7068,6 @@ async function linkPiBrowser() {
   }
 
   const now = Date.now();
-
   const updatePayload = {
     walletKey,
     piUid: linkedPiUid,
@@ -7104,32 +7114,16 @@ async function linkPiBrowser() {
     ).trim()
   };
 }
+
 async function ensurePiLinkBeforeWithdraw() {
   const state = await getPiLinkState();
 
-  if (state.ok && state.piVerified && state.piUid) {
+  if (state.ok && state.piVerified && state.piUid && state.piWalletAddress) {
     return state;
   }
 
-  const ok = confirm("Tài khoản này chưa liên kết Pi Browser. Bấm OK để liên kết ngay.");
-  if (!ok) return null;
-
-  const data = await linkPiBrowser();
-
-  alert(
-    "Liên kết Pi Browser thành công!\n" +
-    "uid: " + (data.piUid || "") + "\n" +
-    "username: " + (data.piUsername || "")
-  );
-
-  return {
-    ok: true,
-    walletKey: getCurrentWalletKeyForPi(),
-    piVerified: true,
-    piUid: data.piUid || "",
-    piUsername: data.piUsername || "",
-    piWalletAddress: data.piWalletAddress || ""
-  };
+  // Không dùng confirm trước authenticate nữa
+  return await linkPiBrowser();
 }
 async function openWithdrawAmount(leftCount) {
       try {
