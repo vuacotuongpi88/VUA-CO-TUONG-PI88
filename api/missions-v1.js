@@ -72,7 +72,12 @@ function countChildren(obj) {
 function formatRewardText(amountPmc) {
   return `${Math.max(0, Math.floor(Number(amountPmc) || 0)).toLocaleString('vi-VN')} PMC`;
 }
-
+function readPmcBalance(obj) {
+  return Math.max(
+    0,
+    Math.floor(Number(obj?.pmcBalance ?? obj?.pmc ?? 0) || 0)
+  );
+}
 function missionDefinitions() {
   return [
     {
@@ -353,7 +358,7 @@ async function buildBoard(db, walletKey, now = Date.now()) {
 
   const walletVal = walletSnap.val() || {};
   const treasuryVal = treasurySnap.val() || {};
-  const treasuryPmc = Math.max(0, Math.floor(Number(treasuryVal.pmcBalance || 0) || 0));
+  const treasuryPmc = readPmcBalance(treasuryVal);
   const missionPoolPmc = Math.max(0, Math.floor(treasuryPmc * TREASURY_SHARE_RATIO));
 
   const tabs = { day: [], week: [], month: [], referral: [] };
@@ -419,18 +424,26 @@ function missionTxnRef(db) {
   return db.ref('missionRewardLogsV1');
 }
 
-async function txAdjustPmc(ref, delta, extra = {}) {
+async function txAdjustPmc(ref, delta, extra = {}, preRead = null) {
   let afterBalance = 0;
+
   const result = await new Promise((resolve, reject) => {
     ref.transaction(
       current => {
-        const safeCurrent = current && typeof current === 'object' ? current : {};
-        const currentPmc = Math.max(0, Math.floor(Number(safeCurrent.pmcBalance || 0) || 0));
+        const baseCurrent =
+          current && typeof current === 'object'
+            ? current
+            : (preRead && typeof preRead === 'object' ? preRead : {});
+
+        const currentPmc = readPmcBalance(baseCurrent);
         const nextPmc = currentPmc + Math.floor(Number(delta || 0));
+
         if (nextPmc < 0) return;
+
         afterBalance = nextPmc;
+
         return {
-          ...safeCurrent,
+          ...baseCurrent,
           ...extra,
           pmcBalance: nextPmc,
           updatedAt: nowMs()
@@ -443,6 +456,7 @@ async function txAdjustPmc(ref, delta, extra = {}) {
       false
     );
   });
+
   return result;
 }
 
@@ -490,21 +504,44 @@ async function claimMission(db, walletKey, missionId, now = Date.now()) {
   }
 
   const treasuryRef = db.ref(`wallets/${safeKey(ADMIN_TREASURY_WALLET_KEY)}`);
-  const userRef = db.ref(`wallets/${walletKey}`);
+const userRef = db.ref(`wallets/${walletKey}`);
 
-  try {
-    const treasuryTx = await txAdjustPmc(treasuryRef, -mission.rewardPmc, {
-      name: 'Ví phí hệ thống'
-    });
+const [treasuryPreSnap, userPreSnap] = await Promise.all([
+  treasuryRef.once('value'),
+  userRef.once('value')
+]);
+
+const treasuryPreRead =
+  treasuryPreSnap.val() && typeof treasuryPreSnap.val() === 'object'
+    ? treasuryPreSnap.val()
+    : {};
+
+const userPreRead =
+  userPreSnap.val() && typeof userPreSnap.val() === 'object'
+    ? userPreSnap.val()
+    : {};
+
+try {
+  const treasuryTx = await txAdjustPmc(
+    treasuryRef,
+    -mission.rewardPmc,
+    { name: 'Ví phí hệ thống' },
+    treasuryPreRead
+  );
 
     if (!treasuryTx.committed) {
       await claimRef.remove().catch(() => {});
       throw new Error('Ví phí hệ thống hiện không đủ quỹ để trả thưởng.');
     }
 
-    const userTx = await txAdjustPmc(userRef, mission.rewardPmc, {});
+    const userTx = await txAdjustPmc(userRef, mission.rewardPmc, {}, userPreRead);
     if (!userTx.committed) {
-      await txAdjustPmc(treasuryRef, mission.rewardPmc, { name: 'Ví phí hệ thống' }).catch(() => {});
+      await txAdjustPmc(
+  treasuryRef,
+  mission.rewardPmc,
+  { name: 'Ví phí hệ thống' },
+  treasuryPreRead
+).catch(() => {});
       await claimRef.remove().catch(() => {});
       throw new Error('Không cộng được thưởng vào ví người chơi.');
     }
