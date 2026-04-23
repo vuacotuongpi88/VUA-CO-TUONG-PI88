@@ -6995,32 +6995,50 @@ async function linkPiBrowser() {
   }
 
   const auth = await Pi.authenticate(
-    ["username", "payments", "wallet_address"],
+    ["username", "payments", "wallet_address", "platform"],
     onIncompletePaymentFound
   );
 
   const linkedPiUid = String(
     auth?.user?.uid ||
     auth?.uid ||
+    state?.piUid ||
     ""
   ).trim();
 
   const linkedPiUsername = String(
     auth?.user?.username ||
     auth?.username ||
+    state?.piUsername ||
     ""
   ).trim();
 
-  const linkedWalletAddress = String(
+  let linkedWalletAddress = String(
+    auth?.user?.wallet?.address ||
     auth?.user?.wallet_address ||
+    auth?.user?.walletAddress ||
+    auth?.user?.payment_address ||
+    auth?.user?.credentials?.wallet_address ||
+    auth?.user?.credentials?.walletAddress ||
+    auth?.user?.credentials?.address ||
+    auth?.wallet?.address ||
     auth?.wallet_address ||
     auth?.walletAddress ||
     auth?.publicKey ||
-    auth?.user?.walletAddress ||
+    auth?.public_key ||
     auth?.user?.publicKey ||
-    auth?.wallet?.address ||
+    state?.piWalletAddress ||
     ""
   ).trim();
+
+  // Fallback tạm: SDK không xổ ví thì cho user dán ví nhận tiền
+  if (!linkedWalletAddress) {
+    const typed = prompt(
+      "Pi Browser chưa trả ví tự động.\n" +
+      "Dán địa chỉ ví Pi nhận tiền của bạn vào đây (bắt đầu bằng G):"
+    );
+    linkedWalletAddress = String(typed || "").trim();
+  }
 
   if (!linkedPiUid) {
     throw new Error("Không lấy được Pi UID từ Pi Browser.");
@@ -7031,27 +7049,59 @@ async function linkPiBrowser() {
   }
 
   if (!linkedWalletAddress) {
-    throw new Error("Không lấy được địa chỉ ví Pi từ Pi Browser ở frontend.");
+    throw new Error("Chưa có địa chỉ ví Pi để lưu.");
   }
 
+  if (!/^G[A-Z2-7]{20,}$/i.test(linkedWalletAddress)) {
+    throw new Error("Địa chỉ ví Pi không hợp lệ.");
+  }
+
+  const now = Date.now();
+
   const updatePayload = {
+    walletKey,
     piUid: linkedPiUid,
     piUsername: linkedPiUsername,
     piVerified: true,
+    verifiedAt: now,
+    piLinkSource: "frontend_pi_browser",
+
     piWalletAddress: linkedWalletAddress,
     linkedWalletAddress: linkedWalletAddress,
     piBrowserWalletAddress: linkedWalletAddress,
-    updatedAt: Date.now()
+
+    linkedWallet: {
+      address: linkedWalletAddress,
+      linkedAt: now,
+      source: "frontend_pi_browser"
+    },
+
+    piLink: {
+      walletAddress: linkedWalletAddress,
+      linkedAt: now,
+      source: "frontend_pi_browser"
+    },
+
+    updatedAt: now
   };
 
   await firebase.database().ref("wallets/" + walletKey).update(updatePayload);
 
+  const verifySnap = await firebase.database().ref("wallets/" + walletKey).once("value");
+  const verifyVal = verifySnap.val() || {};
+
   return {
     ok: true,
     walletKey,
-    piUid: linkedPiUid,
-    piUsername: linkedPiUsername,
-    piWalletAddress: linkedWalletAddress
+    piUid: String(verifyVal.piUid || linkedPiUid || "").trim(),
+    piUsername: String(verifyVal.piUsername || linkedPiUsername || "").trim(),
+    piWalletAddress: String(
+      verifyVal.piWalletAddress ||
+      verifyVal.linkedWalletAddress ||
+      verifyVal.piBrowserWalletAddress ||
+      linkedWalletAddress ||
+      ""
+    ).trim()
   };
 }
 async function ensurePiLinkBeforeWithdraw() {
