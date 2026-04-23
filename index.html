@@ -9590,7 +9590,8 @@ ensureFriendProfileSynced()
     }
 }
 
-async function startPiDeposit(amount = 1) {
+
+ async function startPiDeposit(amount = 1) {
   try {
     window.__PI_PENDING_PAYMENT_BLOCKED__ = false;
     window.__PI_PENDING_PAYMENT_MSG__ = "";
@@ -9599,10 +9600,11 @@ async function startPiDeposit(amount = 1) {
       alert("Nạp Pi chỉ chạy trong Pi Browser.");
       return;
     }
-    if (!piAuth) {
-      const auth = await loginPi();
-      if (!auth) return;
-    }
+
+    // Ép re-auth bằng payments scope trước khi createPayment
+    piAuth = null;
+    const auth = await loginPi();
+    if (!auth) return;
 
     if (window.__PI_PENDING_PAYMENT_BLOCKED__) {
       alert(
@@ -9667,10 +9669,17 @@ async function startPiDeposit(amount = 1) {
         onError: function (error) {
           console.error("Pi payment lỗi:", error);
           const msg = String(error?.message || error || "");
+
+          if (/payments scope/i.test(msg)) {
+            alert("Phiên Pi hiện tại chưa có quyền payments. Tao sẽ yêu cầu đăng nhập lại khi bấm nạp.");
+            return;
+          }
+
           if (/pending payment|incomplete payment/i.test(msg)) {
             alert("Đang có payment Pi cũ chưa xử lý xong. Không tạo payment mới nữa.");
             return;
           }
+
           alert("Nạp Pi lỗi: " + (msg || "Không rõ lỗi"));
         }
       }
