@@ -4194,7 +4194,7 @@ margin-bottom: 14px;
         <span class="close" onclick="closeExchangeModal()">&times;</span>
         <div class="room-mode-title">ĐỔI PI → PMC</div>
 
-        <div style="font-size:13px; color:#dfe6e9;">Tỷ lệ cố định: <b style="color:#7dffb3;">1 Pi = 1000 PMC</b></div>
+        <div style="font-size:13px; color:#dfe6e9;">Tỷ lệ cố định: <b style="color:#7dffb3;">1 Pi = 500 PMC</b></div>
 
        <input id="exchange-pi-input" class="modal-input-dark" type="number" min="0" step="0.01" placeholder="Nhập số Pi muốn đổi">
 
@@ -4215,7 +4215,7 @@ margin-bottom: 14px;
         <div class="room-mode-title">ĐỔI PMC → PI</div>
 
         <div class="pmc-note" style="margin-top:0;">
-            Tỷ lệ hiện tại: <strong id="pmc-to-pi-rate-label">1,000 PMC = 1 Pi</strong>
+            Tỷ lệ hiện tại: <strong id="pmc-to-pi-rate-label"> PMC = 1 Pi</strong>
         </div>
 
         <input
@@ -9773,16 +9773,16 @@ document.addEventListener("click", function(e) {
 
             <div class="pmc-note">
                 PMC bị trừ từ ví phí hệ thống, Pi sẽ cộng thẳng vào tài khoản Pi admin đang đăng nhập.<br>
-                Tỷ lệ đổi: <span id="admin-fee-rate-label">1,000 PMC = 1 Pi</span>
+                Tỷ lệ đổi: <span id="admin-fee-rate-label">500 PMC = 1 Pi</span>
             </div>
 
             <input
                 id="admin-fee-pmc-input"
                 class="modal-input-dark"
                 type="number"
-                min="1000"
+                min="100"
                 step="1""
-                placeholder="Nhập PMC muốn đổi từ 1000 trở lên, ví dụ 1000 hoặc 1961"
+                placeholder="Nhập PMC muốn đổi từ 100 trở lên, ví dụ 100 hoặc 261"
                 oninput="previewAdminFeePmcToPi()"
             >
             <input
