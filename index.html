@@ -521,6 +521,73 @@ font-size: 1rem;
         0 0 16px rgba(244, 197, 66, 0.12);
     border: 1px solid rgba(244, 197, 66, 0.42);
 }
+.player-chip-inline img {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255,255,255,0.14);
+    box-shadow: 0 0 10px rgba(0,0,0,0.28);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.player-chip-rank {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.3px;
+    width: fit-content;
+    max-width: 140px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.title-frame-beginner {
+    border-color: #95a5a6 !important;
+    box-shadow: 0 0 10px rgba(149,165,166,0.35) !important;
+}
+.title-frame-bronze {
+    border-color: #cd7f32 !important;
+    box-shadow: 0 0 12px rgba(205,127,50,0.38) !important;
+}
+.title-frame-silver {
+    border-color: #cfd8dc !important;
+    box-shadow: 0 0 12px rgba(207,216,220,0.42) !important;
+}
+.title-frame-gold {
+    border-color: #f4c542 !important;
+    box-shadow: 0 0 14px rgba(244,197,66,0.42) !important;
+}
+.title-frame-platinum {
+    border-color: #55efc4 !important;
+    box-shadow: 0 0 14px rgba(85,239,196,0.42) !important;
+}
+.title-frame-diamond {
+    border-color: #74b9ff !important;
+    box-shadow: 0 0 15px rgba(116,185,255,0.46) !important;
+}
+.title-frame-master {
+    border-color: #a29bfe !important;
+    box-shadow: 0 0 16px rgba(162,155,254,0.48) !important;
+}
+.title-frame-king {
+    border-color: #ff3cac !important;
+    box-shadow: 0 0 18px rgba(255,60,172,0.52) !important;
+}
+
+.title-pill-beginner { background: rgba(149,165,166,0.18); color: #ecf0f1; }
+.title-pill-bronze   { background: rgba(205,127,50,0.18); color: #ffd8b0; }
+.title-pill-silver   { background: rgba(207,216,220,0.18); color: #f5f9fb; }
+.title-pill-gold     { background: rgba(244,197,66,0.16); color: #ffeaa7; }
+.title-pill-platinum { background: rgba(85,239,196,0.16); color: #b8ffe9; }
+.title-pill-diamond  { background: rgba(116,185,255,0.16); color: #d6edff; }
+.title-pill-master   { background: rgba(162,155,254,0.16); color: #e3dfff; }
+.title-pill-king     { background: rgba(255,60,172,0.16); color: #ffd2ec; }
 #arena-mission-btn {
     position: fixed;
     width: 52px;
@@ -5480,7 +5547,8 @@ function getCurrentPlayerProfile() {
         photo: localStorage.getItem("user-photo") || user?.photoURL || "images/do_tuong.png",
         balance: getPiBalance(),
         pmcBalance: getPmcBalance(),
-        walletKey: makeWalletDbKey()
+        walletKey: makeWalletDbKey(),
+        levelMeta: getCachedLevelMeta()
     };
 }
 
@@ -5577,7 +5645,189 @@ function updateCheckEffectFromBoard() {
 function renderPlayersFromRoom(room) {
     const doPlayer = room?.players?.do || {};
     const denPlayer = room?.players?.den || {};
+    const PLAYER_LEVEL_TABLE = [
+  { level: 1,  xp: 0,   title: "Tân Binh",         frame: "beginner", pill: "beginner", rewardPmc: 0 },
+  { level: 2,  xp: 20,  title: "Kỳ Thủ Đồng",      frame: "bronze",   pill: "bronze",   rewardPmc: 200 },
+  { level: 3,  xp: 45,  title: "Chiến Binh Đồng",  frame: "bronze",   pill: "bronze",   rewardPmc: 300 },
+  { level: 4,  xp: 75,  title: "Kỳ Thủ Bạc",       frame: "silver",   pill: "silver",   rewardPmc: 450 },
+  { level: 5,  xp: 110, title: "Chiến Binh Bạc",   frame: "silver",   pill: "silver",   rewardPmc: 600 },
+  { level: 6,  xp: 150, title: "Kỳ Thủ Vàng",      frame: "gold",     pill: "gold",     rewardPmc: 800 },
+  { level: 7,  xp: 200, title: "Chiến Binh Vàng",  frame: "gold",     pill: "gold",     rewardPmc: 1000 },
+  { level: 8,  xp: 260, title: "Bạch Kim",         frame: "platinum", pill: "platinum", rewardPmc: 1300 },
+  { level: 9,  xp: 330, title: "Tinh Anh",         frame: "platinum", pill: "platinum", rewardPmc: 1600 },
+  { level: 10, xp: 410, title: "Kim Cương",        frame: "diamond",  pill: "diamond",  rewardPmc: 2000 },
+  { level: 11, xp: 510, title: "Tinh Nhuệ",        frame: "diamond",  pill: "diamond",  rewardPmc: 2600 },
+  { level: 12, xp: 630, title: "Đại Cao Thủ",      frame: "master",   pill: "master",   rewardPmc: 3200 },
+  { level: 13, xp: 780, title: "Tông Sư",          frame: "master",   pill: "master",   rewardPmc: 4000 },
+  { level: 14, xp: 960, title: "Thiên Vương",      frame: "king",     pill: "king",     rewardPmc: 5500 },
+  { level: 15, xp: 1180,title: "Vua Cờ",           frame: "king",     pill: "king",     rewardPmc: 8000 }
+];
 
+function getWalletLevelRef(walletKey) {
+  return walletRefByKey(walletKey).child("levelMeta");
+}
+
+function getLevelInfoByXp(xpValue) {
+  const xp = Math.max(0, Number(xpValue || 0) || 0);
+  let current = PLAYER_LEVEL_TABLE[0];
+  for (const row of PLAYER_LEVEL_TABLE) {
+    if (xp >= row.xp) current = row;
+  }
+  return current;
+}
+
+function getLevelInfoByLevel(levelValue) {
+  const level = Math.max(1, Number(levelValue || 1) || 1);
+  return PLAYER_LEVEL_TABLE.find(x => x.level === level) || PLAYER_LEVEL_TABLE[PLAYER_LEVEL_TABLE.length - 1];
+}
+
+function buildLevelMeta(meta = {}) {
+  const xp = Math.max(0, Number(meta.xp || 0) || 0);
+  const info = getLevelInfoByXp(xp);
+  return {
+    xp,
+    level: info.level,
+    title: info.title,
+    frame: info.frame,
+    pill: info.pill
+  };
+}
+
+function getDefaultLevelMeta() {
+  return buildLevelMeta({ xp: 0 });
+}
+
+function formatTitleLine(meta = {}) {
+  const safe = buildLevelMeta(meta);
+  return `${safe.title} • Lv.${safe.level}`;
+}
+
+function applyAvatarFrame(imgEl, meta = {}) {
+  if (!imgEl) return;
+  const safe = buildLevelMeta(meta);
+
+  imgEl.classList.remove(
+    "title-frame-beginner",
+    "title-frame-bronze",
+    "title-frame-silver",
+    "title-frame-gold",
+    "title-frame-platinum",
+    "title-frame-diamond",
+    "title-frame-master",
+    "title-frame-king"
+  );
+
+  imgEl.classList.add(`title-frame-${safe.frame}`);
+}
+
+function applyTitlePill(el, meta = {}) {
+  if (!el) return;
+  const safe = buildLevelMeta(meta);
+
+  el.classList.remove(
+    "title-pill-beginner",
+    "title-pill-bronze",
+    "title-pill-silver",
+    "title-pill-gold",
+    "title-pill-platinum",
+    "title-pill-diamond",
+    "title-pill-master",
+    "title-pill-king",
+    "player-ready-on",
+    "player-ready-off"
+  );
+
+  el.classList.add(`title-pill-${safe.pill}`);
+}
+
+async function ensureMyLevelMetaLoaded() {
+  const walletKey = makeWalletDbKey();
+  if (!walletKey) return getDefaultLevelMeta();
+
+  try {
+    const snap = await getWalletLevelRef(walletKey).once("value");
+    const meta = buildLevelMeta(snap.val() || {});
+    localStorage.setItem("level-meta-cache", JSON.stringify(meta));
+    return meta;
+  } catch (err) {
+    console.error("Không load được levelMeta:", err);
+    const cached = localStorage.getItem("level-meta-cache");
+    if (cached) {
+      try { return buildLevelMeta(JSON.parse(cached)); } catch (_) {}
+    }
+    return getDefaultLevelMeta();
+  }
+}
+
+function getCachedLevelMeta() {
+  const raw = localStorage.getItem("level-meta-cache");
+  if (!raw) return getDefaultLevelMeta();
+  try {
+    return buildLevelMeta(JSON.parse(raw));
+  } catch (_) {
+    return getDefaultLevelMeta();
+  }
+}
+
+async function awardLevelProgressForFinishedRoom(roomId, room) {
+  if (!roomId || !room || !room.winner || room.winner === "hoa") return;
+
+  const walletKey = makeWalletDbKey();
+  if (!walletKey) return;
+
+  const mySideNow = mySide;
+  if (!mySideNow) return;
+
+  const resultType = room.winner === mySideNow ? "win" : "lose";
+  const xpGain = resultType === "win" ? 18 : 8;
+
+  const claimRef = db.ref(`levelMatchClaimsV1/${walletKey}/${roomId}`);
+  const claimTx = await runRefTransaction(claimRef, current => {
+    if (current && current.done) return;
+    return {
+      done: true,
+      at: Date.now(),
+      resultType,
+      xpGain
+    };
+  });
+
+  if (!claimTx.committed) return;
+
+  const levelRef = getWalletLevelRef(walletKey);
+  const levelSnap = await levelRef.once("value");
+  const beforeMeta = buildLevelMeta(levelSnap.val() || {});
+  const oldLevel = beforeMeta.level;
+  const nextXp = beforeMeta.xp + xpGain;
+  const afterMeta = buildLevelMeta({ xp: nextXp });
+
+  await levelRef.update({
+    xp: nextXp,
+    level: afterMeta.level,
+    title: afterMeta.title,
+    frame: afterMeta.frame,
+    pill: afterMeta.pill,
+    updatedAt: Date.now()
+  });
+
+  localStorage.setItem("level-meta-cache", JSON.stringify(afterMeta));
+
+  let rewardPmc = 0;
+  if (afterMeta.level > oldLevel) {
+    for (let lv = oldLevel + 1; lv <= afterMeta.level; lv++) {
+      rewardPmc += Number(getLevelInfoByLevel(lv).rewardPmc || 0);
+    }
+
+    if (rewardPmc > 0) {
+      await adjustPmcWalletByKey(walletKey, rewardPmc, {
+        name: localStorage.getItem("user-name-display") || "Người chơi",
+        photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+      });
+    }
+
+    alert(`🎉 Thăng cấp Lv.${afterMeta.level} - ${afterMeta.title}\n+${rewardPmc.toLocaleString("vi-VN")} PMC quà tăng cấp`);
+  }
+}
     const topName = document.getElementById("player-den-name");
     const bottomName = document.getElementById("player-do-name");
     const topRank = document.getElementById("player-den-rank");
@@ -5607,33 +5857,25 @@ function renderPlayersFromRoom(room) {
     const oppPmc = Number(oppPlayer.pmcBalance || 0);
     const myPmc = Number(myPlayer.pmcBalance || 0);
 
-    if (topRank) {
-        topRank.classList.remove("player-ready-on", "player-ready-off");
+    const oppLevelMeta = buildLevelMeta(oppPlayer?.levelMeta || {});
+const myLevelMeta = buildLevelMeta(
+    myPlayer?.uid === (firebase.auth().currentUser?.uid || "")
+        ? getCachedLevelMeta()
+        : (myPlayer?.levelMeta || {})
+);
 
-        if (isPlayingNow) {
-            topRank.innerText = roomStake > 0
-                ? ("PHÒNG " + formatPMC(roomStake) + " PMC")
-                : (formatPMC(oppPmc) + " PMC");
-            topRank.classList.add("player-ready-on");
-        } else {
-            topRank.innerText = oppReady ? "ĐÃ SS" : "CHƯA SS";
-            topRank.classList.add(oppReady ? "player-ready-on" : "player-ready-off");
-        }
-    }
+if (topRank) {
+    topRank.innerText = formatTitleLine(oppLevelMeta);
+    applyTitlePill(topRank, oppLevelMeta);
+}
 
-    if (bottomRank) {
-        bottomRank.classList.remove("player-ready-on", "player-ready-off");
+if (bottomRank) {
+    bottomRank.innerText = formatTitleLine(myLevelMeta);
+    applyTitlePill(bottomRank, myLevelMeta);
+}
 
-        if (isPlayingNow) {
-            bottomRank.innerText = roomStake > 0
-                ? ("PHÒNG " + formatPMC(roomStake) + " PMC")
-                : (formatPMC(myPmc) + " PMC");
-            bottomRank.classList.add("player-ready-on");
-        } else {
-            bottomRank.innerText = myReady ? "ĐÃ SS" : "CHƯA SS";
-            bottomRank.classList.add(myReady ? "player-ready-on" : "player-ready-off");
-        }
-    }
+if (topAvatar) applyAvatarFrame(topAvatar, oppLevelMeta);
+if (bottomAvatar) applyAvatarFrame(bottomAvatar, myLevelMeta);
 
     const inviteCode = String(
         room?.inviteCode || makeInviteCodeFromRoomId(currentRoomId || "")
@@ -5956,6 +6198,11 @@ if (room.status === "playing" && !room.winner) {
         if (room.winner) {
     setTimeout(() => {
         settlePmcViaApi(listeningRoomId);
+    }, 0);
+
+    setTimeout(() => {
+        awardLevelProgressForFinishedRoom(listeningRoomId, room)
+            .catch(err => console.error("Lỗi tăng cấp người chơi:", err));
     }, 0);
 }
         if (room.winner && !isGameOver) {
@@ -10396,6 +10643,7 @@ switchMissionTab(MISSION_UI_STATE.activeTab || 'day');
 
   document.addEventListener('DOMContentLoaded', function () {
   ensureMissionHubMounted();
+  ensureMyLevelMetaLoaded().catch(console.error);
   refreshMissionLobbyBadgeSilently();
 
   setInterval(function () {
