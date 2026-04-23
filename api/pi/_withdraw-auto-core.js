@@ -12,7 +12,7 @@ const CONFIG = {
   MAX_WITHDRAW_PER_TX: envNumber(
     process.env.MAX_WITHDRAW_PER_TX,
     process.env.PI_MAX_WITHDRAW_PER_TX,
-    20
+    10000
   ),
   MAX_WITHDRAW_PER_DAY_COUNT: envNumber(
     process.env.MAX_WITHDRAW_PER_DAY_COUNT,
@@ -22,7 +22,7 @@ const CONFIG = {
   AUTO_WITHDRAW_MAX: envNumber(
     process.env.AUTO_WITHDRAW_MAX,
     process.env.PI_AUTO_WITHDRAW_MAX,
-    3
+    10000
   ),
   BURST_WINDOW_MS: envNumber(
     process.env.WITHDRAW_BURST_WINDOW_MS,
