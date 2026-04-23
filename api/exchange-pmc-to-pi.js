@@ -1,4 +1,4 @@
-const PMC_PER_PI = 1000;
+const PMC_PER_PI = 500;
 
 module.exports = async function handler(req, res) {
   let stage = "start";
