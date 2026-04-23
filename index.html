@@ -9517,7 +9517,8 @@ async function onIncompletePaymentFound(payment) {
     if (!txid) {
       window.__PI_PENDING_PAYMENT_BLOCKED__ = true;
       window.__PI_PENDING_PAYMENT_MSG__ =
-        "Đang có payment Pi treo chưa có txid. Dev cần xử lý approve/complete phía server trước.";
+        "Đang có payment Pi treo chưa có txid. Dev cần xử lý phía server trước.";
+      alert(window.__PI_PENDING_PAYMENT_MSG__);
       return true;
     }
 
@@ -9542,36 +9543,29 @@ async function onIncompletePaymentFound(payment) {
       data
     });
 
-    if (!res.ok || !data?.ok) {
+    if (!res.ok || !data?.ok || data?.note) {
       window.__PI_PENDING_PAYMENT_BLOCKED__ = true;
       window.__PI_PENDING_PAYMENT_MSG__ =
-        data?.error || "Payment Pi cũ chưa complete xong ở server.";
+        data?.note ||
+        data?.error ||
+        "Payment Pi cũ chưa được xử lý sạch ở server.";
+      alert(window.__PI_PENDING_PAYMENT_MSG__);
       return true;
     }
 
-    if (!res.ok || !data?.ok || data?.note) {
-  window.__PI_PENDING_PAYMENT_BLOCKED__ = true;
-  window.__PI_PENDING_PAYMENT_MSG__ =
-    data?.note ||
-    data?.error ||
-    "Payment Pi cũ chưa được xử lý sạch ở server.";
-  alert(window.__PI_PENDING_PAYMENT_MSG__);
-  return true;
-}
-
-window.__PI_PENDING_PAYMENT_BLOCKED__ = false;
-window.__PI_PENDING_PAYMENT_MSG__ = "";
-alert("Payment cũ đã complete thật. Giờ mới thử nạp lại.");
-return true;;
+    window.__PI_PENDING_PAYMENT_BLOCKED__ = false;
+    window.__PI_PENDING_PAYMENT_MSG__ = "";
+    alert("Payment cũ đã complete thật. Giờ mới thử nạp lại.");
+    return true;
   } catch (e) {
     console.error("Xử lý incomplete payment lỗi:", e);
     window.__PI_PENDING_PAYMENT_BLOCKED__ = true;
     window.__PI_PENDING_PAYMENT_MSG__ =
       e?.message || "Không xử lý được payment Pi đang treo.";
+    alert(window.__PI_PENDING_PAYMENT_MSG__);
     return true;
   }
 }
-
 async function loginPi() {
     try {
         if (!window.Pi) {
