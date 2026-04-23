@@ -4,7 +4,7 @@ const adminBundle = require('./_firebaseAdmin.js');
 const ADMIN_TREASURY_WALLET_KEY = String(
   process.env.ADMIN_TREASURY_WALLET_KEY || 'pi_admin_master'
 ).trim();
-const TREASURY_SHARE_RATIO = Number(process.env.MISSION_TREASURY_SHARE_RATIO || 0.35);
+const TREASURY_SHARE_RATIO = Number(process.env.MISSION_TREASURY_SHARE_RATIO || 0.30);
 const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 function safeKey(value) {
@@ -88,10 +88,10 @@ function missionDefinitions() {
       target: 1,
       metricKey: 'alwaysOne',
       periodType: 'day',
-      rewardRate: 0.002,
-      minPmc: 300,
-      maxPmc: 1500,
-      note: 'Thưởng nóng từ quỹ phí hệ thống.'
+      rewardRate: 0.00015,
+      minPmc: 2,
+      maxPmc: 8,
+      note: 'Quà mở hàng nhẹ, lấy vui mỗi ngày.'
     },
     {
       id: 'daily_play_3',
@@ -101,10 +101,10 @@ function missionDefinitions() {
       target: 3,
       metricKey: 'dayMatches',
       periodType: 'day',
-      rewardRate: 0.004,
-      minPmc: 500,
-      maxPmc: 3000,
-      note: 'Còn 1 ván nữa là nút nhận sáng ngay.'
+      rewardRate: 0.00035,
+      minPmc: 5,
+      maxPmc: 18,
+      note: 'Chơi đều là có quà, nhưng không đốt quỹ.'
     },
     {
       id: 'daily_win_1',
@@ -114,10 +114,10 @@ function missionDefinitions() {
       target: 1,
       metricKey: 'dayWins',
       periodType: 'day',
-      rewardRate: 0.0045,
-      minPmc: 600,
-      maxPmc: 3500,
-      note: 'Đã thắng thì phải có lộc.'
+      rewardRate: 0.00045,
+      minPmc: 6,
+      maxPmc: 25,
+      note: 'Thắng trận đầu có lộc nhỏ.'
     },
     {
       id: 'weekly_play_10',
@@ -127,10 +127,10 @@ function missionDefinitions() {
       target: 10,
       metricKey: 'weekMatches',
       periodType: 'week',
-      rewardRate: 0.006,
-      minPmc: 1500,
-      maxPmc: 9000,
-      note: 'Người chơi chăm chỉ luôn được hậu hĩnh.'
+      rewardRate: 0.0008,
+      minPmc: 12,
+      maxPmc: 60,
+      note: 'Mốc tuần cho người chăm chơi.'
     },
     {
       id: 'weekly_win_5',
@@ -140,10 +140,10 @@ function missionDefinitions() {
       target: 5,
       metricKey: 'weekWins',
       periodType: 'week',
-      rewardRate: 0.0075,
-      minPmc: 2000,
-      maxPmc: 12000,
-      note: 'Chiến công tuần càng cao, quà càng dày.'
+      rewardRate: 0.0010,
+      minPmc: 15,
+      maxPmc: 80,
+      note: 'Thắng nhiều thì thưởng khá hơn.'
     },
     {
       id: 'weekly_active_3',
@@ -153,10 +153,10 @@ function missionDefinitions() {
       target: 3,
       metricKey: 'weekActiveDays',
       periodType: 'week',
-      rewardRate: 0.0065,
-      minPmc: 1800,
-      maxPmc: 10000,
-      note: 'Giữ nhịp đều là có thưởng đều.'
+      rewardRate: 0.0009,
+      minPmc: 14,
+      maxPmc: 70,
+      note: 'Giữ nhịp chơi đều là được cộng.'
     },
     {
       id: 'monthly_play_30',
@@ -166,10 +166,10 @@ function missionDefinitions() {
       target: 30,
       metricKey: 'monthMatches',
       periodType: 'month',
-      rewardRate: 0.011,
-      minPmc: 4000,
-      maxPmc: 25000,
-      note: 'Mốc lớn tháng cho người chơi chịu cày.'
+      rewardRate: 0.0020,
+      minPmc: 40,
+      maxPmc: 180,
+      note: 'Mốc tháng đáng giá nhưng vẫn sống quỹ.'
     },
     {
       id: 'monthly_win_15',
@@ -179,10 +179,10 @@ function missionDefinitions() {
       target: 15,
       metricKey: 'monthWins',
       periodType: 'month',
-      rewardRate: 0.013,
-      minPmc: 5000,
-      maxPmc: 32000,
-      note: 'Danh hiệu Chiến Thần Tháng đang chờ.'
+      rewardRate: 0.0025,
+      minPmc: 55,
+      maxPmc: 240,
+      note: 'Ngon hơn mốc ngày, nhưng không quá tay.'
     },
     {
       id: 'monthly_active_10',
@@ -192,10 +192,10 @@ function missionDefinitions() {
       target: 10,
       metricKey: 'monthActiveDays',
       periodType: 'month',
-      rewardRate: 0.012,
-      minPmc: 4500,
-      maxPmc: 28000,
-      note: 'Đều mỗi ngày, ví dày mỗi tháng.'
+      rewardRate: 0.0022,
+      minPmc: 45,
+      maxPmc: 200,
+      note: 'Thưởng bền cho người chơi đều.'
     },
     {
       id: 'ref_1',
@@ -205,10 +205,10 @@ function missionDefinitions() {
       target: 1,
       metricKey: 'friendCount',
       periodType: 'lifetime',
-      rewardRate: 0.008,
-      minPmc: 2000,
-      maxPmc: 15000,
-      note: 'Mốc khởi động cực dễ lấy.'
+      rewardRate: 0.0008,
+      minPmc: 8,
+      maxPmc: 35,
+      note: 'Mốc mở đầu nhẹ, dễ kích hoạt.'
     },
     {
       id: 'ref_10',
@@ -218,10 +218,10 @@ function missionDefinitions() {
       target: 10,
       metricKey: 'friendCount',
       periodType: 'lifetime',
-      rewardRate: 0.015,
-      minPmc: 10000,
-      maxPmc: 60000,
-      note: 'Càng đông bạn, quỹ cộng đồng càng đã.'
+      rewardRate: 0.0020,
+      minPmc: 30,
+      maxPmc: 150,
+      note: 'Có kéo người thật thì thưởng mới dày hơn.'
     },
     {
       id: 'ref_100',
@@ -231,10 +231,10 @@ function missionDefinitions() {
       target: 100,
       metricKey: 'friendCount',
       periodType: 'lifetime',
-      rewardRate: 0.03,
-      minPmc: 80000,
-      maxPmc: 300000,
-      note: 'Mốc này đủ để gây tiếng vang trong sảnh.'
+      rewardRate: 0.0060,
+      minPmc: 120,
+      maxPmc: 700,
+      note: 'Mốc lớn, nhưng vẫn trong ngưỡng chịu được.'
     },
     {
       id: 'ref_1000',
@@ -244,10 +244,10 @@ function missionDefinitions() {
       target: 1000,
       metricKey: 'friendCount',
       periodType: 'lifetime',
-      rewardRate: 0.06,
-      minPmc: 500000,
-      maxPmc: 3000000,
-      note: 'Phần thưởng cực hậu hĩnh cho người kéo cộng đồng thật.'
+      rewardRate: 0.0120,
+      minPmc: 600,
+      maxPmc: 1500,
+      note: 'Mốc rất khó, thưởng lớn vừa đủ.'
     },
     {
       id: 'ref_10000',
@@ -257,10 +257,10 @@ function missionDefinitions() {
       target: 10000,
       metricKey: 'friendCount',
       periodType: 'lifetime',
-      rewardRate: 0.1,
-      minPmc: 5000000,
-      maxPmc: 20000000,
-      note: 'Mốc huyền thoại: phải thật đông mới chạm tới.'
+      rewardRate: 0.0200,
+      minPmc: 4000,
+      maxPmc: 8000,
+      note: 'Huyền thoại thì có thưởng lớn, nhưng không phá app.'
     }
   ];
 }
