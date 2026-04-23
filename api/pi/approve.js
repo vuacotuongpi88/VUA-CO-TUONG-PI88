@@ -1,55 +1,80 @@
-export async function POST(request) {
+module.exports = async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ ok: false, error: "Method not allowed" });
+  }
+
   try {
-    console.log("APPROVE HIT");
+    const body =
+      typeof req.body === "string"
+        ? JSON.parse(req.body || "{}")
+        : (req.body || {});
 
-    const { paymentId } = await request.json();
+    const paymentId = String(body.paymentId || "").trim();
 
-    console.log("APPROVE paymentId:", paymentId);
-    console.log("HAS_KEY:", !!process.env.PI_API_KEY);
-    console.log("KEY_PREFIX:", (process.env.PI_API_KEY || "").slice(0, 6));
+    const PI_API_BASE = String(
+      process.env.PI_API_BASE_URL || "https://api.minepi.com"
+    ).trim();
 
-    if (!process.env.PI_API_KEY) {
-      return Response.json(
-        { ok: false, error: "Thiếu PI_API_KEY trên Vercel" },
-        { status: 500 }
-      );
+    const PI_API_KEY = String(
+      process.env.PI_API_KEY ||
+      process.env.PI_SERVER_API_KEY ||
+      process.env.PI_APIKEY ||
+      ""
+    ).trim();
+
+    console.log("APPROVE HIT", {
+      paymentId,
+      hasKey: !!PI_API_KEY,
+      keyPrefix: PI_API_KEY.slice(0, 6)
+    });
+
+    if (!PI_API_KEY) {
+      return res.status(500).json({
+        ok: false,
+        error: "Thiếu PI_API_KEY / PI_SERVER_API_KEY trên Vercel."
+      });
     }
 
     if (!paymentId) {
-      return Response.json(
-        { ok: false, error: "Thiếu paymentId" },
-        { status: 400 }
-      );
+      return res.status(400).json({
+        ok: false,
+        error: "Thiếu paymentId"
+      });
     }
 
-    const res = await fetch(`https://api.minepi.com/v2/payments/${paymentId}/approve`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Key ${process.env.PI_API_KEY}`,
-        "Content-Type": "application/json"
+    const piRes = await fetch(
+      `${PI_API_BASE}/v2/payments/${encodeURIComponent(paymentId)}/approve`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Key ${PI_API_KEY}`,
+          "Pi-Api-Key": PI_API_KEY
+        }
       }
-    });
+    );
 
-    const raw = await res.text();
+    const raw = await piRes.text();
     let data = {};
     try {
       data = raw ? JSON.parse(raw) : {};
-    } catch {
+    } catch (_) {
       data = { raw };
     }
 
-    console.log("APPROVE STATUS:", res.status);
+    console.log("APPROVE STATUS:", piRes.status);
     console.log("APPROVE DATA:", data);
 
-    return Response.json(
-      { ok: res.ok, status: res.status, data },
-      { status: res.status }
-    );
+    return res.status(piRes.status).json({
+      ok: piRes.ok,
+      status: piRes.status,
+      data
+    });
   } catch (err) {
     console.error("APPROVE ERROR:", err);
-    return Response.json(
-      { ok: false, error: err?.message || "approve error" },
-      { status: 500 }
-    );
+    return res.status(500).json({
+      ok: false,
+      error: err?.message || "approve error"
+    });
   }
-}
+};

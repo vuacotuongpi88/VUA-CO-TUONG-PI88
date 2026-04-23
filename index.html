@@ -9549,10 +9549,20 @@ async function onIncompletePaymentFound(payment) {
       return true;
     }
 
-    window.__PI_PENDING_PAYMENT_BLOCKED__ = false;
-    window.__PI_PENDING_PAYMENT_MSG__ = "";
-    alert("Đã gửi lệnh complete payment cũ. Bấm nạp lại sau 1-2 giây.");
-    return true;
+    if (!res.ok || !data?.ok || data?.note) {
+  window.__PI_PENDING_PAYMENT_BLOCKED__ = true;
+  window.__PI_PENDING_PAYMENT_MSG__ =
+    data?.note ||
+    data?.error ||
+    "Payment Pi cũ chưa được xử lý sạch ở server.";
+  alert(window.__PI_PENDING_PAYMENT_MSG__);
+  return true;
+}
+
+window.__PI_PENDING_PAYMENT_BLOCKED__ = false;
+window.__PI_PENDING_PAYMENT_MSG__ = "";
+alert("Payment cũ đã complete thật. Giờ mới thử nạp lại.");
+return true;;
   } catch (e) {
     console.error("Xử lý incomplete payment lỗi:", e);
     window.__PI_PENDING_PAYMENT_BLOCKED__ = true;
