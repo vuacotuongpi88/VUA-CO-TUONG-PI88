@@ -6990,42 +6990,70 @@ async function linkPiBrowser() {
     throw new Error("Không xác định được walletKey.");
   }
 
+  if (!window.firebase || !firebase.database) {
+    throw new Error("Firebase client chưa sẵn sàng.");
+  }
+
   const auth = await Pi.authenticate(
     ["username", "payments", "wallet_address"],
     onIncompletePaymentFound
   );
 
-  const res = await fetch("/api/pi/link-account?v=" + Date.now(), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-wallet-key": walletKey
-    },
-    body: JSON.stringify({
-      accessToken: auth.accessToken,
-      walletKey
-    })
-  });
+  const linkedPiUid = String(
+    auth?.user?.uid ||
+    auth?.uid ||
+    ""
+  ).trim();
 
- const raw = await res.text();
-alert(
-  "LINK RAW STATUS = " + res.status +
-  "\nLINK RAW TEXT = " + String(raw || "").slice(0, 800)
-);
+  const linkedPiUsername = String(
+    auth?.user?.username ||
+    auth?.username ||
+    ""
+  ).trim();
 
-let data = {};
-try {
-  data = raw ? JSON.parse(raw) : {};
-} catch (_) {
-  throw new Error("API link-account trả dữ liệu không hợp lệ.");
+  const linkedWalletAddress = String(
+    auth?.user?.wallet_address ||
+    auth?.wallet_address ||
+    auth?.walletAddress ||
+    auth?.publicKey ||
+    auth?.user?.walletAddress ||
+    auth?.user?.publicKey ||
+    auth?.wallet?.address ||
+    ""
+  ).trim();
+
+  if (!linkedPiUid) {
+    throw new Error("Không lấy được Pi UID từ Pi Browser.");
+  }
+
+  if (!linkedPiUsername) {
+    throw new Error("Không lấy được username Pi từ Pi Browser.");
+  }
+
+  if (!linkedWalletAddress) {
+    throw new Error("Không lấy được địa chỉ ví Pi từ Pi Browser ở frontend.");
+  }
+
+  const updatePayload = {
+    piUid: linkedPiUid,
+    piUsername: linkedPiUsername,
+    piVerified: true,
+    piWalletAddress: linkedWalletAddress,
+    linkedWalletAddress: linkedWalletAddress,
+    piBrowserWalletAddress: linkedWalletAddress,
+    updatedAt: Date.now()
+  };
+
+  await firebase.database().ref("wallets/" + walletKey).update(updatePayload);
+
+  return {
+    ok: true,
+    walletKey,
+    piUid: linkedPiUid,
+    piUsername: linkedPiUsername,
+    piWalletAddress: linkedWalletAddress
+  };
 }
-
-if (!res.ok || !data.ok) {
-  throw new Error(data.error || "Liên kết Pi Browser thất bại.");
-}
-  return data;
-}
-
 async function ensurePiLinkBeforeWithdraw() {
   const state = await getPiLinkState();
 
