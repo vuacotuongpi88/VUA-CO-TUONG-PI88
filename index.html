@@ -4194,7 +4194,7 @@ margin-bottom: 14px;
         <span class="close" onclick="closeExchangeModal()">&times;</span>
         <div class="room-mode-title">ĐỔI PI → PMC</div>
 
-        <div style="font-size:13px; color:#dfe6e9;">Tỷ lệ cố định: <b style="color:#7dffb3;">1 Pi = 500 PMC</b></div>
+        <div style="font-size:13px; color:#dfe6e9;">Tỷ lệ cố định: <b style="color:#7dffb3;">1 Pi = 20,000,000,000 PMC</b></div>
 
        <input id="exchange-pi-input" class="modal-input-dark" type="number" min="0" step="0.01" placeholder="Nhập số Pi muốn đổi">
 
@@ -6245,7 +6245,7 @@ const WITHDRAW_PASS_KEY = "pi_withdraw_password_hash";
 const PI_BALANCE_KEY = "pi-balance"; // key cũ, giữ lại để migrate 1 lần
 const BALANCE_CACHE_KEY = "wallet_balance_cache";
 const PMC_BALANCE_KEY = "pmc_balance_cache";
-const PMC_RATE = 500; // 1 Pi = 500 PMC
+const PMC_RATE = 20000000000; // 1 Pi = 20 tỷ PMC
 
 let withdrawLockResolve = null;
 let withdrawLockMode = "verify"; // verify | create
