@@ -9691,6 +9691,597 @@ document.addEventListener("click", function(e) {
         </div>
     </div>
 </div>
+<style id="mission-hub-style">
+#mission-hub-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.78);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 28000;
+    padding: 16px;
+    box-sizing: border-box;
+}
+#mission-hub-modal.show {
+    display: flex;
+}
+.mission-hub-box {
+    width: min(96vw, 980px);
+    max-height: 88vh;
+    overflow: hidden;
+    border-radius: 22px;
+    border: 2px solid rgba(244, 197, 66, 0.65);
+    background: radial-gradient(circle at top, rgba(123,47,247,0.18), transparent 32%), rgba(8, 8, 14, 0.97);
+    box-shadow: 0 0 28px rgba(123, 47, 247, 0.25), 0 0 24px rgba(244, 197, 66, 0.08);
+}
+.mission-hub-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 18px;
+    background: linear-gradient(90deg, rgba(80, 20, 144, 0.95), rgba(45, 10, 88, 0.98));
+    color: #fff8d6;
+}
+.mission-hub-title-wrap {
+    min-width: 0;
+}
+.mission-hub-title {
+    font-size: 23px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    color: #f4c542;
+}
+.mission-hub-sub {
+    margin-top: 3px;
+    font-size: 12px;
+    color: #e7d9ff;
+}
+.mission-hub-close {
+    cursor: pointer;
+    font-size: 24px;
+    font-weight: 900;
+    line-height: 1;
+}
+.mission-hub-body {
+    padding: 16px;
+    overflow-y: auto;
+    max-height: calc(88vh - 74px);
+}
+.mission-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 14px;
+}
+.mission-summary-card {
+    border-radius: 16px;
+    padding: 14px;
+    border: 1px solid rgba(85, 239, 196, 0.18);
+    background: rgba(14, 14, 24, 0.9);
+    box-shadow: inset 0 0 16px rgba(255,255,255,0.03);
+}
+.mission-summary-card strong {
+    display: block;
+    font-size: 12px;
+    color: #d8c7ff;
+    margin-bottom: 8px;
+}
+.mission-summary-value {
+    font-size: 24px;
+    font-weight: 900;
+    color: #7dffb3;
+    line-height: 1.1;
+}
+.mission-summary-note {
+    margin-top: 6px;
+    font-size: 11px;
+    color: #b2bec3;
+    line-height: 1.45;
+}
+.mission-top-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+}
+.mission-top-tab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border-radius: 14px;
+    border: 1px solid rgba(244, 197, 66, 0.28);
+    background: linear-gradient(180deg, rgba(58, 24, 102, 0.96), rgba(32, 12, 56, 0.96));
+    color: #f7e7b1;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 900;
+    cursor: pointer;
+}
+.mission-top-tab.active {
+    background: linear-gradient(180deg, #7b2ff7, #4d1d95);
+    color: #fff8d6;
+    border-color: #f4c542;
+    box-shadow: 0 0 14px rgba(123, 47, 247, 0.38), 0 0 20px rgba(244, 197, 66, 0.15);
+}
+.mission-pane {
+    display: none;
+}
+.mission-pane.show {
+    display: block;
+}
+.mission-pane-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+.mission-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(14, 20, 20, 0.98), rgba(8, 12, 12, 0.98));
+    border: 1px solid rgba(85, 239, 196, 0.22);
+    box-shadow: 0 0 14px rgba(85,239,196,0.07);
+    padding: 14px;
+}
+.mission-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at top right, rgba(85,239,196,0.08), transparent 40%);
+}
+.mission-card-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: flex-start;
+}
+.mission-card-title {
+    font-size: 16px;
+    font-weight: 900;
+    color: #fff8d6;
+}
+.mission-card-desc {
+    margin-top: 5px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: #c8d6d8;
+}
+.mission-card-badge {
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 900;
+    white-space: nowrap;
+}
+.mission-card-badge.ready {
+    background: rgba(125,255,179,0.16);
+    color: #7dffb3;
+    border: 1px solid rgba(125,255,179,0.35);
+}
+.mission-card-badge.claimed {
+    background: rgba(244, 197, 66, 0.16);
+    color: #f4c542;
+    border: 1px solid rgba(244, 197, 66, 0.35);
+}
+.mission-card-badge.locked {
+    background: rgba(223,230,233,0.1);
+    color: #dfe6e9;
+    border: 1px solid rgba(223,230,233,0.18);
+}
+.mission-card-progress-line {
+    margin-top: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+    color: #dfe6e9;
+}
+.mission-card-progress-bar {
+    margin-top: 8px;
+    width: 100%;
+    height: 9px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    overflow: hidden;
+}
+.mission-card-progress-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #7b2ff7, #55efc4, #f4c542);
+}
+.mission-card-footer {
+    margin-top: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+}
+.mission-reward-box strong {
+    display: block;
+    font-size: 11px;
+    color: #d8c7ff;
+    margin-bottom: 3px;
+}
+.mission-reward-value {
+    font-size: 18px;
+    font-weight: 900;
+    color: #7dffb3;
+}
+.mission-reward-note {
+    margin-top: 4px;
+    font-size: 10px;
+    line-height: 1.35;
+    color: #b2bec3;
+}
+.mission-claim-btn {
+    min-width: 126px;
+    border-radius: 12px;
+    padding: 10px 12px !important;
+    font-size: 12px !important;
+    font-weight: 900 !important;
+    letter-spacing: 0.3px;
+    background: linear-gradient(180deg, #00c38a, #008f67) !important;
+    color: #fff !important;
+    border: 1px solid rgba(125,255,179,0.65) !important;
+}
+.mission-claim-btn[disabled] {
+    opacity: 0.6;
+    cursor: not-allowed;
+    filter: grayscale(0.1);
+}
+.mission-empty {
+    border-radius: 18px;
+    border: 1px dashed rgba(85,239,196,0.28);
+    padding: 18px;
+    text-align: center;
+    color: #dfe6e9;
+    background: rgba(8, 12, 12, 0.92);
+}
+.mission-marketing-note {
+    margin-top: 14px;
+    border-radius: 16px;
+    padding: 12px 14px;
+    background: rgba(85,239,196,0.08);
+    border: 1px solid rgba(85,239,196,0.16);
+    color: #dfe6e9;
+    font-size: 12px;
+    line-height: 1.5;
+}
+#mission-hub-toast {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #f7e7b1;
+}
+@media (max-width: 768px) {
+    .mission-summary-grid,
+    .mission-top-tabs,
+    .mission-pane-grid {
+        grid-template-columns: 1fr;
+    }
+    .mission-card-footer {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .mission-claim-btn {
+        width: 100%;
+    }
+}
+</style>
+
+<script id="mission-hub-script">
+(function () {
+  const MISSION_UI_STATE = {
+    board: null,
+    activeTab: 'day',
+    loading: false,
+    claiming: false
+  };
+
+  function formatPmc(value) {
+    return Math.max(0, Math.floor(Number(value) || 0)).toLocaleString('vi-VN') + ' PMC';
+  }
+
+  function missionWalletKey() {
+    try {
+      return String(
+        (typeof getCurrentWalletKeyForPi === 'function' && getCurrentWalletKeyForPi()) ||
+        localStorage.getItem('walletKey') ||
+        (typeof makeWalletDbKey === 'function' && makeWalletDbKey()) ||
+        ''
+      ).trim();
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function ensureMissionHubMounted() {
+    if (!document.getElementById('menu-mission-hub')) {
+      const menu = document.getElementById('profile-dropdown');
+      const logoutItem = menu ? menu.querySelector('.menu-item.menu-item-danger') : null;
+      if (menu && logoutItem) {
+        const item = document.createElement('div');
+        item.id = 'menu-mission-hub';
+        item.className = 'menu-item';
+        item.setAttribute('onclick', 'openMissionHub()');
+        item.innerHTML = '<span class="menu-icon">🎯</span><span>NHIỆM VỤ</span>';
+        menu.insertBefore(item, logoutItem);
+      }
+    }
+
+    if (document.getElementById('mission-hub-modal')) return;
+
+    const modal = document.createElement('div');
+    modal.id = 'mission-hub-modal';
+    modal.innerHTML = `
+      <div class="mission-hub-box">
+        <div class="mission-hub-header">
+          <div class="mission-hub-title-wrap">
+            <div class="mission-hub-title">QUỸ THƯỞNG CAO THỦ</div>
+            <div class="mission-hub-sub">Chơi hay • mời mạnh • bấm nhận là phí nội bộ chảy ngay về ví</div>
+          </div>
+          <div class="mission-hub-close" onclick="closeMissionHub()">✕</div>
+        </div>
+        <div class="mission-hub-body">
+          <div class="mission-summary-grid">
+            <div class="mission-summary-card">
+              <strong>Quỹ nhiệm vụ hiện tại</strong>
+              <div class="mission-summary-value" id="mission-pool-value">0 PMC</div>
+              <div class="mission-summary-note">V1 đang lấy 35% từ ví phí hệ thống làm quỹ thưởng hoạt động.</div>
+            </div>
+            <div class="mission-summary-card">
+              <strong>Có thể nhận ngay</strong>
+              <div class="mission-summary-value" id="mission-claimable-value">0 PMC</div>
+              <div class="mission-summary-note" id="mission-claimable-note">Cày thêm chút nữa là nút nhận sáng lên.</div>
+            </div>
+            <div class="mission-summary-card">
+              <strong>Mốc mời hiện tại</strong>
+              <div class="mission-summary-value" id="mission-ref-summary">0 bạn</div>
+              <div class="mission-summary-note" id="mission-stats-note">Càng đông bạn hữu, quỹ cộng đồng càng đã.</div>
+            </div>
+          </div>
+
+          <div class="mission-top-tabs" id="mission-top-tabs">
+            <button class="mission-top-tab active" data-tab="day" onclick="switchMissionTab('day')">Ngày</button>
+            <button class="mission-top-tab" data-tab="week" onclick="switchMissionTab('week')">Tuần</button>
+            <button class="mission-top-tab" data-tab="month" onclick="switchMissionTab('month')">Tháng</button>
+            <button class="mission-top-tab" data-tab="referral" onclick="switchMissionTab('referral')">Mời bạn</button>
+          </div>
+
+          <div id="mission-pane-day" class="mission-pane show"><div class="mission-pane-grid"></div></div>
+          <div id="mission-pane-week" class="mission-pane"><div class="mission-pane-grid"></div></div>
+          <div id="mission-pane-month" class="mission-pane"><div class="mission-pane-grid"></div></div>
+          <div id="mission-pane-referral" class="mission-pane"><div class="mission-pane-grid"></div></div>
+
+          <div class="mission-marketing-note" id="mission-marketing-note">
+            Quỹ càng dày thì thưởng càng đậm. Đạt điều kiện là nhận thẳng vào ví PMC nội bộ, không chờ admin.
+          </div>
+          <div id="mission-hub-toast"></div>
+        </div>
+      </div>`;
+    modal.addEventListener('click', function (e) {
+      if (e.target === modal) closeMissionHub();
+    });
+    document.body.appendChild(modal);
+  }
+
+  async function fetchMissionBoard(force) {
+    if (MISSION_UI_STATE.loading && !force) return;
+    MISSION_UI_STATE.loading = true;
+    missionToast('Đang tải bảng nhiệm vụ...');
+
+    try {
+      const walletKey = missionWalletKey();
+      if (!walletKey) throw new Error('Chưa xác định được ví người chơi.');
+
+      const res = await fetch('/api/missions-v1?v=' + Date.now(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-wallet-key': walletKey
+        },
+        body: JSON.stringify({ action: 'board', walletKey })
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || 'Không tải được bảng nhiệm vụ.');
+      }
+
+      MISSION_UI_STATE.board = data;
+      renderMissionBoard();
+      missionToast('');
+    } catch (err) {
+      console.error('MISSION_BOARD_FAIL', err);
+      missionToast('Lỗi tải nhiệm vụ: ' + (err.message || 'Không rõ lỗi'));
+    } finally {
+      MISSION_UI_STATE.loading = false;
+    }
+  }
+
+  function missionStatusClass(mission) {
+    if (mission.claimed) return 'claimed';
+    if (mission.ready) return 'ready';
+    return 'locked';
+  }
+
+  function missionStatusText(mission) {
+    if (mission.claimed) return 'ĐÃ NHẬN';
+    if (mission.ready) return 'NHẬN NGAY';
+    return 'ĐANG CÀY';
+  }
+
+  function escapeMissionText(text) {
+    return String(text || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function renderMissionCards(tab, missions) {
+    const pane = document.querySelector('#mission-pane-' + tab + ' .mission-pane-grid');
+    if (!pane) return;
+
+    if (!Array.isArray(missions) || !missions.length) {
+      pane.innerHTML = '<div class="mission-empty">Chưa có nhiệm vụ ở mục này.</div>';
+      return;
+    }
+
+    pane.innerHTML = missions.map(function (mission) {
+      const progressPct = Math.max(0, Math.min(100, Number(mission.progressPercent || 0)));
+      const btnText = mission.claimed ? 'Đã nhận' : (mission.ready ? 'Nhận thưởng' : 'Chưa đạt');
+      const disabled = (!mission.ready || mission.claimed || MISSION_UI_STATE.claiming) ? 'disabled' : '';
+      return `
+        <div class="mission-card">
+          <div class="mission-card-head">
+            <div>
+              <div class="mission-card-title">${escapeMissionText(mission.title)}</div>
+              <div class="mission-card-desc">${escapeMissionText(mission.desc)}</div>
+            </div>
+            <div class="mission-card-badge ${missionStatusClass(mission)}">${missionStatusText(mission)}</div>
+          </div>
+
+          <div class="mission-card-progress-line">
+            <span>Tiến độ: ${escapeMissionText(mission.progressText)}</span>
+            <span>${progressPct}%</span>
+          </div>
+          <div class="mission-card-progress-bar">
+            <div class="mission-card-progress-fill" style="width:${progressPct}%"></div>
+          </div>
+
+          <div class="mission-card-footer">
+            <div class="mission-reward-box">
+              <strong>Thưởng dự kiến</strong>
+              <div class="mission-reward-value">${escapeMissionText(mission.rewardText)}</div>
+              <div class="mission-reward-note">${escapeMissionText(mission.note || '')}</div>
+            </div>
+            <button class="mission-claim-btn" ${disabled} onclick="claimMissionReward('${mission.id}')">${btnText}</button>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function renderMissionBoard() {
+    const board = MISSION_UI_STATE.board || {};
+    const tabs = board.tabs || {};
+
+    const poolEl = document.getElementById('mission-pool-value');
+    const claimableEl = document.getElementById('mission-claimable-value');
+    const claimableNoteEl = document.getElementById('mission-claimable-note');
+    const refEl = document.getElementById('mission-ref-summary');
+    const statsEl = document.getElementById('mission-stats-note');
+    const marketingEl = document.getElementById('mission-marketing-note');
+
+    if (poolEl) poolEl.innerText = formatPmc(board.treasury?.missionPoolPmc || 0);
+    if (claimableEl) claimableEl.innerText = formatPmc(board.claimableTotalPmc || 0);
+    if (claimableNoteEl) {
+      claimableNoteEl.innerText = (board.claimableCount || 0) > 0
+        ? `Đang có ${board.claimableCount} nhiệm vụ sáng nút nhận.`
+        : 'Còn thiếu vài bước nữa để mở khóa thưởng.';
+    }
+    if (refEl) refEl.innerText = `${Number(board.metrics?.friendCount || 0).toLocaleString('vi-VN')} bạn`;
+    if (statsEl) {
+      const metrics = board.metrics || {};
+      statsEl.innerText = `Hôm nay ${metrics.dayMatches || 0} ván • tuần này ${metrics.weekMatches || 0} ván • tháng này ${metrics.monthWins || 0} trận thắng.`;
+    }
+    if (marketingEl) {
+      marketingEl.innerHTML = `
+        Ví phí hệ thống hiện có <strong>${formatPmc(board.treasury?.treasuryPmc || 0)}</strong>.<br>
+        V1 đang chia quỹ theo kiểu “đạt mốc là nhận ngay”, tiền thưởng chảy thẳng vào ví PMC nội bộ của người chơi.`;
+    }
+
+    renderMissionCards('day', tabs.day || []);
+    renderMissionCards('week', tabs.week || []);
+    renderMissionCards('month', tabs.month || []);
+    renderMissionCards('referral', tabs.referral || []);
+    switchMissionTab(MISSION_UI_STATE.activeTab || 'day');
+  }
+
+  function missionToast(text) {
+    const el = document.getElementById('mission-hub-toast');
+    if (el) el.innerText = text || '';
+  }
+
+  window.openMissionHub = function () {
+    ensureMissionHubMounted();
+    const modal = document.getElementById('mission-hub-modal');
+    if (modal) modal.classList.add('show');
+    fetchMissionBoard(true);
+  };
+
+  window.closeMissionHub = function () {
+    const modal = document.getElementById('mission-hub-modal');
+    if (modal) modal.classList.remove('show');
+  };
+
+  window.switchMissionTab = function (tab) {
+    MISSION_UI_STATE.activeTab = tab;
+    document.querySelectorAll('.mission-top-tab').forEach(function (btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-tab') === tab);
+    });
+    document.querySelectorAll('.mission-pane').forEach(function (pane) {
+      pane.classList.toggle('show', pane.id === 'mission-pane-' + tab);
+    });
+  };
+
+  window.claimMissionReward = async function (missionId) {
+    if (MISSION_UI_STATE.claiming) return;
+    MISSION_UI_STATE.claiming = true;
+    missionToast('Đang nhận thưởng...');
+
+    try {
+      const walletKey = missionWalletKey();
+      if (!walletKey) throw new Error('Thiếu walletKey.');
+
+      const res = await fetch('/api/missions-v1?v=' + Date.now(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-wallet-key': walletKey
+        },
+        body: JSON.stringify({ action: 'claim', missionId, walletKey })
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || 'Không nhận được thưởng.');
+      }
+
+      if (typeof data.newPmcBalance === 'number' && typeof setPmcBalance === 'function') {
+        setPmcBalance(data.newPmcBalance);
+      } else if (typeof loadWalletBalance === 'function') {
+        await loadWalletBalance().catch(() => {});
+      }
+
+      alert(
+        'NHẬN THƯỞNG THÀNH CÔNG!\n' +
+        `Nhiệm vụ: ${data.missionTitle || missionId}\n` +
+        `Thưởng: ${formatPmc(data.amountPmc || 0)}\n` +
+        `Ví PMC mới: ${formatPmc(data.newPmcBalance || 0)}`
+      );
+
+      await fetchMissionBoard(true);
+      missionToast('Đã cộng thưởng vào ví nội bộ.');
+    } catch (err) {
+      console.error('MISSION_CLAIM_FAIL', err);
+      missionToast('Lỗi nhận thưởng: ' + (err.message || 'Không rõ lỗi'));
+      alert('Nhận thưởng lỗi: ' + (err.message || 'Không rõ lỗi'));
+    } finally {
+      MISSION_UI_STATE.claiming = false;
+    }
+  };
+
+  document.addEventListener('DOMContentLoaded', function () {
+    ensureMissionHubMounted();
+  });
+})();
+</script>
 </body>
 
 </html>
