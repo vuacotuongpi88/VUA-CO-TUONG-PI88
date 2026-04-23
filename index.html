@@ -9503,31 +9503,41 @@ let piAuth = null;
 
 async function onIncompletePaymentFound(payment) {
   try {
-    if (!payment?.identifier || !payment?.transaction?.txid) return;
+    console.log("PI_INCOMPLETE_PAYMENT_FOUND", payment);
 
-    const res = await fetch("/api/pi/complete?v=" + Date.now(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    alert(
+      "Phát hiện payment Pi đang treo.\n" +
+      "paymentId: " + String(payment?.identifier || "") + "\n" +
+      "txid: " + String(payment?.transaction?.txid || "chưa có")
+    );
+
+    if (payment?.identifier && payment?.transaction?.txid) {
+      const res = await fetch("/api/pi/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paymentId: payment.identifier,
+          txid: payment.transaction.txid
+        })
+      });
+
+      const raw = await res.text();
+      let data = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch (_) {
+        data = { raw };
+      }
+
+      console.log("HTML_INCOMPLETE_PAYMENT_COMPLETE", {
         paymentId: payment.identifier,
-        txid: payment.transaction.txid
-      })
-    });
-
-    const raw = await res.text();
-    let data = {};
-    try {
-      data = raw ? JSON.parse(raw) : {};
-    } catch (_) {
-      data = { raw };
+        txid: payment.transaction.txid,
+        status: res.status,
+        data
+      });
+    } else {
+      console.warn("Pending payment chưa có txid, cần dev xử lý approve/complete phía server", payment);
     }
-
-    console.log("HTML_INCOMPLETE_PAYMENT_COMPLETE", {
-      paymentId: payment.identifier,
-      txid: payment.transaction.txid,
-      status: res.status,
-      data
-    });
   } catch (e) {
     console.error("Xử lý incomplete payment lỗi:", e);
   }
