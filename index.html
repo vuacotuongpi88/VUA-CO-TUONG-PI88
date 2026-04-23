@@ -10146,10 +10146,10 @@ document.addEventListener("click", function(e) {
       <div class="mission-hub-body">
         <div class="mission-summary-grid">
           <div class="mission-summary-card">
-            <strong>Quỹ nhiệm vụ hiện tại</strong>
-            <div class="mission-summary-value" id="mission-pool-value">0 PMC</div>
-            <div class="mission-summary-note">V1 đang lấy 35% từ ví phí hệ thống làm quỹ thưởng hoạt động.</div>
-          </div>
+  <strong>Quỹ nhiệm vụ hiện tại</strong>
+  <div class="mission-summary-value" id="mission-pool-value">0 PMC</div>
+  <div class="mission-summary-note">Hoàn thành nhiệm vụ để mở khóa thưởng ngay.</div>
+</div>
           <div class="mission-summary-card">
             <strong>Có thể nhận ngay</strong>
             <div class="mission-summary-value" id="mission-claimable-value">0 PMC</div>
@@ -10308,10 +10308,9 @@ document.addEventListener("click", function(e) {
       statsEl.innerText = `Hôm nay ${metrics.dayMatches || 0} ván • tuần này ${metrics.weekMatches || 0} ván • tháng này ${metrics.monthWins || 0} trận thắng.`;
     }
     if (marketingEl) {
-      marketingEl.innerHTML = `
-        Ví phí hệ thống hiện có <strong>${formatPmc(board.treasury?.treasuryPmc || 0)}</strong>.<br>
-        V1 đang chia quỹ theo kiểu “đạt mốc là nhận ngay”, tiền thưởng chảy thẳng vào ví PMC nội bộ của người chơi.`;
-    }
+  marketingEl.innerHTML = `
+    Hoàn thành nhiệm vụ là nhận thưởng ngay, tiền thưởng chảy thẳng vào ví PMC nội bộ của người chơi.`;
+}
 
     renderMissionCards('day', tabs.day || []);
 renderMissionCards('week', tabs.week || []);
