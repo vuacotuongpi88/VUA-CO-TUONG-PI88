@@ -10297,7 +10297,7 @@ async function bindFriendSystem() {
         liveFriendCache = list;
         renderFriendList();
     });
-
+   
     friendRequestRef.on("value", snap => {
         const list = [];
         snap.forEach(child => {
@@ -10337,7 +10337,137 @@ async function bindFriendSystem() {
 }
 bindLobbyRoomList();
 bindFriendSystem();
+/* ===== KẾT BẠN ĐỐI THỦ TRONG TRẬN - KHÔNG CẦN NHẬP TÊN ===== */
 
+async function resolveMatchFriendTarget(player = {}) {
+    let walletKey = player.walletKey || player.wallet || player.walletDbKey || "";
+
+    // Nếu phòng cũ thiếu walletKey thì thử dò theo uid trong wallets
+    if (!walletKey && player.uid) {
+        const snap = await db.ref("wallets")
+            .orderByChild("uid")
+            .equalTo(player.uid)
+            .limitToFirst(1)
+            .once("value");
+
+        snap.forEach(child => {
+            if (!walletKey) walletKey = child.key;
+        });
+    }
+
+    walletKey = String(walletKey || "").replace(/[.#$\[\]\/]/g, "_");
+
+    return {
+        walletKey,
+        uid: player.uid || walletKey,
+        username: player.username || player.name || player.displayName || "",
+        displayName: player.name || player.displayName || player.username || "Đối thủ",
+        photo: player.photo || "images/do_tuong.png"
+    };
+}
+
+async function sendFriendRequestToMatchOpponent() {
+    try {
+        if (!currentRoomId) {
+            alert("Chưa ở trong trận nào.");
+            return;
+        }
+
+        const me = await ensureFriendProfileSynced();
+        const roomSnap = await db.ref("matches/" + currentRoomId).once("value");
+        const room = roomSnap.val();
+
+        if (!room || !room.players) {
+            alert("Không tìm thấy dữ liệu phòng.");
+            return;
+        }
+
+        const doPlayer = room.players.do || null;
+        const denPlayer = room.players.den || null;
+
+        if (!doPlayer || !denPlayer) {
+            alert("Chưa đủ 2 người chơi để kết bạn.");
+            return;
+        }
+
+        const meUid = auth.currentUser?.uid || "";
+        const meWalletKey = me.walletKey;
+
+        const isDo =
+            doPlayer.uid === meUid ||
+            doPlayer.walletKey === meWalletKey;
+
+        const isDen =
+            denPlayer.uid === meUid ||
+            denPlayer.walletKey === meWalletKey;
+
+        if (!isDo && !isDen) {
+            alert("Tài khoản này không phải người trong trận.");
+            return;
+        }
+
+        const rawTarget = isDo ? denPlayer : doPlayer;
+        const target = await resolveMatchFriendTarget(rawTarget);
+
+        if (!target.walletKey) {
+            alert("Không lấy được ví của đối thủ.");
+            return;
+        }
+
+        if (target.walletKey === me.walletKey || target.uid === me.uid) {
+            alert("Không thể tự kết bạn với chính mình.");
+            return;
+        }
+
+        const friendSnap = await db.ref(`social/friends/${me.walletKey}/${target.walletKey}`).once("value");
+        if (friendSnap.exists()) {
+            alert("Hai người đã là bạn bè rồi.");
+            return;
+        }
+
+        // Nếu đối thủ đã gửi lời mời trước, bấm nút này sẽ tự chấp nhận luôn
+        const incomingSnap = await db.ref(`social/friendRequests/${me.walletKey}/${target.walletKey}`).once("value");
+        if (incomingSnap.exists()) {
+            await acceptFriendRequest(target.walletKey);
+            alert("Đã chấp nhận lời mời. Hai người đã thành bạn bè!");
+            return;
+        }
+
+        const sentSnap = await db.ref(`social/friendRequestSent/${me.walletKey}/${target.walletKey}`).once("value");
+        if (sentSnap.exists()) {
+            alert("Đã gửi lời mời rồi, chờ đối thủ chấp nhận.");
+            return;
+        }
+
+        const updates = {};
+
+        updates[`social/friendRequests/${target.walletKey}/${me.walletKey}`] = {
+            fromWalletKey: me.walletKey,
+            fromUid: me.uid,
+            fromUsername: me.username,
+            fromDisplayName: me.displayName,
+            fromPhoto: me.photo,
+            fromRoomId: currentRoomId,
+            createdAt: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        updates[`social/friendRequestSent/${me.walletKey}/${target.walletKey}`] = {
+            targetWalletKey: target.walletKey,
+            username: target.username || "",
+            displayName: target.displayName || target.username || "Đối thủ",
+            photo: target.photo || "images/do_tuong.png",
+            fromRoomId: currentRoomId,
+            createdAt: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        await db.ref().update(updates);
+
+        alert("Đã gửi lời mời kết bạn cho " + (target.displayName || "đối thủ") + "!");
+    } catch (err) {
+        console.error("Lỗi sendFriendRequestToMatchOpponent:", err);
+        alert("Gửi lời mời kết bạn lỗi, xem console.");
+    }
+}
 function hoaTran() {
     isGameOver = true;
     clearInterval(interval);
