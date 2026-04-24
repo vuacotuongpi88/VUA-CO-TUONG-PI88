@@ -827,6 +827,7 @@ font-size: 1rem;
         top: 16px;
         right: 12px;
         bottom: auto;
+        display: flex;
     }
 
     #arena-friend-box {
@@ -839,6 +840,7 @@ font-size: 1rem;
 
 @media (min-width: 601px) {
     #arena-friend-btn {
+        display: flex;
         right: 22px;
         bottom: 24px;
     }
@@ -3775,6 +3777,49 @@ margin-bottom: 14px;
 
 .board-stage-relative{
   position:relative !important;
+}
+/* ===== CẦN GẠT UI GÓC BÀN - KHÔNG ĐỤNG BÀN CỜ ===== */
+/* 
+  x: số dương = qua PHẢI, số âm = qua TRÁI
+  y: số dương = xuống DƯỚI, số âm = lên TRÊN
+*/
+
+.board-side {
+  /* AVATAR ĐEN */
+  --den-avatar-x: 0px;
+  --den-avatar-y: 0px;
+
+  /* ĐỒNG HỒ ĐEN */
+  --den-clock-x: 0px;
+  --den-clock-y: 0px;
+
+  /* AVATAR ĐỎ */
+  --do-avatar-x: 0px;
+  --do-avatar-y: 0px;
+
+  /* ĐỒNG HỒ ĐỎ */
+  --do-clock-x: 0px;
+  --do-clock-y: 0px;
+}
+
+/* Kéo avatar ĐEN */
+.board-side .top-row .player-slot {
+  transform: translate(var(--den-avatar-x), var(--den-avatar-y)) !important;
+}
+
+/* Kéo đồng hồ ĐEN */
+.board-side .top-row .timer-inline {
+  transform: translate(var(--den-clock-x), var(--den-clock-y)) !important;
+}
+
+/* Kéo avatar ĐỎ */
+.board-side .bottom-row .player-slot {
+  transform: translate(var(--do-avatar-x), var(--do-avatar-y)) !important;
+}
+
+/* Kéo đồng hồ ĐỎ */
+.board-side .bottom-row .timer-inline {
+  transform: translate(var(--do-clock-x), var(--do-clock-y)) !important;
 }
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
