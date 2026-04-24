@@ -5146,8 +5146,8 @@ auth.onAuthStateChanged(async user => {
         document.getElementById("user-display").style.display = "none";
         document.getElementById("home-menu").style.display = "none";
         document.getElementById("game-arena").style.display = "none";
+        document.body.classList.remove("in-match");
         showLoginChoices();
-    }
 });
 function hideHomeUI() {
     const homeMenu = document.getElementById("home-menu");
