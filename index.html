@@ -5573,19 +5573,54 @@ const dx = Math.abs(tc - c), dy = Math.abs(tr - r);
 if (mt[tr][tc] && mt[tr][tc].side === side) return false;
 
 let luatType = type;
-// XÁC ĐỊNH LUẬT CỜ ÚP DỰA TRÊN VỊ TRÍ XUẤT PHÁT
-const pieceAtPos = document.querySelector(`.piece[style*="left: ${columns[c]}%"][style*="top: ${rows[r]}%"]`);
-if (isCoUp && pieceAtPos && pieceAtPos.dataset.isUp === "true") {
-if (r === 0 || r === 9) {
-if (c === 0 || c === 8) luatType = (side === 'do' ? '俥' : '車');
-else if (c === 1 || c === 7) luatType = (side === 'do' ? '傌' : '馬');
-else if (c === 2 || c === 6) luatType = (side === 'do' ? '相' : '象');
-else if (c === 3 || c === 5) luatType = (side === 'do' ? '仕' : '士');
-} else if ((r === 2 && side === 'den') || (r === 7 && side === 'do')) {
-if (c === 1 || c === 7) luatType = (side === 'do' ? '炮' : '砲');
-} else if ((r === 3 && side === 'den') || (r === 6 && side === 'do')) {
-if (c % 2 === 0) luatType = (side === 'do' ? '兵' : '卒');
+
+// Tìm quân theo TỌA ĐỘ THẬT của bàn, rồi đổi sang TỌA ĐỘ HIỂN THỊ.
+// Cái này sửa lỗi bên ĐEN bị xoay bàn làm quân úp nhận sai slot.
+function getPieceAtBoardPos(boardC, boardR) {
+    const viewPos = mapBoardToView(boardC, boardR);
+
+    return Array.from(document.querySelectorAll(".piece")).find(p => {
+        const pc = columns.indexOf(parseFloat(p.style.left));
+        const pr = rows.indexOf(parseFloat(p.style.top));
+        return pc === viewPos.c && pr === viewPos.r;
+    }) || null;
 }
+
+// Luật cờ úp: quân chưa lật đi theo Ô BAN ĐẦU, không theo mặt thật.
+function getCoUpSlotType(slotSide, slotC, slotR) {
+    if (slotSide === "den") {
+        if (slotR === 0) {
+            if (slotC === 0 || slotC === 8) return "車";
+            if (slotC === 1 || slotC === 7) return "馬";
+            if (slotC === 2 || slotC === 6) return "象";
+            if (slotC === 3 || slotC === 5) return "士";
+            if (slotC === 4) return "將";
+        }
+
+        if (slotR === 2 && (slotC === 1 || slotC === 7)) return "砲";
+        if (slotR === 3 && slotC % 2 === 0) return "卒";
+    }
+
+    if (slotSide === "do") {
+        if (slotR === 9) {
+            if (slotC === 0 || slotC === 8) return "俥";
+            if (slotC === 1 || slotC === 7) return "傌";
+            if (slotC === 2 || slotC === 6) return "相";
+            if (slotC === 3 || slotC === 5) return "仕";
+            if (slotC === 4) return "帥";
+        }
+
+        if (slotR === 7 && (slotC === 1 || slotC === 7)) return "炮";
+        if (slotR === 6 && slotC % 2 === 0) return "兵";
+    }
+
+    return null;
+}
+
+const pieceAtPos = getPieceAtBoardPos(c, r);
+
+if (isCoUp && pieceAtPos && pieceAtPos.dataset.isUp === "true") {
+    luatType = getCoUpSlotType(side, c, r) || type;
 }
 
 switch (luatType) {
