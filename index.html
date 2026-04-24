@@ -5209,7 +5209,6 @@ let readyTime = 30;
 let readyInterval = null;
 let readyOverlayWaitingShown = false;
 let currentRoomStatus = null;
-let isResettingNextMatch = false;
 
 function formatTime(s) {
     const m = Math.floor(s / 60);
@@ -5352,7 +5351,6 @@ function hideVictoryPopup() {
 }
 
 async function playNextMatch() {
-    isResettingNextMatch = true;
     hideVictoryPopup();
     clearInterval(interval);
     clearInterval(readyInterval);
@@ -5397,8 +5395,9 @@ async function playNextMatch() {
         updatedAt: firebase.database.ServerValue.TIMESTAMP
     });
 
-   hideVictoryPopup();
-return;
+    isGameOver = false;
+    hideVictoryPopup();
+    return;
 }
 
     // Offline fallback
@@ -6698,14 +6697,9 @@ if (typeof applyBoardPerspective === "function") {
         renderPlayersFromRoom(room);
         updateReadyUI();
 
-const hasEnoughPlayersWaiting =
-    !!room.players?.do &&
-    !!room.players?.den &&
-    room.status === "waiting" &&
-    !room.winner;
+const hasEnoughPlayersWaiting = !!room.players?.do && !!room.players?.den && room.status === "waiting";
 
 if (hasEnoughPlayersWaiting) {
-    isResettingNextMatch = false;
     isGameOver = false;
     selectedPiece = null;
     clearMoveHints();
@@ -6723,7 +6717,6 @@ if (hasEnoughPlayersWaiting) {
 }
 
 if (room.status === "playing" && !room.winner) {
-    isResettingNextMatch = false;
     readyOverlayWaitingShown = false;
     isGameOver = false;
     const overlay = document.getElementById("ready-overlay");
@@ -6778,7 +6771,7 @@ if (room.status === "playing" && !room.winner) {
             .catch(err => console.error("Lỗi tăng cấp người chơi:", err));
     }, 0);
 }
-        if (room.winner && !isGameOver && !isResettingNextMatch) {
+        if (room.winner && !isGameOver) {
     if (room.winner === "hoa") {
         endGame("HÒA CỜ", "2 BÊN HÒA");
     } else {
