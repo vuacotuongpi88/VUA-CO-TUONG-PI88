@@ -3583,7 +3583,45 @@ margin-bottom: 14px;
     align-items: flex-start;
     gap: 4px;
 }
+.player-slot-extra {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-top: 2px;
+    width: 100%;
+}
 
+.player-balance-outside {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.player-balance-outside .player-chip-balance {
+    display: block;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.15;
+    text-shadow: 0 0 6px rgba(0,0,0,0.42);
+}
+
+.top-row .player-slot {
+    align-items: flex-start;
+}
+
+.bottom-row .player-slot {
+    align-items: flex-end;
+}
+
+.bottom-row .player-slot-extra {
+    align-items: flex-end;
+    text-align: right;
+}
+
+.top-row .player-slot-extra {
+    align-items: flex-start;
+    text-align: left;
+}
 .player-invite-code {
     min-height: 14px;
     margin-left: 2px;
@@ -4129,14 +4167,20 @@ margin-bottom: 14px;
 </div>
 <div class="board-side">
     <div class="player-timer-row top-row">
-        <div class="player-slot">
+       <div class="player-slot">
     <div class="player-chip-inline" onclick="openPlayerStats('den')">
         <img id="player-den-avatar" src="images/do_tuong.png" alt="Đen">
         <div class="player-chip-meta">
-    <span id="player-den-name" class="player-chip-name">BÊN ĐEN</span>
-    <span id="player-den-rank" class="player-chip-rank">Tân Binh • Lv.1</span>
-    <span id="player-den-pi" class="player-chip-balance player-chip-balance-pi">0.00 π</span>
-    <span id="player-den-pmc" class="player-chip-balance player-chip-balance-pmc">0 PMC</span>
+            <span id="player-den-name" class="player-chip-name">BÊN ĐEN</span>
+            <span id="player-den-rank" class="player-chip-rank">Tân Binh • Lv.1</span>
+        </div>
+    </div>
+
+    <div class="player-slot-extra">
+        <div id="player-den-invite" class="player-invite-code"></div>
+        <div class="player-balance-outside">
+        </div>
+    </div>
 </div>
     </div>
     <div id="player-den-invite" class="player-invite-code"></div>
@@ -4166,14 +4210,20 @@ margin-bottom: 14px;
     <div class="player-timer-row bottom-row">
         <div id="timer-do" class="timer-box active-do timer-inline">09:00</div>
 
-        <div class="player-slot">
+      <div class="player-slot">
     <div class="player-chip-inline" onclick="openPlayerStats('do')">
         <img id="player-do-avatar" src="images/do_tuong.png" alt="Đỏ">
         <div class="player-chip-meta">
-    <span id="player-do-name" class="player-chip-name">BÊN ĐỎ</span>
-    <span id="player-do-rank" class="player-chip-rank">Tân Binh • Lv.1</span>
-    <span id="player-do-pi" class="player-chip-balance player-chip-balance-pi">0.00 π</span>
-    <span id="player-do-pmc" class="player-chip-balance player-chip-balance-pmc">0 PMC</span>
+            <span id="player-do-name" class="player-chip-name">BÊN ĐỎ</span>
+            <span id="player-do-rank" class="player-chip-rank">Tân Binh • Lv.1</span>
+        </div>
+    </div>
+
+    <div class="player-slot-extra">
+        <div id="player-do-invite" class="player-invite-code"></div>
+        <div class="player-balance-outside">
+        </div>
+    </div>
 </div>
     </div>
     <div id="player-do-invite" class="player-invite-code"></div>
