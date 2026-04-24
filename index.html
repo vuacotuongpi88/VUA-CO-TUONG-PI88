@@ -5095,6 +5095,8 @@ auth.onAuthStateChanged(async user => {
     }
 });
 function hideHomeUI() {
+    document.body.classList.add("in-match");
+    
     const homeMenu = document.getElementById("home-menu");
     if (homeMenu) homeMenu.style.display = "none";
 const mobileLobbyTitle = document.getElementById("mobile-lobby-title");
@@ -5124,6 +5126,8 @@ if (missionBadge) {
 }
 
 function showHomeUI() {
+    document.body.classList.remove("in-match");
+    
     const homeMenu = document.getElementById("home-menu");
     if (homeMenu) homeMenu.style.display = "block";
 
