@@ -3786,8 +3786,8 @@ margin-bottom: 14px;
 
 .board-side {
   /* AVATAR ĐEN */
-  --den-avatar-x: 0px;
-  --den-avatar-y: 60px;
+  --den-avatar-x: -10px;
+  --den-avatar-y: 55px;
 
   /* ĐỒNG HỒ ĐEN */
   --den-clock-x: 0px;
@@ -3821,6 +3821,37 @@ margin-bottom: 14px;
 .board-side .bottom-row .timer-inline {
   transform: translate(var(--do-clock-x), var(--do-clock-y)) !important;
 }
+/* ===== ĐẢO THỨ TỰ HIỂN THỊ BÊN ĐỊCH (TOP ROW) ===== */
+/* Mục tiêu: số dư -> mã phòng -> avatar */
+
+.board-side .top-row .player-slot{
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* Cụm info lên trên */
+.board-side .top-row .player-slot-extra{
+  order: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  margin-top: 0 !important;
+  margin-bottom: 4px !important;
+}
+
+/* Số dư lên đầu */
+.board-side .top-row .player-balance-outside{
+  order: 1 !important;
+}
+
+/* Mã phòng nằm sau số dư */
+.board-side .top-row #player-den-invite{
+  order: 2 !important;
+}
+
+/* Avatar xuống dưới cùng */
+.board-side .top-row .player-chip-inline{
+  order: 3 !important;
+}    
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
