@@ -5958,11 +5958,11 @@ if (bottomAvatar) applyAvatarFrame(bottomAvatar, myLevelMeta);
 function cleanupRoomListeners() {
     if (roomValueRef) roomValueRef.off();
     if (roomChatRef) roomChatRef.off();
-    setCornerBalanceVisible(true);
     roomValueRef = null;
     roomChatRef = null;
     lastRoomBoardHash = "";
 }
+setCornerBalanceVisible(true);
 async function leaveRealtimeMatch() {
     const roomId = currentRoomId;
     const side = mySide;
