@@ -5338,7 +5338,7 @@ function endGame(main, sub) {
         wrap.style.pointerEvents = "auto";
     }
 }
-function hideVictoryPopup() {
+ffunction hideVictoryPopup() {
     const wrap = document.getElementById("victory-wrap");
     if (!wrap) return;
 
@@ -5349,6 +5349,7 @@ function hideVictoryPopup() {
 
     wrap.style.transform = "translate(-50%, -50%) scale(0)";
     wrap.style.pointerEvents = "none";
+    wrap.style.display = "none";
 }
 
 async function playNextMatch() {
