@@ -5883,7 +5883,6 @@ async function awardLevelProgressForFinishedRoom(roomId, room) {
     const roomStake = Number(room?.stakePMC || 0);
     const oppPmc = Number(oppPlayer.pmcBalance || 0);
     const myPmc = Number(myPlayer.pmcBalance || 0);
-    updateCornerBalanceVisibility(isPlayingNow);
 
     const oppLevelMeta = buildLevelMeta(oppPlayer?.levelMeta || {});
 const myLevelMeta = buildLevelMeta(
