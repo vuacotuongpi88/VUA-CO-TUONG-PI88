@@ -5352,6 +5352,7 @@ function hideVictoryPopup() {
 }
 
 async function playNextMatch() {
+    isResettingNextMatch = true;
     hideVictoryPopup();
     clearInterval(interval);
     clearInterval(readyInterval);
