@@ -626,16 +626,11 @@ font-size: 1rem;
     border: 2px solid rgba(0,0,0,0.75);
 }
 
-#arena-mission-btn .mission-badge-dot.show {
-    display: inline-flex;
-}
-
 @media (max-width: 600px) {
     #arena-mission-btn {
         top: 16px;
         right: 72px; /* nằm song song bên trái icon kết bạn */
         bottom: auto;
-        display: flex;
     }
 }
 
@@ -644,7 +639,6 @@ font-size: 1rem;
         right: 86px; /* nằm song song bên trái icon kết bạn desktop */
         bottom: 24px;
         top: auto;
-        display: flex;
     }
 }
 #arena-friend-box {
@@ -4759,12 +4753,20 @@ if (friendBox) friendBox.classList.remove("show");
 
     const rankingModal = document.getElementById("ranking-modal");
     if (rankingModal) rankingModal.classList.remove("show");
+    const missionBtn = document.getElementById("arena-mission-btn");
+if (missionBtn) missionBtn.style.display = "none";
+
+const missionBadge = document.getElementById("arena-mission-badge");
+if (missionBadge) {
+    missionBadge.classList.remove("show");
+    missionBadge.textContent = "0";
+}
 }
 
 function showHomeUI() {
     const homeMenu = document.getElementById("home-menu");
     if (homeMenu) homeMenu.style.display = "block";
-
+    
     if (window.innerWidth <= 600) {
        const friendWrap = document.getElementById("mobile-friend-wrap");
 if (friendWrap) friendWrap.style.display = "block";
