@@ -7829,7 +7829,7 @@ async function settlePmcViaApi(roomId) {
         console.log("firebase uid:", firebase.auth().currentUser?.uid);
 console.log("local uid:", localStorage.getItem("uid"));
 console.log("walletKey:", walletKey);
-        const res = await fetch("/api/pmc/settle", {
+        const res = await fetch("/api/pmc/settle-safe-v2", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ roomId, feeRate: MATCH_SYSTEM_FEE_RATE })
