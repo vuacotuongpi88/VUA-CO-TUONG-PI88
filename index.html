@@ -6697,7 +6697,7 @@ if (typeof applyBoardPerspective === "function") {
         renderPlayersFromRoom(room);
         updateReadyUI();
 
-const hasEnoughPlayersWaiting = !!room.players?.do && !!room.players?.den && room.status === "waiting" && !room.winner;
+const hasEnoughPlayersWaiting = !!room.players?.do && !!room.players?.den && room.status === "waiting";
 
 if (hasEnoughPlayersWaiting) {
     isGameOver = false;
