@@ -546,7 +546,29 @@ font-size: 1rem;
     overflow: hidden;
     text-overflow: ellipsis;
 }
+.player-chip-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+}
 
+.player-chip-balance {
+    display: block;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.15;
+    opacity: 0.96;
+    text-shadow: 0 0 6px rgba(0,0,0,0.42);
+}
+
+.player-chip-balance-pi {
+    color: #ffe082;
+}
+
+.player-chip-balance-pmc {
+    color: #7dffb3;
+}
 .title-frame-beginner {
     border-color: #95a5a6 !important;
     box-shadow: 0 0 10px rgba(149,165,166,0.35) !important;
@@ -3367,15 +3389,7 @@ margin-bottom: 14px;
     line-height: 1.1;
     font-size: 11px;
 }
-.player-chip-invite,
-#player-den-invite,
-#player-do-invite {
-    font-size: 10px;
-    font-weight: 800;
-    color: #7dffb3;
-    margin-top: 2px;
-    text-shadow: 0 0 6px rgba(0,0,0,0.45);
-}
+
 .player-chip-name {
     color: #f106d2;
     font-weight: bold;
@@ -4119,9 +4133,11 @@ margin-bottom: 14px;
     <div class="player-chip-inline" onclick="openPlayerStats('den')">
         <img id="player-den-avatar" src="images/do_tuong.png" alt="Đen">
         <div class="player-chip-meta">
-            <span id="player-den-name" class="player-chip-name">BÊN ĐEN</span>
-            <span id="player-den-rank" class="player-chip-rank">0 / 4500</span>
-        </div>
+    <span id="player-den-name" class="player-chip-name">BÊN ĐEN</span>
+    <span id="player-den-rank" class="player-chip-rank">Tân Binh • Lv.1</span>
+    <span id="player-den-pi" class="player-chip-balance player-chip-balance-pi">0.00 π</span>
+    <span id="player-den-pmc" class="player-chip-balance player-chip-balance-pmc">0 PMC</span>
+</div>
     </div>
     <div id="player-den-invite" class="player-invite-code"></div>
 </div>
@@ -4154,9 +4170,11 @@ margin-bottom: 14px;
     <div class="player-chip-inline" onclick="openPlayerStats('do')">
         <img id="player-do-avatar" src="images/do_tuong.png" alt="Đỏ">
         <div class="player-chip-meta">
-            <span id="player-do-name" class="player-chip-name">BÊN ĐỎ</span>
-            <span id="player-do-rank" class="player-chip-rank">0 / 4500</span>
-        </div>
+    <span id="player-do-name" class="player-chip-name">BÊN ĐỎ</span>
+    <span id="player-do-rank" class="player-chip-rank">Tân Binh • Lv.1</span>
+    <span id="player-do-pi" class="player-chip-balance player-chip-balance-pi">0.00 π</span>
+    <span id="player-do-pmc" class="player-chip-balance player-chip-balance-pmc">0 PMC</span>
+</div>
     </div>
     <div id="player-do-invite" class="player-invite-code"></div>
 </div>
@@ -5658,19 +5676,16 @@ function updateCheckEffectFromBoard() {
         });
     });
 }
-function updateCornerBalanceVisibility(isPlayingNow) {
-    const userBalance = document.getElementById("user-balance");
-    const userPmcBalance = document.getElementById("user-pmc-balance");
+function setCornerBalanceVisible(show) {
+    const piEl = document.getElementById("user-balance");
+    const pmcEl = document.getElementById("user-pmc-balance");
 
-    if (userBalance) {
-        userBalance.style.display = isPlayingNow ? "none" : "";
-    }
-    if (userPmcBalance) {
-        userPmcBalance.style.display = isPlayingNow ? "none" : "";
-    }
+    if (piEl) piEl.style.display = show ? "" : "none";
+    if (pmcEl) pmcEl.style.display = show ? "" : "none";
 }
 function renderPlayersFromRoom(room) {
     const doPlayer = room?.players?.do || {};
+    setCornerBalanceVisible(false);
     const denPlayer = room?.players?.den || {};
     const PLAYER_LEVEL_TABLE = [
   { level: 1,  xp: 0,   title: "Tân Binh",         frame: "beginner", pill: "beginner", rewardPmc: 0 },
@@ -5689,7 +5704,7 @@ function renderPlayersFromRoom(room) {
   { level: 14, xp: 960, title: "Thiên Vương",      frame: "king",     pill: "king",     rewardPmc: 5500 },
   { level: 15, xp: 1180,title: "Vua Cờ",           frame: "king",     pill: "king",     rewardPmc: 8000 }
 ];
-
+setCornerBalanceVisible(false);
 function getWalletLevelRef(walletKey) {
   return walletRefByKey(walletKey).child("levelMeta");
 }
@@ -5863,6 +5878,10 @@ async function awardLevelProgressForFinishedRoom(roomId, room) {
     const bottomAvatar = document.getElementById("player-do-avatar");
     const topInvite = document.getElementById("player-den-invite");
     const bottomInvite = document.getElementById("player-do-invite");
+    const topPi = document.getElementById("player-den-pi");
+const topPmcBox = document.getElementById("player-den-pmc");
+const bottomPi = document.getElementById("player-do-pi");
+const bottomPmcBox = document.getElementById("player-do-pmc");
 
     const doReadyNow = !!room?.ready?.do;
     const denReadyNow = !!room?.ready?.den;
@@ -5881,8 +5900,17 @@ async function awardLevelProgressForFinishedRoom(roomId, room) {
     if (bottomAvatar) bottomAvatar.src = myPlayer.photo || "images/do_tuong.png";
 
     const roomStake = Number(room?.stakePMC || 0);
-    const oppPmc = Number(oppPlayer.pmcBalance || 0);
-    const myPmc = Number(myPlayer.pmcBalance || 0);
+
+const oppPmc = Number(oppPlayer.pmcBalance || 0);
+const myPmc = Number(myPlayer.pmcBalance || 0);
+
+const oppPi = Number(
+    oppPlayer.balance != null ? oppPlayer.balance : (oppPlayer.piBalance || 0)
+) || 0;
+
+const myPi = Number(
+    myPlayer.balance != null ? myPlayer.balance : (myPlayer.piBalance || 0)
+) || 0;
 
     const oppLevelMeta = buildLevelMeta(oppPlayer?.levelMeta || {});
 const myLevelMeta = buildLevelMeta(
@@ -5890,7 +5918,11 @@ const myLevelMeta = buildLevelMeta(
         ? getCachedLevelMeta()
         : (myPlayer?.levelMeta || {})
 );
+if (topPi) topPi.innerText = `${oppPi.toFixed(2)} π`;
+if (topPmcBox) topPmcBox.innerText = `${formatPMC(oppPmc)} PMC`;
 
+if (bottomPi) bottomPi.innerText = `${myPi.toFixed(2)} π`;
+if (bottomPmcBox) bottomPmcBox.innerText = `${formatPMC(myPmc)} PMC`;
 if (topRank) {
     topRank.innerText = formatTitleLine(oppLevelMeta);
     applyTitlePill(topRank, oppLevelMeta);
@@ -5905,41 +5937,32 @@ if (topAvatar) applyAvatarFrame(topAvatar, oppLevelMeta);
 if (bottomAvatar) applyAvatarFrame(bottomAvatar, myLevelMeta);
 
     const inviteCode = String(
-    room?.inviteCode || makeInviteCodeFromRoomId(currentRoomId || "")
-).toUpperCase();
+        room?.inviteCode || makeInviteCodeFromRoomId(currentRoomId || "")
+    ).toUpperCase();
 
-const hostUid = room?.players?.do?.uid || "";
+    const hostUid = room?.players?.do?.uid || "";
 
-if (isPlayingNow) {
-    if (topInvite) {
-        topInvite.innerText = `PMC: ${formatPMC(oppPmc)}`;
-    }
-    if (bottomInvite) {
-        bottomInvite.innerText = `PMC: ${formatPMC(myPmc)}`;
-    }
-} else {
     if (topInvite) {
         topInvite.innerText = oppPlayer?.uid === hostUid && inviteCode
-            ? (`MÃ MỜI: ` + inviteCode)
+            ? ("MÃ MỜI: " + inviteCode)
             : "";
     }
 
     if (bottomInvite) {
         bottomInvite.innerText = myPlayer?.uid === hostUid && inviteCode
-            ? (`MÃ MỜI: ` + inviteCode)
+            ? ("MÃ MỜI: " + inviteCode)
             : "";
     }
-}
 }
 
 function cleanupRoomListeners() {
     if (roomValueRef) roomValueRef.off();
     if (roomChatRef) roomChatRef.off();
+    setCornerBalanceVisible(true);
     roomValueRef = null;
     roomChatRef = null;
     lastRoomBoardHash = "";
 }
-
 async function leaveRealtimeMatch() {
     const roomId = currentRoomId;
     const side = mySide;
