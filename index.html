@@ -5121,24 +5121,7 @@ function makeKingSvg(label, fillColor, textColor) {
 function isKingPiece(type) {
     return type === "帥" || type === "將";
 }
-function getCoUpBaseRuleType(cIdx, rIdx, side) {
-    if (rIdx === 0 || rIdx === 9) {
-        if (cIdx === 0 || cIdx === 8) return side === "do" ? "俥" : "車";
-        if (cIdx === 1 || cIdx === 7) return side === "do" ? "傌" : "馬";
-        if (cIdx === 2 || cIdx === 6) return side === "do" ? "相" : "象";
-        if (cIdx === 3 || cIdx === 5) return side === "do" ? "仕" : "士";
-    }
 
-    if ((rIdx === 2 && side === "den") || (rIdx === 7 && side === "do")) {
-        if (cIdx === 1 || cIdx === 7) return side === "do" ? "炮" : "砲";
-    }
-
-    if ((rIdx === 3 && side === "den") || (rIdx === 6 && side === "do")) {
-        if (cIdx % 2 === 0) return side === "do" ? "兵" : "卒";
-    }
-
-    return null;
-}
 function createPiece(cIdx, rIdx, type, up) {
     const img = document.createElement("img");
     img.className = "piece";
