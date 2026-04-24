@@ -4766,13 +4766,20 @@ if (missionBadge) {
 function showHomeUI() {
     const homeMenu = document.getElementById("home-menu");
     if (homeMenu) homeMenu.style.display = "block";
-    
-    if (window.innerWidth <= 600) {
-       const friendWrap = document.getElementById("mobile-friend-wrap");
-if (friendWrap) friendWrap.style.display = "block";
 
-const friendBox = document.getElementById("mobile-friend-box");
-if (friendBox) friendBox.classList.remove("show");
+    const missionBtn = document.getElementById("arena-mission-btn");
+    if (missionBtn) missionBtn.style.display = "flex";
+
+    if (typeof refreshMissionLobbyBadgeSilently === "function") {
+        refreshMissionLobbyBadgeSilently();
+    }
+
+    if (window.innerWidth <= 600) {
+        const friendWrap = document.getElementById("mobile-friend-wrap");
+        if (friendWrap) friendWrap.style.display = "block";
+
+        const friendBox = document.getElementById("mobile-friend-box");
+        if (friendBox) friendBox.classList.remove("show");
 
         const adZone = document.getElementById("mobile-ad-zone");
         if (adZone) adZone.style.display = "flex";
