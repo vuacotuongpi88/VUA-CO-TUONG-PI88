@@ -4042,66 +4042,6 @@ margin-bottom: 14px;
     bottom: auto !important;
   }
 }
-    /* ===== KHUNG BAO BỌC SỐ DƯ 2 BÊN TRONG TRẬN ===== */
-
-.board-side .player-balance-outside{
-  width: fit-content !important;
-  max-width: 150px !important;
-
-  padding: 4px 8px !important;
-  margin-top: 3px !important;
-
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: flex-end !important;
-  gap: 1px !important;
-
-  background: rgba(0, 0, 0, 0.68) !important;
-  border: 1px solid rgba(85, 239, 196, 0.65) !important;
-  border-radius: 10px !important;
-
-  box-shadow:
-    0 0 8px rgba(85, 239, 196, 0.22),
-    inset 0 0 8px rgba(0, 0, 0, 0.35) !important;
-
-  backdrop-filter: blur(2px);
-}
-
-/* Số dư bên ĐỊCH phía trên */
-.board-side .top-row .player-balance-outside{
-  margin-bottom: 3px !important;
-}
-
-/* Số dư bên MÌNH phía dưới */
-.board-side .bottom-row .player-balance-outside{
-  margin-top: 4px !important;
-}
-
-/* Chữ số dư trong khung */
-.board-side .player-balance-outside .player-chip-balance{
-  width: auto !important;
-  max-width: 140px !important;
-  font-size: 10px !important;
-  line-height: 1.15 !important;
-  font-weight: 900 !important;
-  text-align: right !important;
-  white-space: nowrap !important;
-}
-
-/* Pi màu vàng */
-.board-side .player-balance-outside .player-chip-balance-pi{
-  color: #ffe082 !important;
-}
-
-/* PMC màu xanh */
-.board-side .player-balance-outside .player-chip-balance-pmc{
-  color: #7dffb3 !important;
-}
-    /* ===== ẨN SĐT + MENU 3 GẠCH KHI ĐANG TRONG TRẬN ===== */
-
-body.in-match .hamburger-menu-container{
-  display: none !important;
-}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -5146,8 +5086,8 @@ auth.onAuthStateChanged(async user => {
         document.getElementById("user-display").style.display = "none";
         document.getElementById("home-menu").style.display = "none";
         document.getElementById("game-arena").style.display = "none";
-        document.body.classList.remove("in-match");
         showLoginChoices();
+    }
 });
 function hideHomeUI() {
     const homeMenu = document.getElementById("home-menu");
