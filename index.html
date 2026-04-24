@@ -3998,15 +3998,23 @@ margin-bottom: 14px;
     font-size: 10px !important;
   }
 }
-    /* ===== NÚT KẾT BẠN ĐỐI THỦ TRONG TRẬN ===== */
+/* ===== NÚT KẾT BẠN ĐỐI THỦ TRONG TRẬN ===== */
+/* Nằm ngang song song bên trái icon bạn bè */
 
 .match-add-friend-btn{
-  position: fixed;
-  right: 12px;
-  top: 76px;
-  z-index: 12025;
+  position: fixed !important;
+  top: 20px !important;
+  right: 72px !important;
+  z-index: 12025 !important;
 
-  padding: 8px 12px !important;
+  height: 34px !important;
+  min-width: 92px !important;
+  padding: 0 12px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
   border-radius: 999px !important;
   border: 1px solid rgba(244,197,66,0.55) !important;
 
@@ -4016,6 +4024,7 @@ margin-bottom: 14px;
   font-size: 12px !important;
   font-weight: 900 !important;
   letter-spacing: .3px;
+
   box-shadow:
     0 0 12px rgba(123,47,247,.38),
     0 0 14px rgba(244,197,66,.16);
@@ -4025,11 +4034,12 @@ margin-bottom: 14px;
   transform: scale(.96);
 }
 
+/* Desktop cũng để sát icon bạn bè, không đưa xuống dưới nữa */
 @media (min-width: 601px){
   .match-add-friend-btn{
-    top: auto;
-    right: 22px;
-    bottom: 88px;
+    top: 20px !important;
+    right: 86px !important;
+    bottom: auto !important;
   }
 }
 </style>
