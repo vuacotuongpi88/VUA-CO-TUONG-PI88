@@ -3300,9 +3300,13 @@ margin-bottom: 14px;
     font-weight: 700;
 }
 .board-side{
+  --ui-gap-x: 6px;      /* độ sát mép trái/phải bàn cờ */
+  --ui-top: -66px;      /* cụm trên nhô lên khỏi bàn cờ */
+  --ui-bottom: -76px;   /* cụm dưới hạ xuống khỏi bàn cờ */
+
   position: relative;
   width: min(450px, 90vw);
-  margin: 0 auto;
+  margin: 72px auto 88px;
 }
 
 .game-container{
@@ -3318,37 +3322,45 @@ margin-bottom: 14px;
   position: absolute;
   left: 0;
   width: 100%;
+  height: 0;
   z-index: 50;
   pointer-events: none;
 }
 
 .player-timer-row.top-row{
-  top: -64px;
+  top: var(--ui-top);
 }
 
 .player-timer-row.bottom-row{
-  bottom: -72px;
+  bottom: var(--ui-bottom);
 }
 
+/* KHUNG AVATAR: cả trên và dưới đều bám góc phải */
 .player-slot{
   position: absolute;
+  top: 0;
+  right: var(--ui-gap-x);
+  width: 156px;
   pointer-events: auto;
   z-index: 51;
-  width: 145px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
 }
 
-.top-row .player-slot{
-  left: 0;
-  top: 0;
-}
-
+.top-row .player-slot,
 .bottom-row .player-slot{
-  right: 0;
+  left: auto;
+  right: var(--ui-gap-x);
   top: 0;
 }
 
+/* ĐỒNG HỒ: cả trên và dưới đều bám góc trái */
 .timer-inline{
   position: absolute;
+  top: 0;
+  left: var(--ui-gap-x);
   width: 92px;
   min-width: 92px;
   margin: 0;
@@ -3357,20 +3369,19 @@ margin-bottom: 14px;
   z-index: 51;
 }
 
-.top-row .timer-inline{
-  right: 0;
-  top: 0;
-}
-
+.top-row .timer-inline,
 .bottom-row .timer-inline{
-  left: 0;
+  left: var(--ui-gap-x);
+  right: auto;
   top: 0;
 }
 
+/* KHUNG AVATAR */
 .player-chip-inline{
   display: flex;
   align-items: center;
   gap: 6px;
+  width: 100%;
   min-height: 50px;
   padding: 5px 8px;
   border-radius: 12px;
@@ -3380,46 +3391,47 @@ margin-bottom: 14px;
   box-sizing: border-box;
 }
 
+/* TÊN + HẠNG trong avatar: canh phải */
 .player-chip-meta{
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  width: calc(100% - 34px);
+  align-items: flex-end;
+  text-align: right;
 }
 
+/* MÃ PHÒNG + SỐ DƯ: bám theo khung avatar */
 .player-slot-extra{
+  width: 100%;
   margin-top: 4px;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  align-items: flex-end;
+  text-align: right;
 }
 
 .player-balance-outside{
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 1px;
+  align-items: flex-end;
+  text-align: right;
 }
 
 .player-invite-code,
 .player-chip-balance{
+  display: block;
+  width: 100%;
   font-size: 10px;
   line-height: 1.1;
   text-shadow: 0 0 6px rgba(0,0,0,.45);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.top-row .player-slot-extra,
-.top-row .player-chip-meta{
-  align-items: flex-start;
-  text-align: left;
-}
-
-.bottom-row .player-slot-extra,
-.bottom-row .player-chip-meta{
-  align-items: flex-end;
-  text-align: right;
 }
 
 .turn-row{
@@ -3429,19 +3441,16 @@ margin-bottom: 14px;
 
 @media (max-width: 600px){
   .board-side{
+    --ui-gap-x: 4px;
+    --ui-top: -58px;
+    --ui-bottom: -68px;
+
     width: min(90vw, 360px);
+    margin: 64px auto 80px;
   }
 
   .game-container{
     height: min(90vw, 360px);
-  }
-
-  .player-timer-row.top-row{
-    top: -58px;
-  }
-
-  .player-timer-row.bottom-row{
-    bottom: -66px;
   }
 
   .player-slot{
@@ -3471,42 +3480,14 @@ margin-bottom: 14px;
   .player-chip-rank{
     font-size: 9px;
   }
-}
 
-@media (max-width: 600px) {
-    .player-timer-row {
-        width: min(90vw, 360px);
-        gap: 8px;
-    }
-
-    .timer-inline {
-        width: 92px;
-        min-width: 92px;
-        padding: 6px 8px;
-        font-size: 1rem;
-    }
-
-    .player-chip-inline {
-        min-width: 132px;
-        padding: 5px 8px;
-        gap: 6px;
-    }
-
-    .player-chip-inline img {
-        width: 28px;
-        height: 28px;
-    }
-
-    .player-chip-meta {
-        font-size: 10px;
-    }
-    .chat-header {
+  .chat-header {
     display: none;
-}
+  }
 
-#match-content-popup {
+  #match-content-popup {
     padding-top: 8px;
-}
+  }
 }
 #withdraw-amount-modal {
     position: fixed;
@@ -4214,67 +4195,24 @@ margin-bottom: 14px;
 </div>
 </div>
 <div class="board-side">
-  <div class="player-timer-row top-row">
+    <div class="player-timer-row top-row">
     <div class="player-slot">
-      <div class="player-chip-inline" onclick="openPlayerStats('den')">
+    <div class="player-chip-inline" onclick="openPlayerStats('den')">
         <img id="player-den-avatar" src="images/do_tuong.png" alt="Đen">
         <div class="player-chip-meta">
-          <span id="player-den-name" class="player-chip-name">BÊN ĐEN</span>
-          <span id="player-den-rank" class="player-chip-rank">Tân Binh • Lv.1</span>
+            <span id="player-den-name" class="player-chip-name">BÊN ĐEN</span>
+            <span id="player-den-rank" class="player-chip-rank">Tân Binh • Lv.1</span>
         </div>
-      </div>
+    </div>
 
-      <div class="player-slot-extra">
+    <div class="player-slot-extra">
         <div id="player-den-invite" class="player-invite-code"></div>
         <div class="player-balance-outside">
-          <span id="player-den-pi" class="player-chip-balance player-chip-balance-pi">0.00 π</span>
-          <span id="player-den-pmc" class="player-chip-balance player-chip-balance-pmc">0 PMC</span>
+            <span id="player-den-pi" class="player-chip-balance player-chip-balance-pi">0.00 π</span>
+            <span id="player-den-pmc" class="player-chip-balance player-chip-balance-pmc">0 PMC</span>
         </div>
-      </div>
     </div>
-
-    <div id="timer-den" class="timer-box timer-inline">09:00</div>
-  </div>
-
-  <div id="board" class="game-container">
-    <div id="victory-wrap">
-      <div class="victory-banner">
-        <h1 id="main-result">CHIẾN THẮNG</h1>
-        <span id="sub-result">BÊN ĐỎ THẮNG</span>
-
-        <div id="victory-actions" style="margin-top:16px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
-          <button onclick="playNextMatch()">TIẾP TỤC</button>
-          <button onclick="exitAfterMatch()" style="background:#e17055;">THOÁT TRẬN</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="turn-row">
-    <div id="turn-box" style="color: #55efc4;">Lượt: ĐỎ</div>
-  </div>
-
-  <div class="player-timer-row bottom-row">
-    <div id="timer-do" class="timer-box active-do timer-inline">09:00</div>
-
-    <div class="player-slot">
-      <div class="player-chip-inline" onclick="openPlayerStats('do')">
-        <img id="player-do-avatar" src="images/do_tuong.png" alt="Đỏ">
-        <div class="player-chip-meta">
-          <span id="player-do-name" class="player-chip-name">BÊN ĐỎ</span>
-          <span id="player-do-rank" class="player-chip-rank">Tân Binh • Lv.1</span>
-        </div>
-      </div>
-
-      <div class="player-slot-extra">
-        <div id="player-do-invite" class="player-invite-code"></div>
-        <div class="player-balance-outside">
-          <span id="player-do-pi" class="player-chip-balance player-chip-balance-pi">0.00 π</span>
-          <span id="player-do-pmc" class="player-chip-balance player-chip-balance-pmc">0 PMC</span>
-        </div>
-      </div>
-    </div>
-  </div>
+</div>
 </div>
 
         <div id="timer-den" class="timer-box timer-inline">09:00</div>
