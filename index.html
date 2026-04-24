@@ -3704,6 +3704,80 @@ margin-bottom: 14px;
     border-color: rgba(44, 17, 71, 0.88) !important;
     box-shadow: 0 0 10px rgba(244, 197, 66, 0.28) !important;
 }
+.board-player-panel{
+  position:absolute;
+  z-index:35;
+  width:150px;
+  min-height:58px;
+  padding:6px 8px;
+  border-radius:12px;
+  background:rgba(0,0,0,.58);
+  border:1px solid rgba(90,255,220,.55);
+  box-shadow:0 0 10px rgba(0,255,200,.18);
+  color:#fff;
+  box-sizing:border-box;
+  overflow:hidden;
+}
+
+.board-player-panel .panel-line{
+  display:block;
+  line-height:1.18;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.board-player-panel .panel-name{
+  font-size:13px;
+  font-weight:700;
+  color:#ff5a5a;
+}
+
+.board-player-panel .panel-rank{
+  font-size:12px;
+  font-weight:700;
+  color:#ffe36e;
+}
+
+.board-player-panel .panel-room{
+  font-size:11px;
+  font-weight:700;
+  color:#fff0a8;
+  margin-top:2px;
+}
+
+.board-player-panel .panel-balance{
+  font-size:11px;
+  font-weight:700;
+  color:#84ffd5;
+  margin-top:2px;
+}
+
+.board-corner-timer{
+  position:absolute;
+  z-index:35;
+  min-width:78px;
+  height:34px;
+  padding:0 12px;
+  border-radius:12px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:rgba(0,0,0,.62);
+  border:2px solid rgba(255,255,255,.78);
+  box-sizing:border-box;
+}
+
+.board-corner-timer .timer-text{
+  font-size:16px;
+  font-weight:800;
+  color:#ff6464;
+  letter-spacing:.4px;
+}
+
+.board-stage-relative{
+  position:relative !important;
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -5677,6 +5751,135 @@ function setCornerBalanceVisible(show) {
 
     if (piEl) piEl.style.display = show ? "" : "none";
     if (pmcEl) pmcEl.style.display = show ? "" : "none";
+}
+function pickEl(ids){
+  for (const id of ids) {
+    const el = document.getElementById(id);
+    if (el) return el;
+  }
+  return null;
+}
+
+function ensureNode(tag, id, className, parent){
+  let el = document.getElementById(id);
+  if (!el) {
+    el = document.createElement(tag);
+    el.id = id;
+    if (className) el.className = className;
+    if (parent) parent.appendChild(el);
+  }
+  return el;
+}
+
+function ensureBoardHudMounted(){
+  const board = document.getElementById("board");
+  if (!board) return null;
+
+  const stage = board.parentElement;
+  if (!stage) return null;
+  stage.classList.add("board-stage-relative");
+
+  const topTimer =
+    pickEl(["topTimer", "timerTop", "top-clock", "topTime"]) ||
+    ensureNode("div", "topTimer", "board-corner-timer", stage);
+
+  const bottomTimer =
+    pickEl(["bottomTimer", "timerBottom", "bottom-clock", "bottomTime"]) ||
+    ensureNode("div", "bottomTimer", "board-corner-timer", stage);
+
+  const topPanel = ensureNode("div", "topPlayerPanel", "board-player-panel", stage);
+  const bottomPanel = ensureNode("div", "bottomPlayerPanel", "board-player-panel", stage);
+
+  return { board, stage, topTimer, bottomTimer, topPanel, bottomPanel };
+}
+
+function fillPlayerPanel(panel, side){
+  if (!panel) return;
+
+  const nameEl   = pickEl(side === "top" ? ["topName", "topPlayerName"] : ["bottomName", "bottomPlayerName"]);
+  const rankEl   = pickEl(side === "top" ? ["topRank", "topPlayerRank"] : ["bottomRank", "bottomPlayerRank"]);
+  const roomEl   = pickEl(side === "top" ? ["topInvite", "topRoomCode"] : ["bottomInvite", "bottomRoomCode"]);
+  const piEl     = pickEl(side === "top" ? ["topPiBalance", "topPiText"] : ["bottomPiBalance", "bottomPiText"]);
+  const pmcEl    = pickEl(side === "top" ? ["topPmcBalance", "topPmcText"] : ["bottomPmcBalance", "bottomPmcText"]);
+
+  const nameText = nameEl ? (nameEl.innerText || "").trim() : "";
+  const rankText = rankEl ? (rankEl.innerText || "").trim() : "";
+  const roomText = roomEl ? (roomEl.innerText || "").trim() : "";
+  const piText   = piEl ? (piEl.innerText || "").trim() : "";
+  const pmcText  = pmcEl ? (pmcEl.innerText || "").trim() : "";
+
+  panel.innerHTML = `
+    <div class="panel-line panel-name">${nameText}</div>
+    <div class="panel-line panel-rank">${rankText}</div>
+    <div class="panel-line panel-room">${roomText}</div>
+    <div class="panel-line panel-balance">${piText}</div>
+    <div class="panel-line panel-balance">${pmcText}</div>
+  `;
+}
+
+function normalizeTimerBox(timerEl){
+  if (!timerEl) return;
+  timerEl.classList.add("board-corner-timer");
+
+  let inner = timerEl.querySelector(".timer-text");
+  if (!inner) {
+    const raw = (timerEl.innerText || "").trim();
+    timerEl.innerHTML = `<span class="timer-text">${raw}</span>`;
+  } else {
+    inner.textContent = (inner.textContent || "").trim();
+  }
+}
+
+function syncBoardHudAnchors(){
+  const hud = ensureBoardHudMounted();
+  if (!hud) return;
+
+  const { board, stage, topTimer, bottomTimer, topPanel, bottomPanel } = hud;
+
+  fillPlayerPanel(topPanel, "top");
+  fillPlayerPanel(bottomPanel, "bottom");
+
+  normalizeTimerBox(topTimer);
+  normalizeTimerBox(bottomTimer);
+
+  const stageRect = stage.getBoundingClientRect();
+  const boardRect = board.getBoundingClientRect();
+
+  const left   = boardRect.left - stageRect.left;
+  const top    = boardRect.top - stageRect.top;
+  const right  = left + boardRect.width;
+  const bottom = top + boardRect.height;
+  const GAP = 8;
+
+  // ép hiển thị để đo đúng kích thước
+  [topPanel, bottomPanel, topTimer, bottomTimer].forEach(el => {
+    if (!el) return;
+    el.style.position = "absolute";
+    el.style.display = "";
+    el.style.visibility = "visible";
+  });
+
+  requestAnimationFrame(() => {
+    if (topPanel) {
+      topPanel.style.left = `${left}px`;
+      topPanel.style.top = `${top - topPanel.offsetHeight - GAP}px`;
+    }
+
+    if (topTimer) {
+      topTimer.style.left = `${right - topTimer.offsetWidth}px`;
+      topTimer.style.top = `${top - topTimer.offsetHeight - GAP}px`;
+    }
+
+    if (bottomTimer) {
+      bottomTimer.style.left = `${left}px`;
+      bottomTimer.style.top = `${bottom + GAP}px`;
+    }
+
+    if (bottomPanel) {
+      bottomPanel.style.left = `${right - bottomPanel.offsetWidth}px`;
+      bottomPanel.style.top = `${bottom + GAP}px`;
+    }
+  });
 }
 function renderPlayersFromRoom(room) {
     const doPlayer = room?.players?.do || {};
