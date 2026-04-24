@@ -827,20 +827,11 @@ font-size: 1rem;
         top: 16px;
         right: 12px;
         bottom: auto;
-        display: flex;
-    }
-
-    #arena-friend-box {
-        top: 76px;
-        right: 12px;
-        bottom: auto;
-        width: min(88vw, 300px);
     }
 }
 
 @media (min-width: 601px) {
     #arena-friend-btn {
-        display: flex;
         right: 22px;
         bottom: 24px;
     }
@@ -4816,23 +4807,21 @@ auth.onAuthStateChanged(async user => {
         await tryResumeRealtimeMatch();
     } else {
         clearActiveMatchSnapshot();
-        document.getElementById("login-screen").style.display = "flex";
-        document.getElementById("user-display").style.display = "none";
-        document.getElementById("home-menu").style.display = "none";
-        document.getElementById("game-arena").style.display = "none";
-        showLoginChoices();
+hideFloatingUIForLogin();
+document.getElementById("login-screen").style.display = "flex";
+document.getElementById("home-menu").style.display = "none";
+document.getElementById("game-arena").style.display = "none";
+showLoginChoices();
     }
 });
 function hideHomeUI() {
+    hideFloatingUIForLogin();
+
     const homeMenu = document.getElementById("home-menu");
     if (homeMenu) homeMenu.style.display = "none";
-const mobileLobbyTitle = document.getElementById("mobile-lobby-title");
-if (mobileLobbyTitle) mobileLobbyTitle.style.display = "none";
-    const friendWrap = document.getElementById("mobile-friend-wrap");
-if (friendWrap) friendWrap.style.display = "none";
 
-const friendBox = document.getElementById("mobile-friend-box");
-if (friendBox) friendBox.classList.remove("show");
+    const mobileLobbyTitle = document.getElementById("mobile-lobby-title");
+    if (mobileLobbyTitle) mobileLobbyTitle.style.display = "none";
 
     const adZone = document.getElementById("mobile-ad-zone");
     if (adZone) adZone.style.display = "none";
@@ -4842,16 +4831,44 @@ if (friendBox) friendBox.classList.remove("show");
 
     const rankingModal = document.getElementById("ranking-modal");
     if (rankingModal) rankingModal.classList.remove("show");
+}
+function hideFloatingUIForLogin() {
+    const friendBtn = document.getElementById("arena-friend-btn");
+    if (friendBtn) friendBtn.style.display = "none";
+
     const missionBtn = document.getElementById("arena-mission-btn");
-if (missionBtn) missionBtn.style.display = "none";
+    if (missionBtn) missionBtn.style.display = "none";
 
-const missionBadge = document.getElementById("arena-mission-badge");
-if (missionBadge) {
-    missionBadge.classList.remove("show");
-    missionBadge.textContent = "0";
-}
-}
+    const missionBadge = document.getElementById("arena-mission-badge");
+    if (missionBadge) {
+        missionBadge.classList.remove("show");
+        missionBadge.textContent = "0";
+    }
 
+    const friendWrap = document.getElementById("mobile-friend-wrap");
+    if (friendWrap) friendWrap.style.display = "none";
+
+    const friendBox = document.getElementById("mobile-friend-box");
+    if (friendBox) friendBox.classList.remove("show");
+
+    const arenaFriendBox = document.getElementById("arena-friend-box");
+    if (arenaFriendBox) arenaFriendBox.classList.remove("show");
+
+    const mobileActions = document.getElementById("mobile-match-actions");
+    if (mobileActions) mobileActions.style.display = "none";
+
+    const mobileActionMenu = document.getElementById("mobile-action-menu");
+    if (mobileActionMenu) mobileActionMenu.classList.remove("show");
+
+    const chatBtn = document.getElementById("match-chat-btn");
+    if (chatBtn) chatBtn.style.display = "none";
+
+    const chatPopup = document.getElementById("match-chat-popup");
+    if (chatPopup) chatPopup.style.display = "none";
+
+    const userDisplay = document.getElementById("user-display");
+    if (userDisplay) userDisplay.style.display = "none";
+}
 function showHomeUI() {
     const homeMenu = document.getElementById("home-menu");
     if (homeMenu) homeMenu.style.display = "block";
