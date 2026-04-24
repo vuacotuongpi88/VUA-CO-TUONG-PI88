@@ -4184,7 +4184,6 @@ margin-bottom: 14px;
         </div>
     </div>
 </div>
-    <div id="player-den-invite" class="player-invite-code"></div>
 </div>
 
         <div id="timer-den" class="timer-box timer-inline">09:00</div>
@@ -4228,7 +4227,6 @@ margin-bottom: 14px;
         </div>
     </div>
 </div>
-    <div id="player-do-invite" class="player-invite-code"></div>
 </div>
     </div>
 </div>
@@ -5074,47 +5072,45 @@ async function playNextMatch() {
 
     // Online: đánh lại với đúng người đang cùng phòng
     if (currentRoomId) {
-        readyDo = false;
-        readyDen = false;
+    readyDo = false;
+    readyDen = false;
 
-        // QUAN TRỌNG: chưa hạ isGameOver ở đây
-        // để listener không bật popup thắng lần 2
-        selectedPiece = null;
-        lastMoveFrom = null;
-        lastMoveTo = null;
-        lastRoomBoardHash = "";
+    // chưa hạ isGameOver vội, chờ Firebase xoá winner xong đã
+    selectedPiece = null;
+    lastMoveFrom = null;
+    lastMoveTo = null;
+    lastRoomBoardHash = "";
 
-        await db.ref("matches/" + currentRoomId).update({
-            status: "waiting",
-            ready: {
-                do: false,
-                den: false
-            },
-            stakeLocked: {
-                do: false,
-                den: false
-            },
-            board: null,
-            turn: "do",
-            timeDo: 540,
-            timeDen: 540,
-            lastMoveFrom: null,
-            lastMoveTo: null,
-            winner: null,
-            winReason: null,
-            drawRequest: null,
-            settlement: null,
-            refunds: null,
-            updatedAt: firebase.database.ServerValue.TIMESTAMP
-        });
+    const roomId = currentRoomId;
 
-        // CHỈ hạ sau khi room đã reset xong
-        isGameOver = false;
-        readyOverlayWaitingShown = false;
+    await db.ref("matches/" + roomId).update({
+        status: "waiting",
+        ready: {
+            do: false,
+            den: false
+        },
+        stakeLocked: {
+            do: false,
+            den: false
+        },
+        board: null,
+        turn: "do",
+        timeDo: 540,
+        timeDen: 540,
+        lastMoveFrom: null,
+        lastMoveTo: null,
+        winner: null,
+        winReason: null,
+        drawRequest: null,
+        settlement: null,
+        refunds: null,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+    });
 
-        // bindRoom() sẽ tự show lại bản SS cho cả 2 bên
-        return;
-    }
+    isGameOver = false;
+    hideVictoryPopup();
+    return;
+}
 
     // Offline fallback
     isGameOver = false;
@@ -5762,7 +5758,6 @@ function renderPlayersFromRoom(room) {
   { level: 14, xp: 960, title: "Thiên Vương",      frame: "king",     pill: "king",     rewardPmc: 5500 },
   { level: 15, xp: 1180,title: "Vua Cờ",           frame: "king",     pill: "king",     rewardPmc: 8000 }
 ];
-setCornerBalanceVisible(false);
 function getWalletLevelRef(walletKey) {
   return walletRefByKey(walletKey).child("levelMeta");
 }
