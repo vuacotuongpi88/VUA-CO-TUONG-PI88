@@ -6723,6 +6723,7 @@ if (hasEnoughPlayersWaiting) {
 }
 
 if (room.status === "playing" && !room.winner) {
+    isResettingNextMatch = false;
     readyOverlayWaitingShown = false;
     isGameOver = false;
     const overlay = document.getElementById("ready-overlay");
