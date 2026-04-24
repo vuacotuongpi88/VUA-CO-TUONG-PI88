@@ -4815,13 +4815,15 @@ showLoginChoices();
     }
 });
 function hideHomeUI() {
-    hideFloatingUIForLogin();
-
     const homeMenu = document.getElementById("home-menu");
     if (homeMenu) homeMenu.style.display = "none";
+const mobileLobbyTitle = document.getElementById("mobile-lobby-title");
+if (mobileLobbyTitle) mobileLobbyTitle.style.display = "none";
+    const friendWrap = document.getElementById("mobile-friend-wrap");
+if (friendWrap) friendWrap.style.display = "none";
 
-    const mobileLobbyTitle = document.getElementById("mobile-lobby-title");
-    if (mobileLobbyTitle) mobileLobbyTitle.style.display = "none";
+const friendBox = document.getElementById("mobile-friend-box");
+if (friendBox) friendBox.classList.remove("show");
 
     const adZone = document.getElementById("mobile-ad-zone");
     if (adZone) adZone.style.display = "none";
@@ -4831,6 +4833,14 @@ function hideHomeUI() {
 
     const rankingModal = document.getElementById("ranking-modal");
     if (rankingModal) rankingModal.classList.remove("show");
+    const missionBtn = document.getElementById("arena-mission-btn");
+if (missionBtn) missionBtn.style.display = "none";
+
+const missionBadge = document.getElementById("arena-mission-badge");
+if (missionBadge) {
+    missionBadge.classList.remove("show");
+    missionBadge.textContent = "0";
+}
 }
 function hideFloatingUIForLogin() {
     const friendBtn = document.getElementById("arena-friend-btn");
