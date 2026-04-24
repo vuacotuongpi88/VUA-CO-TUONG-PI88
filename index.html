@@ -6769,7 +6769,7 @@ if (room.status === "playing" && !room.winner) {
             .catch(err => console.error("Lỗi tăng cấp người chơi:", err));
     }, 0);
 }
-        if (room.winner && !isGameOver && !isResettingNextMatch) {
+        if (room.winner && !isGameOver) {
     if (room.winner === "hoa") {
         endGame("HÒA CỜ", "2 BÊN HÒA");
     } else {
