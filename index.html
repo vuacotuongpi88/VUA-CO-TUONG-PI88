@@ -4167,7 +4167,7 @@ margin-bottom: 14px;
 </div>
 <div class="board-side">
     <div class="player-timer-row top-row">
-       <div class="player-slot">
+    <div class="player-slot">
     <div class="player-chip-inline" onclick="openPlayerStats('den')">
         <img id="player-den-avatar" src="images/do_tuong.png" alt="Đen">
         <div class="player-chip-meta">
@@ -4179,10 +4179,11 @@ margin-bottom: 14px;
     <div class="player-slot-extra">
         <div id="player-den-invite" class="player-invite-code"></div>
         <div class="player-balance-outside">
+            <span id="player-den-pi" class="player-chip-balance player-chip-balance-pi">0.00 π</span>
+            <span id="player-den-pmc" class="player-chip-balance player-chip-balance-pmc">0 PMC</span>
         </div>
     </div>
 </div>
-    </div>
     <div id="player-den-invite" class="player-invite-code"></div>
 </div>
 
@@ -4210,7 +4211,7 @@ margin-bottom: 14px;
     <div class="player-timer-row bottom-row">
         <div id="timer-do" class="timer-box active-do timer-inline">09:00</div>
 
-      <div class="player-slot">
+     <div class="player-slot">
     <div class="player-chip-inline" onclick="openPlayerStats('do')">
         <img id="player-do-avatar" src="images/do_tuong.png" alt="Đỏ">
         <div class="player-chip-meta">
@@ -4222,10 +4223,11 @@ margin-bottom: 14px;
     <div class="player-slot-extra">
         <div id="player-do-invite" class="player-invite-code"></div>
         <div class="player-balance-outside">
+            <span id="player-do-pi" class="player-chip-balance player-chip-balance-pi">0.00 π</span>
+            <span id="player-do-pmc" class="player-chip-balance player-chip-balance-pmc">0 PMC</span>
         </div>
     </div>
 </div>
-    </div>
     <div id="player-do-invite" class="player-invite-code"></div>
 </div>
     </div>
@@ -6017,8 +6019,8 @@ function cleanupRoomListeners() {
     roomValueRef = null;
     roomChatRef = null;
     lastRoomBoardHash = "";
+    setCornerBalanceVisible(true);
 }
-setCornerBalanceVisible(true);
 async function leaveRealtimeMatch() {
     const roomId = currentRoomId;
     const side = mySide;
