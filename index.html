@@ -4049,57 +4049,52 @@ body.in-match .hamburger-menu-container{
 }
 
 
-/* ===== LEVEL 160 + EXP HUD GỌN ===== */
-#global-level-hud{
-  position:fixed;
-  left:50%;
-  top:max(8px, env(safe-area-inset-top, 0px) + 6px);
-  transform:translateX(-50%);
-  width:min(320px, 58vw);
-  z-index:12018;
-  display:none;
-  padding:6px 9px;
-  box-sizing:border-box;
-  border-radius:999px;
-  background:rgba(0,0,0,.72);
-  border:1px solid rgba(85,239,196,.55);
-  box-shadow:0 0 12px rgba(85,239,196,.18), inset 0 0 10px rgba(0,0,0,.35);
-  backdrop-filter:blur(2px);
-  pointer-events:none;
+/* ===== LEVEL 160 + EXP HUD GỌN, KHÔNG THƯỞNG PMC THEO LEVEL ===== */
+.level-exp-hud{
+  position: fixed;
+  left: 50%;
+  top: max(8px, env(safe-area-inset-top, 0px) + 6px);
+  transform: translateX(-50%);
+  z-index: 12018;
+  width: min(58vw, 360px);
+  min-width: 210px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(0,0,0,.62);
+  border: 1px solid rgba(85,239,196,.55);
+  box-shadow: 0 0 12px rgba(85,239,196,.18), inset 0 0 8px rgba(0,0,0,.36);
+  backdrop-filter: blur(3px);
+  display: none;
+  pointer-events: none;
 }
-body.home-ready #global-level-hud,
-body.in-match #global-level-hud{
-  display:block;
-}
-.level-hud-top{
+.level-exp-hud.show{ display:block; }
+.level-exp-hud-top{
   display:flex;
-  justify-content:space-between;
   align-items:center;
+  justify-content:space-between;
   gap:8px;
   font-size:10px;
   font-weight:900;
-  line-height:1;
+  line-height:1.1;
   color:#fff8d6;
-  margin-bottom:4px;
   white-space:nowrap;
 }
-.level-hud-stat{
-  color:#7dffb3;
-  font-size:9px;
-}
-.level-hud-bar{
-  height:6px;
+.level-exp-hud-title{ color:#55efc4; overflow:hidden; text-overflow:ellipsis; }
+.level-exp-hud-stat{ color:#ffe082; }
+.level-exp-hud-bar{
+  margin-top:4px;
+  height:5px;
   border-radius:999px;
   overflow:hidden;
   background:rgba(255,255,255,.14);
-  border:1px solid rgba(255,255,255,.12);
+  border:1px solid rgba(255,255,255,.10);
 }
-.level-hud-fill{
+.level-exp-hud-fill{
   height:100%;
   width:0%;
   border-radius:999px;
-  background:linear-gradient(90deg,#55efc4,#f4c542,#ff3cac);
-  box-shadow:0 0 8px rgba(85,239,196,.45);
+  background:linear-gradient(90deg,#55efc4,#f4c542,#ff7be5);
+  box-shadow:0 0 10px rgba(85,239,196,.42);
 }
 .player-exp-wrap{
   width:100%;
@@ -4130,29 +4125,192 @@ body.in-match #global-level-hud{
   background:linear-gradient(90deg,#55efc4,#f4c542);
   box-shadow:0 0 8px rgba(85,239,196,.45);
 }
-.level-milestone-grid{
-  display:grid;
-  grid-template-columns:1fr;
-  gap:10px;
-}
-.level-milestone-note{
-  padding:10px 12px;
-  border-radius:14px;
-  background:rgba(85,239,196,.08);
-  border:1px solid rgba(85,239,196,.22);
-  color:#dff;
-  font-size:12px;
-  line-height:1.45;
-}
 @media (max-width:600px){
-  #global-level-hud{
-    top:max(8px, env(safe-area-inset-top, 0px) + 6px);
-    width:min(250px, 62vw);
-    padding:5px 7px;
+  .level-exp-hud{
+    width:min(54vw, 250px);
+    min-width:176px;
+    padding:5px 8px;
   }
-  .level-hud-top{font-size:9px; gap:5px;}
-  .level-hud-stat{font-size:8px;}
+  .level-exp-hud-top{font-size:9px;}
 }
+
+
+/* ===== SHOP SKIN + TÚI ĐỒ + RƯƠNG CẤP ===== */
+#arena-shop-btn{
+  position: fixed;
+  top: 16px;
+  right: 132px;
+  bottom: auto;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #f4c542, #9b5c00);
+  color: #2a1147;
+  font-size: 24px;
+  cursor: pointer;
+  z-index: 12018;
+  box-shadow:
+    0 0 14px rgba(244,197,66,.34),
+    0 0 16px rgba(123,47,247,.15);
+  border: 1px solid rgba(255,255,255,.35);
+}
+#arena-shop-btn .shop-badge-dot{
+  position:absolute;
+  top:-3px;
+  right:-3px;
+  min-width:20px;
+  height:20px;
+  padding:0 5px;
+  border-radius:999px;
+  background:#ff2d55;
+  color:#fff;
+  font-size:10px;
+  font-weight:900;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  box-shadow:0 0 10px rgba(255,45,85,.45);
+  border:2px solid rgba(0,0,0,.75);
+}
+#arena-shop-btn .shop-badge-dot.show{ display:flex; }
+#arena-shop-btn.has-ready-chest{ animation: shopPulse 1.1s ease-in-out infinite alternate; }
+@keyframes shopPulse{
+  from{ transform:scale(1); box-shadow:0 0 12px rgba(244,197,66,.35); }
+  to{ transform:scale(1.06); box-shadow:0 0 22px rgba(255,209,102,.65); }
+}
+body.in-match #arena-shop-btn{ display:none !important; }
+@media (max-width:600px){
+  #arena-shop-btn{ top:16px; right:132px; }
+}
+@media (min-width:601px){
+  #arena-shop-btn{ top:20px; right:150px; bottom:auto; }
+}
+
+#skin-shop-modal{
+  position:fixed;
+  inset:0;
+  z-index:26050;
+  background:rgba(0,0,0,.76);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:14px;
+  box-sizing:border-box;
+}
+#skin-shop-modal.show{ display:flex; }
+.skin-shop-box{
+  width:min(94vw, 820px);
+  max-height:86vh;
+  overflow:hidden;
+  background:rgba(12,8,22,.98);
+  border:2px solid #f4c542;
+  border-radius:18px;
+  box-shadow:0 0 24px rgba(244,197,66,.22), 0 0 28px rgba(123,47,247,.22);
+  display:flex;
+  flex-direction:column;
+}
+.skin-shop-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  padding:12px 14px;
+  background:linear-gradient(90deg, rgba(123,47,247,.35), rgba(244,197,66,.18));
+  border-bottom:1px solid rgba(244,197,66,.28);
+}
+.skin-shop-title{ color:#f4c542; font-size:18px; font-weight:900; letter-spacing:.5px; }
+.skin-shop-sub{ color:#d8c7ff; font-size:11px; margin-top:3px; line-height:1.35; }
+.skin-shop-close{ cursor:pointer; color:#fff; font-size:20px; font-weight:900; padding:4px 8px; }
+.skin-shop-body{ overflow:auto; padding:12px; }
+.skin-shop-tabs{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; }
+.skin-shop-tab{
+  border:1px solid rgba(244,197,66,.34)!important;
+  border-radius:12px!important;
+  background:linear-gradient(180deg, rgba(58,24,102,.96), rgba(32,12,56,.96))!important;
+  color:#f7e7b1!important;
+  font-size:12px!important;
+  font-weight:900!important;
+  padding:9px 8px!important;
+}
+.skin-shop-tab.active{ background:linear-gradient(180deg,#f4c542,#9b5c00)!important; color:#1b1028!important; }
+.skin-shop-summary{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:8px;
+  margin-bottom:12px;
+}
+.skin-shop-summary-card{
+  background:rgba(0,0,0,.34);
+  border:1px solid rgba(85,239,196,.22);
+  border-radius:13px;
+  padding:9px 10px;
+  color:#fff;
+  font-size:11px;
+}
+.skin-shop-summary-card strong{ display:block; color:#55efc4; font-size:12px; margin-bottom:4px; }
+.skin-shop-grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.skin-card{
+  position:relative;
+  overflow:hidden;
+  background:rgba(0,0,0,.42);
+  border:1px solid rgba(244,197,66,.22);
+  border-radius:15px;
+  padding:11px;
+  min-height:138px;
+  box-shadow:inset 0 0 18px rgba(255,255,255,.03);
+}
+.skin-card.owned{ border-color:rgba(85,239,196,.55); }
+.skin-card.locked{ opacity:.72; }
+.skin-card-top{ display:flex; gap:10px; align-items:center; }
+.skin-preview{
+  width:54px;
+  height:54px;
+  border-radius:50%;
+  background:rgba(255,255,255,.08);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:28px;
+  flex:0 0 auto;
+}
+.skin-name{ color:#fff8d6; font-weight:900; font-size:13px; line-height:1.25; }
+.skin-desc{ margin-top:4px; color:#d8c7ff; font-size:11px; line-height:1.35; }
+.skin-price{ margin-top:8px; color:#ffe082; font-size:12px; font-weight:900; }
+.skin-unlock{ color:#7dffb3; font-size:11px; margin-top:3px; }
+.skin-action-row{ display:flex; gap:7px; margin-top:10px; flex-wrap:wrap; }
+.skin-action-btn{
+  padding:7px 10px!important;
+  border-radius:10px!important;
+  font-size:11px!important;
+  font-weight:900!important;
+  background:linear-gradient(180deg,#7b2ff7,#4d1d95)!important;
+  color:#fff8d6!important;
+}
+.skin-action-btn.buy{ background:linear-gradient(180deg,#f4c542,#b27600)!important; color:#170b21!important; }
+.skin-action-btn.equipped{ background:linear-gradient(180deg,#00c38a,#008f67)!important; color:#fff!important; }
+.skin-action-btn[disabled]{ opacity:.55; cursor:not-allowed; }
+.skin-pane{ display:none; }
+.skin-pane.show{ display:block; }
+.skin-toast{ min-height:18px; margin-top:10px; color:#ffeaa7; font-size:12px; }
+.chest-card .skin-preview{ background:radial-gradient(circle,#ffe082,rgba(123,47,247,.35)); }
+.chest-note{ margin-top:10px; color:#ffdf9e; font-size:11px; line-height:1.45; }
+@media (max-width:600px){
+  .skin-shop-summary{ grid-template-columns:1fr; }
+  .skin-shop-grid{ grid-template-columns:1fr; }
+  .skin-shop-title{ font-size:16px; }
+}
+
+/* Skin gắn vào avatar: không cần thêm file ảnh */
+.cosmetic-avatar-skin-bamboo_gold{ border-color:#f4c542!important; box-shadow:0 0 14px rgba(244,197,66,.65), 0 0 6px rgba(85,239,196,.35)!important; }
+.cosmetic-avatar-skin-dragon_purple{ border-color:#b368ff!important; box-shadow:0 0 16px rgba(179,104,255,.72), 0 0 10px rgba(244,197,66,.18)!important; }
+.cosmetic-avatar-skin-phoenix_red{ border-color:#ff5c7a!important; box-shadow:0 0 16px rgba(255,92,122,.72), 0 0 10px rgba(255,209,102,.26)!important; }
+.cosmetic-avatar-skin-diamond_blue{ border-color:#74b9ff!important; box-shadow:0 0 18px rgba(116,185,255,.78), inset 0 0 8px rgba(255,255,255,.2)!important; }
+.cosmetic-avatar-skin-king_rainbow{ border-color:#fff!important; box-shadow:0 0 9px #ff3cac,0 0 16px #55efc4,0 0 24px #f4c542!important; }
+.cosmetic-avatar-skin-god_neon{ border-color:#ff00e5!important; box-shadow:0 0 12px #ff00e5,0 0 22px #00ffe1,0 0 32px rgba(255,255,255,.35)!important; animation: godSkinGlow 1.2s ease-in-out infinite alternate; }
+@keyframes godSkinGlow{ from{ filter:brightness(1); } to{ filter:brightness(1.18); } }
 
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
@@ -5225,6 +5383,15 @@ if (friendBox) friendBox.classList.remove("show");
     const missionBtn = document.getElementById("arena-mission-btn");
 if (missionBtn) missionBtn.style.display = "none";
 
+const shopBtn = document.getElementById("arena-shop-btn");
+if (shopBtn) shopBtn.style.display = "none";
+
+const shopBadge = document.getElementById("arena-shop-badge");
+if (shopBadge) {
+    shopBadge.classList.remove("show");
+    shopBadge.textContent = "0";
+}
+
 const missionBadge = document.getElementById("arena-mission-badge");
 if (missionBadge) {
     missionBadge.classList.remove("show");
@@ -5240,6 +5407,13 @@ function showHomeUI() {
 
     const missionBtn = document.getElementById("arena-mission-btn");
     if (missionBtn) missionBtn.style.display = "flex";
+
+    const shopBtn = document.getElementById("arena-shop-btn");
+    if (shopBtn) shopBtn.style.display = "flex";
+
+    if (typeof refreshShopBadgeSilently === "function") {
+        refreshShopBadgeSilently();
+    }
 
     if (typeof refreshMissionLobbyBadgeSilently === "function") {
         refreshMissionLobbyBadgeSilently();
@@ -5489,6 +5663,9 @@ async function playNextMatch() {
             den: false
         },
         board: null,
+        moveCount: 0,
+        startedAt: null,
+        finishedAt: null,
         turn: "do",
         timeDo: 540,
         timeDen: 540,
@@ -6014,6 +6191,7 @@ refreshTimerRings();
                     db.ref("matches/" + currentRoomId).update({
                         winner: winnerSide,
                         winReason: "checkmate",
+                        finishedAt: firebase.database.ServerValue.TIMESTAMP,
                         updatedAt: firebase.database.ServerValue.TIMESTAMP
                     });
                 } else {
@@ -6026,7 +6204,7 @@ refreshTimerRings();
     }, 200);
 
     if (currentRoomId) {
-        syncRoomFromBoard();
+        syncRoomFromBoard({ moveCount: firebase.database.ServerValue.increment(1) });
     }
 };
 
@@ -6069,6 +6247,8 @@ function getCurrentPlayerProfile() {
         balance: getPiBalance(),
         pmcBalance: getPmcBalance(),
         walletKey: makeWalletDbKey(),
+        deviceId: getStableDeviceIdForLevel(),
+        equippedAvatarSkin: (typeof getEquippedAvatarSkin === "function" ? getEquippedAvatarSkin() : (localStorage.getItem("equipped-avatar-skin") || "skin_default")),
     };
 }
 
@@ -6298,65 +6478,89 @@ function syncBoardHudAnchors(){
     }
   });
 }
-function buildPlayerLevelTable() {
-  const MAX_LEVEL = 160;
-  const table = [];
+/* ===== LEVEL 160 AN TOÀN: LEVEL KHÔNG PHÁT PMC, EXP CHỐNG FARM ===== */
+const LEVEL_MAX = 160;
+const LEVEL_WIN_BASE_XP = 18;
+const LEVEL_LOSE_BASE_XP = -18;
+const LEVEL_FAST_MATCH_MIN_MOVES = 16;
+const LEVEL_SAME_PAIR_NO_XP_AFTER = 10;
+const LEVEL_MIN_PMC_FOR_REWARDED_XP = 100;
+const MATCH_SYSTEM_FEE_RATE = 0.15;
 
-  let totalXp = 0;
-  for (let level = 1; level <= MAX_LEVEL; level++) {
-    if (level > 1) {
-      // Cấp càng cao càng khó: XP mỗi cấp tăng theo cấp số nhân nhẹ.
-      const needThisLevel = Math.floor(16 * Math.pow(1.035, level - 2) + level);
-      totalXp += needThisLevel;
-    }
-
-    table.push({
-      level,
-      xp: totalXp,
-      title: getLevelTitle(level),
-      frame: getLevelFrame(level),
-      pill: getLevelFrame(level),
-      rewardPmc: getLevelRewardPmc(level)
-    });
+function getStableDeviceIdForLevel() {
+  let id = localStorage.getItem("pmc_device_id_v1");
+  if (!id) {
+    id = "dev_" + Math.random().toString(36).slice(2) + "_" + Date.now().toString(36);
+    localStorage.setItem("pmc_device_id_v1", id);
   }
-
-  return table;
+  return id;
 }
 
-function getLevelTitle(level) {
-  if (level >= 160) return "Vua Cờ Huyền Thoại";
-  if (level >= 140) return "Độc Cô Cầu Bại";
-  if (level >= 120) return "Thiên Hạ Kỳ Vương";
-  if (level >= 100) return "Đại Tông Sư";
-  if (level >= 80) return "Kỳ Vương";
-  if (level >= 60) return "Cao Thủ Kim Cương";
-  if (level >= 40) return "Cao Thủ Bạch Kim";
-  if (level >= 25) return "Chiến Binh Vàng";
-  if (level >= 15) return "Kỳ Thủ Bạc";
-  if (level >= 5) return "Kỳ Thủ Đồng";
-  return "Tân Binh";
+function getLevelXpNeedFromLevel(level) {
+  const lv = Math.max(1, Math.min(LEVEL_MAX - 1, Math.floor(Number(level || 1))));
+  return Math.floor(18 * Math.pow(1.045, lv - 1) + lv * 2);
 }
 
-function getLevelFrame(level) {
-  if (level >= 140) return "king";
-  if (level >= 100) return "master";
-  if (level >= 60) return "diamond";
-  if (level >= 40) return "platinum";
-  if (level >= 25) return "gold";
-  if (level >= 15) return "silver";
-  if (level >= 5) return "bronze";
+function getLevelFrameByLevel(level) {
+  if (level >= 150) return "king";
+  if (level >= 120) return "master";
+  if (level >= 90) return "diamond";
+  if (level >= 60) return "platinum";
+  if (level >= 40) return "gold";
+  if (level >= 25) return "silver";
+  if (level >= 10) return "bronze";
   return "beginner";
 }
 
-function getLevelRewardPmc(level) {
-  // Quà theo mốc 10 cấp: 10, 20, 30...160. Không thưởng lẻ từng level.
-  if (level < 10 || level % 10 !== 0) return 0;
-  return Math.floor(5000 * Math.pow(level / 10, 1.35));
+function getLevelTitleByLevel(level) {
+  if (level >= 160) return "Kỳ Thánh";
+  if (level >= 150) return "Vua Cờ";
+  if (level >= 140) return "Thiên Vương";
+  if (level >= 130) return "Tông Sư";
+  if (level >= 120) return "Đại Cao Thủ";
+  if (level >= 100) return "Tinh Nhuệ";
+  if (level >= 90) return "Kim Cương";
+  if (level >= 75) return "Tinh Anh";
+  if (level >= 60) return "Bạch Kim";
+  if (level >= 40) return "Kỳ Thủ Vàng";
+  if (level >= 25) return "Kỳ Thủ Bạc";
+  if (level >= 10) return "Kỳ Thủ Đồng";
+  return "Tân Binh";
 }
 
-const PLAYER_LEVEL_TABLE = buildPlayerLevelTable();
-const LEVEL_MAX = 160;
-const LEVEL_XP_PER_MATCH = 18;
+const PLAYER_LEVEL_TABLE = (() => {
+  const rows = [];
+  let xp = 0;
+  for (let lv = 1; lv <= LEVEL_MAX; lv++) {
+    const frame = getLevelFrameByLevel(lv);
+    rows.push({
+      level: lv,
+      xp,
+      title: getLevelTitleByLevel(lv),
+      frame,
+      pill: frame,
+      rewardPmc: 0,
+      unlockReward: getLevelUnlockReward(lv)
+    });
+    if (lv < LEVEL_MAX) xp += getLevelXpNeedFromLevel(lv);
+  }
+  return rows;
+})();
+
+function getLevelUnlockReward(level) {
+  const lv = Math.max(1, Math.min(LEVEL_MAX, Math.floor(Number(level || 1))));
+  if (lv === 160) return "Khung Kỳ Thánh + hiệu ứng chiến thắng tối thượng";
+  if (lv % 50 === 0) return "Hiệu ứng chiến thắng cao cấp";
+  if (lv % 40 === 0) return "Skin bàn cờ đặc biệt";
+  if (lv % 30 === 0) return "Hiệu ứng quân cờ";
+  if (lv % 20 === 0) return "Avatar / huy hiệu cao thủ";
+  if (lv % 10 === 0) return "Khung rank mới";
+  return "";
+}
+
+function getLevelMilestoneRows() {
+  return PLAYER_LEVEL_TABLE.filter(row => row.level % 10 === 0 || row.level === LEVEL_MAX);
+}
 
 function getWalletLevelRef(walletKey) {
   return walletRefByKey(walletKey).child("levelMeta");
@@ -6374,27 +6578,34 @@ function getLevelInfoByXp(xpValue) {
 }
 
 function getLevelInfoByLevel(levelValue) {
-  const level = Math.max(1, Math.min(LEVEL_MAX, Number(levelValue || 1) || 1));
+  const level = Math.max(1, Math.min(LEVEL_MAX, Math.floor(Number(levelValue || 1) || 1)));
   return PLAYER_LEVEL_TABLE.find(x => x.level === level) || PLAYER_LEVEL_TABLE[PLAYER_LEVEL_TABLE.length - 1];
 }
 
+function getNextLevelInfoByXp(xpValue) {
+  const current = getLevelInfoByXp(xpValue);
+  return PLAYER_LEVEL_TABLE.find(row => row.level > current.level) || current;
+}
+
 function buildLevelMeta(meta = {}) {
-  const maxXp = PLAYER_LEVEL_TABLE[PLAYER_LEVEL_TABLE.length - 1].xp;
-  const xp = Math.max(0, Math.min(maxXp, Number(meta.xp || 0) || 0));
+  const xp = Math.max(0, Number(meta.xp || 0) || 0);
   const info = getLevelInfoByXp(xp);
   return {
+    ...meta,
     xp,
     level: info.level,
     title: info.title,
     frame: info.frame,
     pill: info.pill,
-    wins: Math.max(0, Number(meta.wins || meta.totalWins || 0) || 0),
-    losses: Math.max(0, Number(meta.losses || meta.totalLosses || 0) || 0)
+    wins: Math.max(0, Number(meta.wins || 0) || 0),
+    losses: Math.max(0, Number(meta.losses || 0) || 0),
+    matches: Math.max(0, Number(meta.matches || 0) || 0),
+    blockedXpMatches: Math.max(0, Number(meta.blockedXpMatches || 0) || 0)
   };
 }
 
 function getDefaultLevelMeta() {
-  return buildLevelMeta({ xp: 0, wins: 0, losses: 0 });
+  return buildLevelMeta({ xp: 0, wins: 0, losses: 0, matches: 0, blockedXpMatches: 0 });
 }
 
 function formatTitleLine(meta = {}) {
@@ -6402,76 +6613,100 @@ function formatTitleLine(meta = {}) {
   return `${safe.title} • Lv.${safe.level}`;
 }
 
-function getNextLevelInfoByXp(xpValue) {
-  const safe = buildLevelMeta({ xp: xpValue });
-  return PLAYER_LEVEL_TABLE.find(row => row.level > safe.level) || safe;
-}
-
 function getLevelProgress(meta = {}) {
   const safe = buildLevelMeta(meta);
-  const currentInfo = getLevelInfoByLevel(safe.level);
-  const nextInfo = PLAYER_LEVEL_TABLE.find(row => row.level > safe.level) || currentInfo;
-
-  if (safe.level >= LEVEL_MAX || nextInfo.level === currentInfo.level) {
-    return { safe, currentInfo, nextInfo, gotXp: 0, needXp: 0, pct: 100, isMax: true };
+  const current = getLevelInfoByLevel(safe.level);
+  const next = getNextLevelInfoByXp(safe.xp);
+  if (next.level <= safe.level) {
+    return { safe, gotXp: 0, needXp: 0, pct: 100, maxed: true };
   }
-
-  const needXp = Math.max(1, nextInfo.xp - currentInfo.xp);
-  const gotXp = Math.max(0, safe.xp - currentInfo.xp);
+  const needXp = Math.max(1, next.xp - current.xp);
+  const gotXp = Math.max(0, safe.xp - current.xp);
   const pct = Math.max(0, Math.min(100, (gotXp / needXp) * 100));
-  return { safe, currentInfo, nextInfo, gotXp, needXp, pct, isMax: false };
+  return { safe, gotXp, needXp, pct, maxed: false };
+}
+
+function renderPlayerExpBar(rankEl, meta = {}) {
+  if (!rankEl || !rankEl.parentElement) return;
+  const p = getLevelProgress(meta);
+  let wrap = rankEl.parentElement.querySelector(".player-exp-wrap");
+  if (!wrap) {
+    wrap = document.createElement("div");
+    wrap.className = "player-exp-wrap";
+    rankEl.insertAdjacentElement("afterend", wrap);
+  }
+  wrap.innerHTML = `
+    <div class="player-exp-text">
+      <span>EXP</span>
+      <span>${p.maxed ? "MAX" : `${Math.floor(p.gotXp)}/${Math.floor(p.needXp)}`}</span>
+    </div>
+    <div class="player-exp-bar"><div class="player-exp-fill" style="width:${p.pct}%"></div></div>
+  `;
+}
+
+function ensureLevelHudMounted() {
+  let hud = document.getElementById("level-exp-hud");
+  if (hud) return hud;
+  hud = document.createElement("div");
+  hud.id = "level-exp-hud";
+  hud.className = "level-exp-hud";
+  hud.innerHTML = `
+    <div class="level-exp-hud-top">
+      <span class="level-exp-hud-title" id="level-exp-hud-title">Lv.1</span>
+      <span class="level-exp-hud-stat" id="level-exp-hud-stat">0/0 EXP</span>
+    </div>
+    <div class="level-exp-hud-bar"><div class="level-exp-hud-fill" id="level-exp-hud-fill"></div></div>
+  `;
+  document.body.appendChild(hud);
+  return hud;
+}
+
+function renderLevelHud(meta = {}) {
+  const hud = ensureLevelHudMounted();
+  const p = getLevelProgress(meta);
+  const titleEl = document.getElementById("level-exp-hud-title");
+  const statEl = document.getElementById("level-exp-hud-stat");
+  const fillEl = document.getElementById("level-exp-hud-fill");
+  if (titleEl) titleEl.innerText = `${p.safe.title} • Lv.${p.safe.level}`;
+  if (statEl) statEl.innerText = p.maxed ? `MAX • T:${p.safe.wins} B:${p.safe.losses}` : `${Math.floor(p.gotXp)}/${Math.floor(p.needXp)} EXP • T:${p.safe.wins} B:${p.safe.losses}`;
+  if (fillEl) fillEl.style.width = `${p.pct}%`;
+  hud.classList.add("show");
+}
+
+function hideLevelHud() {
+  const hud = document.getElementById("level-exp-hud");
+  if (hud) hud.classList.remove("show");
 }
 
 function applyAvatarFrame(imgEl, meta = {}) {
   if (!imgEl) return;
   const safe = buildLevelMeta(meta);
-
   imgEl.classList.remove(
-    "title-frame-beginner",
-    "title-frame-bronze",
-    "title-frame-silver",
-    "title-frame-gold",
-    "title-frame-platinum",
-    "title-frame-diamond",
-    "title-frame-master",
-    "title-frame-king"
+    "title-frame-beginner", "title-frame-bronze", "title-frame-silver", "title-frame-gold",
+    "title-frame-platinum", "title-frame-diamond", "title-frame-master", "title-frame-king"
   );
-
   imgEl.classList.add(`title-frame-${safe.frame}`);
 }
 
 function applyTitlePill(el, meta = {}) {
   if (!el) return;
   const safe = buildLevelMeta(meta);
-
   el.classList.remove(
-    "title-pill-beginner",
-    "title-pill-bronze",
-    "title-pill-silver",
-    "title-pill-gold",
-    "title-pill-platinum",
-    "title-pill-diamond",
-    "title-pill-master",
-    "title-pill-king",
-    "player-ready-on",
-    "player-ready-off"
+    "title-pill-beginner", "title-pill-bronze", "title-pill-silver", "title-pill-gold",
+    "title-pill-platinum", "title-pill-diamond", "title-pill-master", "title-pill-king",
+    "player-ready-on", "player-ready-off"
   );
-
   el.classList.add(`title-pill-${safe.pill}`);
 }
 
 async function ensureMyLevelMetaLoaded() {
   const walletKey = makeWalletDbKey();
-  if (!walletKey) {
-    renderGlobalLevelHud(getDefaultLevelMeta());
-    return getDefaultLevelMeta();
-  }
-
+  if (!walletKey) return getDefaultLevelMeta();
   try {
     const snap = await getWalletLevelRef(walletKey).once("value");
     const meta = buildLevelMeta(snap.val() || {});
     localStorage.setItem("level-meta-cache", JSON.stringify(meta));
-    renderGlobalLevelHud(meta);
+    renderLevelHud(meta);
     return meta;
   } catch (err) {
     console.error("Không load được levelMeta:", err);
@@ -6479,168 +6714,172 @@ async function ensureMyLevelMetaLoaded() {
     if (cached) {
       try {
         const meta = buildLevelMeta(JSON.parse(cached));
-        renderGlobalLevelHud(meta);
+        renderLevelHud(meta);
         return meta;
       } catch (_) {}
     }
-    renderGlobalLevelHud(getDefaultLevelMeta());
-    return getDefaultLevelMeta();
+    const meta = getDefaultLevelMeta();
+    renderLevelHud(meta);
+    return meta;
   }
 }
 
 function getCachedLevelMeta() {
   const raw = localStorage.getItem("level-meta-cache");
   if (!raw) return getDefaultLevelMeta();
-  try {
-    return buildLevelMeta(JSON.parse(raw));
-  } catch (_) {
-    return getDefaultLevelMeta();
-  }
+  try { return buildLevelMeta(JSON.parse(raw)); } catch (_) { return getDefaultLevelMeta(); }
 }
 
-function renderGlobalLevelHud(meta = getCachedLevelMeta()) {
-  if (!document.body) return;
-  const progress = getLevelProgress(meta);
-  const safe = progress.safe;
-
-  let hud = document.getElementById("global-level-hud");
-  if (!hud) {
-    hud = document.createElement("div");
-    hud.id = "global-level-hud";
-    document.body.appendChild(hud);
-  }
-
-  hud.style.display = (firebase.auth && firebase.auth().currentUser) ? "block" : "none";
-
-  hud.innerHTML = `
-    <div class="level-hud-top">
-      <span>Lv.${safe.level} ${safe.title}</span>
-      <span class="level-hud-stat">W:${safe.wins} • L:${safe.losses}</span>
-      <span>${progress.isMax ? "MAX" : `${progress.gotXp}/${progress.needXp}`}</span>
-    </div>
-    <div class="level-hud-bar"><div class="level-hud-fill" style="width:${progress.pct}%"></div></div>
-  `;
+function getLevelTodayKey(now = new Date()) {
+  const d = now instanceof Date ? now : new Date(now);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
-function renderPlayerExpBar(rankEl, meta = {}) {
-  if (!rankEl || !rankEl.parentElement) return;
-  const progress = getLevelProgress(meta);
+function safeLevelKey(value) {
+  return String(value || "unknown").replace(/[.#$\[\]\/]/g, "_");
+}
 
-  let wrap = rankEl.parentElement.querySelector(".player-exp-wrap");
-  if (!wrap) {
-    wrap = document.createElement("div");
-    wrap.className = "player-exp-wrap";
-    rankEl.insertAdjacentElement("afterend", wrap);
+function getRoomPlayerKeyForLevel(player = {}) {
+  return player.walletKey || player.wallet || player.walletDbKey || player.uid || player.name || "unknown";
+}
+
+function getRepeatAdjustedXpAbs(pairCount) {
+  const n = Math.max(1, Number(pairCount || 1) || 1);
+  if (n >= 10) return 5;
+  if (n >= 5) return 13;
+  if (n === 4) return 15;
+  if (n === 3) return 16;
+  if (n === 2) return 17;
+  return 18;
+}
+
+async function reserveLevelPairCount(walletKey, opponentKey, roomId) {
+  const todayKey = getLevelTodayKey();
+  const safeMe = safeLevelKey(walletKey);
+  const safeOpp = safeLevelKey(opponentKey);
+  const safeRoom = safeLevelKey(roomId);
+
+  const roomClaimRef = db.ref(`levelPairRoomClaimsV2/${safeMe}/${todayKey}/${safeOpp}/${safeRoom}`);
+  const roomClaimTx = await runRefTransaction(roomClaimRef, current => {
+    if (current && current.done) return;
+    return { done: true, at: Date.now() };
+  });
+  if (!roomClaimTx.committed) {
+    const snap = await db.ref(`levelPairDailyCountsV2/${safeMe}/${todayKey}/${safeOpp}/count`).once("value");
+    return { count: Number(snap.val() || 1) || 1, duplicate: true };
   }
 
-  wrap.innerHTML = `
-    <div class="player-exp-text">
-      <span>EXP</span>
-      <span>${progress.isMax ? "MAX" : `${progress.gotXp}/${progress.needXp}`}</span>
-    </div>
-    <div class="player-exp-bar"><div class="player-exp-fill" style="width:${progress.pct}%"></div></div>
-  `;
+  let nextCount = 1;
+  const countRef = db.ref(`levelPairDailyCountsV2/${safeMe}/${todayKey}/${safeOpp}`);
+  await runRefTransaction(countRef, current => {
+    const val = current && typeof current === "object" ? current : {};
+    const count = Math.max(0, Number(val.count || 0) || 0);
+    nextCount = count + 1;
+    return { ...val, count: nextCount, updatedAt: Date.now() };
+  });
+  return { count: nextCount, duplicate: false };
+}
+
+function isSameLevelDevice(room = {}) {
+  const doDev = room?.players?.do?.deviceId || "";
+  const denDev = room?.players?.den?.deviceId || "";
+  return !!doDev && !!denDev && doDev === denDev;
+}
+
+function getLevelMatchBlockReason(room = {}, pairCount = 1) {
+  if (isSameLevelDevice(room)) return "same_device";
+  if (Math.max(0, Number(room.moveCount || 0) || 0) > 0 && Math.max(0, Number(room.moveCount || 0) || 0) < LEVEL_FAST_MATCH_MIN_MOVES) return "too_fast";
+  if (pairCount > LEVEL_SAME_PAIR_NO_XP_AFTER) return "same_pair_too_many";
+  if (getPmcBalance() < LEVEL_MIN_PMC_FOR_REWARDED_XP) return "low_pmc_balance";
+  return "";
 }
 
 async function awardLevelProgressForFinishedRoom(roomId, room) {
   if (!roomId || !room || !room.winner || room.winner === "hoa") return;
-
   const walletKey = makeWalletDbKey();
-  if (!walletKey) return;
+  if (!walletKey || !mySide) return;
 
   const mySideNow = mySide;
-  if (!mySideNow) return;
-
   const resultType = room.winner === mySideNow ? "win" : "lose";
-  const xpDelta = resultType === "win" ? LEVEL_XP_PER_MATCH : -LEVEL_XP_PER_MATCH;
+  const doPlayerKey = getRoomPlayerKeyForLevel(room.players?.do || {});
+  const denPlayerKey = getRoomPlayerKeyForLevel(room.players?.den || {});
+  const opponentKey = mySideNow === "do" ? denPlayerKey : doPlayerKey;
 
   const claimRef = db.ref(`levelMatchClaimsV2/${walletKey}/${roomId}`);
   const claimTx = await runRefTransaction(claimRef, current => {
     if (current && current.done) return;
-    return {
-      done: true,
-      at: Date.now(),
-      resultType,
-      xpDelta
-    };
+    return { done: true, at: Date.now(), resultType, opponentKey };
   });
-
   if (!claimTx.committed) return;
 
+  const pair = await reserveLevelPairCount(walletKey, opponentKey, roomId);
+  const blockReason = getLevelMatchBlockReason(room, pair.count);
+  const absXp = blockReason ? 0 : getRepeatAdjustedXpAbs(pair.count);
+  const xpDelta = resultType === "win" ? absXp : -absXp;
+
+  let beforeMeta = getDefaultLevelMeta();
+  let afterMeta = getDefaultLevelMeta();
   const levelRef = getWalletLevelRef(walletKey);
-  const levelSnap = await levelRef.once("value");
-  const beforeMeta = buildLevelMeta(levelSnap.val() || {});
-  const oldLevel = beforeMeta.level;
-  const maxXp = PLAYER_LEVEL_TABLE[PLAYER_LEVEL_TABLE.length - 1].xp;
-  const nextXp = Math.max(0, Math.min(maxXp, beforeMeta.xp + xpDelta));
-
-  const afterMeta = buildLevelMeta({
-    xp: nextXp,
-    wins: beforeMeta.wins + (resultType === "win" ? 1 : 0),
-    losses: beforeMeta.losses + (resultType === "lose" ? 1 : 0)
-  });
-
-  await levelRef.update({
-    xp: afterMeta.xp,
-    level: afterMeta.level,
-    title: afterMeta.title,
-    frame: afterMeta.frame,
-    pill: afterMeta.pill,
-    wins: afterMeta.wins,
-    losses: afterMeta.losses,
-    lastResult: resultType,
-    lastXpDelta: xpDelta,
-    updatedAt: Date.now()
+  await runRefTransaction(levelRef, current => {
+    beforeMeta = buildLevelMeta(current || {});
+    const nextXp = Math.max(0, Math.min(getLevelInfoByLevel(LEVEL_MAX).xp, beforeMeta.xp + xpDelta));
+    afterMeta = buildLevelMeta({
+      ...beforeMeta,
+      xp: nextXp,
+      wins: beforeMeta.wins + (resultType === "win" ? 1 : 0),
+      losses: beforeMeta.losses + (resultType === "lose" ? 1 : 0),
+      matches: beforeMeta.matches + 1,
+      blockedXpMatches: beforeMeta.blockedXpMatches + (blockReason ? 1 : 0),
+      lastResult: resultType,
+      lastXpDelta: xpDelta,
+      lastPairCount: pair.count,
+      lastBlockReason: blockReason,
+      updatedAt: Date.now()
+    });
+    return afterMeta;
   });
 
   localStorage.setItem("level-meta-cache", JSON.stringify(afterMeta));
-  renderGlobalLevelHud(afterMeta);
+  renderLevelHud(afterMeta);
 
-  // Thưởng mốc cấp chỉ nhận 1 lần/mốc, tránh tụt level rồi cày lại ăn thưởng lặp.
-  let rewardPmc = 0;
-  const rewardLevels = [];
-
-  if (afterMeta.level > oldLevel) {
-    for (let lv = oldLevel + 1; lv <= afterMeta.level; lv++) {
-      const reward = Number(getLevelInfoByLevel(lv).rewardPmc || 0);
-      if (reward <= 0) continue;
-
-      const rewardRef = db.ref(`levelRewardClaimsV1/${walletKey}/${lv}`);
-      const rewardTx = await runRefTransaction(rewardRef, current => {
-        if (current && current.done) return;
-        return {
-          done: true,
-          level: lv,
-          rewardPmc: reward,
-          at: Date.now()
-        };
-      });
-
-      if (rewardTx.committed) {
-        rewardPmc += reward;
-        rewardLevels.push(lv);
-      }
-    }
+  if (blockReason) {
+    console.warn("Trận này không cộng/trừ EXP vì chống farm:", { blockReason, pairCount: pair.count, roomId, opponentKey });
+    return;
   }
 
-  if (rewardPmc > 0) {
-    await adjustPmcWalletByKey(walletKey, rewardPmc, {
-      name: localStorage.getItem("user-name-display") || "Người chơi",
-      photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-    });
-
-    alert(
-      `🎉 Lên Lv.${afterMeta.level} - ${afterMeta.title}\n` +
-      `Mốc thưởng: Lv.${rewardLevels.join(", Lv.")}\n` +
-      `+${rewardPmc.toLocaleString("vi-VN")} PMC`
-    );
+  if (afterMeta.level > beforeMeta.level) {
+    const unlocks = [];
+    for (let lv = beforeMeta.level + 1; lv <= afterMeta.level; lv++) {
+      const reward = getLevelUnlockReward(lv);
+      if (reward) unlocks.push(`Lv.${lv}: ${reward}`);
+    }
+    alert(`🎉 Thăng cấp Lv.${afterMeta.level} - ${afterMeta.title}\nKhông thưởng PMC theo level để chống farm.\n${unlocks.length ? "Mở khóa: " + unlocks.slice(-2).join(" • ") : "Mở khóa danh hiệu mới."}`);
   }
 }
 
+function getLocalLevelMissionsForBoard() {
+  const meta = getCachedLevelMeta();
+  const level = Math.max(1, Number(meta.level || 1) || 1);
+  return getLevelMilestoneRows().map(row => {
+    const reached = level >= row.level;
+    return {
+      id: `level_unlock_${row.level}`,
+      title: `Mốc Lv.${row.level}`,
+      desc: `Đạt Lv.${row.level} để mở khóa skin và rương cấp trong Shop.`,
+      progressText: reached ? `Đã đạt Lv.${level}/${row.level}` : `Lv.${level}/${row.level}`,
+      progressPercent: reached ? 100 : Math.max(0, Math.min(99, Math.floor((level / row.level) * 100))),
+      rewardText: row.unlockReward ? (row.unlockReward + " + rương cấp") : "Skin / khung + rương cấp",
+      note: reached ? "Vào Shop > Rương cấp để mở quà nếu chưa nhận." : "Cày bằng trận thật; gặp lại một acc nhiều lần sẽ giảm EXP.",
+      ready: false,
+      claimed: reached
+    };
+  });
+}
+
 function renderPlayersFromRoom(room) {
-    setCornerBalanceVisible(false);
     const doPlayer = room?.players?.do || {};
     const denPlayer = room?.players?.den || {};
+    setCornerBalanceVisible(false);
     const topName = document.getElementById("player-den-name");
     const bottomName = document.getElementById("player-do-name");
     const topRank = document.getElementById("player-den-rank");
@@ -6704,11 +6943,17 @@ if (bottomRank) {
     bottomRank.innerText = formatTitleLine(myLevelMeta);
     applyTitlePill(bottomRank, myLevelMeta);
     renderPlayerExpBar(bottomRank, myLevelMeta);
-    renderGlobalLevelHud(myLevelMeta);
 }
+renderLevelHud(myLevelMeta);
 
-if (topAvatar) applyAvatarFrame(topAvatar, oppLevelMeta);
-if (bottomAvatar) applyAvatarFrame(bottomAvatar, myLevelMeta);
+if (topAvatar) {
+    applyAvatarFrame(topAvatar, oppLevelMeta);
+    if (typeof applyCosmeticSkinToAvatar === "function") applyCosmeticSkinToAvatar(topAvatar, oppPlayer.equippedAvatarSkin || "skin_default");
+}
+if (bottomAvatar) {
+    applyAvatarFrame(bottomAvatar, myLevelMeta);
+    if (typeof applyCosmeticSkinToAvatar === "function") applyCosmeticSkinToAvatar(bottomAvatar, myPlayer.equippedAvatarSkin || (typeof getEquippedAvatarSkin === "function" ? getEquippedAvatarSkin() : "skin_default"));
+}
 
     const inviteCode = String(
         room?.inviteCode || makeInviteCodeFromRoomId(currentRoomId || "")
@@ -6771,6 +7016,7 @@ async function leaveRealtimeMatch() {
             await db.ref("matches/" + roomId).update({
                 winner: otherSide,
                 winReason: "bochay",
+                finishedAt: firebase.database.ServerValue.TIMESTAMP,
                 updatedAt: firebase.database.ServerValue.TIMESTAMP
             });
 
@@ -6879,6 +7125,9 @@ await waitingRoomRef.remove().catch(() => {});
         status: "playing",
         isCoUp,
         board: freshBoard,
+        moveCount: 0,
+        startedAt: firebase.database.ServerValue.TIMESTAMP,
+        finishedAt: null,
         turn: "do",
         timeDo: 540,
         timeDen: 540,
@@ -6964,7 +7213,7 @@ if (typeof applyBoardPerspective === "function") {
         renderPlayersFromRoom(room);
         updateReadyUI();
 
-const hasEnoughPlayersWaiting = !!room.players?.do && !!room.players?.den && room.status === "waiting";
+const hasEnoughPlayersWaiting = !!room.players?.do && !!room.players?.den && room.status === "waiting" && !room.winner;
 
 if (hasEnoughPlayersWaiting) {
     isGameOver = false;
@@ -7022,6 +7271,7 @@ if (room.status === "playing" && !room.winner) {
                 await db.ref("matches/" + roomId).update({
                     winner: "hoa",
                     winReason: "hoa",
+                    finishedAt: firebase.database.ServerValue.TIMESTAMP,
                     drawRequest: null
                 });
             } else {
@@ -7160,6 +7410,9 @@ async function createAndPublishWaitingRoom(me, mode, stakePMC, bucket) {
             den: false
         },
         board: null,
+        moveCount: 0,
+        startedAt: null,
+        finishedAt: null,
         lastMoveFrom: null,
         lastMoveTo: null,
         winner: null,
@@ -7579,7 +7832,7 @@ console.log("walletKey:", walletKey);
         const res = await fetch("/api/pmc/settle", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ roomId })
+            body: JSON.stringify({ roomId, feeRate: MATCH_SYSTEM_FEE_RATE })
         });
 
         const rawText = await res.text();
@@ -7843,7 +8096,7 @@ if (!winLock.committed) {
 }
 
 const totalPot = stake * 2;
-const feePMC = Math.max(0, Math.floor(totalPot * 0.02));
+const feePMC = Math.max(0, Math.floor(totalPot * MATCH_SYSTEM_FEE_RATE));
 const winnerReceivePMC = totalPot - feePMC;
 const adminWalletKey = "pi_admin_master";
 const settleDebugRef = db.ref(`matches/${roomId}/settlement/debug`);
@@ -8599,7 +8852,8 @@ function handleMatchAction(type) {
         if (confirm("Đầu hàng ván này?")) {
             db.ref("matches/" + currentRoomId).update({
                 winner: mySide === "do" ? "den" : "do",
-                winReason: "dauhang"
+                winReason: "dauhang",
+                finishedAt: firebase.database.ServerValue.TIMESTAMP
             });
         }
         return;
@@ -11377,15 +11631,17 @@ document.addEventListener("click", function(e) {
           <button class="mission-top-tab" data-tab="week" onclick="switchMissionTab('week')">Tuần</button>
           <button class="mission-top-tab" data-tab="month" onclick="switchMissionTab('month')">Tháng</button>
           <button class="mission-top-tab" data-tab="referral" onclick="switchMissionTab('referral')">Mời bạn</button>
+          <button class="mission-top-tab" data-tab="level" onclick="switchMissionTab('level')">Cấp</button>
         </div>
 
         <div id="mission-pane-day" class="mission-pane show"><div class="mission-pane-grid"></div></div>
         <div id="mission-pane-week" class="mission-pane"><div class="mission-pane-grid"></div></div>
         <div id="mission-pane-month" class="mission-pane"><div class="mission-pane-grid"></div></div>
         <div id="mission-pane-referral" class="mission-pane"><div class="mission-pane-grid"></div></div>
+        <div id="mission-pane-level" class="mission-pane"><div class="mission-pane-grid"></div></div>
 
         <div class="mission-marketing-note" id="mission-marketing-note">
-          Quỹ càng dày thì thưởng càng đậm. Đạt điều kiện là nhận thẳng vào ví PMC nội bộ, không chờ admin.
+          Quỹ nhiệm vụ thưởng nhỏ theo hoạt động thật. Level chỉ mở khung, skin, hiệu ứng; không phát PMC theo cấp để chống farm.
         </div>
         <div id="mission-hub-toast"></div>
       </div>
@@ -11515,17 +11771,19 @@ document.addEventListener("click", function(e) {
     if (refEl) refEl.innerText = `${Number(board.metrics?.friendCount || 0).toLocaleString('vi-VN')} bạn`;
     if (statsEl) {
       const metrics = board.metrics || {};
-      statsEl.innerText = `Hôm nay ${metrics.dayMatches || 0} ván • tuần này ${metrics.weekMatches || 0} ván • tháng này ${metrics.monthWins || 0} trận thắng.`;
+      const lv = getCachedLevelMeta();
+      statsEl.innerText = `Hôm nay ${metrics.dayMatches || 0} ván • tuần này ${metrics.weekMatches || 0} ván • tổng T:${lv.wins || 0} / B:${lv.losses || 0}.`;
     }
     if (marketingEl) {
   marketingEl.innerHTML = `
-    Hoàn thành nhiệm vụ là nhận thưởng ngay, tiền thưởng chảy thẳng vào ví PMC nội bộ của người chơi.`;
+    Nhiệm vụ thưởng PMC nhỏ theo hoạt động thật. Mốc cấp chỉ mở vật phẩm hiển thị, không phát PMC miễn phí để chống farm.`;
 }
 
     renderMissionCards('day', tabs.day || []);
 renderMissionCards('week', tabs.week || []);
 renderMissionCards('month', tabs.month || []);
 renderMissionCards('referral', tabs.referral || []);
+renderMissionCards('level', getLocalLevelMissionsForBoard());
 updateMissionLobbyBadge(board);
 switchMissionTab(MISSION_UI_STATE.activeTab || 'day');
   }
@@ -11659,108 +11917,278 @@ async function refreshMissionLobbyBadgeSilently() {
     updateMissionLobbyBadge(data);
   } catch (_) {}
 }
-
-/* ===== TAB MỐC CẤP TRONG THANH NHIỆM VỤ ===== */
-(function () {
-  function escapeLevelText(text) {
-    return String(text || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
-  function levelRewardText(amount) {
-    return `${Math.max(0, Math.floor(Number(amount) || 0)).toLocaleString('vi-VN')} PMC`;
-  }
-
-  function ensureLevelMissionPane() {
-    const tabs = document.getElementById('mission-top-tabs');
-    const body = document.querySelector('#mission-hub-modal .mission-hub-body');
-    if (!tabs || !body) return;
-
-    if (!document.querySelector('.mission-top-tab[data-tab="level"]')) {
-      const btn = document.createElement('button');
-      btn.className = 'mission-top-tab';
-      btn.setAttribute('data-tab', 'level');
-      btn.setAttribute('onclick', "switchMissionTab('level')");
-      btn.textContent = 'Cấp';
-      tabs.appendChild(btn);
-    }
-
-    if (!document.getElementById('mission-pane-level')) {
-      const pane = document.createElement('div');
-      pane.id = 'mission-pane-level';
-      pane.className = 'mission-pane';
-      pane.innerHTML = '<div class="mission-pane-grid level-milestone-grid"></div>';
-      const note = document.getElementById('mission-marketing-note');
-      body.insertBefore(pane, note || null);
-    }
-  }
-
-  async function renderLevelMissionPane() {
-    ensureLevelMissionPane();
-    const grid = document.querySelector('#mission-pane-level .mission-pane-grid');
-    if (!grid || typeof PLAYER_LEVEL_TABLE === 'undefined') return;
-
-    const meta = await ensureMyLevelMetaLoaded().catch(() => getCachedLevelMeta());
-    const safe = buildLevelMeta(meta || {});
-    const rewardLevels = PLAYER_LEVEL_TABLE.filter(row => Number(row.rewardPmc || 0) > 0);
-    const near = rewardLevels.filter(row => row.level >= Math.max(10, safe.level - 10)).slice(0, 8);
-    const showRows = near.length ? near : rewardLevels.slice(0, 8);
-
-    const cards = showRows.map(row => {
-      const reached = safe.level >= row.level;
-      const progressPct = reached ? 100 : Math.max(0, Math.min(100, (safe.xp / Math.max(1, row.xp)) * 100));
-      return `
-        <div class="mission-card">
-          <div class="mission-card-head">
-            <div>
-              <div class="mission-card-title">Mốc Lv.${row.level} - ${escapeLevelText(row.title)}</div>
-              <div class="mission-card-desc">Cần ${Number(row.xp).toLocaleString('vi-VN')} EXP. Thắng +${LEVEL_XP_PER_MATCH}, thua -${LEVEL_XP_PER_MATCH}.</div>
-            </div>
-            <div class="mission-card-badge ${reached ? 'claimed' : 'locked'}">${reached ? 'ĐÃ ĐẠT' : 'ĐANG CÀY'}</div>
-          </div>
-          <div class="mission-card-progress-line">
-            <span>Tiến độ: Lv.${safe.level}/${row.level}</span>
-            <span>${Math.floor(progressPct)}%</span>
-          </div>
-          <div class="mission-card-progress-bar"><div class="mission-card-progress-fill" style="width:${progressPct}%"></div></div>
-          <div class="mission-card-footer">
-            <div class="mission-reward-box">
-              <strong>Quà mốc cấp</strong>
-              <div class="mission-reward-value">${levelRewardText(row.rewardPmc)}</div>
-              <div class="mission-reward-note">Tự cộng 1 lần khi lần đầu chạm mốc.</div>
-            </div>
-            <button class="mission-claim-btn" disabled>${reached ? 'Đã mở' : 'Chưa đạt'}</button>
-          </div>
-        </div>`;
-    }).join('');
-
-    grid.innerHTML = `
-      <div class="level-milestone-note">
-        Hiện tại: <b>Lv.${safe.level} ${escapeLevelText(safe.title)}</b> • EXP ${safe.xp.toLocaleString('vi-VN')} • Thắng ${safe.wins} • Thua ${safe.losses}.<br>
-        Lên cấp theo cấp số nhân: cấp thấp dễ, cấp cao càng khó. Thắng và thua cộng/trừ bằng nhau.
-      </div>
-      ${cards}
-    `;
-  }
-
-  const oldOpenMissionHub = window.openMissionHub;
-  window.openMissionHub = function () {
-    if (typeof oldOpenMissionHub === 'function') oldOpenMissionHub();
-    setTimeout(renderLevelMissionPane, 0);
-  };
-
-  const oldSwitchMissionTab = window.switchMissionTab;
-  window.switchMissionTab = function (tab) {
-    if (typeof oldSwitchMissionTab === 'function') oldSwitchMissionTab(tab);
-    if (tab === 'level') setTimeout(renderLevelMissionPane, 0);
-  };
-})();
-
 </script>
+
+
+<script id="skin-shop-script">
+(function(){
+  const SHOP_API = '/api/cosmetics-v1';
+  const SHOP_STATE = { board:null, activeTab:'shop', loading:false, acting:false };
+  const FALLBACK_CATALOG = [
+    { id:'skin_bamboo_gold', name:'Viền Trúc Kim', icon:'🎋', pricePmc:25000, unlockLevel:10, desc:'Viền vàng xanh cho avatar, mốc đầu cho người chăm cày.' },
+    { id:'skin_dragon_purple', name:'Long Ảnh Tím', icon:'🐉', pricePmc:80000, unlockLevel:30, desc:'Hiệu ứng tím cao thủ, mua được nhưng cày Lv.30 cũng mở.' },
+    { id:'skin_phoenix_red', name:'Phượng Hỏa Đỏ', icon:'🔥', pricePmc:150000, unlockLevel:50, desc:'Viền đỏ rực cho người thích nổi bật.' },
+    { id:'skin_diamond_blue', name:'Kim Cương Lam', icon:'💎', pricePmc:300000, unlockLevel:80, desc:'Khung xanh kim cương, dành cho tài khoản mạnh.' },
+    { id:'skin_king_rainbow', name:'Vương Giả Ngũ Sắc', icon:'👑', pricePmc:800000, unlockLevel:120, desc:'Skin nhà giàu hoặc người cày lâu năm.' },
+    { id:'skin_god_neon', name:'Thần Quang Neon', icon:'⚡', pricePmc:1500000, unlockLevel:160, desc:'Mốc tối thượng Lv.160, mua rất đắt để đốt PMC.' }
+  ];
+
+  function shopWalletKey(){
+    try { if (typeof makeWalletDbKey === 'function') return makeWalletDbKey(); } catch(_) {}
+    return String(localStorage.getItem('walletKey') || localStorage.getItem('pi_uid') || localStorage.getItem('uid') || '').replace(/[.#$\[\]\/]/g, '_');
+  }
+  function shopFormatPmc(n){
+    if (typeof formatPMC === 'function') return formatPMC(n);
+    return Math.max(0, Math.floor(Number(n)||0)).toLocaleString('vi-VN');
+  }
+  function shopLevel(){
+    try { return Math.max(1, Number(getCachedLevelMeta()?.level || 1) || 1); } catch(_) { return 1; }
+  }
+  function currentSkinId(){
+    return localStorage.getItem('equipped-avatar-skin') || 'skin_default';
+  }
+  function skinCssClass(id){
+    return 'cosmetic-avatar-' + String(id || 'skin_default').replace(/^skin_/, 'skin-').replace(/_/g, '_');
+  }
+  window.applyCosmeticSkinToAvatar = function(imgEl, skinId){
+    if (!imgEl) return;
+    FALLBACK_CATALOG.forEach(item => imgEl.classList.remove(skinCssClass(item.id)));
+    const id = skinId || currentSkinId();
+    if (id && id !== 'skin_default') imgEl.classList.add(skinCssClass(id));
+  };
+  function applyMySkinNow(){
+    const id = currentSkinId();
+    ['corner-avatar-img','player-do-avatar','player-den-avatar','edit-user-photo'].forEach(domId => {
+      const el = document.getElementById(domId);
+      if (el) window.applyCosmeticSkinToAvatar(el, id);
+    });
+  }
+  window.getEquippedAvatarSkin = function(){ return currentSkinId(); };
+
+  function ensureShopButton(){
+    let btn = document.getElementById('arena-shop-btn');
+    if (btn) return btn;
+    btn = document.createElement('div');
+    btn.id = 'arena-shop-btn';
+    btn.setAttribute('onclick','openSkinShop()');
+    btn.innerHTML = '🛒<span id="arena-shop-badge" class="shop-badge-dot">0</span>';
+    document.body.appendChild(btn);
+    return btn;
+  }
+  function ensureShopModal(){
+    if (document.getElementById('skin-shop-modal')) return;
+    const modal = document.createElement('div');
+    modal.id = 'skin-shop-modal';
+    modal.innerHTML = `
+      <div class="skin-shop-box">
+        <div class="skin-shop-header">
+          <div>
+            <div class="skin-shop-title">SHOP SKIN & TÚI ĐỒ</div>
+            <div class="skin-shop-sub">Người giàu mua skin để đốt PMC. Người nghèo cày level để mở khóa. Rương cấp trả từ ví phí hệ thống, mỗi mốc 1 lần.</div>
+          </div>
+          <div class="skin-shop-close" onclick="closeSkinShop()">✕</div>
+        </div>
+        <div class="skin-shop-body">
+          <div class="skin-shop-summary">
+            <div class="skin-shop-summary-card"><strong>Level</strong><span id="skin-shop-level">Lv.1</span></div>
+            <div class="skin-shop-summary-card"><strong>PMC</strong><span id="skin-shop-pmc">0 PMC</span></div>
+            <div class="skin-shop-summary-card"><strong>Đang dùng</strong><span id="skin-shop-equipped">Mặc định</span></div>
+          </div>
+          <div class="skin-shop-tabs">
+            <button class="skin-shop-tab active" data-tab="shop" onclick="switchSkinShopTab('shop')">Shop</button>
+            <button class="skin-shop-tab" data-tab="bag" onclick="switchSkinShopTab('bag')">Túi đồ</button>
+            <button class="skin-shop-tab" data-tab="chest" onclick="switchSkinShopTab('chest')">Rương cấp</button>
+          </div>
+          <div id="skin-pane-shop" class="skin-pane show"><div class="skin-shop-grid"></div></div>
+          <div id="skin-pane-bag" class="skin-pane"><div class="skin-shop-grid"></div></div>
+          <div id="skin-pane-chest" class="skin-pane"><div class="skin-shop-grid"></div><div class="chest-note">Rương có thể ra 100–30,000 PMC. Jackpot rất hiếm và chỉ trả khi ví phí hệ thống đủ quỹ.</div></div>
+          <div id="skin-shop-toast" class="skin-toast"></div>
+        </div>
+      </div>`;
+    modal.addEventListener('click', e => { if (e.target === modal) closeSkinShop(); });
+    document.body.appendChild(modal);
+  }
+  function shopToast(t){ const el=document.getElementById('skin-shop-toast'); if(el) el.innerText=t||''; }
+  async function fetchShopBoard(force){
+    if (!force && SHOP_STATE.board) return SHOP_STATE.board;
+    const walletKey = shopWalletKey();
+    if (!walletKey) throw new Error('Thiếu walletKey. Đăng nhập lại rồi mở shop.');
+    const res = await fetch(SHOP_API + '?v=' + Date.now(), {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'x-wallet-key':walletKey },
+      body:JSON.stringify({ action:'board', walletKey })
+    });
+    const data = await res.json().catch(()=>({}));
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Không tải được shop.');
+    SHOP_STATE.board = data;
+    if (data.equippedAvatarSkin) localStorage.setItem('equipped-avatar-skin', data.equippedAvatarSkin);
+    if (typeof data.pmcBalance === 'number' && typeof setPmcBalance === 'function') setPmcBalance(data.pmcBalance);
+    return data;
+  }
+  function renderSummary(board){
+    const lv = document.getElementById('skin-shop-level');
+    const pmc = document.getElementById('skin-shop-pmc');
+    const eq = document.getElementById('skin-shop-equipped');
+    const catalog = board.catalog || FALLBACK_CATALOG;
+    const equipped = board.equippedAvatarSkin || currentSkinId();
+    const found = catalog.find(x => x.id === equipped);
+    if (lv) lv.innerText = 'Lv.' + (board.level || shopLevel());
+    if (pmc) pmc.innerText = shopFormatPmc(board.pmcBalance || 0) + ' PMC';
+    if (eq) eq.innerText = found ? found.name : 'Mặc định';
+  }
+  function itemCard(item, mode, board){
+    const owned = !!item.owned;
+    const unlocked = !!item.levelUnlocked;
+    const equipped = (board.equippedAvatarSkin || currentSkinId()) === item.id;
+    const canUse = owned || unlocked;
+    const buyDisabled = owned ? 'disabled' : '';
+    const equipDisabled = (!canUse || equipped) ? 'disabled' : '';
+    const buyText = owned ? 'Đã mua' : ('Mua ' + shopFormatPmc(item.pricePmc) + ' PMC');
+    const equipText = equipped ? 'Đang dùng' : (canUse ? 'Gắn vào avatar' : 'Chưa mở');
+    return `
+      <div class="skin-card ${canUse?'owned':'locked'}">
+        <div class="skin-card-top">
+          <div class="skin-preview">${escapeShop(item.icon || '✨')}</div>
+          <div>
+            <div class="skin-name">${escapeShop(item.name)}</div>
+            <div class="skin-desc">${escapeShop(item.desc)}</div>
+          </div>
+        </div>
+        <div class="skin-price">Giá shop: ${shopFormatPmc(item.pricePmc)} PMC</div>
+        <div class="skin-unlock">Cày miễn phí: đạt Lv.${item.unlockLevel} ${unlocked ? '✅' : ''}</div>
+        <div class="skin-action-row">
+          ${mode==='shop' ? `<button class="skin-action-btn buy" ${buyDisabled} onclick="buyCosmeticSkin('${item.id}')">${buyText}</button>` : ''}
+          <button class="skin-action-btn ${equipped?'equipped':''}" ${equipDisabled} onclick="equipCosmeticSkin('${item.id}')">${equipText}</button>
+        </div>
+      </div>`;
+  }
+  function chestCard(chest){
+    const cls = chest.claimed ? 'owned' : (chest.canClaim ? 'owned' : 'locked');
+    const btnText = chest.claimed ? 'Đã mở' : (chest.canClaim ? 'Mở rương' : 'Chưa đạt');
+    const disabled = (!chest.canClaim || chest.claimed || SHOP_STATE.acting) ? 'disabled' : '';
+    const got = chest.rewardPmc ? `<div class="skin-price">Đã nhận: ${shopFormatPmc(chest.rewardPmc)} PMC</div>` : '';
+    return `
+      <div class="skin-card chest-card ${cls}">
+        <div class="skin-card-top">
+          <div class="skin-preview">🎁</div>
+          <div>
+            <div class="skin-name">Rương mốc Lv.${chest.level}</div>
+            <div class="skin-desc">Ngẫu nhiên 100–30,000 PMC. Jackpot cực hiếm, trả từ ví phí hệ thống.</div>
+          </div>
+        </div>
+        <div class="skin-unlock">Tiến độ: ${chest.progressText || ''}</div>
+        ${got}
+        <div class="skin-action-row"><button class="skin-action-btn buy" ${disabled} onclick="openLevelGiftChest(${chest.level})">${btnText}</button></div>
+      </div>`;
+  }
+  function renderShop(){
+    const board = SHOP_STATE.board || { catalog:FALLBACK_CATALOG, inventory:{}, level:shopLevel(), pmcBalance:0, levelChests:[] };
+    renderSummary(board);
+    const catalog = board.catalog || FALLBACK_CATALOG;
+    const shopGrid = document.querySelector('#skin-pane-shop .skin-shop-grid');
+    const bagGrid = document.querySelector('#skin-pane-bag .skin-shop-grid');
+    const chestGrid = document.querySelector('#skin-pane-chest .skin-shop-grid');
+    if (shopGrid) shopGrid.innerHTML = catalog.map(item => itemCard(item, 'shop', board)).join('');
+    if (bagGrid) {
+      const items = catalog.filter(item => item.owned || item.levelUnlocked);
+      bagGrid.innerHTML = items.length ? items.map(item => itemCard(item, 'bag', board)).join('') : '<div class="mission-empty">Túi chưa có skin. Mua trong shop hoặc cày level để mở.</div>';
+    }
+    if (chestGrid) {
+      const chests = board.levelChests || [];
+      chestGrid.innerHTML = chests.length ? chests.map(chestCard).join('') : '<div class="mission-empty">Chưa có rương cấp.</div>';
+    }
+    updateShopBadge(board);
+    applyMySkinNow();
+  }
+  function escapeShop(text){
+    return String(text || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+  window.openSkinShop = async function(){
+    ensureShopButton(); ensureShopModal();
+    const modal = document.getElementById('skin-shop-modal');
+    if (modal) modal.classList.add('show');
+    shopToast('Đang tải shop...');
+    try { await fetchShopBoard(true); renderShop(); shopToast(''); }
+    catch(err){ console.error('SHOP_LOAD_FAIL', err); shopToast('Lỗi tải shop: ' + (err.message || 'Không rõ lỗi')); }
+  };
+  window.closeSkinShop = function(){ const modal=document.getElementById('skin-shop-modal'); if(modal) modal.classList.remove('show'); };
+  window.switchSkinShopTab = function(tab){
+    SHOP_STATE.activeTab = tab;
+    document.querySelectorAll('.skin-shop-tab').forEach(btn => btn.classList.toggle('active', btn.getAttribute('data-tab') === tab));
+    document.querySelectorAll('.skin-pane').forEach(pane => pane.classList.toggle('show', pane.id === 'skin-pane-' + tab));
+  };
+  async function postShop(action, payload){
+    const walletKey = shopWalletKey();
+    if (!walletKey) throw new Error('Thiếu walletKey.');
+    const res = await fetch(SHOP_API + '?v=' + Date.now(), {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'x-wallet-key':walletKey },
+      body:JSON.stringify({ action, walletKey, ...payload })
+    });
+    const data = await res.json().catch(()=>({}));
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Thao tác shop lỗi.');
+    return data;
+  }
+  window.buyCosmeticSkin = async function(itemId){
+    if (SHOP_STATE.acting) return; SHOP_STATE.acting = true; shopToast('Đang mua skin...');
+    try {
+      const data = await postShop('buy', { itemId });
+      if (typeof data.newPmcBalance === 'number' && typeof setPmcBalance === 'function') setPmcBalance(data.newPmcBalance);
+      await fetchShopBoard(true); renderShop();
+      alert('Mua skin thành công: ' + (data.itemName || itemId));
+      shopToast('Đã mua skin. Vào Túi đồ để gắn.');
+    } catch(err){ alert('Mua skin lỗi: ' + (err.message || 'Không rõ lỗi')); shopToast('Mua lỗi: ' + (err.message || 'Không rõ lỗi')); }
+    finally { SHOP_STATE.acting = false; }
+  };
+  window.equipCosmeticSkin = async function(itemId){
+    if (SHOP_STATE.acting) return; SHOP_STATE.acting = true; shopToast('Đang gắn skin...');
+    try {
+      const data = await postShop('equip', { itemId });
+      localStorage.setItem('equipped-avatar-skin', data.equippedAvatarSkin || itemId);
+      if (typeof currentRoomId !== 'undefined' && currentRoomId && typeof mySide !== 'undefined' && mySide) {
+        try { await firebase.database().ref('matches/' + currentRoomId + '/players/' + mySide + '/equippedAvatarSkin').set(data.equippedAvatarSkin || itemId); } catch(_) {}
+      }
+      await fetchShopBoard(true); renderShop(); applyMySkinNow();
+      shopToast('Đã gắn skin vào avatar.');
+    } catch(err){ alert('Gắn skin lỗi: ' + (err.message || 'Không rõ lỗi')); shopToast('Gắn lỗi: ' + (err.message || 'Không rõ lỗi')); }
+    finally { SHOP_STATE.acting = false; }
+  };
+  window.openLevelGiftChest = async function(level){
+    if (SHOP_STATE.acting) return; SHOP_STATE.acting = true; shopToast('Đang mở rương...');
+    try {
+      const data = await postShop('open_chest', { level });
+      if (typeof data.newPmcBalance === 'number' && typeof setPmcBalance === 'function') setPmcBalance(data.newPmcBalance);
+      await fetchShopBoard(true); renderShop();
+      alert('🎁 Mở rương Lv.' + level + ' thành công!\nNhận: ' + shopFormatPmc(data.rewardPmc || 0) + ' PMC');
+      shopToast('Đã cộng PMC từ rương vào ví.');
+    } catch(err){ alert('Mở rương lỗi: ' + (err.message || 'Không rõ lỗi')); shopToast('Mở rương lỗi: ' + (err.message || 'Không rõ lỗi')); }
+    finally { SHOP_STATE.acting = false; }
+  };
+  function updateShopBadge(board){
+    const badge = document.getElementById('arena-shop-badge');
+    const btn = document.getElementById('arena-shop-btn');
+    if (!badge || !btn) return;
+    const count = (board?.levelChests || []).filter(c => c.canClaim && !c.claimed).length;
+    if (count > 0) { badge.textContent = count > 99 ? '99+' : String(count); badge.classList.add('show'); btn.classList.add('has-ready-chest'); }
+    else { badge.textContent = '0'; badge.classList.remove('show'); btn.classList.remove('has-ready-chest'); }
+  }
+  async function refreshShopBadgeSilently(){
+    try { const b = await fetchShopBoard(true); updateShopBadge(b); }
+    catch(_) { updateShopBadge({ levelChests:[] }); }
+  }
+  window.refreshShopBadgeSilently = refreshShopBadgeSilently;
+
+  document.addEventListener('DOMContentLoaded', function(){
+    ensureShopButton(); ensureShopModal();
+    setTimeout(refreshShopBadgeSilently, 1200);
+    setInterval(function(){
+      const home = document.getElementById('home-menu');
+      if (home && home.style.display !== 'none') refreshShopBadgeSilently();
+    }, 30000);
+  });
+})();
+</script>
+
 </body>
 
 </html>
