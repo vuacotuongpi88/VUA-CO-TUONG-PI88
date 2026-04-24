@@ -3809,7 +3809,195 @@ margin-bottom: 14px;
 .board-side .top-row .player-chip-inline{
   order: 3 !important;
 }        
+/* ===== AUTO BÁM GÓC THEO BÀN CỜ - KHÔNG CẦN KÉO TAY ===== */
 
+.board-side{
+  --board-size: min(450px, 90vw);
+  --corner-gap-y: clamp(4px, 1.4vw, 8px);
+
+  width: var(--board-size) !important;
+  margin: 0 auto !important;
+
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  grid-template-rows: auto auto auto auto !important;
+  gap: var(--corner-gap-y) !important;
+
+  align-items: center !important;
+  justify-items: stretch !important;
+}
+
+.board-side > .game-container{
+  grid-row: 2 !important;
+  width: var(--board-size) !important;
+  height: var(--board-size) !important;
+  max-width: 450px !important;
+  max-height: 450px !important;
+  margin: 0 auto !important;
+  position: relative !important;
+}
+
+.board-side > .player-timer-row{
+  width: 100% !important;
+  display: flex !important;
+  align-items: flex-end !important;
+  justify-content: space-between !important;
+  gap: 6px !important;
+
+  position: relative !important;
+  left: auto !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+  margin: 0 !important;
+}
+
+.board-side > .top-row{
+  grid-row: 1 !important;
+}
+
+.board-side > .bottom-row{
+  grid-row: 4 !important;
+  align-items: flex-start !important;
+}
+
+.board-side > .turn-row{
+  grid-row: 3 !important;
+  width: 100% !important;
+  margin: 0 !important;
+  text-align: center !important;
+}
+
+/* Đồng hồ luôn bám mép trái */
+.board-side #timer-den,
+.board-side #timer-do{
+  order: 1 !important;
+
+  position: relative !important;
+  left: auto !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+
+  margin: 0 !important;
+  flex: 0 0 auto !important;
+}
+
+/* Avatar luôn bám mép phải */
+.board-side .player-slot{
+  order: 2 !important;
+  width: clamp(132px, 36vw, 160px) !important;
+  flex: 0 0 auto !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-end !important;
+
+  position: relative !important;
+  left: auto !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+}
+
+/* Khung avatar */
+.board-side .player-chip-inline{
+  width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+/* Mã phòng + số dư bám theo khung avatar */
+.board-side .player-slot-extra{
+  width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-end !important;
+  text-align: right !important;
+  gap: 2px !important;
+  margin-top: 4px !important;
+}
+
+.board-side .player-balance-outside{
+  width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-end !important;
+  text-align: right !important;
+}
+
+.board-side .player-invite-code,
+.board-side .player-chip-balance{
+  width: 100% !important;
+  display: block !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Bên địch phía trên: số dư -> mã phòng -> avatar */
+.board-side .top-row .player-slot-extra{
+  order: 1 !important;
+  margin-top: 0 !important;
+  margin-bottom: 4px !important;
+}
+
+.board-side .top-row .player-balance-outside{
+  order: 1 !important;
+}
+
+.board-side .top-row #player-den-invite{
+  order: 2 !important;
+}
+
+.board-side .top-row .player-chip-inline{
+  order: 3 !important;
+}
+
+/* Bên mình phía dưới: avatar -> mã phòng -> số dư */
+.board-side .bottom-row .player-chip-inline{
+  order: 1 !important;
+}
+
+.board-side .bottom-row .player-slot-extra{
+  order: 2 !important;
+}
+
+/* Mobile nhỏ */
+@media (max-width: 600px){
+  .board-side{
+    --board-size: min(90vw, 360px);
+  }
+
+  .board-side #timer-den,
+  .board-side #timer-do{
+    width: 92px !important;
+    min-width: 92px !important;
+    padding: 6px 8px !important;
+    font-size: 1rem !important;
+  }
+
+  .board-side .player-slot{
+    width: 132px !important;
+  }
+
+  .board-side .player-chip-inline{
+    padding: 5px 8px !important;
+    gap: 6px !important;
+  }
+
+  .board-side .player-chip-inline img{
+    width: 28px !important;
+    height: 28px !important;
+  }
+
+  .board-side .player-chip-meta{
+    font-size: 10px !important;
+  }
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -4211,71 +4399,70 @@ margin-bottom: 14px;
 </div>
 </div>
 <div class="board-side">
-    <div class="player-timer-row top-row">
+
+  <div class="player-timer-row top-row">
+    <div id="timer-den" class="timer-box timer-inline">09:00</div>
+
     <div class="player-slot">
-    <div class="player-chip-inline" onclick="openPlayerStats('den')">
+      <div class="player-chip-inline" onclick="openPlayerStats('den')">
         <img id="player-den-avatar" src="images/do_tuong.png" alt="Đen">
         <div class="player-chip-meta">
-            <span id="player-den-name" class="player-chip-name">BÊN ĐEN</span>
-            <span id="player-den-rank" class="player-chip-rank">Tân Binh • Lv.1</span>
+          <span id="player-den-name" class="player-chip-name">BÊN ĐEN</span>
+          <span id="player-den-rank" class="player-chip-rank">Tân Binh • Lv.1</span>
         </div>
-    </div>
+      </div>
 
-    <div class="player-slot-extra">
+      <div class="player-slot-extra">
         <div id="player-den-invite" class="player-invite-code"></div>
         <div class="player-balance-outside">
-            <span id="player-den-pi" class="player-chip-balance player-chip-balance-pi">0.00 π</span>
-            <span id="player-den-pmc" class="player-chip-balance player-chip-balance-pmc">0 PMC</span>
+          <span id="player-den-pi" class="player-chip-balance player-chip-balance-pi">0.00 π</span>
+          <span id="player-den-pmc" class="player-chip-balance player-chip-balance-pmc">0 PMC</span>
         </div>
+      </div>
     </div>
-</div>
-</div>
+  </div>
 
-        <div id="timer-den" class="timer-box timer-inline">09:00</div>
-    </div>
-
-    <div id="board" class="game-container">
-        <div id="victory-wrap">
-    <div class="victory-banner">
+  <div id="board" class="game-container">
+    <div id="victory-wrap">
+      <div class="victory-banner">
         <h1 id="main-result">CHIẾN THẮNG</h1>
         <span id="sub-result">BÊN ĐỎ THẮNG</span>
 
         <div id="victory-actions" style="margin-top:16px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
-            <button onclick="playNextMatch()">TIẾP TỤC</button>
-            <button onclick="exitAfterMatch()" style="background:#e17055;">THOÁT TRẬN</button>
+          <button onclick="playNextMatch()">TIẾP TỤC</button>
+          <button onclick="exitAfterMatch()" style="background:#e17055;">THOÁT TRẬN</button>
         </div>
+      </div>
     </div>
-</div>
-    </div>
+  </div>
 
-    <div class="turn-row">
-        <div id="turn-box" style="color: #55efc4;">Lượt: ĐỎ</div>
-    </div>
+  <div class="turn-row">
+    <div id="turn-box" style="color: #55efc4;">Lượt: ĐỎ</div>
+  </div>
 
-    <div class="player-timer-row bottom-row">
-        <div id="timer-do" class="timer-box active-do timer-inline">09:00</div>
+  <div class="player-timer-row bottom-row">
+    <div id="timer-do" class="timer-box active-do timer-inline">09:00</div>
 
-     <div class="player-slot">
-    <div class="player-chip-inline" onclick="openPlayerStats('do')">
+    <div class="player-slot">
+      <div class="player-chip-inline" onclick="openPlayerStats('do')">
         <img id="player-do-avatar" src="images/do_tuong.png" alt="Đỏ">
         <div class="player-chip-meta">
-            <span id="player-do-name" class="player-chip-name">BÊN ĐỎ</span>
-            <span id="player-do-rank" class="player-chip-rank">Tân Binh • Lv.1</span>
+          <span id="player-do-name" class="player-chip-name">BÊN ĐỎ</span>
+          <span id="player-do-rank" class="player-chip-rank">Tân Binh • Lv.1</span>
         </div>
-    </div>
+      </div>
 
-    <div class="player-slot-extra">
+      <div class="player-slot-extra">
         <div id="player-do-invite" class="player-invite-code"></div>
         <div class="player-balance-outside">
-            <span id="player-do-pi" class="player-chip-balance player-chip-balance-pi">0.00 π</span>
-            <span id="player-do-pmc" class="player-chip-balance player-chip-balance-pmc">0 PMC</span>
+          <span id="player-do-pi" class="player-chip-balance player-chip-balance-pi">0.00 π</span>
+          <span id="player-do-pmc" class="player-chip-balance player-chip-balance-pmc">0 PMC</span>
         </div>
+      </div>
     </div>
-</div>
-</div>
-    </div>
-</div>
+  </div>
 
+</div>
 <div class="chat-side">
 <div id="match-chat-popup">
 <div class="chat-header">
