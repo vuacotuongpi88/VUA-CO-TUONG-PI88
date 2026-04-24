@@ -4807,11 +4807,11 @@ auth.onAuthStateChanged(async user => {
         await tryResumeRealtimeMatch();
     } else {
         clearActiveMatchSnapshot();
-hideFloatingUIForLogin();
-document.getElementById("login-screen").style.display = "flex";
-document.getElementById("home-menu").style.display = "none";
-document.getElementById("game-arena").style.display = "none";
-showLoginChoices();
+        document.getElementById("login-screen").style.display = "flex";
+        document.getElementById("user-display").style.display = "none";
+        document.getElementById("home-menu").style.display = "none";
+        document.getElementById("game-arena").style.display = "none";
+        showLoginChoices();
     }
 });
 function hideHomeUI() {
