@@ -5180,6 +5180,7 @@ if (missionBadge) {
 }
 
 function showHomeUI() {
+    document.body.classList.remove("in-match");
     const homeMenu = document.getElementById("home-menu");
     if (homeMenu) homeMenu.style.display = "block";
 
