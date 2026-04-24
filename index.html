@@ -5160,8 +5160,9 @@ function createPiece(cIdx, rIdx, type, up) {
     this.src = side === "do" ? "images/do_tuong.png" : "images/den_tuong.png";
 };
 
-    img.style.left = columns[cIdx] + "%";
-    img.style.top = rows[rIdx] + "%";
+    const viewPos = mapBoardToView(cIdx, rIdx);
+img.style.left = columns[viewPos.c] + "%";
+img.style.top = rows[viewPos.r] + "%";
 
     // ép nổi lên trên cho riêng 2 con Tướng
     if (isKingPiece(type)) {
@@ -5279,24 +5280,19 @@ const dx = Math.abs(tc - c), dy = Math.abs(tr - r);
 if (mt[tr][tc] && mt[tr][tc].side === side) return false;
 
 let luatType = type;
-
-// XÁC ĐỊNH LUẬT CỜ ÚP THEO Ô GỐC, nhưng phải tìm quân theo VIEW hiện tại
-const fromView = mapBoardToView(c, r);
-const pieceAtPos = document.querySelector(
-    `.piece[style*="left: ${columns[fromView.c]}%"][style*="top: ${rows[fromView.r]}%"]`
-);
-
+// XÁC ĐỊNH LUẬT CỜ ÚP DỰA TRÊN VỊ TRÍ XUẤT PHÁT
+const pieceAtPos = document.querySelector(`.piece[style*="left: ${columns[c]}%"][style*="top: ${rows[r]}%"]`);
 if (isCoUp && pieceAtPos && pieceAtPos.dataset.isUp === "true") {
-    if (r === 0 || r === 9) {
-        if (c === 0 || c === 8) luatType = (side === "do" ? "俥" : "車");
-        else if (c === 1 || c === 7) luatType = (side === "do" ? "傌" : "馬");
-        else if (c === 2 || c === 6) luatType = (side === "do" ? "相" : "象");
-        else if (c === 3 || c === 5) luatType = (side === "do" ? "仕" : "士");
-    } else if ((r === 2 && side === "den") || (r === 7 && side === "do")) {
-        if (c === 1 || c === 7) luatType = (side === "do" ? "炮" : "砲");
-    } else if ((r === 3 && side === "den") || (r === 6 && side === "do")) {
-        if (c % 2 === 0) luatType = (side === "do" ? "兵" : "卒");
-    }
+if (r === 0 || r === 9) {
+if (c === 0 || c === 8) luatType = (side === 'do' ? '俥' : '車');
+else if (c === 1 || c === 7) luatType = (side === 'do' ? '傌' : '馬');
+else if (c === 2 || c === 6) luatType = (side === 'do' ? '相' : '象');
+else if (c === 3 || c === 5) luatType = (side === 'do' ? '仕' : '士');
+} else if ((r === 2 && side === 'den') || (r === 7 && side === 'do')) {
+if (c === 1 || c === 7) luatType = (side === 'do' ? '炮' : '砲');
+} else if ((r === 3 && side === 'den') || (r === 6 && side === 'do')) {
+if (c % 2 === 0) luatType = (side === 'do' ? '兵' : '卒');
+}
 }
 
 switch (luatType) {
