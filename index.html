@@ -5121,6 +5121,24 @@ function makeKingSvg(label, fillColor, textColor) {
 function isKingPiece(type) {
     return type === "帥" || type === "將";
 }
+function getCoUpBaseRuleType(cIdx, rIdx, side) {
+    if (rIdx === 0 || rIdx === 9) {
+        if (cIdx === 0 || cIdx === 8) return side === "do" ? "俥" : "車";
+        if (cIdx === 1 || cIdx === 7) return side === "do" ? "傌" : "馬";
+        if (cIdx === 2 || cIdx === 6) return side === "do" ? "相" : "象";
+        if (cIdx === 3 || cIdx === 5) return side === "do" ? "仕" : "士";
+    }
+
+    if ((rIdx === 2 && side === "den") || (rIdx === 7 && side === "do")) {
+        if (cIdx === 1 || cIdx === 7) return side === "do" ? "炮" : "砲";
+    }
+
+    if ((rIdx === 3 && side === "den") || (rIdx === 6 && side === "do")) {
+        if (cIdx % 2 === 0) return side === "do" ? "兵" : "卒";
+    }
+
+    return null;
+}
 function createPiece(cIdx, rIdx, type, up) {
     const img = document.createElement("img");
     img.className = "piece";
@@ -5129,6 +5147,7 @@ function createPiece(cIdx, rIdx, type, up) {
     img.dataset.side = side;
     img.dataset.type = type;
     img.dataset.isUp = up ? "true" : "false";
+    img.dataset.baseRuleType = getCoUpBaseRuleType(cIdx, rIdx, side) || type;
 
     const names = {
         '車': 'xe',
@@ -5278,19 +5297,13 @@ const dx = Math.abs(tc - c), dy = Math.abs(tr - r);
 if (mt[tr][tc] && mt[tr][tc].side === side) return false;
 
 let luatType = type;
-// XÁC ĐỊNH LUẬT CỜ ÚP DỰA TRÊN VỊ TRÍ XUẤT PHÁT
-const pieceAtPos = document.querySelector(`.piece[style*="left: ${columns[c]}%"][style*="top: ${rows[r]}%"]`);
+
+const pieceAtPos = document.querySelector(
+    `.piece[style*="left: ${columns[c]}%"][style*="top: ${rows[r]}%"]`
+);
+
 if (isCoUp && pieceAtPos && pieceAtPos.dataset.isUp === "true") {
-if (r === 0 || r === 9) {
-if (c === 0 || c === 8) luatType = (side === 'do' ? '俥' : '車');
-else if (c === 1 || c === 7) luatType = (side === 'do' ? '傌' : '馬');
-else if (c === 2 || c === 6) luatType = (side === 'do' ? '相' : '象');
-else if (c === 3 || c === 5) luatType = (side === 'do' ? '仕' : '士');
-} else if ((r === 2 && side === 'den') || (r === 7 && side === 'do')) {
-if (c === 1 || c === 7) luatType = (side === 'do' ? '炮' : '砲');
-} else if ((r === 3 && side === 'den') || (r === 6 && side === 'do')) {
-if (c % 2 === 0) luatType = (side === 'do' ? '兵' : '卒');
-}
+    luatType = pieceAtPos.dataset.baseRuleType || type;
 }
 
 switch (luatType) {
