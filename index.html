@@ -5147,7 +5147,6 @@ function createPiece(cIdx, rIdx, type, up) {
     img.dataset.side = side;
     img.dataset.type = type;
     img.dataset.isUp = up ? "true" : "false";
-    img.dataset.baseRuleType = getCoUpBaseRuleType(cIdx, rIdx, side) || type;
 
     const names = {
         '車': 'xe',
