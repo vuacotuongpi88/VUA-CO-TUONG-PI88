@@ -3998,6 +3998,40 @@ margin-bottom: 14px;
     font-size: 10px !important;
   }
 }
+    /* ===== NÚT KẾT BẠN ĐỐI THỦ TRONG TRẬN ===== */
+
+.match-add-friend-btn{
+  position: fixed;
+  right: 12px;
+  top: 76px;
+  z-index: 12025;
+
+  padding: 8px 12px !important;
+  border-radius: 999px !important;
+  border: 1px solid rgba(244,197,66,0.55) !important;
+
+  background: linear-gradient(180deg, #7b2ff7, #4d1d95) !important;
+  color: #fff8d6 !important;
+
+  font-size: 12px !important;
+  font-weight: 900 !important;
+  letter-spacing: .3px;
+  box-shadow:
+    0 0 12px rgba(123,47,247,.38),
+    0 0 14px rgba(244,197,66,.16);
+}
+
+.match-add-friend-btn:active{
+  transform: scale(.96);
+}
+
+@media (min-width: 601px){
+  .match-add-friend-btn{
+    top: auto;
+    right: 22px;
+    bottom: 88px;
+  }
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -4398,6 +4432,9 @@ margin-bottom: 14px;
 </div>
 </div>
 </div>
+<button id="match-add-friend-btn" class="match-add-friend-btn" onclick="sendFriendRequestToMatchOpponent()">
+  🤝 KẾT BẠN
+</button>    
 <div class="board-side">
 
   <div class="player-timer-row top-row">
