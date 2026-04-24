@@ -3299,195 +3299,177 @@ margin-bottom: 14px;
     color: #b2bec3 !important;
     font-weight: 700;
 }
-.board-side{
-  --ui-gap-x: 6px;      /* độ sát mép trái/phải bàn cờ */
-  --ui-top: -66px;      /* cụm trên nhô lên khỏi bàn cờ */
-  --ui-bottom: -76px;   /* cụm dưới hạ xuống khỏi bàn cờ */
-
-  position: relative;
-  width: min(450px, 90vw);
-  margin: 72px auto 88px;
+.board-side {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
 }
 
-.game-container{
-  position: relative;
-  width: 100%;
-  height: min(450px, 90vw);
-  max-width: 450px;
-  max-height: 450px;
-  margin: 0 auto;
+.game-container {
+    position: relative;
 }
 
-.player-timer-row{
-  position: absolute;
-  left: 0;
-  width: 100%;
-  height: 0;
-  z-index: 50;
-  pointer-events: none;
+.player-timer-row {
+    width: min(450px, 90vw);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
 }
 
-.player-timer-row.top-row{
-  top: var(--ui-top);
+.turn-row {
+    width: min(450px, 90vw);
+    text-align: center;
+    margin-top: 2px;
+    margin-bottom: 2px;
 }
 
-.player-timer-row.bottom-row{
-  bottom: var(--ui-bottom);
+.timer-inline {
+    --timer-pct: 1turn;
+    --ring-color: #ffffff;
+--ring-glow: rgba(255, 255, 255, 0.35);
+
+    width: 110px;
+    min-width: 110px;
+    padding: 8px 10px;
+    font-size: 1.2rem;
+    border-radius: 12px;
+    margin: 0;
+    box-sizing: border-box;
+
+    position: relative;
+    border: 2px solid transparent;
+    background:
+        linear-gradient(rgba(15, 30, 15, 0.94), rgba(15, 30, 15, 0.94)) padding-box,
+        conic-gradient(
+            from -90deg,
+            var(--ring-color) 0turn var(--timer-pct),
+            rgba(255,255,255,0.08) var(--timer-pct) 1turn
+        ) border-box;
+    box-shadow:
+        0 0 8px rgba(0,0,0,0.35),
+        0 0 14px var(--ring-glow),
+        inset 0 0 10px rgba(255,255,255,0.04);
+    transition:
+        background 0.18s linear,
+        box-shadow 0.18s linear,
+        color 0.18s linear,
+        transform 0.18s ease;
 }
 
-/* KHUNG AVATAR: cả trên và dưới đều bám góc phải */
-.player-slot{
-  position: absolute;
-  top: 0;
-  right: var(--ui-gap-x);
-  width: 156px;
-  pointer-events: auto;
-  z-index: 51;
-
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+.player-chip-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 150px;
+    padding: 6px 10px;
+    background: rgba(0, 0, 0, 0.78);
+    border: 1px solid #55efc4;
+    border-radius: 12px;
+    box-shadow: 0 0 12px rgba(85, 239, 196, 0.18);
+    cursor: pointer;
+    box-sizing: border-box;
 }
 
-.top-row .player-slot,
-.bottom-row .player-slot{
-  left: auto;
-  right: var(--ui-gap-x);
-  top: 0;
+.player-chip-inline img {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid #e704c9;
 }
 
-/* ĐỒNG HỒ: cả trên và dưới đều bám góc trái */
-.timer-inline{
-  position: absolute;
-  top: 0;
-  left: var(--ui-gap-x);
-  width: 92px;
-  min-width: 92px;
-  margin: 0;
-  padding: 6px 8px;
-  box-sizing: border-box;
-  z-index: 51;
+.player-chip-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    line-height: 1.1;
+    font-size: 11px;
 }
 
-.top-row .timer-inline,
-.bottom-row .timer-inline{
-  left: var(--ui-gap-x);
-  right: auto;
-  top: 0;
+.player-chip-name {
+    color: #f106d2;
+    font-weight: bold;
 }
 
-/* KHUNG AVATAR */
-.player-chip-inline{
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  min-height: 50px;
-  padding: 5px 8px;
-  border-radius: 12px;
-  background: rgba(0,0,0,0.78);
-  border: 1px solid #55efc4;
-  box-shadow: 0 0 12px rgba(85,239,196,0.18);
-  box-sizing: border-box;
+.player-chip-rank {
+    font-weight: 900;
+    background: linear-gradient(90deg, #ffd54a 0%, #ffd54a 35%, #ffd54a 70%, #ffef9a 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 10px rgba(255, 213, 74, 0.18);
+}
+.player-chip-name {
+    color: #f11606;
+    font-weight: bold;
 }
 
-/* TÊN + HẠNG trong avatar: canh phải */
-.player-chip-meta{
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  width: calc(100% - 34px);
-  align-items: flex-end;
-  text-align: right;
+@media (max-width: 600px) {
+    .player-timer-row {
+        width: min(90vw, 360px);
+        gap: 8px;
+    }
+
+    .timer-inline {
+        width: 92px;
+        min-width: 92px;
+        padding: 6px 8px;
+        font-size: 1rem;
+    }
+
+    .player-chip-inline {
+        min-width: 132px;
+        padding: 5px 8px;
+        gap: 6px;
+    }
+
+    .player-chip-inline img {
+        width: 28px;
+        height: 28px;
+    }
+
+    .player-chip-meta {
+        font-size: 10px;
+    }
 }
 
-/* MÃ PHÒNG + SỐ DƯ: bám theo khung avatar */
-.player-slot-extra{
-  width: 100%;
-  margin-top: 4px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  align-items: flex-end;
-  text-align: right;
-}
+@media (max-width: 600px) {
+    .player-timer-row {
+        width: min(90vw, 360px);
+        gap: 8px;
+    }
 
-.player-balance-outside{
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  align-items: flex-end;
-  text-align: right;
-}
+    .timer-inline {
+        width: 92px;
+        min-width: 92px;
+        padding: 6px 8px;
+        font-size: 1rem;
+    }
 
-.player-invite-code,
-.player-chip-balance{
-  display: block;
-  width: 100%;
-  font-size: 10px;
-  line-height: 1.1;
-  text-shadow: 0 0 6px rgba(0,0,0,.45);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+    .player-chip-inline {
+        min-width: 132px;
+        padding: 5px 8px;
+        gap: 6px;
+    }
 
-.turn-row{
-  margin-top: 8px;
-  text-align: center;
-}
+    .player-chip-inline img {
+        width: 28px;
+        height: 28px;
+    }
 
-@media (max-width: 600px){
-  .board-side{
-    --ui-gap-x: 4px;
-    --ui-top: -58px;
-    --ui-bottom: -68px;
-
-    width: min(90vw, 360px);
-    margin: 64px auto 80px;
-  }
-
-  .game-container{
-    height: min(90vw, 360px);
-  }
-
-  .player-slot{
-    width: 132px;
-  }
-
-  .timer-inline{
-    width: 84px;
-    min-width: 84px;
-    padding: 5px 7px;
-    font-size: 14px;
-  }
-
-  .player-chip-inline{
-    min-height: 46px;
-    padding: 4px 7px;
-    gap: 5px;
-  }
-
-  .player-chip-inline img{
-    width: 28px;
-    height: 28px;
-  }
-
-  .player-invite-code,
-  .player-chip-balance,
-  .player-chip-rank{
-    font-size: 9px;
-  }
-
-  .chat-header {
+    .player-chip-meta {
+        font-size: 10px;
+    }
+    .chat-header {
     display: none;
-  }
+}
 
-  #match-content-popup {
+#match-content-popup {
     padding-top: 8px;
-  }
+}
 }
 #withdraw-amount-modal {
     position: fixed;
