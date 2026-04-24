@@ -3809,50 +3809,73 @@ margin-bottom: 14px;
 .board-side .top-row .player-chip-inline{
   order: 3 !important;
 }        
-/* ===== CẦN GẠT UI GÓC BÀN - KHÔNG ĐỤNG BÀN CỜ ===== */
-/* 
-  x: số dương = qua PHẢI, số âm = qua TRÁI
-  y: số dương = xuống DƯỚI, số âm = lên TRÊN
+/* ===== CẦN GẠT UI GÓC BÀN - CHỈ DÙNG SỐ DƯƠNG ===== */
+/*
+  Muốn qua PHẢI  -> tăng -right
+  Muốn qua TRÁI  -> tăng -left
+  Muốn XUỐNG     -> tăng -down
+  Muốn LÊN       -> tăng -up
+
+  Không cần nhập số âm nữa.
 */
 
 .board-side {
   /* AVATAR ĐEN */
-  --den-avatar-x: 0px;
-  --den-avatar-y: 50px;
+  --den-avatar-right: 0px;
+  --den-avatar-left: 50px;
+  --den-avatar-down: 0px;
+  --den-avatar-up: 0px;
 
   /* ĐỒNG HỒ ĐEN */
-  --den-clock-x:  80px;
-  --den-clock-y: -15px;
+  --den-clock-right: 0px;
+  --den-clock-left: 0px;
+  --den-clock-down: 0px;
+  --den-clock-up: 0px;
 
   /* AVATAR ĐỎ */
-  --do-avatar-x: -55px;
-  --do-avatar-y: -100px;
+  --do-avatar-right: 0px;
+  --do-avatar-left: 0px;
+  --do-avatar-down: 0px;
+  --do-avatar-up: 0px;
 
   /* ĐỒNG HỒ ĐỎ */
-  --do-clock-x: 0px;
-  --do-clock-y: 20px;
+  --do-clock-right: 0px;
+  --do-clock-left: 0px;
+  --do-clock-down: 0px;
+  --do-clock-up: 0px;
 }
 
 /* Kéo avatar ĐEN */
 .board-side .top-row .player-slot {
-  transform: translate(var(--den-avatar-x), var(--den-avatar-y)) !important;
+  transform: translate(
+    calc(var(--den-avatar-right) - var(--den-avatar-left)),
+    calc(var(--den-avatar-down) - var(--den-avatar-up))
+  ) !important;
 }
 
 /* Kéo đồng hồ ĐEN */
 .board-side .top-row .timer-inline {
-  transform: translate(var(--den-clock-x), var(--den-clock-y)) !important;
+  transform: translate(
+    calc(var(--den-clock-right) - var(--den-clock-left)),
+    calc(var(--den-clock-down) - var(--den-clock-up))
+  ) !important;
 }
 
 /* Kéo avatar ĐỎ */
 .board-side .bottom-row .player-slot {
-  transform: translate(var(--do-avatar-x), var(--do-avatar-y)) !important;
+  transform: translate(
+    calc(var(--do-avatar-right) - var(--do-avatar-left)),
+    calc(var(--do-avatar-down) - var(--do-avatar-up))
+  ) !important;
 }
 
 /* Kéo đồng hồ ĐỎ */
 .board-side .bottom-row .timer-inline {
-  transform: translate(var(--do-clock-x), var(--do-clock-y)) !important;
+  transform: translate(
+    calc(var(--do-clock-right) - var(--do-clock-left)),
+    calc(var(--do-clock-down) - var(--do-clock-up))
+  ) !important;
 }
-
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
