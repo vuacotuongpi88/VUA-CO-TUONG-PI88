@@ -6349,9 +6349,24 @@ function getLevelFrame(level) {
 }
 
 function getLevelRewardPmc(level) {
-  // Quà theo mốc 10 cấp: 10, 20, 30...160. Không thưởng lẻ từng level.
+  // Rương mốc cấp: mỗi 10 cấp mở 1 rương, quà ngẫu nhiên 100 - 10.000 PMC.
+  // Không cộng thẳng khi lên cấp nữa, người chơi tự bấm mở rương trong tab Nhiệm vụ > Cấp.
   if (level < 10 || level % 10 !== 0) return 0;
-  return Math.floor(5000 * Math.pow(level / 10, 1.35));
+  return 10000;
+}
+
+function getLevelChestRangeText() {
+  return "100 - 10.000 PMC";
+}
+
+function rollLevelChestRewardPmc() {
+  // Tỉ lệ an toàn: đa số là quà nhỏ, jackpot 10.000 PMC rất hiếm.
+  const roll = Math.random() * 100;
+  if (roll < 58) return 100 + Math.floor(Math.random() * 401);       // 100 - 500
+  if (roll < 82) return 501 + Math.floor(Math.random() * 1000);      // 501 - 1.500
+  if (roll < 94) return 1501 + Math.floor(Math.random() * 2000);     // 1.501 - 3.500
+  if (roll < 99) return 3501 + Math.floor(Math.random() * 3500);     // 3.501 - 7.000
+  return 7001 + Math.floor(Math.random() * 3000);                    // 7.001 - 10.000
 }
 
 const PLAYER_LEVEL_TABLE = buildPlayerLevelTable();
@@ -6596,47 +6611,25 @@ async function awardLevelProgressForFinishedRoom(roomId, room) {
   localStorage.setItem("level-meta-cache", JSON.stringify(afterMeta));
   renderGlobalLevelHud(afterMeta);
 
-  // Thưởng mốc cấp chỉ nhận 1 lần/mốc, tránh tụt level rồi cày lại ăn thưởng lặp.
-  let rewardPmc = 0;
-  const rewardLevels = [];
+  // Lên mốc cấp chỉ mở khóa rương, KHÔNG cộng thẳng PMC nữa.
+  // Người chơi vào Nhiệm vụ > Cấp để tự bấm mở rương 100 - 10.000 PMC.
+  const unlockedChestLevels = [];
 
   if (afterMeta.level > oldLevel) {
     for (let lv = oldLevel + 1; lv <= afterMeta.level; lv++) {
       const reward = Number(getLevelInfoByLevel(lv).rewardPmc || 0);
-      if (reward <= 0) continue;
-
-      const rewardRef = db.ref(`levelRewardClaimsV1/${walletKey}/${lv}`);
-      const rewardTx = await runRefTransaction(rewardRef, current => {
-        if (current && current.done) return;
-        return {
-          done: true,
-          level: lv,
-          rewardPmc: reward,
-          at: Date.now()
-        };
-      });
-
-      if (rewardTx.committed) {
-        rewardPmc += reward;
-        rewardLevels.push(lv);
-      }
+      if (reward > 0) unlockedChestLevels.push(lv);
     }
   }
 
-  if (rewardPmc > 0) {
-    await adjustPmcWalletByKey(walletKey, rewardPmc, {
-      name: localStorage.getItem("user-name-display") || "Người chơi",
-      photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-    });
-
+  if (unlockedChestLevels.length > 0) {
     alert(
       `🎉 Lên Lv.${afterMeta.level} - ${afterMeta.title}\n` +
-      `Mốc thưởng: Lv.${rewardLevels.join(", Lv.")}\n` +
-      `+${rewardPmc.toLocaleString("vi-VN")} PMC`
+      `Đã mở khóa rương mốc: Lv.${unlockedChestLevels.join(", Lv.")}\n` +
+      `Vào Nhiệm vụ > Cấp để mở rương nhận ngẫu nhiên ${getLevelChestRangeText()}.`
     );
   }
 }
-
 function renderPlayersFromRoom(room) {
     setCornerBalanceVisible(false);
     const doPlayer = room?.players?.do || {};
@@ -11660,7 +11653,7 @@ async function refreshMissionLobbyBadgeSilently() {
   } catch (_) {}
 }
 
-/* ===== TAB MỐC CẤP TRONG THANH NHIỆM VỤ ===== */
+/* ===== TAB MỐC CẤP + RƯƠNG PMC TRONG THANH NHIỆM VỤ ===== */
 (function () {
   function escapeLevelText(text) {
     return String(text || '')
@@ -11671,8 +11664,24 @@ async function refreshMissionLobbyBadgeSilently() {
       .replace(/'/g, '&#39;');
   }
 
-  function levelRewardText(amount) {
-    return `${Math.max(0, Math.floor(Number(amount) || 0)).toLocaleString('vi-VN')} PMC`;
+  function levelRewardText(row) {
+    if (!row || Number(row.rewardPmc || 0) <= 0) return 'Không có rương';
+    return '🎁 Rương ' + getLevelChestRangeText();
+  }
+
+  function levelChestClaimPath(walletKey, level) {
+    return 'levelChestClaimsV1/' + String(walletKey || '').replace(/[.#$\[\]\/]/g, '_') + '/' + Number(level || 0);
+  }
+
+  async function loadLevelChestClaims(walletKey) {
+    if (!walletKey || typeof db === 'undefined') return {};
+    try {
+      const snap = await db.ref('levelChestClaimsV1/' + String(walletKey).replace(/[.#$\[\]\/]/g, '_')).once('value');
+      return snap.val() && typeof snap.val() === 'object' ? snap.val() : {};
+    } catch (err) {
+      console.warn('LOAD_LEVEL_CHEST_CLAIMS_FAIL', err);
+      return {};
+    }
   }
 
   function ensureLevelMissionPane() {
@@ -11704,23 +11713,34 @@ async function refreshMissionLobbyBadgeSilently() {
     const grid = document.querySelector('#mission-pane-level .mission-pane-grid');
     if (!grid || typeof PLAYER_LEVEL_TABLE === 'undefined') return;
 
+    const walletKey = missionWalletKey();
     const meta = await ensureMyLevelMetaLoaded().catch(() => getCachedLevelMeta());
     const safe = buildLevelMeta(meta || {});
+    const claims = await loadLevelChestClaims(walletKey);
     const rewardLevels = PLAYER_LEVEL_TABLE.filter(row => Number(row.rewardPmc || 0) > 0);
-    const near = rewardLevels.filter(row => row.level >= Math.max(10, safe.level - 10)).slice(0, 8);
-    const showRows = near.length ? near : rewardLevels.slice(0, 8);
+    const near = rewardLevels.filter(row => row.level >= Math.max(10, safe.level - 10)).slice(0, 10);
+    const showRows = near.length ? near : rewardLevels.slice(0, 10);
 
     const cards = showRows.map(row => {
       const reached = safe.level >= row.level;
+      const claim = claims[String(row.level)] || null;
+      const claimed = !!(claim && claim.done);
+      const canOpen = reached && !claimed;
       const progressPct = reached ? 100 : Math.max(0, Math.min(100, (safe.xp / Math.max(1, row.xp)) * 100));
+      const statusClass = claimed ? 'claimed' : (canOpen ? 'ready' : 'locked');
+      const statusText = claimed ? 'ĐÃ MỞ' : (canOpen ? 'MỞ RƯƠNG' : 'ĐANG CÀY');
+      const btnText = claimed ? 'Đã mở' : (canOpen ? 'Mở rương' : 'Chưa đạt');
+      const disabled = canOpen ? '' : 'disabled';
+      const claimedText = claimed && claim.rewardPmc ? 'Đã nhận ' + Number(claim.rewardPmc).toLocaleString('vi-VN') + ' PMC' : 'Mở 1 lần khi đạt mốc.';
+
       return `
         <div class="mission-card">
           <div class="mission-card-head">
             <div>
-              <div class="mission-card-title">Mốc Lv.${row.level} - ${escapeLevelText(row.title)}</div>
+              <div class="mission-card-title">🎁 Rương Lv.${row.level} - ${escapeLevelText(row.title)}</div>
               <div class="mission-card-desc">Cần ${Number(row.xp).toLocaleString('vi-VN')} EXP. Thắng +${LEVEL_XP_PER_MATCH}, thua -${LEVEL_XP_PER_MATCH}.</div>
             </div>
-            <div class="mission-card-badge ${reached ? 'claimed' : 'locked'}">${reached ? 'ĐÃ ĐẠT' : 'ĐANG CÀY'}</div>
+            <div class="mission-card-badge ${statusClass}">${statusText}</div>
           </div>
           <div class="mission-card-progress-line">
             <span>Tiến độ: Lv.${safe.level}/${row.level}</span>
@@ -11729,11 +11749,11 @@ async function refreshMissionLobbyBadgeSilently() {
           <div class="mission-card-progress-bar"><div class="mission-card-progress-fill" style="width:${progressPct}%"></div></div>
           <div class="mission-card-footer">
             <div class="mission-reward-box">
-              <strong>Quà mốc cấp</strong>
-              <div class="mission-reward-value">${levelRewardText(row.rewardPmc)}</div>
-              <div class="mission-reward-note">Tự cộng 1 lần khi lần đầu chạm mốc.</div>
+              <strong>Quà rương mốc cấp</strong>
+              <div class="mission-reward-value">${levelRewardText(row)}</div>
+              <div class="mission-reward-note">${claimedText}</div>
             </div>
-            <button class="mission-claim-btn" disabled>${reached ? 'Đã mở' : 'Chưa đạt'}</button>
+            <button class="mission-claim-btn" ${disabled} onclick="openLevelChestReward(${row.level})">${btnText}</button>
           </div>
         </div>`;
     }).join('');
@@ -11741,11 +11761,82 @@ async function refreshMissionLobbyBadgeSilently() {
     grid.innerHTML = `
       <div class="level-milestone-note">
         Hiện tại: <b>Lv.${safe.level} ${escapeLevelText(safe.title)}</b> • EXP ${safe.xp.toLocaleString('vi-VN')} • Thắng ${safe.wins} • Thua ${safe.losses}.<br>
-        Lên cấp theo cấp số nhân: cấp thấp dễ, cấp cao càng khó. Thắng và thua cộng/trừ bằng nhau.
+        Mỗi 10 cấp mở 1 rương. Rương cho ngẫu nhiên <b>${getLevelChestRangeText()}</b>, mỗi mốc chỉ mở 1 lần.
       </div>
       ${cards}
     `;
   }
+
+  window.openLevelChestReward = async function (level) {
+    const lv = Math.max(0, Math.floor(Number(level || 0) || 0));
+    if (!lv || lv % 10 !== 0) {
+      alert('Mốc rương không hợp lệ.');
+      return;
+    }
+
+    const walletKey = missionWalletKey();
+    if (!walletKey) {
+      alert('Chưa xác định được ví người chơi.');
+      return;
+    }
+
+    const meta = await ensureMyLevelMetaLoaded().catch(() => getCachedLevelMeta());
+    const safe = buildLevelMeta(meta || {});
+    if (safe.level < lv) {
+      alert('Chưa đạt Lv.' + lv + ' nên chưa mở được rương này.');
+      return;
+    }
+
+    const claimRef = db.ref(levelChestClaimPath(walletKey, lv));
+    const rewardPmc = rollLevelChestRewardPmc();
+
+    try {
+      const claimTx = await runRefTransaction(claimRef, current => {
+        if (current && current.done) return;
+        return {
+          done: true,
+          level: lv,
+          rewardPmc,
+          openedAt: Date.now()
+        };
+      });
+
+      if (!claimTx.committed) {
+        alert('Rương Lv.' + lv + ' đã mở rồi.');
+        await renderLevelMissionPane();
+        return;
+      }
+
+      const newBalance = await adjustPmcWalletByKey(walletKey, rewardPmc, {
+        name: localStorage.getItem('user-name-display') || 'Người chơi',
+        photo: localStorage.getItem('user-photo') || 'images/do_tuong.png'
+      });
+
+      if (newBalance == null) {
+        await claimRef.remove().catch(() => {});
+        alert('Mở rương lỗi: không cộng được PMC. Đã hoàn trạng thái rương.');
+        await renderLevelMissionPane();
+        return;
+      }
+
+      await db.ref('walletTransactions').push({
+        type: 'level_chest_reward_client',
+        walletKey,
+        level: lv,
+        amountPMC: rewardPmc,
+        createdAt: Date.now(),
+        status: 'done'
+      }).catch(() => {});
+
+      alert('🎁 Mở rương Lv.' + lv + ' thành công!\n+' + rewardPmc.toLocaleString('vi-VN') + ' PMC');
+      if (typeof loadWalletBalance === 'function') await loadWalletBalance().catch(() => {});
+      await renderLevelMissionPane();
+      if (typeof refreshMissionLobbyBadgeSilently === 'function') refreshMissionLobbyBadgeSilently();
+    } catch (err) {
+      console.error('OPEN_LEVEL_CHEST_FAIL', err);
+      alert('Mở rương lỗi: ' + (err.message || 'Không rõ lỗi'));
+    }
+  };
 
   const oldOpenMissionHub = window.openMissionHub;
   window.openMissionHub = function () {
