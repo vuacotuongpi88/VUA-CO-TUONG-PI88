@@ -3809,69 +3809,7 @@ margin-bottom: 14px;
 .board-side .top-row .player-chip-inline{
   order: 3 !important;
 }        
-/* ===== CẦN GẠT UI GÓC BÀN - KHÔNG DÙNG TRANSFORM ===== */
-/*
-  Muốn qua PHẢI  -> tăng right
-  Muốn qua TRÁI  -> tăng left
-  Muốn XUỐNG     -> tăng down
-  Muốn LÊN       -> tăng up
 
-  Toàn bộ dùng số dương.
-*/
-
-.board-side {
-  /* AVATAR ĐEN / ĐỊCH PHÍA TRÊN */
-  --den-avatar-right: 34px;
-  --den-avatar-left: 0px;
-  --den-avatar-down: 28px;
-  --den-avatar-up: 0px;
-
-  /* ĐỒNG HỒ ĐEN / ĐỊCH PHÍA TRÊN */
-  --den-clock-right: 48px;
-  --den-clock-left: 0px;
-  --den-clock-down: 30px;
-  --den-clock-up: 0px;
-
-  /* AVATAR ĐỎ / MÌNH PHÍA DƯỚI */
-  --do-avatar-right: 0px;
-  --do-avatar-left: 26px;
-  --do-avatar-down: 0px;
-  --do-avatar-up: 22px;
-
-  /* ĐỒNG HỒ ĐỎ / MÌNH PHÍA DƯỚI */
-  --do-clock-right: 24px;
-  --do-clock-left: 0px;
-  --do-clock-down: 0px;
-  --do-clock-up: 20px;
-}
-
-/* AVATAR ĐEN */
-.board-side .top-row > .player-slot {
-  position: relative !important;
-  left: calc(var(--den-avatar-right) - var(--den-avatar-left)) !important;
-  top: calc(var(--den-avatar-down) - var(--den-avatar-up)) !important;
-}
-
-/* ĐỒNG HỒ ĐEN */
-.board-side #timer-den {
-  position: relative !important;
-  left: calc(var(--den-clock-right) - var(--den-clock-left)) !important;
-  top: calc(var(--den-clock-down) - var(--den-clock-up)) !important;
-}
-
-/* AVATAR ĐỎ */
-.board-side .bottom-row > .player-slot {
-  position: relative !important;
-  left: calc(var(--do-avatar-right) - var(--do-avatar-left)) !important;
-  top: calc(var(--do-avatar-down) - var(--do-avatar-up)) !important;
-}
-
-/* ĐỒNG HỒ ĐỎ */
-.board-side #timer-do {
-  position: relative !important;
-  left: calc(var(--do-clock-right) - var(--do-clock-left)) !important;
-  top: calc(var(--do-clock-down) - var(--do-clock-up)) !important;
-}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
