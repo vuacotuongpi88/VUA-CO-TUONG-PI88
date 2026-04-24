@@ -3367,7 +3367,15 @@ margin-bottom: 14px;
     line-height: 1.1;
     font-size: 11px;
 }
-
+.player-chip-invite,
+#player-den-invite,
+#player-do-invite {
+    font-size: 10px;
+    font-weight: 800;
+    color: #7dffb3;
+    margin-top: 2px;
+    text-shadow: 0 0 6px rgba(0,0,0,0.45);
+}
 .player-chip-name {
     color: #f106d2;
     font-weight: bold;
@@ -5650,6 +5658,17 @@ function updateCheckEffectFromBoard() {
         });
     });
 }
+function updateCornerBalanceVisibility(isPlayingNow) {
+    const userBalance = document.getElementById("user-balance");
+    const userPmcBalance = document.getElementById("user-pmc-balance");
+
+    if (userBalance) {
+        userBalance.style.display = isPlayingNow ? "none" : "";
+    }
+    if (userPmcBalance) {
+        userPmcBalance.style.display = isPlayingNow ? "none" : "";
+    }
+}
 function renderPlayersFromRoom(room) {
     const doPlayer = room?.players?.do || {};
     const denPlayer = room?.players?.den || {};
@@ -5864,6 +5883,7 @@ async function awardLevelProgressForFinishedRoom(roomId, room) {
     const roomStake = Number(room?.stakePMC || 0);
     const oppPmc = Number(oppPlayer.pmcBalance || 0);
     const myPmc = Number(myPlayer.pmcBalance || 0);
+    updateCornerBalanceVisibility(isPlayingNow);
 
     const oppLevelMeta = buildLevelMeta(oppPlayer?.levelMeta || {});
 const myLevelMeta = buildLevelMeta(
@@ -5886,22 +5906,31 @@ if (topAvatar) applyAvatarFrame(topAvatar, oppLevelMeta);
 if (bottomAvatar) applyAvatarFrame(bottomAvatar, myLevelMeta);
 
     const inviteCode = String(
-        room?.inviteCode || makeInviteCodeFromRoomId(currentRoomId || "")
-    ).toUpperCase();
+    room?.inviteCode || makeInviteCodeFromRoomId(currentRoomId || "")
+).toUpperCase();
 
-    const hostUid = room?.players?.do?.uid || "";
+const hostUid = room?.players?.do?.uid || "";
 
+if (isPlayingNow) {
+    if (topInvite) {
+        topInvite.innerText = `PMC: ${formatPMC(oppPmc)}`;
+    }
+    if (bottomInvite) {
+        bottomInvite.innerText = `PMC: ${formatPMC(myPmc)}`;
+    }
+} else {
     if (topInvite) {
         topInvite.innerText = oppPlayer?.uid === hostUid && inviteCode
-            ? ("MÃ MỜI: " + inviteCode)
+            ? (`MÃ MỜI: ` + inviteCode)
             : "";
     }
 
     if (bottomInvite) {
         bottomInvite.innerText = myPlayer?.uid === hostUid && inviteCode
-            ? ("MÃ MỜI: " + inviteCode)
+            ? (`MÃ MỜI: ` + inviteCode)
             : "";
     }
+}
 }
 
 function cleanupRoomListeners() {
