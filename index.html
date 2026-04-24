@@ -5739,7 +5739,6 @@ function setCornerBalanceVisible(show) {
 }
 function renderPlayersFromRoom(room) {
     const doPlayer = room?.players?.do || {};
-    setCornerBalanceVisible(false);
     const denPlayer = room?.players?.den || {};
     const PLAYER_LEVEL_TABLE = [
   { level: 1,  xp: 0,   title: "Tân Binh",         frame: "beginner", pill: "beginner", rewardPmc: 0 },
@@ -5758,6 +5757,7 @@ function renderPlayersFromRoom(room) {
   { level: 14, xp: 960, title: "Thiên Vương",      frame: "king",     pill: "king",     rewardPmc: 5500 },
   { level: 15, xp: 1180,title: "Vua Cờ",           frame: "king",     pill: "king",     rewardPmc: 8000 }
 ];
+setCornerBalanceVisible(false);
 function getWalletLevelRef(walletKey) {
   return walletRefByKey(walletKey).child("levelMeta");
 }
