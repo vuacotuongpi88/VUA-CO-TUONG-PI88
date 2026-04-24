@@ -10485,18 +10485,6 @@ async function sendFriendRequestToMatchOpponent() {
         alert("Gửi lời mời kết bạn lỗi, xem console.");
     }
 }
-function hoaTran() {
-    isGameOver = true;
-    clearInterval(interval);
-    sounds.bgm.pause();
-    sounds.heartbeat.pause();
-
-    const wrap = document.getElementById("victory-wrap");
-    document.getElementById("main-result").innerText = "HÒA CỜ";
-    document.getElementById("sub-result").innerText = "KHÔNG PHÂN THẮNG BẠI";
-    wrap.style.transform = "translate(-50%, -50%) scale(1)";
-
-}
 
 async function onIncompletePaymentFound(payment) {
   try {
