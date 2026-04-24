@@ -6146,10 +6146,13 @@ if (bottomAvatar) applyAvatarFrame(bottomAvatar, myLevelMeta);
     }
 
     if (bottomInvite) {
-        bottomInvite.innerText = myPlayer?.uid === hostUid && inviteCode
-            ? ("MÃ MỜI: " + inviteCode)
-            : "";
-    }
+    bottomInvite.innerText = myPlayer?.uid === hostUid && inviteCode
+        ? ("MÃ MỜI: " + inviteCode)
+        : "";
+}
+
+requestAnimationFrame(syncBoardHudAnchors);
+setTimeout(syncBoardHudAnchors, 80);
 }
 
 function cleanupRoomListeners() {
@@ -10908,6 +10911,14 @@ switchMissionTab(MISSION_UI_STATE.activeTab || 'day');
       refreshMissionLobbyBadgeSilently();
     }
   }, 15000);
+});
+
+window.addEventListener("resize", function () {
+  requestAnimationFrame(syncBoardHudAnchors);
+});
+
+window.addEventListener("orientationchange", function () {
+  setTimeout(syncBoardHudAnchors, 120);
 });
 })();
 function updateMissionLobbyBadge(board) {
