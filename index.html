@@ -6705,6 +6705,7 @@ const hasEnoughPlayersWaiting =
     !room.winner;
 
 if (hasEnoughPlayersWaiting) {
+    isResettingNextMatch = false;
     isGameOver = false;
     selectedPiece = null;
     clearMoveHints();
