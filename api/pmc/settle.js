@@ -437,7 +437,12 @@ module.exports = async function handler(req, res) {
         name: denPlayer.name || denPlayer.usernameNorm || denPlayer.username || "Người chơi đen",
         photo: denPlayer.photo || "images/do_tuong.png"
       });
-
+      await db.ref().update({
+  [`matches/${roomId}/players/do/pmcBalance`]: Math.floor(Number(doAfter?.pmcBalance || 0) || 0),
+  [`matches/${roomId}/players/den/pmcBalance`]: Math.floor(Number(denAfter?.pmcBalance || 0) || 0),
+  [`matches/${roomId}/players/do/balance`]: Number(doAfter?.balance || 0) || 0,
+  [`matches/${roomId}/players/den/balance`]: Number(denAfter?.balance || 0) || 0
+});
       await settlementRef.set({
         done: true,
         type: "draw_refund",
@@ -512,7 +517,21 @@ module.exports = async function handler(req, res) {
         photo: "images/do_tuong.png"
       }
     );
+    const doWalletAfterSnap = await db.ref("wallets/" + safeWalletKey(doWalletKey)).once("value");
+const denWalletAfterSnap = await db.ref("wallets/" + safeWalletKey(denWalletKey)).once("value");
 
+const doWalletAfter = doWalletAfterSnap.val() || {};
+const denWalletAfter = denWalletAfterSnap.val() || {};
+
+const doPmcBalanceAfter = Math.floor(Number(doWalletAfter.pmcBalance || 0) || 0);
+const denPmcBalanceAfter = Math.floor(Number(denWalletAfter.pmcBalance || 0) || 0);
+
+await db.ref().update({
+  [`matches/${roomId}/players/do/pmcBalance`]: doPmcBalanceAfter,
+  [`matches/${roomId}/players/den/pmcBalance`]: denPmcBalanceAfter,
+  [`matches/${roomId}/players/do/balance`]: Number(doWalletAfter.balance || 0) || 0,
+  [`matches/${roomId}/players/den/balance`]: Number(denWalletAfter.balance || 0) || 0
+});
     let expResult = null;
 
     try {
@@ -565,17 +584,19 @@ module.exports = async function handler(req, res) {
     });
 
     return res.status(200).json({
-      ok: true,
-      type: "winner_settle",
-      grossPot,
-      feePmc,
-      winnerReceivePmc,
-      winnerWalletKey: safeWalletKey(winnerWalletKey),
-      adminWalletKey: "pi_admin_master",
-      winnerPmcBalance: winnerAfter?.pmcBalance ?? null,
-      adminPmcBalance: adminAfter?.pmcBalance ?? null,
-      expResult
-    });
+  ok: true,
+  type: "winner_settle",
+  grossPot,
+  feePmc,
+  winnerReceivePmc,
+  winnerWalletKey: safeWalletKey(winnerWalletKey),
+  adminWalletKey: "pi_admin_master",
+  winnerPmcBalance: winnerAfter?.pmcBalance ?? null,
+  adminPmcBalance: adminAfter?.pmcBalance ?? null,
+  doPmcBalance: doPmcBalanceAfter,
+  denPmcBalance: denPmcBalanceAfter,
+  expResult
+});
   } catch (err) {
     console.error("pmc settle error =", err);
 
