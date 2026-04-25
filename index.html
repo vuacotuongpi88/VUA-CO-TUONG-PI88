@@ -7209,7 +7209,14 @@ function getStableDeviceIdForLevel() {
 
 function getLevelXpNeedFromLevel(level) {
   const lv = Math.max(1, Math.min(LEVEL_MAX - 1, Math.floor(Number(level || 1))));
-  return Math.floor(18 * Math.pow(1.045, lv - 1) + lv * 2);
+
+  /*
+    Lv.1 -> Lv.2 cần 100 EXP.
+    Càng lên cao càng khó theo cấp số nhân.
+    Muốn khó hơn: tăng 1.075 lên 1.085 hoặc 1.09.
+    Muốn dễ hơn: giảm xuống 1.065.
+  */
+  return Math.floor(100 * Math.pow(1.075, lv - 1));
 }
 
 function getLevelFrameByLevel(level) {
@@ -7328,13 +7335,36 @@ function getLevelProgress(meta = {}) {
   const safe = buildLevelMeta(meta);
   const current = getLevelInfoByLevel(safe.level);
   const next = getNextLevelInfoByXp(safe.xp);
+
   if (next.level <= safe.level) {
-    return { safe, gotXp: 0, needXp: 0, pct: 100, maxed: true };
+    return {
+      safe,
+      gotXp: 0,
+      needXp: 0,
+      pct: 100,
+      maxed: true,
+      currentLevel: safe.level,
+      nextLevel: safe.level,
+      currentTotalXp: current.xp,
+      nextTotalXp: current.xp
+    };
   }
+
   const needXp = Math.max(1, next.xp - current.xp);
   const gotXp = Math.max(0, safe.xp - current.xp);
   const pct = Math.max(0, Math.min(100, (gotXp / needXp) * 100));
-  return { safe, gotXp, needXp, pct, maxed: false };
+
+  return {
+    safe,
+    gotXp,
+    needXp,
+    pct,
+    maxed: false,
+    currentLevel: current.level,
+    nextLevel: next.level,
+    currentTotalXp: current.xp,
+    nextTotalXp: next.xp
+  };
 }
 
 function renderPlayerExpBar(rankEl, meta = {}) {
@@ -7349,7 +7379,7 @@ function renderPlayerExpBar(rankEl, meta = {}) {
   wrap.innerHTML = `
     <div class="player-exp-text">
       <span>EXP</span>
-      <span>${p.maxed ? "MAX" : `${Math.floor(p.gotXp)}/${Math.floor(p.needXp)}`}</span>
+      <span>${p.maxed ? "MAX" : `${Math.floor(p.gotXp).toLocaleString('vi-VN')}/${Math.floor(p.needXp).toLocaleString('vi-VN')}`}</span>
     </div>
     <div class="player-exp-bar"><div class="player-exp-fill" style="width:${p.pct}%"></div></div>
   `;
@@ -7379,7 +7409,11 @@ function renderLevelHud(meta = {}) {
   const statEl = document.getElementById("level-exp-hud-stat");
   const fillEl = document.getElementById("level-exp-hud-fill");
   if (titleEl) titleEl.innerText = `${p.safe.title} • Lv.${p.safe.level}`;
-  if (statEl) statEl.innerText = p.maxed ? `MAX • T:${p.safe.wins} B:${p.safe.losses}` : `${Math.floor(p.gotXp)}/${Math.floor(p.needXp)} EXP • T:${p.safe.wins} B:${p.safe.losses}`;
+  if (statEl) {
+  statEl.innerText = p.maxed
+    ? `MAX • Tổng EXP: ${Math.floor(p.safe.xp).toLocaleString('vi-VN')} • T:${p.safe.wins} B:${p.safe.losses}`
+    : `${Math.floor(p.gotXp).toLocaleString('vi-VN')}/${Math.floor(p.needXp).toLocaleString('vi-VN')} EXP lên Lv.${p.nextLevel || (p.safe.level + 1)} • T:${p.safe.wins} B:${p.safe.losses}`;
+}
   if (fillEl) fillEl.style.width = `${p.pct}%`;
   hud.classList.add("show");
 }
@@ -7595,17 +7629,30 @@ console.log("LEVEL_EXP_DEBUG", {
 
 function getLocalLevelMissionsForBoard() {
   const meta = getCachedLevelMeta();
-  const level = Math.max(1, Number(meta.level || 1) || 1);
+  const safe = buildLevelMeta(meta);
+  const currentXp = Math.floor(Number(safe.xp || 0) || 0);
+
   return getLevelMilestoneRows().map(row => {
-    const reached = level >= row.level;
+    const targetXp = Math.floor(Number(row.xp || 0) || 0);
+    const reached = currentXp >= targetXp || safe.level >= row.level;
+    const progressPct = reached
+      ? 100
+      : Math.max(0, Math.min(99, Math.floor((currentXp / Math.max(1, targetXp)) * 100)));
+
+    const needMore = Math.max(0, targetXp - currentXp);
+
     return {
       id: `level_unlock_${row.level}`,
       title: `Mốc Lv.${row.level}`,
-      desc: `Đạt Lv.${row.level} để mở khóa skin và rương cấp trong Shop.`,
-      progressText: reached ? `Đã đạt Lv.${level}/${row.level}` : `Lv.${level}/${row.level}`,
-      progressPercent: reached ? 100 : Math.max(0, Math.min(99, Math.floor((level / row.level) * 100))),
+      desc: `Cần tổng ${targetXp.toLocaleString('vi-VN')} EXP để đạt Lv.${row.level}.`,
+      progressText: reached
+        ? `Đã đạt: ${currentXp.toLocaleString('vi-VN')}/${targetXp.toLocaleString('vi-VN')} EXP`
+        : `Còn thiếu ${needMore.toLocaleString('vi-VN')} EXP • hiện có ${currentXp.toLocaleString('vi-VN')}/${targetXp.toLocaleString('vi-VN')}`,
+      progressPercent: progressPct,
       rewardText: row.unlockReward ? (row.unlockReward + " + rương cấp") : "Skin / khung + rương cấp",
-      note: reached ? "Vào Shop > Rương cấp để mở quà nếu chưa nhận." : "Cày bằng trận thật; gặp lại một acc nhiều lần sẽ giảm EXP.",
+      note: reached
+        ? "Vào Shop > Rương cấp để mở quà nếu chưa nhận."
+        : "EXP tăng/giảm sau trận thật. Gặp lại cùng một người nhiều lần trong ngày sẽ giảm EXP.",
       ready: false,
       claimed: reached
     };
