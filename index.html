@@ -7523,10 +7523,32 @@ async function awardLevelProgressForFinishedRoom(roomId, room) {
   });
   if (!claimTx.committed) return;
 
-  const pair = await reserveLevelPairCount(walletKey, opponentKey, roomId);
-  const blockReason = getLevelMatchBlockReason(room, pair.count);
-  const absXp = blockReason ? 0 : getRepeatAdjustedXpAbs(pair.count);
-  const xpDelta = resultType === "win" ? absXp : -absXp;
+const pair = await reserveLevelPairCount(walletKey, opponentKey, roomId);
+const blockReason = getLevelMatchBlockReason(room, pair.count);
+
+let absXp = getRepeatAdjustedXpAbs(pair.count);
+
+// Không cho ván test / ván nhanh bị 0 EXP hoàn toàn.
+// same_device hoặc too_fast chỉ giảm mạnh còn 2 EXP.
+if (blockReason === "same_device" || blockReason === "too_fast") {
+    absXp = Math.min(absXp, 2);
+}
+
+// Gặp cùng acc quá nhiều hoặc PMC quá thấp thì vẫn chặn hẳn.
+if (blockReason === "same_pair_too_many" || blockReason === "low_pmc_balance") {
+    absXp = 0;
+}
+
+const xpDelta = resultType === "win" ? absXp : -absXp;
+
+console.log("LEVEL_EXP_RESULT", {
+    roomId,
+    resultType,
+    pairCount: pair.count,
+    blockReason,
+    absXp,
+    xpDelta
+});
 
   let beforeMeta = getDefaultLevelMeta();
   let afterMeta = getDefaultLevelMeta();
