@@ -8858,14 +8858,16 @@ async function loadWalletBalance() {
         const data = snap.val() || {};
 
         let piAmount = 0;
-        if (data.balance != null) {
-            piAmount = Number(data.balance) || 0;
-        } else {
-            const scopedCache = localStorage.getItem(getBalanceCacheKey());
-            const legacy = localStorage.getItem(PI_BALANCE_KEY);
-            piAmount = Number(scopedCache ?? legacy ?? 0) || 0;
-        }
 
+// Ưu tiên piBalance vì đổi PMC -> Pi thường trả về newPiBalance.
+// Nếu ví cũ chỉ có balance thì vẫn dùng balance.
+if (data.piBalance != null || data.balance != null) {
+    piAmount = Number(data.piBalance ?? data.balance ?? 0) || 0;
+} else {
+    const scopedCache = localStorage.getItem(getBalanceCacheKey());
+    const legacy = localStorage.getItem(PI_BALANCE_KEY);
+    piAmount = Number(scopedCache ?? legacy ?? 0) || 0;
+}
         let pmcAmount = 0;
         if (data.pmcBalance != null) {
             pmcAmount = Math.floor(Number(data.pmcBalance) || 0);
@@ -8880,12 +8882,13 @@ async function loadWalletBalance() {
         localStorage.setItem(getPmcCacheKey(), String(currentPmcBalance));
 
         await walletRef().update({
-            balance: currentWalletBalance,
-            pmcBalance: currentPmcBalance,
-            updatedAt: firebase.database.ServerValue.TIMESTAMP,
-            name: localStorage.getItem("user-name-display") || "Người chơi",
-            photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-        });
+    balance: currentWalletBalance,
+    piBalance: currentWalletBalance,
+    pmcBalance: currentPmcBalance,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP,
+    name: localStorage.getItem("user-name-display") || "Người chơi",
+    photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+});
 
         updateBalanceUI(currentWalletBalance);
         updatePmcUI(currentPmcBalance);
@@ -8920,12 +8923,13 @@ function setPiBalance(amount) {
     updateBalanceUI(safeAmount);
 
     walletRef().update({
-        balance: safeAmount,
-        pmcBalance: getPmcBalance(),
-        updatedAt: firebase.database.ServerValue.TIMESTAMP,
-        name: localStorage.getItem("user-name-display") || "Người chơi",
-        photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-    }).catch(err => {
+    balance: safeAmount,
+    piBalance: safeAmount,
+    pmcBalance: getPmcBalance(),
+    updatedAt: firebase.database.ServerValue.TIMESTAMP,
+    name: localStorage.getItem("user-name-display") || "Người chơi",
+    photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+}).catch(err => {
         console.error("Lỗi sync số dư Pi:", err);
     });
 }
@@ -8937,14 +8941,16 @@ function setPmcBalance(amount) {
     localStorage.setItem(getPmcCacheKey(), String(safeAmount));
     updatePmcUI(safeAmount);
 
-    walletRef().update({
-        balance: getPiBalance(),
-        pmcBalance: safeAmount,
-        updatedAt: firebase.database.ServerValue.TIMESTAMP,
-        name: localStorage.getItem("user-name-display") || "Người chơi",
-        photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-    }).catch(err => {
-        console.error("Lỗi sync số dư PMC:", err);
+    const livePi = getPiBalance();
+
+walletRef().update({
+    balance: livePi,
+    piBalance: livePi,
+    pmcBalance: safeAmount,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP,
+    name: localStorage.getItem("user-name-display") || "Người chơi",
+    photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+}).catch(err => {
     });
 }
 function walletRefByKey(walletKey) {
@@ -9877,20 +9883,38 @@ if (!walletKey) {
 }
 
 // Đọc số dư Pi thật trực tiếp từ Firebase, không lấy cache trên màn hình
+// Đọc số dư Pi thật trực tiếp từ Firebase, không lấy cache trên màn hình
 const liveSnap = await walletRefByKey(walletKey).once("value");
 const liveWallet = liveSnap.val() && typeof liveSnap.val() === "object" ? liveSnap.val() : {};
 
-const currentBalance = Number(
-    liveWallet.piBalance ??
-    liveWallet.balance ??
-    liveWallet.pi ??
-    0
-) || 0;
+// Lấy số lớn nhất giữa piBalance / balance / pi
+// để tránh 1 cột cũ kéo số dư về 13 hoặc 0
+const piBalanceValue = Number(liveWallet.piBalance);
+const balanceValue = Number(liveWallet.balance);
+const piValue = Number(liveWallet.pi);
 
-setPiBalance(currentBalance);
+const currentBalance = Math.max(
+    Number.isFinite(piBalanceValue) ? piBalanceValue : 0,
+    Number.isFinite(balanceValue) ? balanceValue : 0,
+    Number.isFinite(piValue) ? piValue : 0
+);
+
+// Chỉ cập nhật UI/cache, KHÔNG gọi setPiBalance() ở đây
+// vì setPiBalance() có thể ghi nhầm ví mặc định.
+currentWalletBalance = currentBalance;
+localStorage.setItem(getBalanceCacheKey(), String(currentWalletBalance));
+localStorage.setItem(PI_BALANCE_KEY, String(currentWalletBalance));
+updateBalanceUI(currentWalletBalance);
+
+// Đồng bộ lại đúng node ví đang rút
+await walletRefByKey(walletKey).update({
+    balance: currentBalance,
+    piBalance: currentBalance,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP
+}).catch(() => {});
 
 if (amount > currentBalance) {
-    alert(`Số dư không đủ. Ví thật ${walletKey} hiện còn ${currentBalance.toFixed(2)} Pi.`);
+    alert(`Số dư không đủ. Ví ${walletKey} hiện còn ${currentBalance.toFixed(2)} Pi.`);
     return;
 }
 
@@ -10441,15 +10465,31 @@ function pmcDebugLog() {}
 function clearPmcDebugLog() {}
 
 function getMoneyWalletKey(linkState = null) {
-    return String(
+    const clean = v => String(v || "").trim().replace(/[.#$\[\]\/]/g, "_");
+
+    const linkedWalletKey = clean(linkState?.walletKey);
+    if (linkedWalletKey) return linkedWalletKey;
+
+    const piName = clean(
+        linkState?.piUsername ||
+        localStorage.getItem("pi-verified-username") ||
+        localStorage.getItem("pi-user-name")
+    );
+
+    if (piName) {
+        return clean("pi_" + piName.toLowerCase());
+    }
+
+    const cachedWalletKey = clean(localStorage.getItem("walletKey"));
+    if (cachedWalletKey) return cachedWalletKey;
+
+    return clean(
         (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "") ||
-        linkState?.walletKey ||
-        localStorage.getItem("walletKey") ||
         localStorage.getItem("uid") ||
         localStorage.getItem("currentUserUid") ||
         firebase.auth().currentUser?.uid ||
         ""
-    ).trim();
+    );
 }
 async function confirmPmcToPiExchange() {
     const input = document.getElementById("pmc-to-pi-input");
