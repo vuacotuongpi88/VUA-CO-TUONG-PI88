@@ -9867,27 +9867,36 @@ async function processWithdraw() {
         return;
     }
 
-    const currentBalance = Number(getPiBalance() || 0);
-    if (amount > currentBalance) {
-        alert(`Số dư không đủ. Hiện còn ${currentBalance.toFixed(2)} Pi.`);
-        return;
-    }
+   const linkState = await getPiLinkState().catch(() => ({ ok: false }));
 
-    const linkState = await getPiLinkState().catch(() => ({ ok: false }));
-
-const walletKey = String(
-    linkState?.walletKey ||
-    (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "") ||
-    ""
-).trim();
-
-const piUid = String(linkState?.piUid || "").trim();
-const piUsername = String(linkState?.piUsername || "").trim();
+const walletKey = getMoneyWalletKey(linkState);
 
 if (!walletKey) {
     alert("Thiếu walletKey nội bộ.");
     return;
 }
+
+// Đọc số dư Pi thật trực tiếp từ Firebase, không lấy cache trên màn hình
+const liveSnap = await walletRefByKey(walletKey).once("value");
+const liveWallet = liveSnap.val() && typeof liveSnap.val() === "object" ? liveSnap.val() : {};
+
+const currentBalance = Number(
+    liveWallet.piBalance ??
+    liveWallet.balance ??
+    liveWallet.pi ??
+    0
+) || 0;
+
+setPiBalance(currentBalance);
+
+if (amount > currentBalance) {
+    alert(`Số dư không đủ. Ví thật ${walletKey} hiện còn ${currentBalance.toFixed(2)} Pi.`);
+    return;
+}
+
+const piUid = String(linkState?.piUid || "").trim();
+const piUsername = String(linkState?.piUsername || "").trim();
+
 
 const withdrawUrl = "/api/pi/withdraw-auto-v2?v=" + Date.now();
 
@@ -10431,6 +10440,17 @@ function previewPmcToPiExchange() {
 function pmcDebugLog() {}
 function clearPmcDebugLog() {}
 
+function getMoneyWalletKey(linkState = null) {
+    return String(
+        (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "") ||
+        linkState?.walletKey ||
+        localStorage.getItem("walletKey") ||
+        localStorage.getItem("uid") ||
+        localStorage.getItem("currentUserUid") ||
+        firebase.auth().currentUser?.uid ||
+        ""
+    ).trim();
+}
 async function confirmPmcToPiExchange() {
     const input = document.getElementById("pmc-to-pi-input");
     const pmcAmount = Math.max(0, Math.floor(Number(input?.value || 0) || 0));
@@ -10440,13 +10460,7 @@ async function confirmPmcToPiExchange() {
         return;
     }
 
-    const currentUser = firebase.auth().currentUser;
-    const walletKey =
-        currentUser?.uid ||
-        localStorage.getItem("uid") ||
-        localStorage.getItem("walletKey") ||
-        localStorage.getItem("currentUserUid") ||
-        (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "");
+    const walletKey = getMoneyWalletKey();
 
     if (!walletKey) {
         alert("Không lấy được mã ví để đổi PMC sang Pi.");
