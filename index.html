@@ -8589,11 +8589,27 @@ for (const waiting of waitingList) {
     );
 
     if (joined) {
-        closeReadyOverlay();
-        readyOverlayWaitingShown = false;
+    // Bên mới vào phòng KHÔNG được đóng bảng sẵn sàng.
+    // bindRoom(roomId) sẽ tự nghe Firebase và bật ready overlay khi đủ 2 người.
+    readyOverlayWaitingShown = false;
+
+    setTimeout(() => {
         updateReadyUI();
-        return;
-    }
+
+        const overlay = document.getElementById("ready-overlay");
+        if (
+            currentRoomId &&
+            mySide &&
+            currentRoomStatus === "waiting" &&
+            overlay &&
+            overlay.style.display !== "flex"
+        ) {
+            showReadyOverlay(currentRoomMode || mode);
+        }
+    }, 250);
+
+    return;
+}
 }
 
 const created = await createAndPublishWaitingRoom(
