@@ -228,13 +228,6 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    if (amount > Number(CONFIG.MAX_WITHDRAW_PER_TX || 0)) {
-      return res.status(400).json({
-        ok: false,
-        error: `Mỗi lần chỉ được rút tối đa ${CONFIG.MAX_WITHDRAW_PER_TX} Pi.`
-      });
-    }
-
     stage = "db-init";
     const adminApp = adminBundle.app || adminBundle;
     const db = getDatabase(adminApp);
