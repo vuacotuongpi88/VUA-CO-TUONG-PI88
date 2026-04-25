@@ -9,20 +9,25 @@ function envNumber(...values) {
 }
 
 const CONFIG = {
+  // Bỏ giới hạn số Pi rút mỗi lần
   MAX_WITHDRAW_PER_TX: envNumber(
     process.env.MAX_WITHDRAW_PER_TX,
     process.env.PI_MAX_WITHDRAW_PER_TX,
-    10000
+    999999999
   ),
+
+  // Bỏ giới hạn số lượt rút trong ngày
   MAX_WITHDRAW_PER_DAY_COUNT: envNumber(
     process.env.MAX_WITHDRAW_PER_DAY_COUNT,
     process.env.PI_MAX_WITHDRAW_PER_DAY_COUNT,
-    5
+    999999
   ),
+
+  // 0 = không đưa lệnh rút Pi cao vào duyệt thủ công
   AUTO_WITHDRAW_MAX: envNumber(
     process.env.AUTO_WITHDRAW_MAX,
     process.env.PI_AUTO_WITHDRAW_MAX,
-    10000
+    0
   ),
   BURST_WINDOW_MS: envNumber(
     process.env.WITHDRAW_BURST_WINDOW_MS,
@@ -212,19 +217,31 @@ async function inspectWithdrawQueue(db, walletKey) {
 }
 
 function buildRiskFlags({ amount, queueInfo }) {
-  const safeAmount = Number(amount || 0);
-  const recentCount = Number(queueInfo?.recentCount || 0);
-
   return {
-    overAutoMax: safeAmount > CONFIG.AUTO_WITHDRAW_MAX,
-    burstRequests: recentCount >= CONFIG.BURST_REQUEST_LIMIT,
+    // Không còn luật: rút Pi cao phải đưa vào duyệt
+    overAutoMax: false,
+
+    // Không đưa spam nhanh vào hàng duyệt nữa
+    // Chỉ để log nếu sau này cần xem, không dùng để queue admin.
+    burstRequests: Number(queueInfo?.recentCount || 0) >= Number(CONFIG.BURST_REQUEST_LIMIT || 999999),
+
+    // Hai cái này vẫn giữ để tránh 1 ví tạo nhiều lệnh rút đang chạy cùng lúc
     hasPendingAdmin: !!queueInfo?.pendingAdminRequest,
-    hasActiveRequest: !!queueInfo?.activeRequest
+    hasActiveRequest: !!queueInfo?.activeRequest,
+
+    // Chỉ để hiển thị/debug, không dùng để queue
+    oldPendingOtherWallet: String(queueInfo?.lastOtherWalletHint || "").trim()
   };
 }
 
 function shouldQueueForAdmin(riskFlags) {
-  return Object.values(riskFlags || {}).some(Boolean);
+  // Không đưa vào hàng duyệt vì số Pi cao.
+  // Không đưa vào hàng duyệt vì bấm nhanh.
+  // Chỉ chặn nếu ví đang có lệnh pending/active để tránh rút trùng.
+  return !!(
+    riskFlags?.hasPendingAdmin ||
+    riskFlags?.hasActiveRequest
+  );
 }
 
 function normalizeMemo(text) {
