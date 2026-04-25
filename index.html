@@ -5116,6 +5116,40 @@ body.in-match #arena-shop-btn{ display:none !important; }
     display: block !important;
     opacity: 1 !important;
 }
+/* ===== SHOP ICON - TONE XANH TÍM DỄ NHÌN ===== */
+#arena-shop-btn {
+    background: linear-gradient(180deg, #15e6c7, #087f8f) !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.45) !important;
+    box-shadow:
+        0 0 14px rgba(21, 230, 199, 0.42),
+        0 0 22px rgba(123, 47, 247, 0.22),
+        inset 0 0 10px rgba(255, 255, 255, 0.12) !important;
+}
+
+#arena-shop-btn .shop-icon-clean {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.35));
+}
+
+#arena-shop-btn:hover {
+    transform: scale(1.05);
+    background: linear-gradient(180deg, #28ffd9, #6d28d9) !important;
+    box-shadow:
+        0 0 18px rgba(40, 255, 217, 0.55),
+        0 0 28px rgba(109, 40, 217, 0.32) !important;
+}
+
+/* badge thông báo shop */
+#arena-shop-badge.shop-badge-dot {
+    background: #ff2d55 !important;
+    color: #ffffff !important;
+    border: 2px solid rgba(0, 0, 0, 0.75) !important;
+    box-shadow: 0 0 10px rgba(255, 45, 85, 0.55) !important;
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -13252,7 +13286,18 @@ window.applyCosmeticSkinToAvatar = function(imgEl, skinId){
     btn = document.createElement('div');
     btn.id = 'arena-shop-btn';
     btn.setAttribute('onclick','openSkinShop()');
-    btn.innerHTML = '🛒<span id="arena-shop-badge" class="shop-badge-dot">0</span>';
+    btn.innerHTML = `
+  <span class="shop-icon-clean">
+    <svg viewBox="0 0 24 24" width="25" height="25" aria-hidden="true">
+      <path d="M6 7h14l-1.4 8.2a2 2 0 0 1-2 1.7H9.1a2 2 0 0 1-2-1.6L5.2 4.8H3"
+            fill="none" stroke="currentColor" stroke-width="2.2"
+            stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="9.5" cy="20" r="1.4" fill="currentColor"/>
+      <circle cx="17" cy="20" r="1.4" fill="currentColor"/>
+    </svg>
+  </span>
+  <span id="arena-shop-badge" class="shop-badge-dot">0</span>
+`;
     document.body.appendChild(btn);
     return btn;
   }
