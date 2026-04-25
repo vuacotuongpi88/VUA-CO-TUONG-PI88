@@ -7511,6 +7511,7 @@ function getLevelMatchBlockReason(room = {}, pairCount = 1) {
   return "";
 }
 
+
 async function awardLevelProgressForFinishedRoom(roomId, room) {
   if (!roomId || !room || !room.winner || room.winner === "hoa") return;
   const walletKey = makeWalletDbKey();
@@ -8030,11 +8031,6 @@ if (room.status === "playing" && !room.winner) {
         if (room.winner) {
     setTimeout(() => {
         settlePmcViaApi(listeningRoomId);
-    }, 0);
-
-    setTimeout(() => {
-        awardLevelProgressForFinishedRoom(listeningRoomId, room)
-            .catch(err => console.error("Lỗi tăng cấp người chơi:", err));
     }, 0);
 }
         if (room.winner && !isGameOver) {
