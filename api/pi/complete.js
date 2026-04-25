@@ -1,4 +1,6 @@
 module.exports = async function handler(req, res) {
+  res.setHeader("Cache-Control", "no-store");
+
   if (req.method !== "POST") {
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
@@ -14,7 +16,7 @@ module.exports = async function handler(req, res) {
 
     const PI_API_BASE = String(
       process.env.PI_API_BASE_URL || "https://api.minepi.com"
-    ).trim();
+    ).trim().replace(/\/+$/, "");
 
     const PI_API_KEY = String(
       process.env.PI_API_KEY ||
@@ -23,11 +25,11 @@ module.exports = async function handler(req, res) {
       ""
     ).trim();
 
-    console.log("COMPLETE HIT", {
+    console.log("PI COMPLETE HIT", {
       paymentId,
       txid,
       hasKey: !!PI_API_KEY,
-      keyPrefix: PI_API_KEY.slice(0, 6)
+      keyPrefix: PI_API_KEY ? PI_API_KEY.slice(0, 6) : ""
     });
 
     if (!PI_API_KEY) {
@@ -37,10 +39,18 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    if (!paymentId || !txid) {
+    if (!paymentId) {
       return res.status(400).json({
         ok: false,
-        error: "Thiếu paymentId hoặc txid"
+        error: "Thiếu paymentId."
+      });
+    }
+
+    if (!txid) {
+      return res.status(409).json({
+        ok: false,
+        needCancel: true,
+        error: "Payment Pi đang treo nhưng chưa có txid. Cần hủy/cancel payment này, không thể complete."
       });
     }
 
@@ -50,7 +60,7 @@ module.exports = async function handler(req, res) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Key ${PI_API_KEY}`,
+          Authorization: `Key ${PI_API_KEY}`,
           "Pi-Api-Key": PI_API_KEY
         },
         body: JSON.stringify({ txid })
@@ -58,6 +68,7 @@ module.exports = async function handler(req, res) {
     );
 
     const raw = await piRes.text();
+
     let data = {};
     try {
       data = raw ? JSON.parse(raw) : {};
@@ -72,22 +83,40 @@ module.exports = async function handler(req, res) {
       ""
     ).trim();
 
-    console.log("COMPLETE STATUS:", piRes.status);
-    console.log("COMPLETE DATA:", data);
+    console.log("PI COMPLETE STATUS:", piRes.status);
+    console.log("PI COMPLETE DATA:", data);
 
-    const treatAsOk =
-      piRes.ok || verifyErr === "payment_already_linked_with_a_tx";
+    const alreadyLinked = verifyErr === "payment_already_linked_with_a_tx";
 
-    return res.status(treatAsOk ? 200 : piRes.status).json({
-      ok: treatAsOk,
+    // Quan trọng:
+    // alreadyLinked cũng cho frontend đi tiếp, nhưng KHÔNG trả note nữa.
+    // Vì index_gop_shop_missions.html đang coi data.note là lỗi.
+    if (piRes.ok || alreadyLinked) {
+      return res.status(200).json({
+        ok: true,
+        completed: piRes.ok,
+        alreadyLinked,
+        status: piRes.status,
+        paymentId,
+        txid,
+        data
+      });
+    }
+
+    return res.status(piRes.status || 500).json({
+      ok: false,
       status: piRes.status,
-      data,
-      note: !piRes.ok && verifyErr === "payment_already_linked_with_a_tx"
-        ? "Pi báo payment đã linked với tx cũ, tạm coi là đã complete."
-        : ""
+      paymentId,
+      txid,
+      error:
+        verifyErr ||
+        data?.error ||
+        data?.message ||
+        "Pi complete thất bại.",
+      data
     });
   } catch (err) {
-    console.error("COMPLETE ERROR:", err);
+    console.error("PI COMPLETE ERROR:", err);
     return res.status(500).json({
       ok: false,
       error: err?.message || "complete error"
