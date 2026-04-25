@@ -11718,8 +11718,8 @@ async function refreshMissionLobbyBadgeSilently() {
     const safe = buildLevelMeta(meta || {});
     const claims = await loadLevelChestClaims(walletKey);
     const rewardLevels = PLAYER_LEVEL_TABLE.filter(row => Number(row.rewardPmc || 0) > 0);
-    const near = rewardLevels.filter(row => row.level >= Math.max(10, safe.level - 10)).slice(0, 10);
-    const showRows = near.length ? near : rewardLevels.slice(0, 10);
+    // Hiện đủ từng mốc Lv.10 -> Lv.160, không cắt còn 10 mốc gần nhất nữa.
+    const showRows = rewardLevels;
 
     const cards = showRows.map(row => {
       const reached = safe.level >= row.level;
