@@ -5074,6 +5074,48 @@ body.in-match #arena-shop-btn{ display:none !important; }
         transform: translateX(-50%) translateY(24px) scale(0.94);
     }
 }
+/* ===== TẮT VIỀN HIỆU ỨNG KHUNG AVATAR - GIỮ ICON SKIN PHÁT SÁNG ===== */
+
+/* Tắt cái viền khung chạy sáng */
+.avatar-frame-skin_bamboo_gold::after,
+.avatar-frame-skin_dragon_purple::after,
+.avatar-frame-skin_phoenix_red::after,
+.avatar-frame-skin_diamond_blue::after,
+.avatar-frame-skin_king_rainbow::after,
+.avatar-frame-skin_god_neon::after {
+    display: none !important;
+    opacity: 0 !important;
+    animation: none !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: transparent !important;
+}
+
+/* Không cho khung avatar tự vẽ viền nữa */
+.avatar-skin-frame-target {
+    border-color: transparent !important;
+}
+
+/* Nếu ảnh avatar còn bị viền màu thì bỏ viền ảnh, nhưng giữ ánh sáng */
+.cosmetic-avatar-skin-bamboo_gold,
+.cosmetic-avatar-skin-dragon_purple,
+.cosmetic-avatar-skin-phoenix_red,
+.cosmetic-avatar-skin-diamond_blue,
+.cosmetic-avatar-skin-king_rainbow,
+.cosmetic-avatar-skin-god_neon {
+    border-color: transparent !important;
+}
+
+/* Giữ icon skin phía trên vẫn hiện và vẫn sáng */
+.avatar-frame-skin_bamboo_gold::before,
+.avatar-frame-skin_dragon_purple::before,
+.avatar-frame-skin_phoenix_red::before,
+.avatar-frame-skin_diamond_blue::before,
+.avatar-frame-skin_king_rainbow::before,
+.avatar-frame-skin_god_neon::before {
+    display: block !important;
+    opacity: 1 !important;
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
