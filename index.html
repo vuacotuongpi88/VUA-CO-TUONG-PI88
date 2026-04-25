@@ -4953,6 +4953,47 @@ body.in-match #arena-shop-btn{ display:none !important; }
   from{ opacity:.76; transform: scale(1); filter: brightness(1); }
   to{ opacity:1; transform: scale(1.045); filter: brightness(1.42); }
 }
+/* ===== NÚT CHỈNH ĐỘ SÁNG VIỀN SKIN AVATAR =====
+   Chỉnh 4 số dưới này thôi:
+
+   --skin-frame-opacity: độ hiện viền, càng thấp càng mờ
+   --skin-frame-brightness: độ sáng nền viền
+   --skin-frame-brightness-to: độ sáng lúc chớp
+   --skin-frame-scale-to: độ phồng viền lúc chớp
+*/
+
+.avatar-skin-frame-target{
+  --skin-frame-opacity: 0.62;
+  --skin-frame-brightness: 0.82;
+  --skin-frame-brightness-to: 1.02;
+  --skin-frame-scale-to: 1.018;
+  --skin-frame-speed: 1.15s;
+}
+
+/* giảm sáng tổng thể viền khung, không đụng icon */
+.avatar-frame-skin_bamboo_gold::after,
+.avatar-frame-skin_dragon_purple::after,
+.avatar-frame-skin_phoenix_red::after,
+.avatar-frame-skin_diamond_blue::after,
+.avatar-frame-skin_king_rainbow::after,
+.avatar-frame-skin_god_neon::after{
+  opacity: var(--skin-frame-opacity) !important;
+  animation: mcSkinFrameSoftGlow var(--skin-frame-speed) ease-in-out infinite alternate !important;
+}
+
+/* animation mềm hơn, không chói quá */
+@keyframes mcSkinFrameSoftGlow{
+  from{
+    opacity: calc(var(--skin-frame-opacity) - 0.08);
+    transform: scale(1);
+    filter: brightness(var(--skin-frame-brightness));
+  }
+  to{
+    opacity: var(--skin-frame-opacity);
+    transform: scale(var(--skin-frame-scale-to));
+    filter: brightness(var(--skin-frame-brightness-to));
+  }
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
