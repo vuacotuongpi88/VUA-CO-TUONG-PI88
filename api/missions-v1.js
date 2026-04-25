@@ -1,5 +1,6 @@
 const { getDatabase } = require('firebase-admin/database');
 const adminBundle = require('./_firebaseAdmin.js');
+const crypto = require('crypto');
 
 const ADMIN_TREASURY_WALLET_KEY = String(
   process.env.ADMIN_TREASURY_WALLET_KEY || 'pi_admin_master'
@@ -72,12 +73,14 @@ function countChildren(obj) {
 function formatRewardText(amountPmc) {
   return `${Math.max(0, Math.floor(Number(amountPmc) || 0)).toLocaleString('vi-VN')} PMC`;
 }
+
 function readPmcBalance(obj) {
   return Math.max(
     0,
     Math.floor(Number(obj?.pmcBalance ?? obj?.pmc ?? 0) || 0)
   );
 }
+
 function missionDefinitions() {
   return [
     {
@@ -504,30 +507,30 @@ async function claimMission(db, walletKey, missionId, now = Date.now()) {
   }
 
   const treasuryRef = db.ref(`wallets/${safeKey(ADMIN_TREASURY_WALLET_KEY)}`);
-const userRef = db.ref(`wallets/${walletKey}`);
+  const userRef = db.ref(`wallets/${walletKey}`);
 
-const [treasuryPreSnap, userPreSnap] = await Promise.all([
-  treasuryRef.once('value'),
-  userRef.once('value')
-]);
+  const [treasuryPreSnap, userPreSnap] = await Promise.all([
+    treasuryRef.once('value'),
+    userRef.once('value')
+  ]);
 
-const treasuryPreRead =
-  treasuryPreSnap.val() && typeof treasuryPreSnap.val() === 'object'
-    ? treasuryPreSnap.val()
-    : {};
+  const treasuryPreRead =
+    treasuryPreSnap.val() && typeof treasuryPreSnap.val() === 'object'
+      ? treasuryPreSnap.val()
+      : {};
 
-const userPreRead =
-  userPreSnap.val() && typeof userPreSnap.val() === 'object'
-    ? userPreSnap.val()
-    : {};
+  const userPreRead =
+    userPreSnap.val() && typeof userPreSnap.val() === 'object'
+      ? userPreSnap.val()
+      : {};
 
-try {
-  const treasuryTx = await txAdjustPmc(
-    treasuryRef,
-    -mission.rewardPmc,
-    { name: 'Ví phí hệ thống' },
-    treasuryPreRead
-  );
+  try {
+    const treasuryTx = await txAdjustPmc(
+      treasuryRef,
+      -mission.rewardPmc,
+      { name: 'Ví phí hệ thống' },
+      treasuryPreRead
+    );
 
     if (!treasuryTx.committed) {
       await claimRef.remove().catch(() => {});
@@ -537,11 +540,11 @@ try {
     const userTx = await txAdjustPmc(userRef, mission.rewardPmc, {}, userPreRead);
     if (!userTx.committed) {
       await txAdjustPmc(
-  treasuryRef,
-  mission.rewardPmc,
-  { name: 'Ví phí hệ thống' },
-  treasuryPreRead
-).catch(() => {});
+        treasuryRef,
+        mission.rewardPmc,
+        { name: 'Ví phí hệ thống' },
+        treasuryPreRead
+      ).catch(() => {});
       await claimRef.remove().catch(() => {});
       throw new Error('Không cộng được thưởng vào ví người chơi.');
     }
@@ -585,6 +588,342 @@ try {
   }
 }
 
+// ===== SHOP SKIN + TÚI ĐỒ + RƯƠNG CẤP GỘP VÀO MISSIONS-V1 =====
+// Không tạo thêm route /api/cosmetics-v1 để né giới hạn Vercel Hobby.
+const SHOP_LEVEL_MAX = 160;
+const CHEST_TREASURY_MAX_RATIO = Number(process.env.CHEST_TREASURY_MAX_RATIO || 0.05);
+
+function getShopLevelXpNeedFromLevel(level) {
+  const lv = Math.max(1, Math.min(SHOP_LEVEL_MAX - 1, Math.floor(Number(level || 1))));
+  return Math.floor(16 * Math.pow(1.035, lv - 1) + lv);
+}
+
+function buildShopLevelTable() {
+  const rows = [];
+  let xp = 0;
+  for (let lv = 1; lv <= SHOP_LEVEL_MAX; lv += 1) {
+    rows.push({ level: lv, xp });
+    if (lv < SHOP_LEVEL_MAX) xp += getShopLevelXpNeedFromLevel(lv);
+  }
+  return rows;
+}
+
+const SHOP_LEVEL_TABLE = buildShopLevelTable();
+
+function shopLevelByXp(xpValue) {
+  const xp = Math.max(0, Number(xpValue || 0) || 0);
+  let current = SHOP_LEVEL_TABLE[0];
+  for (const row of SHOP_LEVEL_TABLE) {
+    if (xp >= row.xp) current = row;
+    else break;
+  }
+  return current.level;
+}
+
+function shopSkinCatalog() {
+  return [
+    { id:'skin_bamboo_gold', type:'avatar_skin', name:'Viền Trúc Kim', icon:'🎋', pricePmc:25000, unlockLevel:10, desc:'Viền vàng xanh cho avatar, mốc đầu cho người chăm cày.' },
+    { id:'skin_dragon_purple', type:'avatar_skin', name:'Long Ảnh Tím', icon:'🐉', pricePmc:80000, unlockLevel:30, desc:'Hiệu ứng tím cao thủ, mua được nhưng cày Lv.30 cũng mở.' },
+    { id:'skin_phoenix_red', type:'avatar_skin', name:'Phượng Hỏa Đỏ', icon:'🔥', pricePmc:150000, unlockLevel:50, desc:'Viền đỏ rực cho người thích nổi bật.' },
+    { id:'skin_diamond_blue', type:'avatar_skin', name:'Kim Cương Lam', icon:'💎', pricePmc:300000, unlockLevel:80, desc:'Khung xanh kim cương, dành cho tài khoản mạnh.' },
+    { id:'skin_king_rainbow', type:'avatar_skin', name:'Vương Giả Ngũ Sắc', icon:'👑', pricePmc:800000, unlockLevel:120, desc:'Skin nhà giàu hoặc người cày lâu năm.' },
+    { id:'skin_god_neon', type:'avatar_skin', name:'Thần Quang Neon', icon:'⚡', pricePmc:1500000, unlockLevel:160, desc:'Mốc tối thượng Lv.160, mua rất đắt để đốt PMC.' }
+  ];
+}
+
+function shopLevelChestMilestones() {
+  const arr = [];
+  for (let lv = 10; lv <= SHOP_LEVEL_MAX; lv += 10) arr.push(lv);
+  return arr;
+}
+
+function shopRandomInt(min, max) {
+  return crypto.randomInt(min, max + 1);
+}
+
+function shopRollChestRewardPmc(treasuryPmc) {
+  // Rương vui, jackpot 30k cực hiếm, và bị cap theo ví phí hệ thống để không cháy quỹ.
+  const roll = shopRandomInt(1, 10000);
+  let raw = 100;
+
+  if (roll <= 7000) raw = shopRandomInt(100, 300);          // 70%
+  else if (roll <= 9000) raw = shopRandomInt(301, 1000);    // 20%
+  else if (roll <= 9800) raw = shopRandomInt(1001, 5000);   // 8%
+  else if (roll <= 9980) raw = shopRandomInt(5001, 15000);  // 1.8%
+  else raw = shopRandomInt(15001, 30000);                   // 0.2%
+
+  const safeTreasury = Math.max(0, Math.floor(Number(treasuryPmc || 0) || 0));
+  const treasuryCap = Math.max(100, Math.floor(safeTreasury * CHEST_TREASURY_MAX_RATIO));
+  return Math.max(100, Math.min(raw, treasuryCap, safeTreasury));
+}
+
+async function getShopUserLevelAndWallet(db, walletKey) {
+  const snap = await db.ref(`wallets/${walletKey}`).once('value');
+  const wallet = snap.val() && typeof snap.val() === 'object' ? snap.val() : {};
+  const meta = wallet.levelMeta && typeof wallet.levelMeta === 'object' ? wallet.levelMeta : {};
+  const xp = Math.max(0, Number(meta.xp || 0) || 0);
+
+  return {
+    wallet,
+    pmcBalance: readPmcBalance(wallet),
+    level: shopLevelByXp(xp),
+    xp
+  };
+}
+
+async function buildShopBoard(db, walletKey) {
+  const [{ wallet, pmcBalance, level }, invSnap, chestSnap] = await Promise.all([
+    getShopUserLevelAndWallet(db, walletKey),
+    db.ref(`cosmeticsInventoryV1/${walletKey}`).once('value'),
+    db.ref(`cosmeticLevelChestClaimsV1/${walletKey}`).once('value')
+  ]);
+
+  const inventory = invSnap.val() && typeof invSnap.val() === 'object' ? invSnap.val() : {};
+  const chestClaims = chestSnap.val() && typeof chestSnap.val() === 'object' ? chestSnap.val() : {};
+  const equippedAvatarSkin = String(wallet.equippedAvatarSkin || wallet.equippedSkin || 'skin_default');
+
+  const catalog = shopSkinCatalog().map(item => {
+    const owned = !!inventory[item.id];
+    const levelUnlocked = level >= Number(item.unlockLevel || 9999);
+    return {
+      ...item,
+      owned,
+      levelUnlocked,
+      usable: owned || levelUnlocked,
+      equipped: equippedAvatarSkin === item.id
+    };
+  });
+
+  const levelChests = shopLevelChestMilestones().map(lv => {
+    const claim = chestClaims[`lv_${lv}`] || null;
+    const claimed = !!(claim && claim.status === 'done');
+    const canClaim = level >= lv && !claimed;
+    return {
+      level: lv,
+      claimed,
+      canClaim,
+      rewardPmc: claim?.rewardPmc || 0,
+      claimedAt: claim?.claimedAt || null,
+      progressText: `Lv.${level}/${lv}`
+    };
+  });
+
+  return {
+    ok: true,
+    walletKey,
+    level,
+    pmcBalance,
+    equippedAvatarSkin,
+    catalog,
+    inventory,
+    levelChests,
+    generatedAt: nowMs()
+  };
+}
+
+async function shopBuyItem(db, walletKey, itemId) {
+  const item = shopSkinCatalog().find(x => x.id === itemId);
+  if (!item) throw new Error('Skin không tồn tại.');
+
+  const invRef = db.ref(`cosmeticsInventoryV1/${walletKey}/${item.id}`);
+  const lock = await new Promise((resolve, reject) => {
+    invRef.transaction(
+      current => {
+        if (current && current.owned) return;
+        return { owned: false, processing: true, lockedAt: nowMs() };
+      },
+      (err, committed) => err ? reject(err) : resolve({ committed }),
+      false
+    );
+  });
+
+  if (!lock.committed) {
+    return { ok: true, itemId: item.id, itemName: item.name, alreadyOwned: true };
+  }
+
+  const userRef = db.ref(`wallets/${walletKey}`);
+  const treasuryRef = db.ref(`wallets/${safeKey(ADMIN_TREASURY_WALLET_KEY)}`);
+  const [userPre, treasuryPre] = await Promise.all([
+    userRef.once('value'),
+    treasuryRef.once('value')
+  ]);
+
+  try {
+    const debit = await txAdjustPmc(userRef, -item.pricePmc, {}, userPre.val());
+    if (!debit.committed) {
+      await invRef.remove().catch(() => {});
+      throw new Error(`Không đủ PMC để mua ${item.name}.`);
+    }
+
+    const credit = await txAdjustPmc(
+      treasuryRef,
+      item.pricePmc,
+      { name: 'Ví phí hệ thống' },
+      treasuryPre.val()
+    );
+
+    if (!credit.committed) {
+      await txAdjustPmc(userRef, item.pricePmc, {}, userPre.val()).catch(() => {});
+      await invRef.remove().catch(() => {});
+      throw new Error('Không cộng được phí shop vào ví hệ thống, đã hoàn tiền.');
+    }
+
+    await invRef.set({
+      owned: true,
+      itemId: item.id,
+      itemName: item.name,
+      pricePmc: item.pricePmc,
+      boughtAt: nowMs()
+    });
+
+    await db.ref('walletTransactions').push().set({
+      type: 'cosmetic_shop_buy',
+      walletKey,
+      itemId: item.id,
+      itemName: item.name,
+      amountPMC: -item.pricePmc,
+      treasuryWalletKey: safeKey(ADMIN_TREASURY_WALLET_KEY),
+      createdAt: nowMs(),
+      status: 'done'
+    });
+
+    await db.ref('cosmeticShopLogsV1').push().set({
+      walletKey,
+      itemId: item.id,
+      itemName: item.name,
+      pricePmc: item.pricePmc,
+      createdAt: nowMs(),
+      status: 'done'
+    });
+
+    return { ok: true, itemId: item.id, itemName: item.name, newPmcBalance: debit.afterBalance };
+  } catch (err) {
+    await invRef.remove().catch(() => {});
+    throw err;
+  }
+}
+
+async function shopEquipItem(db, walletKey, itemId) {
+  const item = shopSkinCatalog().find(x => x.id === itemId);
+  if (!item) throw new Error('Skin không tồn tại.');
+
+  const [{ level }, invSnap] = await Promise.all([
+    getShopUserLevelAndWallet(db, walletKey),
+    db.ref(`cosmeticsInventoryV1/${walletKey}/${item.id}`).once('value')
+  ]);
+
+  const owned = !!(invSnap.val() && invSnap.val().owned);
+  const levelUnlocked = level >= item.unlockLevel;
+
+  if (!owned && !levelUnlocked) {
+    throw new Error(`Chưa sở hữu skin này. Mua bằng PMC hoặc đạt Lv.${item.unlockLevel}.`);
+  }
+
+  await Promise.all([
+    db.ref(`wallets/${walletKey}`).update({ equippedAvatarSkin: item.id, updatedAt: nowMs() }),
+    db.ref(`cosmeticsEquippedV1/${walletKey}`).set({
+      avatarSkin: item.id,
+      itemName: item.name,
+      equippedAt: nowMs()
+    })
+  ]);
+
+  return { ok: true, equippedAvatarSkin: item.id, itemName: item.name };
+}
+
+async function shopOpenLevelChest(db, walletKey, level) {
+  const lv = Math.max(0, Math.floor(Number(level || 0) || 0));
+  if (!shopLevelChestMilestones().includes(lv)) throw new Error('Mốc rương không hợp lệ.');
+
+  const { level: userLevel } = await getShopUserLevelAndWallet(db, walletKey);
+  if (userLevel < lv) throw new Error(`Chưa đạt Lv.${lv}.`);
+
+  const claimRef = db.ref(`cosmeticLevelChestClaimsV1/${walletKey}/lv_${lv}`);
+  const lock = await new Promise((resolve, reject) => {
+    claimRef.transaction(
+      current => {
+        if (current && current.status === 'done') return;
+        if (current && current.status === 'processing') return;
+        return { status: 'processing', walletKey, level: lv, lockedAt: nowMs() };
+      },
+      (err, committed) => err ? reject(err) : resolve({ committed }),
+      false
+    );
+  });
+
+  if (!lock.committed) throw new Error('Rương này đã mở hoặc đang xử lý.');
+
+  const treasuryRef = db.ref(`wallets/${safeKey(ADMIN_TREASURY_WALLET_KEY)}`);
+  const userRef = db.ref(`wallets/${walletKey}`);
+  const [treasuryPre, userPre] = await Promise.all([
+    treasuryRef.once('value'),
+    userRef.once('value')
+  ]);
+
+  const treasuryPmc = readPmcBalance(treasuryPre.val() || {});
+  if (treasuryPmc < 100) {
+    await claimRef.remove().catch(() => {});
+    throw new Error('Ví phí hệ thống chưa đủ quỹ mở rương.');
+  }
+
+  const rewardPmc = shopRollChestRewardPmc(treasuryPmc);
+
+  try {
+    const treasuryTx = await txAdjustPmc(
+      treasuryRef,
+      -rewardPmc,
+      { name: 'Ví phí hệ thống' },
+      treasuryPre.val()
+    );
+
+    if (!treasuryTx.committed) {
+      await claimRef.remove().catch(() => {});
+      throw new Error('Ví phí hệ thống không đủ quỹ trả rương.');
+    }
+
+    const userTx = await txAdjustPmc(userRef, rewardPmc, {}, userPre.val());
+
+    if (!userTx.committed) {
+      await txAdjustPmc(
+        treasuryRef,
+        rewardPmc,
+        { name: 'Ví phí hệ thống' },
+        treasuryPre.val()
+      ).catch(() => {});
+      await claimRef.remove().catch(() => {});
+      throw new Error('Không cộng được quà rương vào ví người chơi.');
+    }
+
+    const payload = {
+      status: 'done',
+      walletKey,
+      level: lv,
+      rewardPmc,
+      claimedAt: nowMs(),
+      treasuryWalletKey: safeKey(ADMIN_TREASURY_WALLET_KEY)
+    };
+
+    await Promise.all([
+      claimRef.set(payload),
+      db.ref('walletTransactions').push().set({
+        type: 'level_chest_reward_pmc',
+        walletKey,
+        amountPMC: rewardPmc,
+        level: lv,
+        sourceWalletKey: safeKey(ADMIN_TREASURY_WALLET_KEY),
+        createdAt: nowMs(),
+        status: 'done'
+      }),
+      db.ref('levelChestRewardLogsV1').push().set(payload)
+    ]);
+
+    return { ok: true, level: lv, rewardPmc, newPmcBalance: userTx.afterBalance };
+  } catch (err) {
+    await claimRef.remove().catch(() => {});
+    throw err;
+  }
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ ok: false, error: 'Method not allowed' });
@@ -602,6 +941,28 @@ module.exports = async function handler(req, res) {
 
     const adminApp = adminBundle.app || adminBundle;
     const db = getDatabase(adminApp);
+
+    if (action === 'shop_board') {
+      const shopBoard = await buildShopBoard(db, walletKey);
+      return res.status(200).json(shopBoard);
+    }
+
+    if (action === 'shop_buy') {
+      const itemId = String(body.itemId || '').trim();
+      const bought = await shopBuyItem(db, walletKey, itemId);
+      return res.status(200).json(bought);
+    }
+
+    if (action === 'shop_equip') {
+      const itemId = String(body.itemId || '').trim();
+      const equipped = await shopEquipItem(db, walletKey, itemId);
+      return res.status(200).json(equipped);
+    }
+
+    if (action === 'shop_open_chest') {
+      const opened = await shopOpenLevelChest(db, walletKey, body.level);
+      return res.status(200).json(opened);
+    }
 
     if (action === 'claim') {
       const missionId = String(body.missionId || '').trim();
