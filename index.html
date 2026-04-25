@@ -5790,6 +5790,7 @@ let roomValueRef = null;
 let roomChatRef = null;
 let lastRoomBoardHash = "";
 let lastDrawRequestAt = 0;
+let myLevelMetaLiveRef = null;
 const ACTIVE_MATCH_KEY = "co_tuong_active_match_v1";
 
 function readActiveMatchSnapshot() {
@@ -7574,6 +7575,31 @@ function pickNewestLevelMeta(a = {}, b = {}) {
     // fallback: cái nào EXP cao hơn thì lấy
     return Number(bb.xp || 0) >= Number(aa.xp || 0) ? bb : aa;
 }
+function startMyLevelMetaLiveSync() {
+    const walletKey = makeWalletDbKey();
+    if (!walletKey || !db) return;
+
+    if (myLevelMetaLiveRef) {
+        myLevelMetaLiveRef.off();
+        myLevelMetaLiveRef = null;
+    }
+
+    myLevelMetaLiveRef = getWalletLevelRef(walletKey);
+
+    myLevelMetaLiveRef.on("value", snap => {
+        const meta = buildLevelMeta(snap.val() || {});
+        setCachedLevelMeta(meta);
+
+        // Nếu đang trong phòng thì đẩy level mới vô room luôn để avatar chip cập nhật ngay
+        if (currentRoomId && mySide) {
+            db.ref("matches/" + currentRoomId + "/players/" + mySide + "/levelMeta")
+                .set(meta)
+                .catch(() => {});
+        }
+    }, err => {
+        console.warn("Không nghe được levelMeta live:", err);
+    });
+}
 function getLevelTodayKey(now = new Date()) {
   const d = now instanceof Date ? now : new Date(now);
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
@@ -7812,9 +7838,15 @@ const myLevelMeta = buildLevelMeta(
         : roomMyLevelMeta
 );
 
-// Nếu room có level mới hơn cache thì lưu lại luôn
+// Chỉ lưu room levelMeta vào cache nếu room thật sự mới hơn cache.
+// Không cho room cũ 0/100 đè cache ví mới.
 if (myPlayer?.uid === (firebase.auth().currentUser?.uid || "")) {
-    setCachedLevelMeta(myLevelMeta);
+    const roomAt = Number(roomMyLevelMeta.updatedAt || 0) || 0;
+    const cacheAt = Number(cacheMyLevelMeta.updatedAt || 0) || 0;
+
+    if (roomAt && roomAt >= cacheAt) {
+        setCachedLevelMeta(myLevelMeta);
+    }
 }
 if (topPi) topPi.innerText = `${oppPi.toFixed(2)} π`;
 if (topPmcBox) topPmcBox.innerText = `${formatPMC(oppPmc)} PMC`;
@@ -8337,14 +8369,25 @@ async function createAndPublishWaitingRoom(me, mode, stakePMC, bucket) {
     return true;
 }
 async function joinOrCreateRealtimeMatch(mode, stakePMC = 0) {
-    if (await tryResumeRealtimeMatch(mode)) return;
+    await ensureMyLevelMetaLoaded();
+    startMyLevelMetaLiveSync();
 
-await ensureMyLevelMetaLoaded();
+    if (await tryResumeRealtimeMatch(mode)) {
+        await ensureMyLevelMetaLoaded();
+        startMyLevelMetaLiveSync();
 
-const safeStake = Math.max(0, Math.floor(Number(stakePMC) || 0));
-await ensureMyLevelMetaLoaded();
-const me = getCurrentPlayerProfile();
-me.levelMeta = getCachedLevelMeta();
+        if (currentRoomId && mySide) {
+            await db.ref("matches/" + currentRoomId + "/players/" + mySide + "/levelMeta")
+                .set(getCachedLevelMeta())
+                .catch(() => {});
+        }
+
+        return;
+    }
+
+    const safeStake = Math.max(0, Math.floor(Number(stakePMC) || 0));
+    const me = getCurrentPlayerProfile();
+    me.levelMeta = getCachedLevelMeta();
 
     if (safeStake <= 0) {
         alert("Mức PMC không hợp lệ.");
