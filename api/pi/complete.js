@@ -88,20 +88,31 @@ module.exports = async function handler(req, res) {
 
     const alreadyLinked = verifyErr === "payment_already_linked_with_a_tx";
 
-    // Quan trọng:
-    // alreadyLinked cũng cho frontend đi tiếp, nhưng KHÔNG trả note nữa.
-    // Vì index_gop_shop_missions.html đang coi data.note là lỗi.
-    if (piRes.ok || alreadyLinked) {
-      return res.status(200).json({
-        ok: true,
-        completed: piRes.ok,
-        alreadyLinked,
-        status: piRes.status,
-        paymentId,
-        txid,
-        data
-      });
-    }
+if (piRes.ok) {
+  return res.status(200).json({
+    ok: true,
+    completed: true,
+    alreadyLinked: false,
+    status: piRes.status,
+    paymentId,
+    txid,
+    data
+  });
+}
+
+if (alreadyLinked) {
+  return res.status(409).json({
+    ok: false,
+    needCancel: true,
+    alreadyLinked: true,
+    status: piRes.status,
+    paymentId,
+    txid,
+    error:
+      "Pi báo payment đã linked với tx cũ nhưng Pi Browser vẫn còn pending. Cần cancel payment treo này.",
+    data
+  });
+}
 
     return res.status(piRes.status || 500).json({
       ok: false,
