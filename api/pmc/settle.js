@@ -9,7 +9,12 @@ function safeWalletKey(walletKey) {
 
 function getLevelXpNeedFromLevel(level) {
   const lv = Math.max(1, Math.min(LEVEL_MAX - 1, Math.floor(Number(level || 1))));
-  return Math.floor(18 * Math.pow(1.045, lv - 1) + lv * 2);
+
+  /*
+    Lv.1 -> Lv.2 cần 100 EXP.
+    Càng lên cao càng khó theo cấp số nhân.
+  */
+  return Math.floor(100 * Math.pow(1.075, lv - 1));
 }
 
 function getLevelFrameByLevel(level) {
