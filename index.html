@@ -7555,7 +7555,25 @@ function getCachedLevelMeta() {
   if (!raw) return getDefaultLevelMeta();
   try { return buildLevelMeta(JSON.parse(raw)); } catch (_) { return getDefaultLevelMeta(); }
 }
+function setCachedLevelMeta(meta = {}) {
+    const safe = buildLevelMeta(meta || {});
+    localStorage.setItem("level-meta-cache", JSON.stringify(safe));
+    renderLevelHud(safe);
+    return safe;
+}
 
+function pickNewestLevelMeta(a = {}, b = {}) {
+    const aa = buildLevelMeta(a || {});
+    const bb = buildLevelMeta(b || {});
+
+    const atA = Number(aa.updatedAt || 0) || 0;
+    const atB = Number(bb.updatedAt || 0) || 0;
+
+    if (atA || atB) return atB >= atA ? bb : aa;
+
+    // fallback: cái nào EXP cao hơn thì lấy
+    return Number(bb.xp || 0) >= Number(aa.xp || 0) ? bb : aa;
+}
 function getLevelTodayKey(now = new Date()) {
   const d = now instanceof Date ? now : new Date(now);
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
@@ -7783,12 +7801,21 @@ const myPi = Number(
     myPlayer.balance != null ? myPlayer.balance : (myPlayer.piBalance || 0)
 ) || 0;
 
-    const oppLevelMeta = buildLevelMeta(oppPlayer?.levelMeta || {});
+ const oppLevelMeta = buildLevelMeta(oppPlayer?.levelMeta || {});
+
+const roomMyLevelMeta = buildLevelMeta(myPlayer?.levelMeta || {});
+const cacheMyLevelMeta = getCachedLevelMeta();
+
 const myLevelMeta = buildLevelMeta(
     myPlayer?.uid === (firebase.auth().currentUser?.uid || "")
-        ? getCachedLevelMeta()
-        : (myPlayer?.levelMeta || {})
+        ? pickNewestLevelMeta(cacheMyLevelMeta, roomMyLevelMeta)
+        : roomMyLevelMeta
 );
+
+// Nếu room có level mới hơn cache thì lưu lại luôn
+if (myPlayer?.uid === (firebase.auth().currentUser?.uid || "")) {
+    setCachedLevelMeta(myLevelMeta);
+}
 if (topPi) topPi.innerText = `${oppPi.toFixed(2)} π`;
 if (topPmcBox) topPmcBox.innerText = `${formatPMC(oppPmc)} PMC`;
 
@@ -8312,8 +8339,12 @@ async function createAndPublishWaitingRoom(me, mode, stakePMC, bucket) {
 async function joinOrCreateRealtimeMatch(mode, stakePMC = 0) {
     if (await tryResumeRealtimeMatch(mode)) return;
 
-    const safeStake = Math.max(0, Math.floor(Number(stakePMC) || 0));
-    const me = getCurrentPlayerProfile();
+await ensureMyLevelMetaLoaded();
+
+const safeStake = Math.max(0, Math.floor(Number(stakePMC) || 0));
+await ensureMyLevelMetaLoaded();
+const me = getCurrentPlayerProfile();
+me.levelMeta = getCachedLevelMeta();
 
     if (safeStake <= 0) {
         alert("Mức PMC không hợp lệ.");
@@ -8721,7 +8752,38 @@ try {
         }
 
         console.log("Settle PMC qua API OK:", data);
-        await loadWalletBalance().catch(() => {});
+
+// Cập nhật cache EXP sau khi server settle xong.
+// Nếu không có đoạn này, ra sảnh/tạo phòng mới sẽ bị quay về cache cũ 0/100.
+try {
+    const myWalletKey = makeWalletDbKey();
+    let myExp = null;
+
+    if (data?.expResult?.do?.walletKey === myWalletKey) {
+        myExp = data.expResult.do.levelMeta;
+    }
+
+    if (data?.expResult?.den?.walletKey === myWalletKey) {
+        myExp = data.expResult.den.levelMeta;
+    }
+
+    if (!myExp && mySide === "do") myExp = data?.expResult?.do?.levelMeta;
+    if (!myExp && mySide === "den") myExp = data?.expResult?.den?.levelMeta;
+
+    if (myExp) {
+        setCachedLevelMeta(myExp);
+
+        if (currentRoomId && mySide) {
+            await db.ref("matches/" + currentRoomId + "/players/" + mySide + "/levelMeta")
+                .set(buildLevelMeta(myExp))
+                .catch(() => {});
+        }
+    }
+} catch (e) {
+    console.warn("Không sync cache EXP sau settle:", e);
+}
+
+await loadWalletBalance().catch(() => {});
     } catch (err) {
         console.error("Lỗi gọi API settle PMC:", err);
     }
