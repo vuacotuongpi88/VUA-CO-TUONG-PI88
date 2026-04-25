@@ -10467,6 +10467,17 @@ function clearPmcDebugLog() {}
 function getMoneyWalletKey(linkState = null) {
     const clean = v => String(v || "").trim().replace(/[.#$\[\]\/]/g, "_");
 
+    // Quan trọng: ví tiền phải đi theo đúng walletRef() đang dùng để nạp/load/set số dư.
+    // walletRef() = wallets/makeWalletDbKey()
+    const mainWalletKey = clean(
+        typeof makeWalletDbKey === "function" ? makeWalletDbKey() : ""
+    );
+
+    if (mainWalletKey) return mainWalletKey;
+
+    const cachedWalletKey = clean(localStorage.getItem("walletKey"));
+    if (cachedWalletKey) return cachedWalletKey;
+
     const linkedWalletKey = clean(linkState?.walletKey);
     if (linkedWalletKey) return linkedWalletKey;
 
@@ -10476,15 +10487,9 @@ function getMoneyWalletKey(linkState = null) {
         localStorage.getItem("pi-user-name")
     );
 
-    if (piName) {
-        return clean("pi_" + piName.toLowerCase());
-    }
-
-    const cachedWalletKey = clean(localStorage.getItem("walletKey"));
-    if (cachedWalletKey) return cachedWalletKey;
+    if (piName) return clean("pi_" + piName.toLowerCase());
 
     return clean(
-        (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "") ||
         localStorage.getItem("uid") ||
         localStorage.getItem("currentUserUid") ||
         firebase.auth().currentUser?.uid ||
