@@ -6399,6 +6399,10 @@ async function playNextMatch() {
     clearInterval(interval);
     clearInterval(readyInterval);
 
+    // reset cờ bảng sẵn sàng cho ván mới
+    readyOverlayWaitingShown = false;
+    closeReadyOverlay();
+
     if (sounds.bgm) sounds.bgm.pause();
     if (sounds.heartbeat) sounds.heartbeat.pause();
 
@@ -8275,7 +8279,11 @@ if (typeof applyBoardPerspective === "function") {
         renderPlayersFromRoom(room);
         updateReadyUI();
 
-const hasEnoughPlayersWaiting = !!room.players?.do && !!room.players?.den && room.status === "waiting" && !room.winner;
+const hasEnoughPlayersWaiting =
+    !!room.players?.do &&
+    !!room.players?.den &&
+    room.status === "waiting" &&
+    !room.winner;
 
 if (hasEnoughPlayersWaiting) {
     isGameOver = false;
@@ -8284,9 +8292,17 @@ if (hasEnoughPlayersWaiting) {
     hideVictoryPopup();
     renderTimerUI();
 
-    if (!readyOverlayWaitingShown) {
-        readyOverlayWaitingShown = true;
-        showReadyOverlay(room.mode);
+    const overlay = document.getElementById("ready-overlay");
+    const overlayVisible = overlay && overlay.style.display === "flex";
+
+    // Quan trọng: đừng chỉ tin biến readyOverlayWaitingShown.
+    // Phải nhìn trạng thái thật của bảng SS.
+    readyOverlayWaitingShown = true;
+
+    if (!overlayVisible) {
+        showReadyOverlay(room.mode || currentRoomMode);
+    } else {
+        updateReadyUI();
     }
 } else {
     readyOverlayWaitingShown = false;
@@ -8297,8 +8313,7 @@ if (hasEnoughPlayersWaiting) {
 if (room.status === "playing" && !room.winner) {
     readyOverlayWaitingShown = false;
     isGameOver = false;
-    const overlay = document.getElementById("ready-overlay");
-    if (overlay) overlay.style.display = "none";
+    closeReadyOverlay();
 }
         const newBoardHash = JSON.stringify(room.board || []);
         if (newBoardHash && newBoardHash !== lastRoomBoardHash) {
