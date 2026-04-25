@@ -8571,9 +8571,8 @@ async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
 }
 async function settlePmcViaApi(roomId) {
     try {
-        console.log("firebase uid:", firebase.auth().currentUser?.uid);
-console.log("local uid:", localStorage.getItem("uid"));
-console.log("walletKey:", walletKey);
+    console.log("settle roomId:", roomId);
+    console.log("my walletKey:", makeWalletDbKey());
         const res = await fetch("/api/pmc/settle", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
