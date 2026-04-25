@@ -4644,107 +4644,315 @@ body.in-match #arena-shop-btn{ display:none !important; }
     transform:scale(1.045);
   }
 }
- /* ===== FIX TẤT CẢ ICON SKIN VỀ GÓC TRÁI - KHÔNG CHẠY RA GIỮA ===== */
+/* ===== FINAL SKIN AVATAR FRAME - ICON GÓC TRÁI + VIỀN PHÁT SÁNG ===== */
 
-.avatar-frame-skin_bamboo_gold::before,
-.avatar-frame-skin_dragon_purple::before,
-.avatar-frame-skin_phoenix_red::before,
-.avatar-frame-skin_diamond_blue::before,
-.avatar-frame-skin_king_rainbow::before,
-.avatar-frame-skin_god_neon::before{
-  left: -7px !important;
-  top: -8px !important;
-  transform: translateX(0) scale(1) !important;
-  width: 28px !important;
-  height: 28px !important;
-  font-size: 16px !important;
-  z-index: 20 !important;
-  animation: skinBadgeTopLeftFloat 1.25s ease-in-out infinite alternate !important;
+/* THÔNG SỐ CHỈNH NHANH:
+   --skin-icon-x: âm = qua trái, dương = qua phải
+   --skin-icon-y: âm = lên trên, dương = xuống dưới
+   --skin-icon-size: kích thước icon
+*/
+.avatar-skin-frame-target{
+  --skin-icon-x: -7px;
+  --skin-icon-y: -13px;
+  --skin-icon-size: 29px;
+  position: relative !important;
+  overflow: visible !important;
+  isolation: isolate;
 }
 
-/* icon nào muốn to hơn chút thì chỉnh riêng ở đây */
-.avatar-frame-skin_king_rainbow::before,
-.avatar-frame-skin_god_neon::before{
-  width: 30px !important;
-  height: 30px !important;
-  font-size: 17px !important;
-  left: -8px !important;
-  top: -9px !important;
+.avatar-skin-frame-target > img,
+.avatar-skin-frame-target .player-chip-meta{
+  position: relative;
+  z-index: 5;
 }
 
-/* Long Ảnh Tím cho nổi hơn nhưng vẫn nằm góc trái */
+.avatar-skin-frame-target::after{
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 18px;
+  pointer-events: none;
+  z-index: 1;
+  border: 2px solid transparent;
+}
+
+.avatar-skin-frame-target::before{
+  position: absolute;
+  left: var(--skin-icon-x) !important;
+  top: var(--skin-icon-y) !important;
+  width: var(--skin-icon-size) !important;
+  height: var(--skin-icon-size) !important;
+  border-radius: 50%;
+  z-index: 30 !important;
+  pointer-events: none;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 17px;
+  line-height: 1;
+  font-weight: 900;
+  transform: translateX(0) translateY(0) scale(1) !important;
+  text-shadow: 0 2px 5px rgba(0,0,0,.9);
+}
+
+/* ===== TRÚC KIM ===== */
+.avatar-frame-skin_bamboo_gold::before{
+  content: "🎋";
+  background: radial-gradient(circle at 35% 25%, #fff8cf, #f4c542 42%, #745600 100%);
+  border: 2px solid #fff3a3;
+  box-shadow:
+    0 0 8px rgba(244,197,66,.95),
+    0 0 16px rgba(85,239,196,.45);
+  animation: mcSkinIconFloat 1.3s ease-in-out infinite alternate !important;
+}
+
+.avatar-frame-skin_bamboo_gold::after{
+  background:
+    linear-gradient(rgba(10,25,15,.74), rgba(10,25,15,.74)) padding-box,
+    conic-gradient(from 0deg, #f4c542, #55efc4, #fff7a8, #f4c542) border-box;
+  border: 2px solid transparent;
+  box-shadow:
+    0 0 10px rgba(244,197,66,.85),
+    0 0 20px rgba(85,239,196,.4);
+  animation: mcSkinGoldFrame 1.2s ease-in-out infinite alternate !important;
+}
+
+/* ===== LONG ẢNH TÍM ===== */
+.avatar-frame-skin_dragon_purple{
+  --skin-icon-x: -8px;
+  --skin-icon-y: -14px;
+  --skin-icon-size: 30px;
+}
+
 .avatar-frame-skin_dragon_purple::before{
-  left: -8px !important;
-  top: -9px !important;
-  width: 30px !important;
-  height: 30px !important;
-  font-size: 17px !important;
-  animation:
-    skinBadgeTopLeftFloat 1.05s ease-in-out infinite alternate,
-    dragonBadgeFlash 2.4s linear infinite !important;
+  content: "龍";
+  color: #fff7ff;
+  background: radial-gradient(circle at 35% 25%, #ffffff, #d8b4fe 22%, #7c3aed 58%, #21003d 100%);
+  border: 2px solid #f4c542;
+  box-shadow:
+    0 0 8px rgba(255,255,255,.75),
+    0 0 14px rgba(179,104,255,.95),
+    0 0 26px rgba(124,58,237,.85),
+    0 0 36px rgba(244,197,66,.38);
+  animation: mcSkinDragonIcon 1.05s ease-in-out infinite alternate !important;
 }
 
-/* animation mới không kéo về giữa nữa */
-@keyframes skinBadgeTopLeftFloat{
+.avatar-frame-skin_dragon_purple::after{
+  background:
+    linear-gradient(rgba(12,4,28,.76), rgba(12,4,28,.76)) padding-box,
+    conic-gradient(
+      from 0deg,
+      #4c1d95,
+      #b368ff,
+      #ffffff,
+      #f4c542,
+      #7c3aed,
+      #4c1d95
+    ) border-box;
+  border: 2px solid transparent;
+  box-shadow:
+    0 0 8px rgba(179,104,255,.85),
+    0 0 18px rgba(179,104,255,.9),
+    0 0 30px rgba(124,58,237,.55),
+    inset 0 0 12px rgba(255,255,255,.08);
+  animation: mcSkinPurpleFrame 1.05s ease-in-out infinite alternate !important;
+}
+
+/* ===== PHƯỢNG HỎA ĐỎ / NGỌN LỬA ===== */
+.avatar-frame-skin_phoenix_red{
+  --skin-icon-x: -8px;
+  --skin-icon-y: -15px;  /* muốn kéo ngọn lửa lên nữa thì đổi -17px */
+  --skin-icon-size: 30px;
+}
+
+.avatar-frame-skin_phoenix_red::before{
+  content: "🔥";
+  background: radial-gradient(circle at 35% 25%, #fff6d5, #ff7675 35%, #8b0000 100%);
+  border: 2px solid #ffd166;
+  box-shadow:
+    0 0 10px rgba(255,92,122,.95),
+    0 0 18px rgba(255,209,102,.55),
+    0 0 28px rgba(255,60,60,.35);
+  animation: mcSkinFireIcon 0.55s ease-in-out infinite alternate !important;
+}
+
+.avatar-frame-skin_phoenix_red::after{
+  background:
+    linear-gradient(rgba(36,6,6,.72), rgba(36,6,6,.72)) padding-box,
+    conic-gradient(from 0deg, #ff3131, #ffd166, #ff6b00, #ff3131) border-box;
+  border: 2px solid transparent;
+  box-shadow:
+    0 0 9px rgba(255,92,122,.92),
+    0 0 18px rgba(255,60,60,.75),
+    0 0 30px rgba(255,209,102,.36),
+    inset 0 0 12px rgba(255,120,80,.12);
+  animation: mcSkinFireFrame 0.55s ease-in-out infinite alternate !important;
+}
+
+/* ===== KIM CƯƠNG LAM ===== */
+.avatar-frame-skin_diamond_blue{
+  --skin-icon-x: -7px;
+  --skin-icon-y: -14px;
+  --skin-icon-size: 29px;
+}
+
+.avatar-frame-skin_diamond_blue::before{
+  content: "💎";
+  background: radial-gradient(circle at 35% 25%, #ffffff, #74b9ff 45%, #003a6b 100%);
+  border: 2px solid #e8f7ff;
+  box-shadow:
+    0 0 12px rgba(116,185,255,.95),
+    0 0 25px rgba(255,255,255,.35);
+  animation: mcSkinDiamondIcon 1.1s ease-in-out infinite alternate !important;
+}
+
+.avatar-frame-skin_diamond_blue::after{
+  background:
+    linear-gradient(rgba(3,18,35,.7), rgba(3,18,35,.7)) padding-box,
+    conic-gradient(from 0deg, #74b9ff, #ffffff, #00d9ff, #74b9ff) border-box;
+  border: 2px solid transparent;
+  box-shadow:
+    0 0 12px rgba(116,185,255,.95),
+    0 0 24px rgba(255,255,255,.32);
+  animation: mcSkinDiamondFrame 1.2s ease-in-out infinite alternate !important;
+}
+
+/* ===== VƯƠNG GIẢ ===== */
+.avatar-frame-skin_king_rainbow{
+  --skin-icon-x: -9px;
+  --skin-icon-y: -15px;
+  --skin-icon-size: 31px;
+}
+
+.avatar-frame-skin_king_rainbow::before{
+  content: "👑";
+  background: radial-gradient(circle at 35% 25%, #fff7b1, #ff3cac 38%, #3b0764 100%);
+  border: 2px solid #ffffff;
+  box-shadow:
+    0 0 8px #ff3cac,
+    0 0 14px #55efc4,
+    0 0 24px #f4c542;
+  animation: mcSkinKingIcon 1s ease-in-out infinite alternate !important;
+}
+
+.avatar-frame-skin_king_rainbow::after{
+  background:
+    linear-gradient(rgba(24,4,34,.72), rgba(24,4,34,.72)) padding-box,
+    conic-gradient(from 0deg, #ff3cac, #55efc4, #f4c542, #ffffff, #ff3cac) border-box;
+  border: 2px solid transparent;
+  box-shadow:
+    0 0 8px #ff3cac,
+    0 0 14px #55efc4,
+    0 0 24px #f4c542;
+  animation: mcSkinKingFrame 1s ease-in-out infinite alternate !important;
+}
+
+/* ===== THẦN QUANG ===== */
+.avatar-frame-skin_god_neon{
+  --skin-icon-x: -9px;
+  --skin-icon-y: -16px;
+  --skin-icon-size: 31px;
+}
+
+.avatar-frame-skin_god_neon::before{
+  content: "⚡";
+  background: radial-gradient(circle at 35% 25%, #ffffff, #ff00e5 35%, #001b1b 100%);
+  border: 2px solid #00ffe1;
+  box-shadow:
+    0 0 10px #ff00e5,
+    0 0 22px #00ffe1,
+    0 0 36px rgba(255,255,255,.5);
+  animation: mcSkinGodIcon .5s ease-in-out infinite alternate !important;
+}
+
+.avatar-frame-skin_god_neon::after{
+  background:
+    linear-gradient(rgba(0,18,20,.72), rgba(0,18,20,.72)) padding-box,
+    conic-gradient(from 0deg, #ff00e5, #00ffe1, #ffffff, #ff00e5) border-box;
+  border: 2px solid transparent;
+  box-shadow:
+    0 0 10px #ff00e5,
+    0 0 20px #00ffe1,
+    0 0 34px rgba(255,255,255,.5);
+  animation: mcSkinGodFrame .55s ease-in-out infinite alternate !important;
+}
+
+/* ===== FINAL ANIMATIONS - KHÔNG KÉO ICON RA GIỮA ===== */
+
+@keyframes mcSkinIconFloat{
+  from{ transform: translateX(0) translateY(0) scale(1) !important; filter: brightness(1); }
+  to{ transform: translateX(0) translateY(-3px) scale(1.08) !important; filter: brightness(1.2); }
+}
+
+@keyframes mcSkinDragonIcon{
+  from{ transform: translateX(0) translateY(0) rotate(-5deg) scale(1) !important; filter: brightness(1); }
+  to{ transform: translateX(0) translateY(-4px) rotate(5deg) scale(1.12) !important; filter: brightness(1.35); }
+}
+
+@keyframes mcSkinFireIcon{
   from{
     transform: translateX(0) translateY(0) scale(1) !important;
-  }
-  to{
-    transform: translateX(0) translateY(-3px) scale(1.08) !important;
-  }
-}
-
-/* chặn mấy animation cũ kéo icon về giữa */
-@keyframes skinBadgeFloat{
-  from{
-    transform: translateX(0) translateY(0) scale(1);
-  }
-  to{
-    transform: translateX(0) translateY(-3px) scale(1.08);
-  }
-}
-
-@keyframes dragonBadgeFly{
-  from{
-    transform: translateX(0) translateY(0) rotate(-5deg) scale(1);
-  }
-  to{
-    transform: translateX(0) translateY(-3px) rotate(5deg) scale(1.1);
-  }
-}
-
-@keyframes diamondBadgeShine{
-  from{
     filter: brightness(1);
-    transform: translateX(0) scale(1);
+    box-shadow:
+      0 0 8px rgba(255,92,122,.8),
+      0 0 16px rgba(255,209,102,.35);
   }
   to{
-    filter: brightness(1.32);
-    transform: translateX(0) scale(1.08);
-  }
-}
-
-@keyframes kingBadgeGlow{
-  from{
-    filter: brightness(1);
-    transform: translateX(0) translateY(0) scale(1);
-  }
-  to{
-    filter: brightness(1.25);
-    transform: translateX(0) translateY(-3px) scale(1.1);
-  }
-}
-
-@keyframes godBadgeShock{
-  from{
-    transform: translateX(0) rotate(-8deg) scale(1);
-    filter: brightness(1);
-  }
-  to{
-    transform: translateX(0) rotate(8deg) scale(1.12);
+    transform: translateX(0) translateY(-4px) scale(1.13) !important;
     filter: brightness(1.45);
+    box-shadow:
+      0 0 12px rgba(255,92,122,1),
+      0 0 24px rgba(255,209,102,.75),
+      0 0 34px rgba(255,80,40,.55);
   }
-}   
+}
+
+@keyframes mcSkinDiamondIcon{
+  from{ transform: translateX(0) translateY(0) scale(1) !important; filter: brightness(1); }
+  to{ transform: translateX(0) translateY(-3px) scale(1.1) !important; filter: brightness(1.35); }
+}
+
+@keyframes mcSkinKingIcon{
+  from{ transform: translateX(0) translateY(0) scale(1) !important; filter: brightness(1); }
+  to{ transform: translateX(0) translateY(-4px) scale(1.14) !important; filter: brightness(1.3); }
+}
+
+@keyframes mcSkinGodIcon{
+  from{ transform: translateX(0) translateY(0) rotate(-8deg) scale(1) !important; filter: brightness(1); }
+  to{ transform: translateX(0) translateY(-4px) rotate(8deg) scale(1.16) !important; filter: brightness(1.5); }
+}
+
+@keyframes mcSkinGoldFrame{
+  from{ opacity:.78; transform: scale(1); filter: brightness(1); }
+  to{ opacity:1; transform: scale(1.025); filter: brightness(1.18); }
+}
+
+@keyframes mcSkinPurpleFrame{
+  from{ opacity:.8; transform: scale(1); filter: brightness(1); }
+  to{ opacity:1; transform: scale(1.035); filter: brightness(1.22); }
+}
+
+@keyframes mcSkinFireFrame{
+  from{ opacity:.76; transform: scale(1); filter: brightness(1); }
+  to{ opacity:1; transform: scale(1.04); filter: brightness(1.38); }
+}
+
+@keyframes mcSkinDiamondFrame{
+  from{ opacity:.78; transform: scale(1); filter: brightness(1); }
+  to{ opacity:1; transform: scale(1.03); filter: brightness(1.24); }
+}
+
+@keyframes mcSkinKingFrame{
+  from{ opacity:.78; transform: scale(1); filter: brightness(1); }
+  to{ opacity:1; transform: scale(1.035); filter: brightness(1.28); }
+}
+
+@keyframes mcSkinGodFrame{
+  from{ opacity:.76; transform: scale(1); filter: brightness(1); }
+  to{ opacity:1; transform: scale(1.045); filter: brightness(1.42); }
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
