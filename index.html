@@ -4310,8 +4310,97 @@ body.in-match #arena-shop-btn{ display:none !important; }
 .cosmetic-avatar-skin-diamond_blue{ border-color:#74b9ff!important; box-shadow:0 0 18px rgba(116,185,255,.78), inset 0 0 8px rgba(255,255,255,.2)!important; }
 .cosmetic-avatar-skin-king_rainbow{ border-color:#fff!important; box-shadow:0 0 9px #ff3cac,0 0 16px #55efc4,0 0 24px #f4c542!important; }
 .cosmetic-avatar-skin-god_neon{ border-color:#ff00e5!important; box-shadow:0 0 12px #ff00e5,0 0 22px #00ffe1,0 0 32px rgba(255,255,255,.35)!important; animation: godSkinGlow 1.2s ease-in-out infinite alternate; }
-@keyframes godSkinGlow{ from{ filter:brightness(1); } to{ filter:brightness(1.18); } }
+@keyframes godSkinGlow{ from{ filter:brightness(1); } to{ filter:brightness(1.18); } 
+}
+/* ===== SKIN BỌC KHUNG AVATAR - KHÔNG ĐỤNG ẢNH ĐẠI DIỆN ===== */
 
+.avatar-skin-frame-target{
+  position: relative !important;
+  overflow: visible !important;
+}
+
+.avatar-skin-frame-target > img{
+  position: relative;
+  z-index: 2;
+}
+
+.avatar-skin-frame-target .player-chip-meta{
+  position: relative;
+  z-index: 2;
+}
+
+.avatar-skin-frame-target::after{
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 16px;
+  pointer-events: none;
+  z-index: 1;
+  border: 2px solid transparent;
+  box-shadow: none;
+}
+
+/* Viền Trúc Kim */
+.avatar-frame-skin_bamboo_gold::after{
+  border-color: #f4c542;
+  box-shadow:
+    0 0 10px rgba(244,197,66,.85),
+    0 0 18px rgba(85,239,196,.35);
+}
+
+/* Long Ảnh Tím */
+.avatar-frame-skin_dragon_purple::after{
+  border-color: #b368ff;
+  box-shadow:
+    0 0 12px rgba(179,104,255,.95),
+    0 0 22px rgba(244,197,66,.25);
+}
+
+/* Phượng Hỏa Đỏ */
+.avatar-frame-skin_phoenix_red::after{
+  border-color: #ff5c7a;
+  box-shadow:
+    0 0 12px rgba(255,92,122,.95),
+    0 0 22px rgba(255,209,102,.25);
+}
+
+/* Kim Cương Lam */
+.avatar-frame-skin_diamond_blue::after{
+  border-color: #74b9ff;
+  box-shadow:
+    0 0 14px rgba(116,185,255,.95),
+    0 0 24px rgba(255,255,255,.25);
+}
+
+/* Vương Giả Ngũ Sắc */
+.avatar-frame-skin_king_rainbow::after{
+  border-color: #ffffff;
+  box-shadow:
+    0 0 8px #ff3cac,
+    0 0 14px #55efc4,
+    0 0 22px #f4c542;
+}
+
+/* Thần Quang Neon */
+.avatar-frame-skin_god_neon::after{
+  border-color: #ff00e5;
+  box-shadow:
+    0 0 10px #ff00e5,
+    0 0 20px #00ffe1,
+    0 0 30px rgba(255,255,255,.45);
+  animation: avatarFrameGodGlow 1.15s ease-in-out infinite alternate;
+}
+
+@keyframes avatarFrameGodGlow{
+  from{
+    opacity: .78;
+    transform: scale(1);
+  }
+  to{
+    opacity: 1;
+    transform: scale(1.025);
+  }
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -6948,11 +7037,25 @@ renderLevelHud(myLevelMeta);
 
 if (topAvatar) {
     applyAvatarFrame(topAvatar, oppLevelMeta);
-    if (typeof applyCosmeticSkinToAvatar === "function") applyCosmeticSkinToAvatar(topAvatar, oppPlayer.equippedAvatarSkin || "skin_default");
+
+    if (typeof applyCosmeticSkinToAvatar === "function") {
+        applyCosmeticSkinToAvatar(
+            topAvatar,
+            oppPlayer.equippedAvatarSkin || "skin_default"
+        );
+    }
 }
+
 if (bottomAvatar) {
     applyAvatarFrame(bottomAvatar, myLevelMeta);
-    if (typeof applyCosmeticSkinToAvatar === "function") applyCosmeticSkinToAvatar(bottomAvatar, myPlayer.equippedAvatarSkin || (typeof getEquippedAvatarSkin === "function" ? getEquippedAvatarSkin() : "skin_default"));
+
+    if (typeof applyCosmeticSkinToAvatar === "function") {
+        applyCosmeticSkinToAvatar(
+            bottomAvatar,
+            myPlayer.equippedAvatarSkin ||
+            (typeof getEquippedAvatarSkin === "function" ? getEquippedAvatarSkin() : "skin_default")
+        );
+    }
 }
 
     const inviteCode = String(
@@ -11947,15 +12050,51 @@ async function refreshMissionLobbyBadgeSilently() {
   function currentSkinId(){
     return localStorage.getItem('equipped-avatar-skin') || 'skin_default';
   }
-  function skinCssClass(id){
-    return 'cosmetic-avatar-' + String(id || 'skin_default').replace(/^skin_/, 'skin-').replace(/_/g, '_');
-  }
-  window.applyCosmeticSkinToAvatar = function(imgEl, skinId){
+  function skinFrameClass(id){
+    return 'avatar-frame-' + String(id || 'skin_default').replace(/[^\w-]/g, '_');
+}
+
+function oldSkinImgClass(id){
+    return 'cosmetic-avatar-' + String(id || 'skin_default')
+        .replace(/^skin_/, 'skin-')
+        .replace(/_/g, '_');
+}
+
+function findAvatarFrameTarget(imgEl){
+    if (!imgEl) return null;
+
+    // Trong trận: bọc nguyên khung avatar + tên + rank
+    const chip = imgEl.closest('.player-chip-inline');
+    if (chip) return chip;
+
+    // Góc sảnh / avatar nhỏ: bọc phần cha gần nhất
+    return imgEl.parentElement || imgEl;
+}
+
+window.applyCosmeticSkinToAvatar = function(imgEl, skinId){
     if (!imgEl) return;
-    FALLBACK_CATALOG.forEach(item => imgEl.classList.remove(skinCssClass(item.id)));
+
+    const target = findAvatarFrameTarget(imgEl);
+    if (!target) return;
+
+    // Dọn class skin cũ trên cả img và khung, để không còn dính vào ảnh
+    FALLBACK_CATALOG.forEach(item => {
+        imgEl.classList.remove(oldSkinImgClass(item.id));
+        imgEl.classList.remove(skinFrameClass(item.id));
+
+        target.classList.remove(oldSkinImgClass(item.id));
+        target.classList.remove(skinFrameClass(item.id));
+    });
+
+    target.classList.remove('avatar-skin-frame-target');
+
     const id = skinId || currentSkinId();
-    if (id && id !== 'skin_default') imgEl.classList.add(skinCssClass(id));
-  };
+    if (!id || id === 'skin_default') return;
+
+    // Skin chỉ gắn vào khung, không gắn vào ảnh đại diện
+    target.classList.add('avatar-skin-frame-target');
+    target.classList.add(skinFrameClass(id));
+};
   function applyMySkinNow(){
     const id = currentSkinId();
     ['corner-avatar-img','player-do-avatar','player-den-avatar','edit-user-photo'].forEach(domId => {
