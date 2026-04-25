@@ -9855,7 +9855,7 @@ async function syncPiPendingBeforeWithdraw() {
 async function processWithdraw() {
     const state = getWithdrawState();
     if (state.count >= MAX_WITHDRAW_PER_DAY) {
-        alert("Hôm nay đã rút đủ 5 lần rồi. Mai quay lại nhé!");
+        alert("Hôm nay đã rút đủ 50 lần rồi. Mai quay lại nhé!");
         return;
     }
 
@@ -9864,11 +9864,6 @@ async function processWithdraw() {
 
     if (!Number.isFinite(amount) || amount <= 0) {
         alert("Số Pi rút không hợp lệ.");
-        return;
-    }
-
-    if (amount > MAX_WITHDRAW_PER_TX) {
-        alert(`Mỗi lần chỉ được rút tối đa ${MAX_WITHDRAW_PER_TX} Pi.`);
         return;
     }
 
