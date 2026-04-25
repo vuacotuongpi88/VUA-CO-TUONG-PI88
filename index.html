@@ -4464,6 +4464,12 @@ body.in-match #arena-shop-btn{ display:none !important; }
 /* ===== KIM CƯƠNG LAM ===== */
 .avatar-frame-skin_diamond_blue::before{
   content: "💎";
+  left: -6px;
+  top: -8px;
+  transform: translateX(0);
+  width: 28px;
+  height: 28px;
+  font-size: 16px;
   background:
     radial-gradient(circle at 35% 25%, #ffffff, #74b9ff 45%, #003a6b 100%);
   border: 2px solid #e8f7ff;
@@ -4597,8 +4603,14 @@ body.in-match #arena-shop-btn{ display:none !important; }
 }
 
 @keyframes diamondBadgeShine{
-  from{ filter:brightness(1); transform:translateX(-50%) scale(1); }
-  to{ filter:brightness(1.32); transform:translateX(-50%) scale(1.09); }
+  from{
+    filter: brightness(1);
+    transform: translateX(0) scale(1);
+  }
+  to{
+    filter: brightness(1.32);
+    transform: translateX(0) scale(1.09);
+  }
 }
 
 @keyframes kingBadgeGlow{
