@@ -1,9 +1,11 @@
-const admin = require("../_firebaseAdmin");
+const { getDatabase } = require("firebase-admin/database");
+const adminBundle = require("../_firebaseAdmin");
+
+const LEVEL_MAX = 160;
 
 function safeWalletKey(walletKey) {
   return String(walletKey || "").replace(/[.#$\[\]\/]/g, "_");
 }
-const LEVEL_MAX = 160;
 
 function getLevelXpNeedFromLevel(level) {
   const lv = Math.max(1, Math.min(LEVEL_MAX - 1, Math.floor(Number(level || 1))));
@@ -41,7 +43,7 @@ function buildLevelTable() {
   const rows = [];
   let xp = 0;
 
-  for (let lv = 1; lv <= LEVEL_MAX; lv++) {
+  for (let lv = 1; lv <= LEVEL_MAX; lv += 1) {
     const frame = getLevelFrameByLevel(lv);
 
     rows.push({
@@ -52,7 +54,9 @@ function buildLevelTable() {
       pill: frame
     });
 
-    if (lv < LEVEL_MAX) xp += getLevelXpNeedFromLevel(lv);
+    if (lv < LEVEL_MAX) {
+      xp += getLevelXpNeedFromLevel(lv);
+    }
   }
 
   return rows;
@@ -88,7 +92,8 @@ function buildLevelMeta(meta = {}) {
     pill: info.pill,
     wins: Math.max(0, Number(meta.wins || 0) || 0),
     losses: Math.max(0, Number(meta.losses || 0) || 0),
-    matches: Math.max(0, Number(meta.matches || 0) || 0)
+    matches: Math.max(0, Number(meta.matches || 0) || 0),
+    blockedXpMatches: Math.max(0, Number(meta.blockedXpMatches || 0) || 0)
   };
 }
 
@@ -103,7 +108,7 @@ function getTodayKeyVN() {
 function getRepeatAdjustedXpAbs(pairCount) {
   const n = Math.max(1, Number(pairCount || 1) || 1);
 
-  // Chỉ giảm khi đánh lặp cùng 1 người trong cùng ngày.
+  // Chỉ giảm khi hôm nay đánh lặp lại đúng cùng 1 người.
   if (n === 1) return 18;
   if (n === 2) return 17;
   if (n === 3) return 16;
@@ -128,6 +133,7 @@ async function reserveServerLevelPairCount(db, walletKey, opponentKey, roomId) {
 
   const roomClaimTx = await roomClaimRef.transaction(current => {
     if (current && current.done) return;
+
     return {
       done: true,
       at: Date.now()
@@ -147,11 +153,14 @@ async function reserveServerLevelPairCount(db, walletKey, opponentKey, roomId) {
 
   let nextCount = 1;
 
-  const countRef = db.ref(`levelPairDailyCountsV3/${safeMe}/${todayKey}/${safeOpp}`);
+  const countRef = db.ref(
+    `levelPairDailyCountsV3/${safeMe}/${todayKey}/${safeOpp}`
+  );
 
   await countRef.transaction(current => {
     const val = current && typeof current === "object" ? current : {};
     const count = Math.max(0, Number(val.count || 0) || 0);
+
     nextCount = count + 1;
 
     return {
@@ -185,11 +194,13 @@ async function awardOnePlayerExp(db, roomId, walletKey, opponentKey, resultType)
   });
 
   if (!claimTx.committed) {
+    const snap = await db.ref(`wallets/${safeKey}/levelMeta`).once("value");
     return {
       ok: true,
       skipped: true,
       reason: "already_awarded",
-      walletKey: safeKey
+      walletKey: safeKey,
+      levelMeta: buildLevelMeta(snap.val() || {})
     };
   }
 
@@ -264,11 +275,15 @@ async function awardMatchExpServer(db, roomId, room) {
     };
   }
 
-  const winnerSide = winnerRaw === "do" || winnerRaw === "red"
-    ? "do"
-    : winnerRaw === "den" || winnerRaw === "black"
-      ? "den"
-      : "";
+  let winnerSide = "";
+
+  if (winnerRaw === "do" || winnerRaw === "red") {
+    winnerSide = "do";
+  }
+
+  if (winnerRaw === "den" || winnerRaw === "black") {
+    winnerSide = "den";
+  }
 
   if (!winnerSide) {
     return {
@@ -285,16 +300,32 @@ async function awardMatchExpServer(db, roomId, room) {
     awardOnePlayerExp(db, roomId, denWalletKey, doWalletKey, denResult)
   ]);
 
+  // Ghi luôn vào room để UI trong trận thấy levelMeta mới khi renderPlayersFromRoom chạy lại.
+  const roomUpdate = {};
+
+  if (doExp?.levelMeta) {
+    roomUpdate[`matches/${roomId}/players/do/levelMeta`] = doExp.levelMeta;
+  }
+
+  if (denExp?.levelMeta) {
+    roomUpdate[`matches/${roomId}/players/den/levelMeta`] = denExp.levelMeta;
+  }
+
+  if (Object.keys(roomUpdate).length) {
+    await db.ref().update(roomUpdate);
+  }
+
   return {
     ok: true,
     do: doExp,
     den: denExp
   };
 }
+
 async function adjustPmcWalletByKey(db, walletKey, delta, profile = {}) {
   const ref = db.ref("wallets/" + safeWalletKey(walletKey));
 
-  const result = await ref.transaction((current) => {
+  const result = await ref.transaction(current => {
     const safeCurrent = current && typeof current === "object" ? current : {};
 
     const currentPi = Number(safeCurrent.balance ?? 0) || 0;
@@ -309,7 +340,7 @@ async function adjustPmcWalletByKey(db, walletKey, delta, profile = {}) {
       pmcBalance: nextPmc,
       updatedAt: Date.now(),
       name: profile.name || safeCurrent.name || "Người chơi",
-      photo: profile.photo || safeCurrent.photo || "images/do_tuong.png",
+      photo: profile.photo || safeCurrent.photo || "images/do_tuong.png"
     };
   });
 
@@ -340,7 +371,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const db = admin.database();
+    const db = getDatabase(adminBundle.app || adminBundle);
     const roomRef = db.ref(`matches/${roomId}`);
     const settlementRef = db.ref(`matches/${roomId}/settlement`);
 
@@ -377,9 +408,10 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // khóa settle để không chia tiền 2 lần
+    // Khóa settle để không chia tiền / cộng EXP 2 lần.
     const lockResult = await settlementRef.transaction(current => {
       if (current?.done || current?.locking) return;
+
       return {
         locking: true,
         done: false,
@@ -394,7 +426,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // HÒA => HOÀN ĐỦ, KHÔNG ĂN PHÍ
+    // HÒA => hoàn đủ, không ăn phí, không cộng/trừ EXP.
     if (winnerRaw === "hoa" || winnerRaw === "draw") {
       const doAfter = await adjustPmcWalletByKey(db, doWalletKey, stake, {
         name: doPlayer.name || doPlayer.usernameNorm || doPlayer.username || "Người chơi đỏ",
@@ -408,9 +440,11 @@ module.exports = async function handler(req, res) {
 
       await settlementRef.set({
         done: true,
+        route: "settle-exp-v3-fixed",
         type: "draw_refund",
         refundedEach: stake,
         feePmc: 0,
+        expResult: null,
         at: Date.now()
       });
 
@@ -429,7 +463,8 @@ module.exports = async function handler(req, res) {
         type: "draw_refund",
         refundedEach: stake,
         doPmcBalance: doAfter?.pmcBalance ?? null,
-        denPmcBalance: denAfter?.pmcBalance ?? null
+        denPmcBalance: denAfter?.pmcBalance ?? null,
+        expResult: null
       });
     }
 
@@ -450,13 +485,14 @@ module.exports = async function handler(req, res) {
       };
     } else {
       await settlementRef.remove();
+
       return res.status(400).json({
         ok: false,
         error: "invalid_winner_value"
       });
     }
 
-    // THẮNG => ĂN PHÍ 2% TỪ TỔNG POT
+    // THẮNG => ăn phí 2% từ tổng pot.
     const grossPot = stake * 2;
     const feePmc = Math.floor(grossPot * 0.02);
     const winnerReceivePmc = grossPot - feePmc;
@@ -477,29 +513,31 @@ module.exports = async function handler(req, res) {
         photo: "images/do_tuong.png"
       }
     );
+
     let expResult = null;
 
-try {
-  expResult = await awardMatchExpServer(db, roomId, room);
-  console.log("MATCH EXP SERVER OK =", expResult);
-} catch (expErr) {
-  console.error("MATCH EXP SERVER ERROR =", expErr);
-  expResult = {
-    ok: false,
-    error: expErr?.message || "exp_error"
-  };
-}
-await settlementRef.set({
-  done: true,
-  type: "winner_settle",
-  grossPot,
-  feePmc,
-  winnerReceivePmc,
-  winnerWalletKey: safeWalletKey(winnerWalletKey),
-  adminWalletKey: "pi_admin_master",
-  expResult,
-  at: Date.now()
-});
+    try {
+      expResult = await awardMatchExpServer(db, roomId, room);
+      console.log("MATCH EXP SERVER OK =", expResult);
+    } catch (expErr) {
+      console.error("MATCH EXP SERVER ERROR =", expErr);
+      expResult = {
+        ok: false,
+        error: expErr?.message || "exp_error"
+      };
+    }
+
+    await settlementRef.set({
+      done: true,
+      type: "winner_settle",
+      grossPot,
+      feePmc,
+      winnerReceivePmc,
+      winnerWalletKey: safeWalletKey(winnerWalletKey),
+      adminWalletKey: "pi_admin_master",
+      expResult,
+      at: Date.now()
+    });
 
     await db.ref("matchFeeTransactions").push({
       roomId,
@@ -535,11 +573,12 @@ await settlementRef.set({
       winnerWalletKey: safeWalletKey(winnerWalletKey),
       adminWalletKey: "pi_admin_master",
       winnerPmcBalance: winnerAfter?.pmcBalance ?? null,
-      adminPmcBalance: adminAfter?.pmcBalance ?? null
+      adminPmcBalance: adminAfter?.pmcBalance ?? null,
+      expResult
     });
-  
   } catch (err) {
     console.error("pmc settle error =", err);
+
     return res.status(500).json({
       ok: false,
       error: err?.message || "server_error"
