@@ -440,7 +440,6 @@ module.exports = async function handler(req, res) {
 
       await settlementRef.set({
         done: true,
-        route: "settle-exp-v3-fixed",
         type: "draw_refund",
         refundedEach: stake,
         feePmc: 0,
@@ -529,6 +528,7 @@ module.exports = async function handler(req, res) {
 
     await settlementRef.set({
       done: true,
+      route: "settle-exp-v3-fixed",
       type: "winner_settle",
       grossPot,
       feePmc,
