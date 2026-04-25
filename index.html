@@ -12398,15 +12398,15 @@ async function onIncompletePaymentFound(payment) {
       data
     });
 
-    if (!res.ok || !data?.ok || data?.note) {
-      window.__PI_PENDING_PAYMENT_BLOCKED__ = true;
-      window.__PI_PENDING_PAYMENT_MSG__ =
-        data?.note ||
-        data?.error ||
-        "Payment Pi cũ chưa được xử lý sạch ở server.";
-      alert(window.__PI_PENDING_PAYMENT_MSG__);
-      return true;
-    }
+    if (!res.ok || !data?.ok) {
+  window.__PI_PENDING_PAYMENT_BLOCKED__ = true;
+  window.__PI_PENDING_PAYMENT_MSG__ =
+    data?.error ||
+    data?.note ||
+    "Payment Pi cũ chưa được xử lý sạch ở server.";
+  alert(window.__PI_PENDING_PAYMENT_MSG__);
+  return true;
+}
 
     window.__PI_PENDING_PAYMENT_BLOCKED__ = false;
     window.__PI_PENDING_PAYMENT_MSG__ = "";
