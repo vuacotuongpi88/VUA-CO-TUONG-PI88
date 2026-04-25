@@ -113,16 +113,17 @@ function getTodayKeyVN() {
 function getRepeatAdjustedXpAbs(pairCount) {
   const n = Math.max(1, Number(pairCount || 1) || 1);
 
-  // Chỉ giảm khi hôm nay đánh lặp lại đúng cùng 1 người.
-  if (n === 1) return 18;
-  if (n === 2) return 17;
-  if (n === 3) return 16;
-  if (n === 4) return 15;
-  if (n <= 6) return 13;
-  if (n <= 8) return 10;
-  if (n <= 10) return 7;
-  if (n <= 15) return 5;
-  if (n <= 20) return 3;
+  // Thắng/thua người mới: ±30 EXP.
+  // Gặp lại cùng người trong cùng ngày thì giảm dần để chống farm.
+  if (n === 1) return 30;
+  if (n === 2) return 24;
+  if (n === 3) return 20;
+  if (n === 4) return 16;
+  if (n <= 6) return 12;
+  if (n <= 8) return 8;
+  if (n <= 10) return 5;
+  if (n <= 15) return 3;
+  if (n <= 20) return 2;
   return 1;
 }
 
