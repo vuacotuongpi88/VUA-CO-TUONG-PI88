@@ -7456,12 +7456,20 @@ function getRoomPlayerKeyForLevel(player = {}) {
 
 function getRepeatAdjustedXpAbs(pairCount) {
   const n = Math.max(1, Number(pairCount || 1) || 1);
-  if (n >= 10) return 5;
-  if (n >= 5) return 13;
-  if (n === 4) return 15;
-  if (n === 3) return 16;
+
+  // Chỉ giảm EXP khi hôm nay gặp lại đúng cùng 1 người nhiều lần.
+  if (n === 1) return 18;
   if (n === 2) return 17;
-  return 18;
+  if (n === 3) return 16;
+  if (n === 4) return 15;
+  if (n <= 6) return 13;
+  if (n <= 8) return 10;
+  if (n <= 10) return 7;
+  if (n <= 15) return 5;
+  if (n <= 20) return 3;
+
+  // Farm quá nhiều cùng 1 người vẫn còn 1 EXP cho vui, nhưng gần như không đáng cày.
+  return 1;
 }
 
 async function reserveLevelPairCount(walletKey, opponentKey, roomId) {
@@ -7498,10 +7506,8 @@ function isSameLevelDevice(room = {}) {
 }
 
 function getLevelMatchBlockReason(room = {}, pairCount = 1) {
-  if (isSameLevelDevice(room)) return "same_device";
-  if (Math.max(0, Number(room.moveCount || 0) || 0) > 0 && Math.max(0, Number(room.moveCount || 0) || 0) < LEVEL_FAST_MATCH_MIN_MOVES) return "too_fast";
-  if (pairCount > LEVEL_SAME_PAIR_NO_XP_AFTER) return "same_pair_too_many";
-  if (getPmcBalance() < LEVEL_MIN_PMC_FOR_REWARDED_XP) return "low_pmc_balance";
+  // Bản mới: không block EXP nữa.
+  // EXP chỉ giảm theo getRepeatAdjustedXpAbs(pairCount).
   return "";
 }
 
@@ -7524,30 +7530,26 @@ async function awardLevelProgressForFinishedRoom(roomId, room) {
   if (!claimTx.committed) return;
 
 const pair = await reserveLevelPairCount(walletKey, opponentKey, roomId);
-const blockReason = getLevelMatchBlockReason(room, pair.count);
 
-let absXp = getRepeatAdjustedXpAbs(pair.count);
-
-// Không cho ván test / ván nhanh bị 0 EXP hoàn toàn.
-// same_device hoặc too_fast chỉ giảm mạnh còn 2 EXP.
-if (blockReason === "same_device" || blockReason === "too_fast") {
-    absXp = Math.min(absXp, 2);
-}
-
-// Gặp cùng acc quá nhiều hoặc PMC quá thấp thì vẫn chặn hẳn.
-if (blockReason === "same_pair_too_many" || blockReason === "low_pmc_balance") {
-    absXp = 0;
-}
-
+// BẢN MỚI:
+// Không chặn EXP vì nghèo.
+// Không chặn EXP vì đánh mốc thấp.
+// Không chặn EXP vì ván nhanh.
+// Không chặn EXP vì cùng device.
+// Chỉ giảm dần khi hôm nay gặp lại cùng 1 đối thủ nhiều lần.
+const blockReason = "";
+const absXp = getRepeatAdjustedXpAbs(pair.count);
 const xpDelta = resultType === "win" ? absXp : -absXp;
 
-console.log("LEVEL_EXP_RESULT", {
-    roomId,
-    resultType,
-    pairCount: pair.count,
-    blockReason,
-    absXp,
-    xpDelta
+console.log("LEVEL_EXP_DEBUG", {
+  roomId,
+  walletKey,
+  opponentKey,
+  resultType,
+  pairCount: pair.count,
+  absXp,
+  xpDelta,
+  note: pair.count > 1 ? "repeat_opponent_reduced_xp" : "normal_xp"
 });
 
   let beforeMeta = getDefaultLevelMeta();
