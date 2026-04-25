@@ -4644,6 +4644,107 @@ body.in-match #arena-shop-btn{ display:none !important; }
     transform:scale(1.045);
   }
 }
+ /* ===== FIX TẤT CẢ ICON SKIN VỀ GÓC TRÁI - KHÔNG CHẠY RA GIỮA ===== */
+
+.avatar-frame-skin_bamboo_gold::before,
+.avatar-frame-skin_dragon_purple::before,
+.avatar-frame-skin_phoenix_red::before,
+.avatar-frame-skin_diamond_blue::before,
+.avatar-frame-skin_king_rainbow::before,
+.avatar-frame-skin_god_neon::before{
+  left: -7px !important;
+  top: -8px !important;
+  transform: translateX(0) scale(1) !important;
+  width: 28px !important;
+  height: 28px !important;
+  font-size: 16px !important;
+  z-index: 20 !important;
+  animation: skinBadgeTopLeftFloat 1.25s ease-in-out infinite alternate !important;
+}
+
+/* icon nào muốn to hơn chút thì chỉnh riêng ở đây */
+.avatar-frame-skin_king_rainbow::before,
+.avatar-frame-skin_god_neon::before{
+  width: 30px !important;
+  height: 30px !important;
+  font-size: 17px !important;
+  left: -8px !important;
+  top: -9px !important;
+}
+
+/* Long Ảnh Tím cho nổi hơn nhưng vẫn nằm góc trái */
+.avatar-frame-skin_dragon_purple::before{
+  left: -8px !important;
+  top: -9px !important;
+  width: 30px !important;
+  height: 30px !important;
+  font-size: 17px !important;
+  animation:
+    skinBadgeTopLeftFloat 1.05s ease-in-out infinite alternate,
+    dragonBadgeFlash 2.4s linear infinite !important;
+}
+
+/* animation mới không kéo về giữa nữa */
+@keyframes skinBadgeTopLeftFloat{
+  from{
+    transform: translateX(0) translateY(0) scale(1) !important;
+  }
+  to{
+    transform: translateX(0) translateY(-3px) scale(1.08) !important;
+  }
+}
+
+/* chặn mấy animation cũ kéo icon về giữa */
+@keyframes skinBadgeFloat{
+  from{
+    transform: translateX(0) translateY(0) scale(1);
+  }
+  to{
+    transform: translateX(0) translateY(-3px) scale(1.08);
+  }
+}
+
+@keyframes dragonBadgeFly{
+  from{
+    transform: translateX(0) translateY(0) rotate(-5deg) scale(1);
+  }
+  to{
+    transform: translateX(0) translateY(-3px) rotate(5deg) scale(1.1);
+  }
+}
+
+@keyframes diamondBadgeShine{
+  from{
+    filter: brightness(1);
+    transform: translateX(0) scale(1);
+  }
+  to{
+    filter: brightness(1.32);
+    transform: translateX(0) scale(1.08);
+  }
+}
+
+@keyframes kingBadgeGlow{
+  from{
+    filter: brightness(1);
+    transform: translateX(0) translateY(0) scale(1);
+  }
+  to{
+    filter: brightness(1.25);
+    transform: translateX(0) translateY(-3px) scale(1.1);
+  }
+}
+
+@keyframes godBadgeShock{
+  from{
+    transform: translateX(0) rotate(-8deg) scale(1);
+    filter: brightness(1);
+  }
+  to{
+    transform: translateX(0) rotate(8deg) scale(1.12);
+    filter: brightness(1.45);
+  }
+}   
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
