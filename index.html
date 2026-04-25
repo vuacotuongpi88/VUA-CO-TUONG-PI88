@@ -7945,20 +7945,27 @@ async function leaveRealtimeMatch() {
         const stillPlaying = room.status === "playing";
         const otherPlayerExists = !!room.players?.[otherSide];
 
-        // ===== Nếu đang chơi mà 1 bên thoát => xử thua như cũ =====
-        if (stillPlaying && otherPlayerExists && !room.winner) {
-            await db.ref("matches/" + roomId).update({
-                winner: otherSide,
-                winReason: "bochay",
-                finishedAt: firebase.database.ServerValue.TIMESTAMP,
-                updatedAt: firebase.database.ServerValue.TIMESTAMP
-            });
+        // ===== Nếu đang chơi mà 1 bên thoát => bên thoát xử THUA, bên còn lại THẮNG =====
+// TUYỆT ĐỐI KHÔNG xóa players / ready / stakeLocked ở đây.
+// Vì /api/pmc/settle cần đủ players.do + players.den để chia PMC và cộng/trừ EXP.
+if (stillPlaying && otherPlayerExists && !room.winner) {
+    const updates = {
+        winner: otherSide,
+        winReason: "bochay",
+        status: "finished",
+        finishedAt: firebase.database.ServerValue.TIMESTAMP,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+    };
 
-            await db.ref("matches/" + roomId + "/players/" + side).remove().catch(() => {});
-            await db.ref("matches/" + roomId + "/ready/" + side).remove().catch(() => {});
-            await db.ref("matches/" + roomId + "/stakeLocked/" + side).set(false).catch(() => {});
-            return;
-        }
+    updates["quitSide"] = side;
+    updates["quitUid"] = me.uid || "";
+    updates["quitAt"] = firebase.database.ServerValue.TIMESTAMP;
+
+    await db.ref("matches/" + roomId).update(updates);
+
+    // Bên thoát tự rời UI thôi, dữ liệu trong room giữ nguyên để server settle.
+    return;
+}
 
         // ===== HOST (do) rời khi phòng đang chờ và đã có người được mời =====
         if (
