@@ -8109,8 +8109,19 @@ function bindRoom(roomId) {
     const listeningRoomId = roomId;
 
     currentRoomId = listeningRoomId;
-roomValueRef = db.ref("matches/" + listeningRoomId);
-roomChatRef = db.ref("matches/" + listeningRoomId + "/chat");
+
+    // Bắt đầu nghe EXP thật từ ví ngay khi bind phòng
+    ensureMyLevelMetaLoaded()
+        .then(meta => {
+            startMyLevelMetaLiveSync();
+            renderLevelHud(buildLevelMeta(meta));
+        })
+        .catch(() => {
+            renderLevelHud(getCachedLevelMeta());
+        });
+
+    roomValueRef = db.ref("matches/" + listeningRoomId);
+    roomChatRef = db.ref("matches/" + listeningRoomId + "/chat");
 
     const content = document.getElementById("match-content-popup");
     if (content) {
@@ -8130,6 +8141,16 @@ if (room.players?.do?.uid === me.uid) {
 }
 
 viewSide = mySide || "do";
+
+// Khi đã biết mình là đỏ/đen thì ép level mới nhất vào room + hiện thanh EXP
+if (mySide) {
+    const latestMeta = getCachedLevelMeta();
+    renderLevelHud(latestMeta);
+
+    db.ref("matches/" + listeningRoomId + "/players/" + mySide + "/levelMeta")
+        .set(buildLevelMeta(latestMeta))
+        .catch(() => {});
+}
 if (typeof applyBoardPerspective === "function") {
     applyBoardPerspective();
 }
