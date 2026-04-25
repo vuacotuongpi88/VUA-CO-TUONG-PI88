@@ -7956,9 +7956,7 @@ if (typeof applyBoardPerspective === "function") {
             });
         }
 
-        if (room.winner) {
-    await maybeSettleStakeRoom(room, listeningRoomId);
-}
+     
 
         renderPlayersFromRoom(room);
         updateReadyUI();
@@ -8573,7 +8571,7 @@ async function settlePmcViaApi(roomId) {
     try {
     console.log("settle roomId:", roomId);
     console.log("my walletKey:", makeWalletDbKey());
-        const res = await fetch("/api/pmc/settle", {
+        const res = await fetch("/api/pmc/settle?t=" + Date.now(), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ roomId, feeRate: MATCH_SYSTEM_FEE_RATE })
@@ -8979,39 +8977,76 @@ async function chargeStakeForReady(roomId, side) {
     try {
         if (!roomId || !side) return { ok: false, stage: "input" };
 
-        const roomSnap = await db.ref("matches/" + roomId).once("value");
+        const roomRef = db.ref("matches/" + roomId);
+        const roomSnap = await roomRef.once("value");
         const room = roomSnap.val() || {};
 
-        const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
-        if (!stake) return { ok: true, stage: "no_stake" };
-        if (room?.stakeLocked?.[side]) return { ok: true, stage: "already_locked" };
+        const stake = Math.max(
+            0,
+            Math.floor(Number(room?.stakePMC || currentRoomStakePMC || 0) || 0)
+        );
+
+        if (!stake) {
+            console.error("READY FAIL no_stake", {
+                roomId,
+                side,
+                roomStake: room?.stakePMC,
+                currentRoomStakePMC
+            });
+            alert("Lỗi: phòng này chưa có mức cược PMC.");
+            return { ok: false, stage: "no_stake" };
+        }
 
         const localProfile = getCurrentPlayerProfile();
         const sidePlayer = room?.players?.[side] || {};
-        let targetWalletKey = sidePlayer.walletKey || localProfile.walletKey;
 
-        if (sidePlayer.uid === localProfile.uid && targetWalletKey !== localProfile.walletKey) {
+        let targetWalletKey = "";
+
+        // Ưu tiên ví của chính máy đang bấm sẵn sàng
+        if (sidePlayer.uid === localProfile.uid) {
             targetWalletKey = localProfile.walletKey;
-
-            await db.ref("matches/" + roomId + "/players/" + side).update({
-                walletKey: localProfile.walletKey,
-                name: localProfile.name,
-                photo: localProfile.photo
-            });
+        } else {
+            targetWalletKey = sidePlayer.walletKey || localProfile.walletKey;
         }
 
-        const safeWalletKey = String(targetWalletKey || "").replace(/[.#$\[\]\/]/g, "_");
-        const targetWalletSnap = await db.ref("wallets/" + safeWalletKey).once("value");
-        const targetWallet = targetWalletSnap.val() || {};
-        const targetPmc = Math.max(0, Math.floor(Number(targetWallet.pmcBalance || 0) || 0));
-
         if (!targetWalletKey) {
-            console.error("READY FAIL wallet_key_missing", { roomId, side });
+            console.error("READY FAIL wallet_key_missing", { roomId, side, localProfile, sidePlayer });
+            alert("Lỗi: không xác định được ví người chơi.");
             return { ok: false, stage: "wallet_key_missing" };
         }
 
-        if (targetPmc < stake) {
-            console.error("READY FAIL insufficient_wallet", { targetWalletKey, targetPmc, stake });
+        const safeWalletKey = String(targetWalletKey).replace(/[.#$\[\]\/]/g, "_");
+
+        // Khóa trước để bấm nhiều lần không bị trừ lặp
+        const lockRef = db.ref("matches/" + roomId + "/stakeLocked/" + side);
+        const lockTx = await runRefTransaction(lockRef, current => {
+            if (current && current.done) return;
+            return {
+                done: true,
+                walletKey: safeWalletKey,
+                stake,
+                at: Date.now(),
+                uid: localProfile.uid || ""
+            };
+        });
+
+        if (!lockTx.committed) {
+            console.log("READY already locked:", { roomId, side });
+            return { ok: true, stage: "already_locked" };
+        }
+
+        const walletSnap = await db.ref("wallets/" + safeWalletKey).once("value");
+        const wallet = walletSnap.val() || {};
+        const beforePmc = Math.floor(Number(wallet.pmcBalance || 0) || 0);
+
+        if (beforePmc < stake) {
+            await lockRef.set(false).catch(() => {});
+            console.error("READY FAIL insufficient_wallet", {
+                targetWalletKey,
+                beforePmc,
+                stake
+            });
+            alert("PMC không đủ để sẵn sàng.");
             return { ok: false, stage: "insufficient_wallet" };
         }
 
@@ -9021,9 +9056,25 @@ async function chargeStakeForReady(roomId, side) {
         });
 
         if (paid == null) {
-            console.error("READY FAIL tx_not_committed", { targetWalletKey, targetPmc, stake });
+            await lockRef.set(false).catch(() => {});
+            console.error("READY FAIL tx_not_committed", {
+                targetWalletKey,
+                beforePmc,
+                stake
+            });
+            alert("Lỗi trừ PMC, thử lại.");
             return { ok: false, stage: "tx_not_committed" };
         }
+
+        // Cập nhật lại player trong room để UI thấy số dư mới
+        await roomRef.child("players/" + side).update({
+            walletKey: targetWalletKey,
+            name: sidePlayer.name || localProfile.name || "Người chơi",
+            photo: sidePlayer.photo || localProfile.photo || "images/do_tuong.png",
+            pmcBalance: paid
+        });
+
+        await db.ref("matches/" + roomId + "/ready/" + side).set(true);
 
         if (targetWalletKey === localProfile.walletKey) {
             currentPmcBalance = paid;
@@ -9033,13 +9084,31 @@ async function chargeStakeForReady(roomId, side) {
             await loadWalletBalance().catch(() => {});
         }
 
-        await db.ref("matches/" + roomId + "/stakeLocked/" + side).set(true);
+        console.log("READY PAID OK", {
+            roomId,
+            side,
+            targetWalletKey,
+            stake,
+            beforePmc,
+            afterPmc: paid
+        });
 
-        return { ok: true, stage: "done", walletKey: targetWalletKey, paid };
+        return {
+            ok: true,
+            stage: "done",
+            walletKey: targetWalletKey,
+            stake,
+            beforePmc,
+            paid
+        };
     } catch (err) {
         console.error("chargeStakeForReady exception:", err);
         alert("Lỗi trừ PMC, thử lại.");
-        return { ok: false, stage: "exception", error: String(err?.message || err) };
+        return {
+            ok: false,
+            stage: "exception",
+            error: String(err?.message || err)
+        };
     }
 }
 
@@ -9777,12 +9846,11 @@ async function setReady() {
     const result = await chargeStakeForReady(currentRoomId, mySide);
 
     if (!result.ok) {
-        // không alert thêm ở đây nữa
         console.error("READY FAIL:", result);
         return;
     }
 
-    await db.ref("matches/" + currentRoomId + "/ready/" + mySide).set(true);
+    console.log("READY OK:", result);
 }
 
 async function batDauTranDau(loai) {
