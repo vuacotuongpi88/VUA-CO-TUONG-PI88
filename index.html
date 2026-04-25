@@ -5023,6 +5023,57 @@ body.in-match #arena-shop-btn{ display:none !important; }
 .avatar-frame-skin_god_neon{
   --skin-icon-y: -25px !important;
 }
+/* ===== HIỆU ỨNG CỘNG/TRỪ EXP NHỎ ===== */
+.exp-float-pop {
+    position: fixed;
+    left: 50%;
+    bottom: max(58px, env(safe-area-inset-bottom, 0px) + 54px);
+    transform: translateX(-50%) translateY(0) scale(1);
+    z-index: 16000;
+    pointer-events: none;
+    padding: 6px 13px;
+    border-radius: 999px;
+    font-size: 15px;
+    font-weight: 900;
+    letter-spacing: 0.4px;
+    background: rgba(0, 0, 0, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    box-shadow:
+        0 0 12px rgba(0, 0, 0, 0.55),
+        0 0 18px rgba(85, 239, 196, 0.22);
+    animation: expFloatDrop 1.35s ease-out forwards;
+}
+
+.exp-float-pop.plus {
+    color: #7dffb3;
+    border-color: rgba(125, 255, 179, 0.68);
+    text-shadow: 0 0 8px rgba(125, 255, 179, 0.55);
+}
+
+.exp-float-pop.minus {
+    color: #ff8a80;
+    border-color: rgba(255, 138, 128, 0.68);
+    text-shadow: 0 0 8px rgba(255, 138, 128, 0.45);
+}
+
+@keyframes expFloatDrop {
+    0% {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-12px) scale(0.88);
+    }
+    16% {
+        opacity: 1;
+        transform: translateX(-50%) translateY(-20px) scale(1.08);
+    }
+    72% {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translateX(-50%) translateY(24px) scale(0.94);
+    }
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -7401,7 +7452,35 @@ function ensureLevelHudMounted() {
   document.body.appendChild(hud);
   return hud;
 }
+function showExpFloat(delta) {
+    const n = Math.floor(Number(delta || 0) || 0);
+    if (!n) return;
 
+    const old = document.querySelector(".exp-float-pop");
+    if (old) old.remove();
+
+    const el = document.createElement("div");
+    el.className = "exp-float-pop " + (n > 0 ? "plus" : "minus");
+    el.textContent = (n > 0 ? "+" : "") + n + " EXP";
+
+    document.body.appendChild(el);
+
+    setTimeout(() => {
+        el.remove();
+    }, 1500);
+}
+
+function maybeShowExpFloat(meta = {}) {
+    const delta = Math.floor(Number(meta.lastXpDelta || 0) || 0);
+    const updatedAt = Number(meta.updatedAt || 0) || 0;
+    if (!delta || !updatedAt) return;
+
+    const key = `${updatedAt}_${delta}`;
+    if (window.__lastExpFloatKey === key) return;
+
+    window.__lastExpFloatKey = key;
+    showExpFloat(delta);
+}
 function renderLevelHud(meta = {}) {
   const hud = ensureLevelHudMounted();
   const p = getLevelProgress(meta);
@@ -7416,6 +7495,7 @@ function renderLevelHud(meta = {}) {
 }
   if (fillEl) fillEl.style.width = `${p.pct}%`;
   hud.classList.add("show");
+  maybeShowExpFloat(p.safe);
 }
 
 function hideLevelHud() {
@@ -7450,6 +7530,7 @@ async function ensureMyLevelMetaLoaded() {
   try {
     const snap = await getWalletLevelRef(walletKey).once("value");
     const meta = buildLevelMeta(snap.val() || {});
+    window.__lastExpFloatKey = `${Number(meta.updatedAt || 0) || 0}_${Number(meta.lastXpDelta || 0) || 0}`;
     localStorage.setItem("level-meta-cache", JSON.stringify(meta));
     renderLevelHud(meta);
     return meta;
@@ -7491,18 +7572,15 @@ function getRoomPlayerKeyForLevel(player = {}) {
 function getRepeatAdjustedXpAbs(pairCount) {
   const n = Math.max(1, Number(pairCount || 1) || 1);
 
-  // Chỉ giảm EXP khi hôm nay gặp lại đúng cùng 1 người nhiều lần.
-  if (n === 1) return 18;
-  if (n === 2) return 17;
-  if (n === 3) return 16;
-  if (n === 4) return 15;
-  if (n <= 6) return 13;
-  if (n <= 8) return 10;
-  if (n <= 10) return 7;
-  if (n <= 15) return 5;
-  if (n <= 20) return 3;
-
-  // Farm quá nhiều cùng 1 người vẫn còn 1 EXP cho vui, nhưng gần như không đáng cày.
+  if (n === 1) return 30;
+  if (n === 2) return 24;
+  if (n === 3) return 20;
+  if (n === 4) return 16;
+  if (n <= 6) return 12;
+  if (n <= 8) return 8;
+  if (n <= 10) return 5;
+  if (n <= 15) return 3;
+  if (n <= 20) return 2;
   return 1;
 }
 
