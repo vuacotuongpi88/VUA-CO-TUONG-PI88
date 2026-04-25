@@ -5041,7 +5041,7 @@ body.in-match #arena-shop-btn{ display:none !important; }
     box-shadow:
         0 0 12px rgba(0, 0, 0, 0.55),
         0 0 18px rgba(85, 239, 196, 0.22);
-    animation: expFloatDrop 1.35s ease-out forwards;
+    animation: expFloatDrop 2.8s ease-out forwards;
 }
 
 .exp-float-pop.plus {
@@ -7569,8 +7569,8 @@ function showExpFloat(delta) {
     document.body.appendChild(el);
 
     setTimeout(() => {
-        el.remove();
-    }, 1500);
+    el.remove();
+    }, 3000);
 }
 
 function maybeShowExpFloat(meta = {}) {
