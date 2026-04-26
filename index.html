@@ -6484,7 +6484,10 @@ function hideVictoryPopup(force = false) {
 }
 
 async function playNextMatch() {
-    hideVictoryPopup();
+    hideVictoryPopup(true);
+    window.__victoryLocked = false;
+    window.__lastVictoryKey = "";
+
     clearInterval(interval);
     clearInterval(readyInterval);
 
@@ -6637,9 +6640,38 @@ async function playNextMatch() {
             updatedAt: firebase.database.ServerValue.TIMESTAMP
         });
 
-        closeReadyOverlay();
+                hideVictoryPopup(true);
+
+        readyDo = false;
+        readyDen = false;
+        readyTime = 30;
         readyOverlayWaitingShown = false;
-        hideVictoryPopup(true);
+        currentRoomStatus = "waiting";
+        isGameOver = false;
+        selectedPiece = null;
+
+        clearMoveHints();
+        clearLastMoveMarks();
+        document.querySelectorAll(".piece").forEach(p => p.remove());
+
+        renderTimerUI();
+        updateReadyUI();
+
+        // Máy bấm TIẾP TỤC tự bật lại bảng SS ngay
+        setTimeout(() => {
+            const overlay = document.getElementById("ready-overlay");
+            if (
+                currentRoomId === roomId &&
+                mySide &&
+                overlay &&
+                overlay.style.display !== "flex"
+            ) {
+                showReadyOverlay(currentRoomMode || room.mode || "co-tuong");
+            } else {
+                updateReadyUI();
+            }
+        }, 150);
+
         return;
     }
 
@@ -8419,7 +8451,10 @@ if (hasEnoughPlayersWaiting) {
     isGameOver = false;
     selectedPiece = null;
     clearMoveHints();
-    hideVictoryPopup();
+
+    // Phòng đã reset về chờ SS thì phải ép tắt popup thắng/thua ở cả 2 máy
+    hideVictoryPopup(true);
+
     renderTimerUI();
 
     const overlay = document.getElementById("ready-overlay");
