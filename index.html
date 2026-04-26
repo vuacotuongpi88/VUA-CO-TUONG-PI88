@@ -5868,220 +5868,7 @@ let lastRoomBoardHash = "";
 let lastDrawRequestAt = 0;
 let myLevelMetaLiveRef = null;
 const ACTIVE_MATCH_KEY = "co_tuong_active_match_v1";
-const AI_BOT_UID = "ai_bot_truc_lam_lv1";
-const AI_BOT_NAME = "AI Trúc Lâm";
-const AI_BOT_SIDE = "den";
-const AI_SYSTEM_WALLET_KEY = "pi_admin_master";
-// Mở app với ?clearMatch=1 để xóa trận cũ bị kẹt
-if (new URLSearchParams(window.location.search).has("clearMatch")) {
-    localStorage.removeItem(ACTIVE_MATCH_KEY);
-    localStorage.removeItem("co_tuong_active_match_v1");
-    history.replaceState(null, "", location.pathname);
-}
-let aiOfferTimer = null;
-let aiMoveTimer = null;
-let aiMoveScheduledKey = "";
-let aiThinking = false;
 
-let aiWorker = null;
-let aiWorkerReqId = 0;
-
-const AI_WORKER_DEPTH = 5;
-const AI_WORKER_TIME_MS = 350;
-const AI_WORKER_TOP_MOVES = 12;
-function resetAiWorker() {
-    try {
-        if (aiWorker) aiWorker.terminate();
-    } catch (_) {}
-
-    aiWorker = null;
-    aiThinking = false;
-}
-
-function getAiWorker() {
-    if (!window.Worker) return null;
-
-    if (!aiWorker) {
-        aiWorker = new Worker("/ai-worker.js?v=20260426_ai_worker_1");
-
-        aiWorker.onerror = function (err) {
-            console.error("AI WORKER ERROR:", err);
-            resetAiWorker();
-        };
-    }
-
-    return aiWorker;
-}
-
-function aiMatrixForWorker() {
-    const mt = taoMaTran();
-
-    return mt.map(row => row.map(p => {
-        if (!p) return null;
-
-        return {
-            side: p.side,
-            type: p.type
-        };
-    }));
-}
-
-function aiMainFindKingForFace(side, mt) {
-    const kingTypes = side === "do"
-        ? ["帥", "帅"]
-        : ["將", "将"];
-
-    for (let r = 0; r < 10; r++) {
-        for (let c = 0; c < 9; c++) {
-            const p = mt[r][c];
-            if (p && p.side === side && kingTypes.includes(p.type)) {
-                return { c, r };
-            }
-        }
-    }
-
-    return null;
-}
-
-function aiMainTwoKingsFacing(mt) {
-    const a = aiMainFindKingForFace("do", mt);
-    const b = aiMainFindKingForFace("den", mt);
-
-    if (!a || !b) return false;
-    if (a.c !== b.c) return false;
-
-    const from = Math.min(a.r, b.r) + 1;
-    const to = Math.max(a.r, b.r) - 1;
-
-    for (let r = from; r <= to; r++) {
-        if (mt[r][a.c]) return false;
-    }
-
-    return true;
-}
-
-function isAiWorkerMoveLegal(move, side = "den") {
-    if (!move || !move.from || !move.to) return false;
-
-    const mt = taoMaTran();
-
-    const p = mt[move.from.r]?.[move.from.c];
-    if (!p || p.side !== side) return false;
-
-    const target = mt[move.to.r]?.[move.to.c];
-    if (target && target.side === side) return false;
-
-    if (!checkLuat(p.type, side, move.from.c, move.from.r, move.to.c, move.to.r, mt)) {
-        return false;
-    }
-
-    const temp = mt.map(row => row.map(cell => cell ? { ...cell } : null));
-    temp[move.to.r][move.to.c] = temp[move.from.r][move.from.c];
-    temp[move.from.r][move.from.c] = null;
-
-    if (isTwoKingsFacing(temp)) return false;
-    if (laBiChieu(side, temp)) return false;
-
-    return true;
-}
-function roomHasAiBot(room) {
-    const den = room?.players?.den || {};
-
-    return !!(
-        room?.aiMode ||
-        den?.isAI ||
-        den?.uid === AI_BOT_UID ||
-        String(den?.name || "").toLowerCase().includes("ai")
-    );
-}
-function aiFastFallbackMove(moves) {
-    if (!moves || !moves.length) return null;
-
-    const values = {
-        "帥": 10000, "帅": 10000, "將": 10000, "将": 10000,
-        "俥": 900, "車": 900, "车": 900,
-        "炮": 520, "砲": 520,
-        "傌": 480, "馬": 480, "马": 480,
-        "相": 230, "象": 230,
-        "仕": 230, "士": 230,
-        "兵": 120, "卒": 120
-    };
-
-    return moves
-        .slice()
-        .sort((a, b) => {
-            const av = a.target ? (values[a.target.type] || 40) : 0;
-            const bv = b.target ? (values[b.target.type] || 40) : 0;
-            return bv - av;
-        })[0] || moves[0];
-}
-
-function requestAiMoveFromWorker(room, side = "den") {
-    return new Promise((resolve) => {
-        const worker = getAiWorker();
-
-        if (!worker) {
-            resolve(null);
-            return;
-        }
-
-        const id = ++aiWorkerReqId;
-        let finished = false;
-
-        const timer = setTimeout(() => {
-            if (finished) return;
-
-            finished = true;
-            worker.removeEventListener("message", onMessage);
-            resetAiWorker();
-
-            resolve(null);
-        }, Math.max(900, AI_WORKER_TIME_MS + 500));
-
-        function onMessage(e) {
-            const data = e.data || {};
-            if (data.id !== id) return;
-
-            if (finished) return;
-
-            finished = true;
-            clearTimeout(timer);
-            worker.removeEventListener("message", onMessage);
-
-            if (!data.ok) {
-                console.error("AI WORKER RETURN ERROR:", data.error);
-                resolve(null);
-                return;
-            }
-
-            const move = data.result && data.result.move ? data.result.move : null;
-
-            console.log("AI WORKER RESULT:", data.result);
-
-            if (!isAiWorkerMoveLegal(move, side)) {
-                console.warn("AI WORKER MOVE ILLEGAL, fallback:", move);
-                resolve(null);
-                return;
-            }
-
-            resolve(move);
-        }
-
-        worker.addEventListener("message", onMessage);
-
-        worker.postMessage({
-            type: "findMove",
-            id,
-            board: aiMatrixForWorker(),
-            side,
-            maxDepth: AI_WORKER_DEPTH,
-            timeLimitMs: AI_WORKER_TIME_MS,
-            topMovesLimit: AI_WORKER_TOP_MOVES,
-            roomId: currentRoomId,
-            moveCount: room?.moveCount || 0
-        });
-    });
-}
 function readActiveMatchSnapshot() {
     try {
         return JSON.parse(localStorage.getItem(ACTIVE_MATCH_KEY) || "null");
@@ -6145,23 +5932,10 @@ async function tryResumeRealtimeMatch(preferredMode = null) {
     if (preferredMode && room.mode && room.mode !== preferredMode) {
         return false;
     }
-const sideFound = detectMySideFromRoom(room, me, saved.roomId);
-const isDo = sideFound === "do";
-const isDen = sideFound === "den";
+
+    const isDo = room.players?.do?.uid === me.uid;
+    const isDen = room.players?.den?.uid === me.uid;
     const canResume = !room.winner && (room.status === "playing" || room.status === "waiting");
-
-    const boardOk =
-        Array.isArray(room.board) &&
-        room.board.length === 10 &&
-        room.board.every(row => Array.isArray(row) && row.length === 9);
-
-    // Nếu trận cũ bị lỗi: status playing nhưng không có board chuẩn,
-    // xóa snapshot để app không bị kẹt màn xanh trống.
-    if (room.status === "playing" && !boardOk) {
-        console.warn("CLEAR BROKEN ACTIVE MATCH:", saved.roomId, room);
-        clearActiveMatchSnapshot(saved.roomId);
-        return false;
-    }
 
     if (!canResume || (!isDo && !isDen)) {
         clearActiveMatchSnapshot(saved.roomId);
@@ -6562,13 +6336,8 @@ function formatTime(s) {
     return String(m).padStart(2, '0') + ":" + String(sec).padStart(2, '0');
 }
 
-let timerLastTickMs = 0;
-
 function startTimer() {
     clearInterval(interval);
-    interval = null;
-
-    timerLastTickMs = Date.now();
     renderTimerUI();
 
     if (!currentRoomId || currentRoomStatus !== "playing" || isGameOver) {
@@ -6578,43 +6347,21 @@ function startTimer() {
     interval = setInterval(() => {
         if (isGameOver || !currentRoomId || currentRoomStatus !== "playing") {
             clearInterval(interval);
-            interval = null;
             return;
         }
 
-        const now = Date.now();
-        const elapsed = Math.floor((now - timerLastTickMs) / 1000);
-
-        if (elapsed <= 0) return;
-
-        timerLastTickMs += elapsed * 1000;
-
-        if (luotDi === "do") {
-            timeDo = Math.max(0, timeDo - elapsed);
-
-            if (timeDo <= 30 && timeDo + elapsed > 30) {
-                playSnd("timeout");
-            }
-
+        if (luotDi === 'do') {
+            timeDo--;
+            if (timeDo === 30) playSnd('timeout');
             renderTimerUI();
-
-            if (timeDo <= 0) {
-                endGame("HẾT GIỜ", "ĐEN THẮNG");
-            }
+            if (timeDo <= 0) endGame("HẾT GIỜ", "ĐEN THẮNG");
         } else {
-            timeDen = Math.max(0, timeDen - elapsed);
-
-            if (timeDen <= 30 && timeDen + elapsed > 30) {
-                playSnd("timeout");
-            }
-
+            timeDen--;
+            if (timeDen === 30) playSnd('timeout');
             renderTimerUI();
-
-            if (timeDen <= 0) {
-                endGame("HẾT GIỜ", "ĐỎ THẮNG");
-            }
+            if (timeDen <= 0) endGame("HẾT GIỜ", "ĐỎ THẮNG");
         }
-    }, 250);
+    }, 1000);
 }
 const FULL_TURN_SECONDS = 9 * 60;
 function renderTimerUI() {
@@ -7230,7 +6977,7 @@ if (mt[r1][c1] && mt[r1][c1].side === side) {
 for (let r2 = 0; r2 < 10; r2++) for (let c2 = 0; c2 < 9; c2++) {
 if (checkLuat(mt[r1][c1].type, side, c1, r1, c2, r2, mt)) {
 let temp = mt[r2][c2]; mt[r2][c2] = mt[r1][c1]; mt[r1][c1] = null;
-let safe = !laBiChieu(side, mt) && !isTwoKingsFacing(mt);
+let safe = !laBiChieu(side, mt);
 mt[r1][c1] = mt[r2][c2]; mt[r2][c2] = temp;
 if (safe) return false;
 }
@@ -7315,12 +7062,7 @@ if (isOwnTurnPiece) {
     mt[r2][c2] = { side: selectedPiece.dataset.side, type: selectedPiece.dataset.type };
     mt[r1][c1] = null;
 
-    if (isTwoKingsFacing(mt)) {
-    alert("Không được để 2 Tướng đối mặt!");
-    return;
-}
-
-if (laBiChieu(luotDi, mt)) {
+    if (laBiChieu(luotDi, mt)) {
     alert("Không được để Tướng bị chiếu!");
     return;
 }
@@ -8472,107 +8214,37 @@ if (stillPlaying && otherPlayerExists && !room.winner) {
 function syncRoomFromBoard(extra = {}) {
     if (!currentRoomId) return;
 
-    return db.ref("matches/" + currentRoomId).update({
-    board: exportBoardState(),
-    turn: luotDi,
-    isCoUp,
-    timeDo,
-    timeDen,
-    lastMoveFrom: lastMoveFrom || null,
-    lastMoveTo: lastMoveTo || null,
-    updatedAt: firebase.database.ServerValue.TIMESTAMP,
-    ...extra
-});
-}
-
-function readyStakeLockedOK(value) {
-    if (value === true) return true;
-    if (value && typeof value === "object") {
-        return value.done === true || value.paid === true || !!value.walletKey;
-    }
-    return false;
+    db.ref("matches/" + currentRoomId).update({
+        board: exportBoardState(),
+        turn: luotDi,
+        isCoUp,
+        timeDo,
+        timeDen,
+        lastMoveFrom: lastMoveFrom || null,
+        lastMoveTo: lastMoveTo || null,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP,
+        ...extra
+    });
 }
 
 async function maybeStartRoomFromHost(room, roomId = currentRoomId) {
+    if (!(room.stakeLocked?.do && room.stakeLocked?.den)) return;
     if (!roomId) return;
+    if (room.status === "playing") return;
+    if (mySide !== "do") return;
+    if (room.status !== "waiting") return;
+    if (!room.players?.do || !room.players?.den) return;
+    if (!(room.ready?.do && room.ready?.den)) return;
+    if (Array.isArray(room.board) && room.board.length) return;
+    if (!(room.stakeLocked?.do && room.stakeLocked?.den)) return;
 
-    const roomRef = db.ref("matches/" + roomId);
-
-    let snap = await roomRef.once("value");
-    let latest = snap.val() || room || {};
-
-    if (!latest) return;
-    if (latest.status === "playing") return;
-    if (latest.status !== "waiting") return;
-    if (latest.winner) return;
-    if (!latest.players?.do || !latest.players?.den) return;
-    if (!(latest.ready?.do && latest.ready?.den)) return;
-
-    const doLocked = readyStakeLockedOK(latest.stakeLocked?.do);
-    const denLocked = readyStakeLockedOK(latest.stakeLocked?.den);
-
-    if (!(doLocked && denLocked)) {
-        console.warn("CHƯA ĐỦ KHÓA PHÍ ĐỂ VÀO TRẬN:", {
-            doLocked: latest.stakeLocked?.do,
-            denLocked: latest.stakeLocked?.den
-        });
-        return;
-    }
-
-    const now = Date.now();
-    const lockRef = roomRef.child("startLock");
-
-    const lockTx = await runRefTransaction(lockRef, current => {
-        const at = Number(current?.at || 0);
-
-        // Có máy khác vừa chốt trong 12 giây thì thôi
-        if (current && at && now - at < 12000) return;
-
-        return {
-            at: now,
-            uid: auth.currentUser?.uid || "",
-            side: mySide || "",
-            by: "maybeStartRoomFromHost"
-        };
-    });
-
-    if (!lockTx.committed) {
-        console.log("START ROOM: máy khác đang chốt trận");
-        return;
-    }
-
-    // Đọc lại lần cuối sau khi khóa
-    snap = await roomRef.once("value");
-    latest = snap.val() || {};
-
-    if (
-        latest.status !== "waiting" ||
-        latest.winner ||
-        !latest.players?.do ||
-        !latest.players?.den ||
-        !(latest.ready?.do && latest.ready?.den) ||
-        !(readyStakeLockedOK(latest.stakeLocked?.do) && readyStakeLockedOK(latest.stakeLocked?.den))
-    ) {
-        await lockRef.remove().catch(() => {});
-        return;
-    }
-
-    isCoUp = latest.mode === "co-up";
-
-    clearInterval(readyInterval);
-    closeReadyOverlay();
-
-    isGameOver = false;
-    selectedPiece = null;
-    lastMoveFrom = null;
-    lastMoveTo = null;
-    lastRoomBoardHash = "";
-
+    isCoUp = room.mode === "co-up";
     resetToStartup();
 
     const freshBoard = exportBoardState();
-
-    await roomRef.update({
+const waitingRoomRef = db.ref("waitingRooms/" + room.roomBucket + "/" + roomId);
+await waitingRoomRef.remove().catch(() => {});
+    await db.ref("matches/" + roomId).update({
         status: "playing",
         isCoUp,
         board: freshBoard,
@@ -8591,25 +8263,8 @@ async function maybeStartRoomFromHost(room, roomId = currentRoomId) {
             do: false,
             den: false
         },
-        startLock: null,
         updatedAt: firebase.database.ServerValue.TIMESTAMP
     });
-
-    if (latest.roomBucket) {
-        await db.ref("waitingRooms/" + latest.roomBucket + "/" + roomId).remove().catch(() => {});
-    }
-
-    currentRoomStatus = "playing";
-    luotDi = "do";
-    timeDo = 540;
-    timeDen = 540;
-
-    applyBoardStateFromRoom(freshBoard);
-    updateTurnUIOnly();
-    renderTimerUI();
-    startTimer();
-
-    console.log("START ROOM OK:", roomId);
 }
 function appendMatchChatMessage(msg) {
     const content = document.getElementById("match-content-popup");
@@ -8630,47 +8285,6 @@ function appendMatchChatMessage(msg) {
     row.innerHTML = `<b style="color:${labelColor};">${who}:</b> <span>${msg.text || ""}</span>`;
     content.appendChild(row);
     content.scrollTop = content.scrollHeight;
-}
-function sameText(a, b) {
-    return String(a || "").trim() !== "" && String(a || "").trim() === String(b || "").trim();
-}
-
-function detectMySideFromRoom(room, me, roomId) {
-    const doPlayer = room?.players?.do || {};
-    const denPlayer = room?.players?.den || {};
-
-    // Ưu tiên deviceId vì 2 máy khác nhau chắc chắn khác deviceId
-    if (sameText(denPlayer.deviceId, me.deviceId)) return "den";
-    if (sameText(doPlayer.deviceId, me.deviceId)) return "do";
-
-    // Tiếp theo xét walletKey nếu khác nhau
-    if (sameText(denPlayer.walletKey, me.walletKey)) return "den";
-    if (sameText(doPlayer.walletKey, me.walletKey)) return "do";
-
-    // Nếu trước đó máy này đã lưu mình là bên nào thì giữ bên đó
-    try {
-        const saved = typeof readActiveMatchSnapshot === "function"
-            ? readActiveMatchSnapshot()
-            : null;
-
-        if (
-            saved &&
-            saved.roomId === roomId &&
-            (saved.side === "do" || saved.side === "den")
-        ) {
-            return saved.side;
-        }
-    } catch (e) {}
-
-    // Chỉ dùng uid khi uid chỉ trùng 1 bên.
-    // Nếu uid trùng cả đỏ lẫn đen thì KHÔNG được tự ép thành đỏ.
-    const uidMatchDo = sameText(doPlayer.uid, me.uid);
-    const uidMatchDen = sameText(denPlayer.uid, me.uid);
-
-    if (uidMatchDen && !uidMatchDo) return "den";
-    if (uidMatchDo && !uidMatchDen) return "do";
-
-    return mySide || "";
 }
 function bindRoom(roomId) {
     cleanupRoomListeners();
@@ -8702,23 +8316,13 @@ function bindRoom(roomId) {
         if (!room) return;
 const me = getCurrentPlayerProfile();
 
-const detectedSide = detectMySideFromRoom(room, me, listeningRoomId);
-
-if (detectedSide === "do" || detectedSide === "den") {
-    mySide = detectedSide;
+if (room.players?.do?.uid === me.uid) {
+    mySide = "do";
+} else if (room.players?.den?.uid === me.uid) {
+    mySide = "den";
 }
 
 viewSide = mySide || "do";
-
-console.log("SIDE DETECT:", {
-    mySide,
-    luotDi,
-    myUid: me.uid,
-    myWalletKey: me.walletKey,
-    myDeviceId: me.deviceId,
-    doPlayer: room.players?.do,
-    denPlayer: room.players?.den
-});
 
 // Khi đã biết mình là đỏ/đen thì ép level mới nhất vào room + hiện thanh EXP
 if (mySide) {
@@ -8782,60 +8386,36 @@ if (hasEnoughPlayersWaiting) {
     renderTimerUI();
 }
 
-const newBoardHash = JSON.stringify(room.board || []);
-const timerSig = [
-    room.status || "",
-    room.turn || "",
-    Number(room.timeDo || 0),
-    Number(room.timeDen || 0),
-    room.winner || "",
-    newBoardHash
-].join("|");
-
-if (newBoardHash && newBoardHash !== lastRoomBoardHash) {
-    lastRoomBoardHash = newBoardHash;
-
-    applyBoardStateFromRoom(room.board || []);
-    isCoUp = !!room.isCoUp;
-
-    lastMoveFrom = room.lastMoveFrom || null;
-    lastMoveTo = room.lastMoveTo || null;
-
-    if (lastMoveFrom && lastMoveTo) {
-        drawLastMoveMarks();
-    }
-}
-
-// Quan trọng: luôn đồng bộ lượt + giờ từ Firebase, không phụ thuộc board hash
-const serverClockChanged = timerSig !== lastTimerRoomSig;
-
-if (serverClockChanged) {
-    lastTimerRoomSig = timerSig;
-
-    // Chỉ đồng bộ giờ từ Firebase khi board/lượt/giờ server thật sự đổi.
-    // Không reset giờ local vì mấy event phụ như levelMeta/chat/player update.
-    luotDi = room.turn || "do";
-    timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
-    timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
-
-    updateTurnUIOnly();
-    renderTimerUI();
-}
-
 if (room.status === "playing" && !room.winner) {
     readyOverlayWaitingShown = false;
     isGameOver = false;
     closeReadyOverlay();
-
-    if (serverClockChanged) {
-        startTimer();
-    }
-
-    maybeScheduleAiMove(room, listeningRoomId);
-} else {
-    updateTurnUIOnly();
-    renderTimerUI();
 }
+        const newBoardHash = JSON.stringify(room.board || []);
+        if (newBoardHash && newBoardHash !== lastRoomBoardHash) {
+            lastRoomBoardHash = newBoardHash;
+
+            applyBoardStateFromRoom(room.board || []);
+            isCoUp = !!room.isCoUp;
+            luotDi = room.turn || "do";
+            timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
+            timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
+
+            timerDoEl.innerText = formatTime(timeDo);
+            timerDenEl.innerText = formatTime(timeDen);
+
+            lastMoveFrom = room.lastMoveFrom || null;
+            lastMoveTo = room.lastMoveTo || null;
+
+            updateTurnUIOnly();
+
+            if (lastMoveFrom && lastMoveTo) {
+                drawLastMoveMarks();
+            }
+
+            startTimer();
+        }
+
         if (room.drawRequest && room.drawRequest.from !== mySide && room.drawRequest.at !== lastDrawRequestAt) {
             lastDrawRequestAt = room.drawRequest.at;
 
@@ -9006,12 +8586,8 @@ async function createAndPublishWaitingRoom(me, mode, stakePMC, bucket) {
     currentRoomStakePMC = stakePMC;
 
     saveActiveMatchSnapshot({ roomId: newRoomId, mode, side: "do" });
-bindRoom(newRoomId);
-
-// Chủ phòng chờ 30 giây chưa có ai vào thì hỏi đánh với AI
-startAiOfferTimerForWaitingRoom(newRoomId);
-
-return true;
+    bindRoom(newRoomId);
+    return true;
 }
 async function joinOrCreateRealtimeMatch(mode, stakePMC = 0) {
     await ensureMyLevelMetaLoaded();
@@ -9137,402 +8713,6 @@ const created = await createAndPublishWaitingRoom(
     closeReadyOverlay();
     readyOverlayWaitingShown = false;
     updateReadyUI();
-}
-function startAiOfferTimerForWaitingRoom(roomId) {
-    clearTimeout(aiOfferTimer);
-
-    aiOfferTimer = setTimeout(async () => {
-        try {
-            if (!roomId || currentRoomId !== roomId || mySide !== "do") return;
-
-            const snap = await db.ref("matches/" + roomId).once("value");
-            const room = snap.val() || {};
-
-            if (!room || room.status !== "waiting" || room.winner) return;
-            if (room.players?.den) return;
-
-            const ok = confirm(
-                "Chờ 30 giây chưa có đối thủ.\n\n" +
-                "Mầy có muốn đánh với AI không?\n\n" +
-                "- Thắng vẫn nhận PMC như trận thường.\n" +
-                "- AI thắng thì PMC chảy về ví quỹ hệ thống."
-            );
-
-            if (!ok) return;
-
-            await startAiOpponentRoom(roomId, room);
-        } catch (err) {
-            console.error("AI OFFER ERROR:", err);
-        }
-    }, 30000);
-}
-
-async function startAiOpponentRoom(roomId, room) {
-    if (!roomId || !room) return;
-    if (mySide !== "do") return;
-
-    const stake = Math.max(0, Math.floor(Number(room.stakePMC || currentRoomStakePMC || 0) || 0));
-    if (!stake) {
-        alert("Phòng chưa có mức cược PMC.");
-        return;
-    }
-
-    // 1) Trừ stake của người chơi trước
-    const readyResult = await chargeStakeForReady(roomId, "do");
-    if (!readyResult.ok) {
-        alert("Không thể sẵn sàng để đánh AI.");
-        return;
-    }
-
-    // 2) Trừ stake của AI từ ví quỹ hệ thống để pot đủ 2 bên
-    const aiBankPaid = await adjustPmcWalletByKey(AI_SYSTEM_WALLET_KEY, -stake, {
-        name: "Ví quỹ hệ thống",
-        photo: "images/den_tuong.png"
-    });
-
-    if (aiBankPaid == null) {
-        await maybeRefundWaitingStakePMC(roomId, room, "do").catch(() => {});
-        alert("Ví quỹ hệ thống không đủ PMC để cho AI vào bàn.");
-        return;
-    }
-
-    try {
-        isCoUp = (room.mode || currentRoomMode) === "co-up";
-        resetToStartup();
-
-        const freshBoard = exportBoardState();
-        const bucket = room.roomBucket || currentRoomBucket;
-
-        const aiPlayer = {
-            uid: AI_BOT_UID,
-            name: AI_BOT_NAME,
-            photo: "images/den_tuong.png",
-            walletKey: AI_SYSTEM_WALLET_KEY,
-            pmcBalance: aiBankPaid,
-            isAI: true,
-            levelMeta: {
-                level: 1,
-                title: "AI Nhập Môn",
-                frameClass: "title-frame-beginner",
-                pillClass: "title-pill-beginner"
-            }
-        };
-
-        const updates = {};
-
-        updates[`matches/${roomId}/players/den`] = aiPlayer;
-        updates[`matches/${roomId}/ready/do`] = true;
-        updates[`matches/${roomId}/ready/den`] = true;
-
-        updates[`matches/${roomId}/stakeLocked/den`] = {
-            done: true,
-            walletKey: AI_SYSTEM_WALLET_KEY,
-            stake,
-            at: Date.now(),
-            uid: AI_BOT_UID,
-            ai: true
-        };
-
-        updates[`matches/${roomId}/aiMode`] = true;
-        updates[`matches/${roomId}/aiSide`] = "den";
-        updates[`matches/${roomId}/aiName`] = AI_BOT_NAME;
-
-        updates[`matches/${roomId}/status`] = "playing";
-        updates[`matches/${roomId}/isCoUp`] = isCoUp;
-        updates[`matches/${roomId}/board`] = freshBoard;
-        updates[`matches/${roomId}/moveCount`] = 0;
-        updates[`matches/${roomId}/startedAt`] = firebase.database.ServerValue.TIMESTAMP;
-        updates[`matches/${roomId}/finishedAt`] = null;
-        updates[`matches/${roomId}/turn`] = "do";
-        updates[`matches/${roomId}/timeDo`] = 540;
-        updates[`matches/${roomId}/timeDen`] = 540;
-        updates[`matches/${roomId}/lastMoveFrom`] = null;
-        updates[`matches/${roomId}/lastMoveTo`] = null;
-        updates[`matches/${roomId}/winner`] = null;
-        updates[`matches/${roomId}/winReason`] = null;
-        updates[`matches/${roomId}/drawRequest`] = null;
-        updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
-
-        if (bucket) {
-            updates[`waitingRooms/${bucket}/${roomId}`] = null;
-        }
-
-        await db.ref().update(updates);
-
-        alert("AI đã vào bàn. Mầy cầm ĐỎ, AI cầm ĐEN.");
-    } catch (err) {
-        console.error("START AI ROOM ERROR:", err);
-
-        await adjustPmcWalletByKey(AI_SYSTEM_WALLET_KEY, stake, {
-            name: "Ví quỹ hệ thống",
-            photo: "images/den_tuong.png"
-        }).catch(() => {});
-
-        await maybeRefundWaitingStakePMC(roomId, room, "do").catch(() => {});
-        alert("Lỗi tạo bàn AI, đã cố hoàn stake.");
-    }
-}
-
-function aiGetPieceElAtReal(c, r) {
-    const view = mapBoardToView(c, r);
-    return Array.from(document.querySelectorAll(".piece")).find(p => {
-        const pc = columns.indexOf(parseFloat(p.style.left));
-        const pr = rows.indexOf(parseFloat(p.style.top));
-        return pc === view.c && pr === view.r;
-    }) || null;
-}
-
-function aiCloneMatrix(mt) {
-    return mt.map(row => row.map(cell => cell ? { ...cell } : null));
-}
-
-function aiMoveLeavesSafe(side, c1, r1, c2, r2, mt) {
-    const temp = aiCloneMatrix(mt);
-    temp[r2][c2] = temp[r1][c1];
-    temp[r1][c1] = null;
-    return !laBiChieu(side, temp);
-}
-
-function aiCollectLegalMoves(side = "den") {
-    const mt = taoMaTran();
-    const moves = [];
-
-    for (let r1 = 0; r1 < 10; r1++) {
-        for (let c1 = 0; c1 < 9; c1++) {
-            const piece = mt[r1][c1];
-            if (!piece || piece.side !== side) continue;
-
-            for (let r2 = 0; r2 < 10; r2++) {
-                for (let c2 = 0; c2 < 9; c2++) {
-                    if (!checkLuat(piece.type, side, c1, r1, c2, r2, mt)) continue;
-                    if (!aiMoveLeavesSafe(side, c1, r1, c2, r2, mt)) continue;
-
-                    moves.push({
-                        from: { c: c1, r: r1 },
-                        to: { c: c2, r: r2 },
-                        piece,
-                        target: mt[r2][c2] || null
-                    });
-                }
-            }
-        }
-    }
-
-    return moves;
-}
-
-function aiCloneMatrix(mt) {
-    return mt.map(row => row.map(cell => cell ? { ...cell } : null));
-}
-
-function findKingForFace(side, mt) {
-    const kingTypes = side === "do"
-        ? ["帥", "帅"]
-        : ["將", "将"];
-
-    for (let r = 0; r < 10; r++) {
-        for (let c = 0; c < 9; c++) {
-            const p = mt[r][c];
-            if (p && p.side === side && kingTypes.includes(p.type)) {
-                return { c, r };
-            }
-        }
-    }
-
-    return null;
-}
-
-function isTwoKingsFacing(mt) {
-    const doKing = findKingForFace("do", mt);
-    const denKing = findKingForFace("den", mt);
-
-    if (!doKing || !denKing) return false;
-    if (doKing.c !== denKing.c) return false;
-
-    const fromR = Math.min(doKing.r, denKing.r) + 1;
-    const toR = Math.max(doKing.r, denKing.r) - 1;
-
-    for (let r = fromR; r <= toR; r++) {
-        if (mt[r][doKing.c]) return false;
-    }
-
-    return true;
-}
-
-function aiMoveLeavesSafe(side, c1, r1, c2, r2, mt) {
-    const temp = aiCloneMatrix(mt);
-    temp[r2][c2] = temp[r1][c1];
-    temp[r1][c1] = null;
-
-    // Không được tự bị chiếu và không được để 2 Tướng nhìn mặt nhau
-    return !laBiChieu(side, temp) && !isTwoKingsFacing(temp);
-}
-
-function aiRevealPieceIfNeeded(pieceEl) {
-    if (!pieceEl || !isCoUp || pieceEl.dataset.isUp !== "true") return;
-
-    pieceEl.dataset.isUp = "false";
-
-    const side = pieceEl.dataset.side;
-    const type = pieceEl.dataset.type;
-
-    const names = {
-        "車": "xe", "馬": "ma", "象": "tuong", "士": "si", "將": "tuong_soai", "砲": "phao", "卒": "tot",
-        "俥": "xe", "傌": "ma", "相": "tuong", "仕": "si", "帥": "tuong_soai", "炮": "phao", "兵": "tot"
-    };
-
-    pieceEl.src = `images/${side}_${names[type]}.png`;
-}
-
-async function aiMakeMoveNow(roomId) {
-    if (!roomId || currentRoomId !== roomId) return;
-
-    const snap = await db.ref("matches/" + roomId).once("value");
-    const room = snap.val() || {};
-
-    if (!roomHasAiBot(room) || room.status !== "playing" || room.winner) {
-    return false;
-}
-
-const turnNow = String(room.turn || luotDi || "").toLowerCase();
-if (turnNow !== "den") {
-    return false;
-}
-
-    const moves = aiCollectLegalMoves("den");
-console.log("AI LEGAL MOVES:", moves.length, {
-    roomId,
-    turn: room.turn,
-    status: room.status,
-    aiMode: room.aiMode,
-    mySide
-});
-
-    if (!moves.length) {
-        return true;
-    }
-
-    renderTimerUI();
-
-// Nhả main thread 1 nhịp để đồng hồ kịp vẽ trước khi AI suy nghĩ
-await new Promise(resolve => setTimeout(resolve, 80));
-
-let move = await requestAiMoveFromWorker(room, "den");
-
-if (!move) {
-    move = aiFastFallbackMove(moves);
-}
-
-if (!move) return false;
-
-    const pieceEl = aiGetPieceElAtReal(move.from.c, move.from.r);
-    const targetEl = aiGetPieceElAtReal(move.to.c, move.to.r);
-
-    if (!pieceEl) return false;
-
-    const capturedKing = targetEl && isKingPiece(targetEl.dataset.type);
-
-    if (targetEl) {
-        targetEl.remove();
-        playSnd("capture");
-    } else {
-        playSnd("click");
-    }
-
-    lastMoveFrom = { c: move.from.c, r: move.from.r };
-    lastMoveTo = { c: move.to.c, r: move.to.r };
-
-    const viewTo = mapBoardToView(move.to.c, move.to.r);
-    pieceEl.style.left = columns[viewTo.c] + "%";
-    pieceEl.style.top = rows[viewTo.r] + "%";
-
-    aiRevealPieceIfNeeded(pieceEl);
-
-    luotDi = "do";
-    selectedPiece = null;
-    clearMoveHints();
-    drawLastMoveMarks();
-    updateTurnUIOnly();
-    refreshTimerRings();
-
-    let winnerSide = "";
-    let winReason = "";
-
-    if (capturedKing) {
-        winnerSide = "den";
-        winReason = "ai_capture_king";
-    } else {
-        setTimeout(() => {
-            updateCheckEffectFromBoard();
-        }, 50);
-
-        if (laBiChieu("do", taoMaTran()) && checkMate("do")) {
-            winnerSide = "den";
-            winReason = "ai_checkmate";
-        }
-    }
-
-    const extra = {
-        moveCount: firebase.database.ServerValue.increment(1)
-    };
-
-    if (winnerSide) {
-        extra.winner = winnerSide;
-        extra.winReason = winReason;
-        extra.status = "finished";
-        extra.finishedAt = firebase.database.ServerValue.TIMESTAMP;
-    }
-
-    await syncRoomFromBoard(extra);
-return true;
-}
-
-function maybeScheduleAiMove(room, roomId) {
-    if (!room || !roomId) return;
-    if (!roomHasAiBot(room)) return;
-    if (room.status !== "playing") return;
-    if (room.winner) return;
-
-    // Nếu người thật đang là bên ĐEN thì không cho tự điều khiển AI
-    if (mySide === "den") return;
-
-    const turnNow = String(room.turn || luotDi || "").toLowerCase();
-    if (turnNow !== "den") return;
-
-    const boardKey = JSON.stringify(room.board || []);
-    const key = roomId + ":" + String(room.moveCount || 0) + ":" + turnNow + ":" + boardKey;
-
-    if (aiMoveScheduledKey === key || aiThinking) return;
-
-    aiMoveScheduledKey = key;
-    clearTimeout(aiMoveTimer);
-
-    console.log("AI SCHEDULED:", {
-        roomId,
-        turnNow,
-        aiMode: room.aiMode,
-        denPlayer: room.players?.den,
-        mySide
-    });
-
-    aiMoveTimer = setTimeout(async () => {
-        let moved = false;
-
-        try {
-            aiThinking = true;
-            moved = await aiMakeMoveNow(roomId);
-        } catch (err) {
-            console.error("AI MOVE ERROR:", err);
-            alert("AI bị lỗi nên chưa đi được. Mở Console xem AI MOVE ERROR.");
-        } finally {
-            aiThinking = false;
-
-            // Nếu chưa đi được thì mở khóa để Firebase event kế tiếp còn gọi lại
-            if (!moved) {
-                aiMoveScheduledKey = "";
-            }
-        }
-    }, 120);
 }
 function toggleProfileMenu(event) {
     event.stopPropagation();
@@ -11165,13 +10345,7 @@ async function setReady() {
         return;
     }
 
-    await db.ref("matches/" + currentRoomId + "/ready/" + mySide).set(true);
-
-    // Đường phụ: bấm xong tự kiểm tra mở trận liền,
-    // không chờ riêng máy chủ/host nữa.
-    const snap = await db.ref("matches/" + currentRoomId).once("value");
-    const room = snap.val() || {};
-    await maybeStartRoomFromHost(room, currentRoomId);
+    console.log("READY OK:", result);
 }
 
 async function batDauTranDau(loai) {
@@ -11293,6 +10467,17 @@ function clearPmcDebugLog() {}
 function getMoneyWalletKey(linkState = null) {
     const clean = v => String(v || "").trim().replace(/[.#$\[\]\/]/g, "_");
 
+    // Quan trọng: ví tiền phải đi theo đúng walletRef() đang dùng để nạp/load/set số dư.
+    // walletRef() = wallets/makeWalletDbKey()
+    const mainWalletKey = clean(
+        typeof makeWalletDbKey === "function" ? makeWalletDbKey() : ""
+    );
+
+    if (mainWalletKey) return mainWalletKey;
+
+    const cachedWalletKey = clean(localStorage.getItem("walletKey"));
+    if (cachedWalletKey) return cachedWalletKey;
+
     const linkedWalletKey = clean(linkState?.walletKey);
     if (linkedWalletKey) return linkedWalletKey;
 
@@ -11302,15 +10487,9 @@ function getMoneyWalletKey(linkState = null) {
         localStorage.getItem("pi-user-name")
     );
 
-    if (piName) {
-        return clean("pi_" + piName.toLowerCase());
-    }
-
-    const cachedWalletKey = clean(localStorage.getItem("walletKey"));
-    if (cachedWalletKey) return cachedWalletKey;
+    if (piName) return clean("pi_" + piName.toLowerCase());
 
     return clean(
-        (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "") ||
         localStorage.getItem("uid") ||
         localStorage.getItem("currentUserUid") ||
         firebase.auth().currentUser?.uid ||
@@ -13219,15 +12398,15 @@ async function onIncompletePaymentFound(payment) {
       data
     });
 
-    if (!res.ok || !data?.ok || data?.note) {
-      window.__PI_PENDING_PAYMENT_BLOCKED__ = true;
-      window.__PI_PENDING_PAYMENT_MSG__ =
-        data?.note ||
-        data?.error ||
-        "Payment Pi cũ chưa được xử lý sạch ở server.";
-      alert(window.__PI_PENDING_PAYMENT_MSG__);
-      return true;
-    }
+    if (!res.ok || !data?.ok) {
+  window.__PI_PENDING_PAYMENT_BLOCKED__ = true;
+  window.__PI_PENDING_PAYMENT_MSG__ =
+    data?.error ||
+    data?.note ||
+    "Payment Pi cũ chưa được xử lý sạch ở server.";
+  alert(window.__PI_PENDING_PAYMENT_MSG__);
+  return true;
+}
 
     window.__PI_PENDING_PAYMENT_BLOCKED__ = false;
     window.__PI_PENDING_PAYMENT_MSG__ = "";
