@@ -5899,13 +5899,30 @@ function resetAiWorker() {
 }
 
 function getAiWorker() {
-    if (!window.Worker) return null;
+    if (!window.Worker) {
+        console.warn("Trình duyệt không hỗ trợ Worker");
+        return null;
+    }
 
     if (!aiWorker) {
-        aiWorker = new Worker("/ai-worker.js?v=20260426_ai_worker_1");
+        const workerUrl = new URL("./ai-worker.js?v=20260426_ai_worker_2", window.location.href);
+
+        console.log("AI WORKER URL:", workerUrl.href);
+
+        aiWorker = new Worker(workerUrl, { type: "classic" });
 
         aiWorker.onerror = function (err) {
-            console.error("AI WORKER ERROR:", err);
+            console.error("AI WORKER ERROR:", {
+                message: err.message,
+                filename: err.filename,
+                lineno: err.lineno,
+                colno: err.colno
+            });
+            resetAiWorker();
+        };
+
+        aiWorker.onmessageerror = function (err) {
+            console.error("AI WORKER MESSAGE ERROR:", err);
             resetAiWorker();
         };
     }
