@@ -9407,24 +9407,51 @@ function saveWithdrawState(state) {
 async function loadWalletBalance() {
     try {
         const snap = await walletRef().once("value");
-        const data = snap.val() || {};
+        const data = snap.val();
+
+        const cachePi = Math.max(
+            0,
+            Number(localStorage.getItem(getBalanceCacheKey()) || currentWalletBalance || 0) || 0
+        );
+
+        const cachePmc = Math.max(
+            0,
+            Math.floor(Number(localStorage.getItem(getPmcCacheKey()) || currentPmcBalance || 0) || 0)
+        );
+
+        // QUAN TRỌNG:
+        // Nếu ví Firebase chưa có data thì KHÔNG ghi ngược 0 lên Firebase nữa.
+        // Chỉ hiện cache cũ, tránh làm ví thật bị kéo về 0.
+        if (!data || typeof data !== "object") {
+            currentWalletBalance = cachePi;
+            currentPmcBalance = cachePmc;
+
+            updateBalanceUI(currentWalletBalance);
+            updatePmcUI(currentPmcBalance);
+
+            console.warn("LOAD WALLET EMPTY - giữ cache, không ghi 0 lên Firebase", {
+                walletKey: makeWalletDbKey(),
+                pi: currentWalletBalance,
+                pmc: currentPmcBalance
+            });
+
+            return { pi: currentWalletBalance, pmc: currentPmcBalance };
+        }
 
         let piAmount = 0;
 
-// Ưu tiên piBalance vì đổi PMC -> Pi thường trả về newPiBalance.
-// Nếu ví cũ chỉ có balance thì vẫn dùng balance.
-if (data.piBalance != null || data.balance != null) {
-    piAmount = Number(data.piBalance ?? data.balance ?? 0) || 0;
-} else {
-    const scopedCache = localStorage.getItem(getBalanceCacheKey());
-    const legacy = localStorage.getItem(PI_BALANCE_KEY);
-    piAmount = Number(scopedCache ?? legacy ?? 0) || 0;
-}
+        if (data.piBalance != null || data.balance != null) {
+            piAmount = Number(data.piBalance ?? data.balance ?? 0) || 0;
+        } else {
+            piAmount = cachePi;
+        }
+
         let pmcAmount = 0;
+
         if (data.pmcBalance != null) {
             pmcAmount = Math.floor(Number(data.pmcBalance) || 0);
         } else {
-            pmcAmount = Math.floor(Number(localStorage.getItem(getPmcCacheKey()) || 0) || 0);
+            pmcAmount = cachePmc;
         }
 
         currentWalletBalance = Math.max(0, piAmount);
@@ -9434,25 +9461,34 @@ if (data.piBalance != null || data.balance != null) {
         localStorage.setItem(getPmcCacheKey(), String(currentPmcBalance));
 
         await walletRef().update({
-    balance: currentWalletBalance,
-    piBalance: currentWalletBalance,
-    pmcBalance: currentPmcBalance,
-    updatedAt: firebase.database.ServerValue.TIMESTAMP,
-    name: localStorage.getItem("user-name-display") || "Người chơi",
-    photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-});
+            balance: currentWalletBalance,
+            piBalance: currentWalletBalance,
+            pmcBalance: currentPmcBalance,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP,
+            name: localStorage.getItem("user-name-display") || "Người chơi",
+            photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+        });
 
         updateBalanceUI(currentWalletBalance);
         updatePmcUI(currentPmcBalance);
+
         return { pi: currentWalletBalance, pmc: currentPmcBalance };
     } catch (err) {
         console.error("Lỗi load ví:", err);
 
-        currentWalletBalance = Math.max(0, Number(localStorage.getItem(getBalanceCacheKey()) || 0) || 0);
-        currentPmcBalance = Math.max(0, Math.floor(Number(localStorage.getItem(getPmcCacheKey()) || 0) || 0));
+        currentWalletBalance = Math.max(
+            0,
+            Number(localStorage.getItem(getBalanceCacheKey()) || currentWalletBalance || 0) || 0
+        );
+
+        currentPmcBalance = Math.max(
+            0,
+            Math.floor(Number(localStorage.getItem(getPmcCacheKey()) || currentPmcBalance || 0) || 0)
+        );
 
         updateBalanceUI(currentWalletBalance);
         updatePmcUI(currentPmcBalance);
+
         return { pi: currentWalletBalance, pmc: currentPmcBalance };
     }
 }
@@ -9658,7 +9694,7 @@ async function settlePmcMatchOnce(roomId) {
     const stake = Math.max(0, Math.floor(Number(room.stakePMC || 0) || 0));
     const winnerSide = String(room.winner || "").trim();
 
-    if (!stake || !winnerSide) return;
+    if (!winnerSide) return;
 
     const lockRef = db.ref(`matches/${roomId}/settlement/pmc`);
 
@@ -9743,13 +9779,22 @@ async function settlePmcMatchOnce(roomId) {
             throw new Error("missing_winner_wallet_key");
         }
 
-        const totalPot = stake * 2;
-        const feeRate = typeof MATCH_SYSTEM_FEE_RATE === "number"
-            ? MATCH_SYSTEM_FEE_RATE
-            : 0.02;
+        // Nếu có cược thì ăn pot.
+// Nếu stake = 0 thì vẫn thưởng xu thắng để test + chơi thường có PMC.
+const WIN_BONUS_PMC = 20;
 
-        const feePMC = Math.max(0, Math.floor(totalPot * feeRate));
-        const winnerReceivePMC = totalPot - feePMC;
+const totalPot = stake > 0 ? stake * 2 : WIN_BONUS_PMC;
+
+const feeRate = typeof MATCH_SYSTEM_FEE_RATE === "number"
+    ? MATCH_SYSTEM_FEE_RATE
+    : 0.02;
+
+// Phòng không cược thì không trừ phí, cộng thẳng 20 PMC.
+const feePMC = stake > 0
+    ? Math.max(0, Math.floor(totalPot * feeRate))
+    : 0;
+
+const winnerReceivePMC = totalPot - feePMC;
 
         const paid = await adjustPmcWalletByKey(
             winnerKey,
