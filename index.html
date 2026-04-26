@@ -5150,6 +5150,147 @@ body.in-match #arena-shop-btn{ display:none !important; }
     border: 2px solid rgba(0, 0, 0, 0.75) !important;
     box-shadow: 0 0 10px rgba(255, 45, 85, 0.55) !important;
 }
+/* --- SÁCH QUẢNG CÁO / SỰ KIỆN --- */
+.ad-book-zone {
+    position: relative;
+    overflow: hidden;
+    min-height: 198px;
+    padding: 0 !important;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    perspective: 900px;
+    background:
+        radial-gradient(circle at top left, rgba(85,239,196,0.16), transparent 42%),
+        linear-gradient(180deg, rgba(0,0,0,0.74), rgba(0,0,0,0.56)) !important;
+}
+
+.ad-book-page {
+    position: absolute;
+    inset: 0;
+    padding: 22px 18px 30px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 9px;
+    opacity: 0;
+    transform: rotateY(88deg) scale(0.94);
+    transform-origin: left center;
+    transition: opacity 0.65s ease, transform 0.75s ease;
+    backface-visibility: hidden;
+    text-align: center;
+}
+
+.ad-book-page.active {
+    opacity: 1;
+    transform: rotateY(0deg) scale(1);
+}
+
+.ad-book-page.leaving {
+    opacity: 0;
+    transform: rotateY(-88deg) scale(0.94);
+    transform-origin: right center;
+}
+
+.ad-book-kicker {
+    color: #ffd166;
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-shadow: 0 0 10px rgba(255,209,102,0.35);
+}
+
+.ad-book-title {
+    color: #55efc4;
+    font-size: 21px;
+    font-weight: 900;
+    line-height: 1.18;
+    letter-spacing: 1px;
+    text-shadow: 0 0 14px rgba(85,239,196,0.35);
+}
+
+.ad-book-text {
+    color: #f5f6fa;
+    font-size: 13px;
+    line-height: 1.45;
+    font-weight: 700;
+    opacity: 0.96;
+}
+
+.ad-book-reward {
+    width: fit-content;
+    max-width: 100%;
+    margin: 4px auto 0;
+    padding: 7px 11px;
+    border-radius: 999px;
+    background: rgba(244,197,66,0.14);
+    border: 1px solid rgba(244,197,66,0.38);
+    color: #ffeaa7;
+    font-size: 11px;
+    font-weight: 900;
+    box-shadow: 0 0 12px rgba(244,197,66,0.12);
+}
+
+.ad-book-dots {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 9px;
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    z-index: 3;
+}
+
+.ad-book-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.28);
+    border: 1px solid rgba(255,255,255,0.2);
+    transition: 0.25s ease;
+}
+
+.ad-book-dot.active {
+    width: 20px;
+    background: #55efc4;
+    box-shadow: 0 0 10px rgba(85,239,196,0.55);
+}
+
+/* mobile chỉnh thấp lại cho vừa khu hiện tại */
+.mobile-ad-banner.ad-book-zone {
+    min-height: 198px;
+    border-radius: 18px;
+    border: 2px dashed rgba(85,239,196,0.78);
+}
+
+.mobile-ad-banner .ad-book-title {
+    font-size: 18px;
+}
+
+.mobile-ad-banner .ad-book-text {
+    font-size: 12px;
+}
+
+@media (max-width: 600px) {
+    .ad-book-page {
+        padding: 18px 14px 28px;
+    }
+
+    .ad-book-title {
+        font-size: 18px;
+    }
+
+    .ad-book-text {
+        font-size: 12px;
+    }
+
+    .ad-book-reward {
+        font-size: 10px;
+        padding: 6px 9px;
+    }
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -5353,12 +5494,54 @@ body.in-match #arena-shop-btn{ display:none !important; }
     <div class="desktop-home-wrap">
     <div id="desktop-home-layout">
         <div class="desktop-side-stack">
-            <div class="desktop-panel desktop-ad-panel">
-                <div class="desktop-panel-title">KHU QUẢNG CÁO / SỰ KIỆN</div>
-                <div class="desktop-panel-sub">
-                    Chỗ này mầy thay bằng banner giải đấu, nhà tài trợ, thông báo hệ thống hoặc lịch sự kiện.
-                </div>
-            </div>
+            <div class="desktop-panel desktop-ad-panel ad-book-zone">
+    <div class="ad-book-page active">
+        <div class="ad-book-kicker">🎁 TÂN THỦ</div>
+        <div class="ad-book-title">VÀO GAME LÀ CÓ QUÀ</div>
+        <div class="ad-book-text">
+            Tạo tài khoản, vào sảnh chờ, chọn Cờ Tướng hoặc Cờ Úp để nhận nhiệm vụ đầu tiên.
+        </div>
+        <div class="ad-book-reward">Nhận PMC khởi đầu • Lên EXP • Mở cấp</div>
+    </div>
+
+    <div class="ad-book-page">
+        <div class="ad-book-kicker">🔥 NHIỆM VỤ NGÀY</div>
+        <div class="ad-book-title">ĐÁNH CỜ MỖI NGÀY, NHẬN THƯỞNG MỖI NGÀY</div>
+        <div class="ad-book-text">
+            Hoàn thành điểm danh, chơi trận, thắng trận, mời bạn để mở thưởng nhiệm vụ.
+        </div>
+        <div class="ad-book-reward">Quỹ thưởng lấy từ hệ thống nhiệm vụ</div>
+    </div>
+
+    <div class="ad-book-page">
+        <div class="ad-book-kicker">👥 MỜI BẠN</div>
+        <div class="ad-book-title">RỦ HUYNH ĐỆ VÀO BÀN</div>
+        <div class="ad-book-text">
+            Kết bạn, gửi lời mời vào phòng, đủ 2 người là sẵn sàng chiến ngay.
+        </div>
+        <div class="ad-book-reward">Có bạn càng đông, sảnh càng vui</div>
+    </div>
+
+    <div class="ad-book-page">
+        <div class="ad-book-kicker">🏆 GIẢI ĐẤU</div>
+        <div class="ad-book-title">CUỐI TUẦN TRANH TOP</div>
+        <div class="ad-book-text">
+            Top thắng nhiều, top EXP, top nhiệm vụ sẽ được vinh danh trên sảnh chờ.
+        </div>
+        <div class="ad-book-reward">Chuẩn bị mở giải Trúc Lâm Tiên Cảnh</div>
+    </div>
+
+    <div class="ad-book-page">
+        <div class="ad-book-kicker">💎 SHOP / PMC</div>
+        <div class="ad-book-title">NÂNG CẤP AVATAR, KHUNG, DANH HIỆU</div>
+        <div class="ad-book-text">
+            Dùng PMC để tham gia hệ sinh thái: nhiệm vụ, cấp bậc, danh hiệu và vật phẩm.
+        </div>
+        <div class="ad-book-reward">Pi ⇄ PMC • Sự kiện • Ưu đãi</div>
+    </div>
+
+    <div class="ad-book-dots"></div>
+</div>
 
            <div class="desktop-panel desktop-ranking-panel" onclick="openRankingModal(event)">
                 <div class="desktop-panel-title">DANH SÁCH BÀN CỜ TƯỚNG</div>
@@ -5466,10 +5649,54 @@ body.in-match #arena-shop-btn{ display:none !important; }
     <div class="lobby-sub-title">TRÚC LÂM TIÊN CẢNH</div>
 </div>
         <div id="mobile-ad-zone">
-            <div class="mobile-ad-banner">
-                <div class="ad-title">KHU QUẢNG CÁO / SỰ KIỆN</div>
-                <div class="ad-sub">Mầy có thể thay bằng banner giải đấu, tài trợ, thông báo hệ thống...</div>
-            </div>
+            <div class="mobile-ad-banner ad-book-zone">
+    <div class="ad-book-page active">
+        <div class="ad-book-kicker">🎁 TÂN THỦ</div>
+        <div class="ad-book-title">VÀO GAME LÀ CÓ QUÀ</div>
+        <div class="ad-book-text">
+            Tạo tài khoản, vào sảnh chờ, chọn Cờ Tướng hoặc Cờ Úp để nhận nhiệm vụ đầu tiên.
+        </div>
+        <div class="ad-book-reward">Nhận PMC khởi đầu • Lên EXP • Mở cấp</div>
+    </div>
+
+    <div class="ad-book-page">
+        <div class="ad-book-kicker">🔥 NHIỆM VỤ NGÀY</div>
+        <div class="ad-book-title">ĐÁNH CỜ MỖI NGÀY, NHẬN THƯỞNG MỖI NGÀY</div>
+        <div class="ad-book-text">
+            Hoàn thành điểm danh, chơi trận, thắng trận, mời bạn để mở thưởng nhiệm vụ.
+        </div>
+        <div class="ad-book-reward">Quỹ thưởng lấy từ hệ thống nhiệm vụ</div>
+    </div>
+
+    <div class="ad-book-page">
+        <div class="ad-book-kicker">👥 MỜI BẠN</div>
+        <div class="ad-book-title">RỦ HUYNH ĐỆ VÀO BÀN</div>
+        <div class="ad-book-text">
+            Kết bạn, gửi lời mời vào phòng, đủ 2 người là sẵn sàng chiến ngay.
+        </div>
+        <div class="ad-book-reward">Có bạn càng đông, sảnh càng vui</div>
+    </div>
+
+    <div class="ad-book-page">
+        <div class="ad-book-kicker">🏆 GIẢI ĐẤU</div>
+        <div class="ad-book-title">CUỐI TUẦN TRANH TOP</div>
+        <div class="ad-book-text">
+            Top thắng nhiều, top EXP, top nhiệm vụ sẽ được vinh danh trên sảnh chờ.
+        </div>
+        <div class="ad-book-reward">Chuẩn bị mở giải Trúc Lâm Tiên Cảnh</div>
+    </div>
+
+    <div class="ad-book-page">
+        <div class="ad-book-kicker">💎 SHOP / PMC</div>
+        <div class="ad-book-title">NÂNG CẤP AVATAR, KHUNG, DANH HIỆU</div>
+        <div class="ad-book-text">
+            Dùng PMC để tham gia hệ sinh thái: nhiệm vụ, cấp bậc, danh hiệu và vật phẩm.
+        </div>
+        <div class="ad-book-reward">Pi ⇄ PMC • Sự kiện • Ưu đãi</div>
+    </div>
+
+    <div class="ad-book-dots"></div>
+</div>
 
            <div class="mobile-rank-card" onclick="openRankingModal(event)">
                 <div class="rank-board-icon">♟</div>
@@ -13785,6 +14012,52 @@ window.applyCosmeticSkinToAvatar = function(imgEl, skinId){
     }, 30000);
   });
 })();
+function initAdBookSlider() {
+    const books = document.querySelectorAll(".ad-book-zone");
+    if (!books.length) return;
+
+    books.forEach((book) => {
+        const pages = Array.from(book.querySelectorAll(".ad-book-page"));
+        const dotsBox = book.querySelector(".ad-book-dots");
+        if (!pages.length || !dotsBox) return;
+
+        let current = 0;
+
+        dotsBox.innerHTML = pages.map((_, i) => {
+            return `<span class="ad-book-dot ${i === 0 ? "active" : ""}"></span>`;
+        }).join("");
+
+        const dots = Array.from(dotsBox.querySelectorAll(".ad-book-dot"));
+
+        function showPage(next) {
+            if (next === current) return;
+
+            pages[current].classList.remove("active");
+            pages[current].classList.add("leaving");
+            dots[current]?.classList.remove("active");
+
+            pages[next].classList.remove("leaving");
+            pages[next].classList.add("active");
+            dots[next]?.classList.add("active");
+
+            setTimeout(() => {
+                pages[current]?.classList.remove("leaving");
+                current = next;
+            }, 780);
+        }
+
+        dots.forEach((dot, i) => {
+            dot.onclick = () => showPage(i);
+        });
+
+        setInterval(() => {
+            const next = (current + 1) % pages.length;
+            showPage(next);
+        }, 10000);
+    });
+}
+
+document.addEventListener("DOMContentLoaded", initAdBookSlider);
 </script>
 
 </body>
