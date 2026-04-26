@@ -8485,24 +8485,94 @@ function syncRoomFromBoard(extra = {}) {
 });
 }
 
-async function maybeStartRoomFromHost(room, roomId = currentRoomId) {
-    if (!(room.stakeLocked?.do && room.stakeLocked?.den)) return;
-    if (!roomId) return;
-    if (room.status === "playing") return;
-    if (mySide !== "do") return;
-    if (room.status !== "waiting") return;
-    if (!room.players?.do || !room.players?.den) return;
-    if (!(room.ready?.do && room.ready?.den)) return;
-    if (Array.isArray(room.board) && room.board.length) return;
-    if (!(room.stakeLocked?.do && room.stakeLocked?.den)) return;
+function readyStakeLockedOK(value) {
+    if (value === true) return true;
+    if (value && typeof value === "object") {
+        return value.done === true || value.paid === true || !!value.walletKey;
+    }
+    return false;
+}
 
-    isCoUp = room.mode === "co-up";
+async function maybeStartRoomFromHost(room, roomId = currentRoomId) {
+    if (!roomId) return;
+
+    const roomRef = db.ref("matches/" + roomId);
+
+    let snap = await roomRef.once("value");
+    let latest = snap.val() || room || {};
+
+    if (!latest) return;
+    if (latest.status === "playing") return;
+    if (latest.status !== "waiting") return;
+    if (latest.winner) return;
+    if (!latest.players?.do || !latest.players?.den) return;
+    if (!(latest.ready?.do && latest.ready?.den)) return;
+
+    const doLocked = readyStakeLockedOK(latest.stakeLocked?.do);
+    const denLocked = readyStakeLockedOK(latest.stakeLocked?.den);
+
+    if (!(doLocked && denLocked)) {
+        console.warn("CHƯA ĐỦ KHÓA PHÍ ĐỂ VÀO TRẬN:", {
+            doLocked: latest.stakeLocked?.do,
+            denLocked: latest.stakeLocked?.den
+        });
+        return;
+    }
+
+    const now = Date.now();
+    const lockRef = roomRef.child("startLock");
+
+    const lockTx = await runRefTransaction(lockRef, current => {
+        const at = Number(current?.at || 0);
+
+        // Có máy khác vừa chốt trong 12 giây thì thôi
+        if (current && at && now - at < 12000) return;
+
+        return {
+            at: now,
+            uid: auth.currentUser?.uid || "",
+            side: mySide || "",
+            by: "maybeStartRoomFromHost"
+        };
+    });
+
+    if (!lockTx.committed) {
+        console.log("START ROOM: máy khác đang chốt trận");
+        return;
+    }
+
+    // Đọc lại lần cuối sau khi khóa
+    snap = await roomRef.once("value");
+    latest = snap.val() || {};
+
+    if (
+        latest.status !== "waiting" ||
+        latest.winner ||
+        !latest.players?.do ||
+        !latest.players?.den ||
+        !(latest.ready?.do && latest.ready?.den) ||
+        !(readyStakeLockedOK(latest.stakeLocked?.do) && readyStakeLockedOK(latest.stakeLocked?.den))
+    ) {
+        await lockRef.remove().catch(() => {});
+        return;
+    }
+
+    isCoUp = latest.mode === "co-up";
+
+    clearInterval(readyInterval);
+    closeReadyOverlay();
+
+    isGameOver = false;
+    selectedPiece = null;
+    lastMoveFrom = null;
+    lastMoveTo = null;
+    lastRoomBoardHash = "";
+
     resetToStartup();
 
     const freshBoard = exportBoardState();
-const waitingRoomRef = db.ref("waitingRooms/" + room.roomBucket + "/" + roomId);
-await waitingRoomRef.remove().catch(() => {});
-    await db.ref("matches/" + roomId).update({
+
+    await roomRef.update({
         status: "playing",
         isCoUp,
         board: freshBoard,
@@ -8521,8 +8591,25 @@ await waitingRoomRef.remove().catch(() => {});
             do: false,
             den: false
         },
+        startLock: null,
         updatedAt: firebase.database.ServerValue.TIMESTAMP
     });
+
+    if (latest.roomBucket) {
+        await db.ref("waitingRooms/" + latest.roomBucket + "/" + roomId).remove().catch(() => {});
+    }
+
+    currentRoomStatus = "playing";
+    luotDi = "do";
+    timeDo = 540;
+    timeDen = 540;
+
+    applyBoardStateFromRoom(freshBoard);
+    updateTurnUIOnly();
+    renderTimerUI();
+    startTimer();
+
+    console.log("START ROOM OK:", roomId);
 }
 function appendMatchChatMessage(msg) {
     const content = document.getElementById("match-content-popup");
@@ -11027,7 +11114,13 @@ async function setReady() {
         return;
     }
 
-    console.log("READY OK:", result);
+    await db.ref("matches/" + currentRoomId + "/ready/" + mySide).set(true);
+
+    // Đường phụ: bấm xong tự kiểm tra mở trận liền,
+    // không chờ riêng máy chủ/host nữa.
+    const snap = await db.ref("matches/" + currentRoomId).once("value");
+    const room = snap.val() || {};
+    await maybeStartRoomFromHost(room, currentRoomId);
 }
 
 async function batDauTranDau(loai) {
