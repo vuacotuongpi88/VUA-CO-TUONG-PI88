@@ -6778,6 +6778,37 @@ if (x1 === x2) { for (let y = Math.min(y1, y2) + 1; y < Math.max(y1, y2); y++) i
 else { for (let x = Math.min(x1, x2) + 1; x < Math.max(x1, x2); x++) if (mt[y1][x]) count++; }
 return count;
 }
+function isTuongSoai(type) {
+    return type === '帥' || type === '將';
+}
+
+function getTuongPos(side, mt) {
+    for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 9; c++) {
+            if (mt[r][c] && mt[r][c].side === side && isTuongSoai(mt[r][c].type)) {
+                return { c, r };
+            }
+        }
+    }
+    return null;
+}
+
+function haiTuongDoiMat(mt) {
+    const doTuong = getTuongPos("do", mt);
+    const denTuong = getTuongPos("den", mt);
+
+    if (!doTuong || !denTuong) return false;
+    if (doTuong.c !== denTuong.c) return false;
+
+    const minR = Math.min(doTuong.r, denTuong.r);
+    const maxR = Math.max(doTuong.r, denTuong.r);
+
+    for (let r = minR + 1; r < maxR; r++) {
+        if (mt[r][doTuong.c]) return false;
+    }
+
+    return true;
+}
 function clearMoveHints() {
     document.querySelectorAll(".move-hint, .move-hint-capture").forEach(el => el.remove());
 }
@@ -6815,14 +6846,13 @@ function isMoveSafe(pieceType, pieceSide, c1, r1, c2, r2, mt) {
     mt[r2][c2] = { side: pieceSide, type: pieceType };
     mt[r1][c1] = null;
 
-    const safe = !laBiChieu(pieceSide, mt);
+    const safe = !laBiChieu(pieceSide, mt) && !haiTuongDoiMat(mt);
 
     mt[r1][c1] = { side: pieceSide, type: pieceType };
     mt[r2][c2] = tempTarget;
 
     return safe;
 }
-
 function showMoveHints(pieceEl) {
     clearMoveHints();
     if (!pieceEl) return;
@@ -6839,8 +6869,8 @@ function showMoveHints(pieceEl) {
 
     for (let tr = 0; tr < 10; tr++) {
         for (let tc = 0; tc < 9; tc++) {
-            if (!checkLuat(pieceEl.dataset.type, pieceEl.dataset.side, c1, r1, tc, tr, mt)) continue;
-           // if (!isMoveSafe(pieceEl.dataset.type, pieceEl.dataset.side, c1, r1, tc, tr, mt)) continue;
+           if (!checkLuat(pieceEl.dataset.type, pieceEl.dataset.side, c1, r1, tc, tr, mt)) continue;
+if (!isMoveSafe(pieceEl.dataset.type, pieceEl.dataset.side, c1, r1, tc, tr, mt)) continue;
 
             const viewPos = mapBoardToView(tc, tr);
 
@@ -6950,24 +6980,23 @@ return false;
 }
 
 function laBiChieu(side, mt) {
-let tPos = null;
-for (let r = 0; r < 10; r++) {
-for (let c = 0; c < 9; c++) {
-if (mt[r][c] && mt[r][c].side === side && (mt[r][c].type === '帥' || mt[r][c].type === '將')) {
-tPos = { c, r }; break;
-}
-}
-if (tPos) break;
-}
-if (!tPos) return false;
-for (let r = 0; r < 10; r++) {
-for (let c = 0; c < 9; c++) {
-if (mt[r][c] && mt[r][c].side !== side) {
-if (checkLuat(mt[r][c].type, mt[r][c].side, c, r, tPos.c, tPos.r, mt)) return true;
-}
-}
-}
-return false;
+    const tPos = getTuongPos(side, mt);
+    if (!tPos) return false;
+
+    // Luật cờ tướng: 2 Tướng / Soái không được nhìn thẳng nhau
+    if (haiTuongDoiMat(mt)) return true;
+
+    for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 9; c++) {
+            if (mt[r][c] && mt[r][c].side !== side) {
+                if (checkLuat(mt[r][c].type, mt[r][c].side, c, r, tPos.c, tPos.r, mt)) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    return false;
 }
 
 function checkMate(side) {
@@ -7062,11 +7091,15 @@ if (isOwnTurnPiece) {
     mt[r2][c2] = { side: selectedPiece.dataset.side, type: selectedPiece.dataset.type };
     mt[r1][c1] = null;
 
-    if (laBiChieu(luotDi, mt)) {
-    alert("Không được để Tướng bị chiếu!");
+    if (haiTuongDoiMat(mt)) {
+    alert("Cấm để 2 Tướng đối mặt!");
     return;
 }
 
+if (laBiChieu(luotDi, mt)) {
+    alert("Không được để Tướng bị chiếu!");
+    return;
+}
     if (target) {
     target.remove();
     try {
