@@ -8517,31 +8517,40 @@ const bottomPmcBox = document.getElementById("player-do-pmc");
 
     const roomStake = Number(room?.stakePMC || 0);
 
+const localProfile = getCurrentPlayerProfile();
+const localWalletKey = makeWalletDbKey();
+
+const isMyLocalPlayer =
+    (myPlayer.walletKey && myPlayer.walletKey === localWalletKey) ||
+    (myPlayer.uid && localProfile.uid && myPlayer.uid === localProfile.uid) ||
+    (mySide === "do" || mySide === "den");
+
 const oppPmc = Number(oppPlayer.pmcBalance || 0);
-const myPmc = Number(myPlayer.pmcBalance || 0);
+const myPmc = isMyLocalPlayer
+    ? getPmcBalance()
+    : Number(myPlayer.pmcBalance || 0);
 
 const oppPi = Number(
     oppPlayer.balance != null ? oppPlayer.balance : (oppPlayer.piBalance || 0)
 ) || 0;
 
-const myPi = Number(
-    myPlayer.balance != null ? myPlayer.balance : (myPlayer.piBalance || 0)
-) || 0;
+const myPi = isMyLocalPlayer
+    ? getPiBalance()
+    : Number(myPlayer.balance != null ? myPlayer.balance : (myPlayer.piBalance || 0)) || 0;
 
- const oppLevelMeta = buildLevelMeta(oppPlayer?.levelMeta || {});
+const oppLevelMeta = buildLevelMeta(oppPlayer?.levelMeta || {});
 
 const roomMyLevelMeta = buildLevelMeta(myPlayer?.levelMeta || {});
 const cacheMyLevelMeta = getCachedLevelMeta();
 
 const myLevelMeta = buildLevelMeta(
-    myPlayer?.uid === (firebase.auth().currentUser?.uid || "")
+    isMyLocalPlayer
         ? pickNewestLevelMeta(cacheMyLevelMeta, roomMyLevelMeta)
         : roomMyLevelMeta
 );
 
-// Chỉ lưu room levelMeta vào cache nếu room thật sự mới hơn cache.
-// Không cho room cũ 0/100 đè cache ví mới.
-if (myPlayer?.uid === (firebase.auth().currentUser?.uid || "")) {
+// Không cho room cũ 0/100 đè EXP thật trong ví/cache
+if (isMyLocalPlayer) {
     const roomAt = Number(roomMyLevelMeta.updatedAt || 0) || 0;
     const cacheAt = Number(cacheMyLevelMeta.updatedAt || 0) || 0;
 
@@ -8805,6 +8814,59 @@ function appendMatchChatMessage(msg) {
     content.appendChild(row);
     content.scrollTop = content.scrollHeight;
 }
+async function finalizeMatchRewardOnce(roomId, room) {
+    if (!roomId || !room || !room.winner) return;
+    if (!mySide) return;
+
+    window.__matchRewardRunning = window.__matchRewardRunning || {};
+    const key = [
+        roomId,
+        room.winner || "",
+        room.winReason || "",
+        room.finishedAt || ""
+    ].join("_");
+
+    if (window.__matchRewardRunning[key]) return;
+    window.__matchRewardRunning[key] = true;
+
+    try {
+        // 1) Cộng / trả PMC theo cược phòng
+        if (typeof maybeSettleStakeRoom === "function") {
+            await maybeSettleStakeRoom(room, roomId);
+        }
+
+        // 2) Cộng/trừ EXP thật
+        if (typeof awardLevelProgressForFinishedRoom === "function") {
+            await awardLevelProgressForFinishedRoom(roomId, room);
+        }
+
+        // 3) Load lại ví thật sau khi cộng tiền
+        if (typeof loadWalletBalance === "function") {
+            await loadWalletBalance().catch(() => {});
+        }
+
+        // 4) Đẩy lại số dư + EXP mới vào player trong room để avatar không hiện 0
+        if (currentRoomId === roomId && mySide) {
+            const pi = typeof getPiBalance === "function" ? getPiBalance() : 0;
+            const pmc = typeof getPmcBalance === "function" ? getPmcBalance() : 0;
+            const meta = typeof getCachedLevelMeta === "function"
+                ? getCachedLevelMeta()
+                : {};
+
+            await db.ref(`matches/${roomId}/players/${mySide}`).update({
+                balance: pi,
+                piBalance: pi,
+                pmcBalance: pmc,
+                levelMeta: typeof buildLevelMeta === "function" ? buildLevelMeta(meta) : meta,
+                updatedAt: firebase.database.ServerValue.TIMESTAMP
+            }).catch(() => {});
+        }
+    } catch (err) {
+        console.error("FINALIZE_MATCH_REWARD_FAIL:", err);
+    } finally {
+        window.__matchRewardRunning[key] = false;
+    }
+}
 function bindRoom(roomId) {
     cleanupRoomListeners();
     const listeningRoomId = roomId;
@@ -8953,21 +9015,8 @@ if (room.status === "playing" && !room.winner) {
                 await db.ref("matches/" + roomId + "/drawRequest").remove();
             }
         }
-       window.__settledPmcRooms = window.__settledPmcRooms || {};
-
-const settleKey = [
-    listeningRoomId,
-    room.winner || "",
-    room.winReason || "",
-    room.finishedAt || ""
-].join("_");
-
-if (room.winner && !window.__settledPmcRooms[settleKey]) {
-    window.__settledPmcRooms[settleKey] = true;
-
-    setTimeout(() => {
-        settlePmcViaApi(listeningRoomId);
-    }, 0);
+       if (room.winner) {
+    finalizeMatchRewardOnce(listeningRoomId, room);
 }
         if (room.winner) {
     const victoryKey = [
