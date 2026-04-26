@@ -6145,9 +6145,9 @@ async function tryResumeRealtimeMatch(preferredMode = null) {
     if (preferredMode && room.mode && room.mode !== preferredMode) {
         return false;
     }
-
-    const isDo = room.players?.do?.uid === me.uid;
-    const isDen = room.players?.den?.uid === me.uid;
+const sideFound = detectMySideFromRoom(room, me, saved.roomId);
+const isDo = sideFound === "do";
+const isDen = sideFound === "den";
     const canResume = !room.winner && (room.status === "playing" || room.status === "waiting");
 
     const boardOk =
@@ -8631,6 +8631,47 @@ function appendMatchChatMessage(msg) {
     content.appendChild(row);
     content.scrollTop = content.scrollHeight;
 }
+function sameText(a, b) {
+    return String(a || "").trim() !== "" && String(a || "").trim() === String(b || "").trim();
+}
+
+function detectMySideFromRoom(room, me, roomId) {
+    const doPlayer = room?.players?.do || {};
+    const denPlayer = room?.players?.den || {};
+
+    // Ưu tiên deviceId vì 2 máy khác nhau chắc chắn khác deviceId
+    if (sameText(denPlayer.deviceId, me.deviceId)) return "den";
+    if (sameText(doPlayer.deviceId, me.deviceId)) return "do";
+
+    // Tiếp theo xét walletKey nếu khác nhau
+    if (sameText(denPlayer.walletKey, me.walletKey)) return "den";
+    if (sameText(doPlayer.walletKey, me.walletKey)) return "do";
+
+    // Nếu trước đó máy này đã lưu mình là bên nào thì giữ bên đó
+    try {
+        const saved = typeof readActiveMatchSnapshot === "function"
+            ? readActiveMatchSnapshot()
+            : null;
+
+        if (
+            saved &&
+            saved.roomId === roomId &&
+            (saved.side === "do" || saved.side === "den")
+        ) {
+            return saved.side;
+        }
+    } catch (e) {}
+
+    // Chỉ dùng uid khi uid chỉ trùng 1 bên.
+    // Nếu uid trùng cả đỏ lẫn đen thì KHÔNG được tự ép thành đỏ.
+    const uidMatchDo = sameText(doPlayer.uid, me.uid);
+    const uidMatchDen = sameText(denPlayer.uid, me.uid);
+
+    if (uidMatchDen && !uidMatchDo) return "den";
+    if (uidMatchDo && !uidMatchDen) return "do";
+
+    return mySide || "";
+}
 function bindRoom(roomId) {
     cleanupRoomListeners();
     const listeningRoomId = roomId;
@@ -8661,13 +8702,23 @@ function bindRoom(roomId) {
         if (!room) return;
 const me = getCurrentPlayerProfile();
 
-if (room.players?.do?.uid === me.uid) {
-    mySide = "do";
-} else if (room.players?.den?.uid === me.uid) {
-    mySide = "den";
+const detectedSide = detectMySideFromRoom(room, me, listeningRoomId);
+
+if (detectedSide === "do" || detectedSide === "den") {
+    mySide = detectedSide;
 }
 
 viewSide = mySide || "do";
+
+console.log("SIDE DETECT:", {
+    mySide,
+    luotDi,
+    myUid: me.uid,
+    myWalletKey: me.walletKey,
+    myDeviceId: me.deviceId,
+    doPlayer: room.players?.do,
+    denPlayer: room.players?.den
+});
 
 // Khi đã biết mình là đỏ/đen thì ép level mới nhất vào room + hiện thanh EXP
 if (mySide) {
