@@ -5899,30 +5899,13 @@ function resetAiWorker() {
 }
 
 function getAiWorker() {
-    if (!window.Worker) {
-        console.warn("Trình duyệt không hỗ trợ Worker");
-        return null;
-    }
+    if (!window.Worker) return null;
 
     if (!aiWorker) {
-        const workerUrl = new URL("./ai-worker.js?v=20260426_ai_worker_2", window.location.href);
-
-        console.log("AI WORKER URL:", workerUrl.href);
-
-        aiWorker = new Worker(workerUrl, { type: "classic" });
+        aiWorker = new Worker("/ai-worker.js?v=20260426_ai_worker_1");
 
         aiWorker.onerror = function (err) {
-            console.error("AI WORKER ERROR:", {
-                message: err.message,
-                filename: err.filename,
-                lineno: err.lineno,
-                colno: err.colno
-            });
-            resetAiWorker();
-        };
-
-        aiWorker.onmessageerror = function (err) {
-            console.error("AI WORKER MESSAGE ERROR:", err);
+            console.error("AI WORKER ERROR:", err);
             resetAiWorker();
         };
     }
@@ -5930,41 +5913,17 @@ function getAiWorker() {
     return aiWorker;
 }
 
-function roomBoardToAiMatrix(room) {
-    const mt = Array(10).fill(null).map(() => Array(9).fill(null));
-
-    (room?.board || []).forEach(item => {
-        const c = Number(item?.c);
-        const r = Number(item?.r);
-        if (Number.isInteger(c) && Number.isInteger(r) && c >= 0 && c < 9 && r >= 0 && r < 10) {
-            mt[r][c] = {
-                side: item.side,
-                type: item.type
-            };
-        }
-    });
-
-    return mt;
-}
-
-function aiMatrixForWorker(room = null) {
-    if (room && Array.isArray(room.board) && room.board.length) {
-        return roomBoardToAiMatrix(room);
-    }
-
+function aiMatrixForWorker() {
     const mt = taoMaTran();
+
     return mt.map(row => row.map(p => {
         if (!p) return null;
-        return { side: p.side, type: p.type };
-    }));
-}
 
-function isAiMoveBasicLegalFromRoom(room, move, side = "den") {
-    if (!move || !move.from || !move.to) return false;
-    const mt = roomBoardToAiMatrix(room);
-    const p = mt[move.from.r]?.[move.from.c];
-    const target = mt[move.to.r]?.[move.to.c];
-    return !!p && p.side === side && !(target && target.side === side);
+        return {
+            side: p.side,
+            type: p.type
+        };
+    }));
 }
 
 function aiMainFindKingForFace(side, mt) {
@@ -6020,21 +5979,12 @@ function isAiWorkerMoveLegal(move, side = "den") {
     temp[move.to.r][move.to.c] = temp[move.from.r][move.from.c];
     temp[move.from.r][move.from.c] = null;
 
-    if (isTwoKingsFacing(temp)) return false;
+    if (aiMainTwoKingsFacing(temp)) return false;
     if (laBiChieu(side, temp)) return false;
 
     return true;
 }
-function roomHasAiBot(room) {
-    const den = room?.players?.den || {};
 
-    return !!(
-        room?.aiMode ||
-        den?.isAI ||
-        den?.uid === AI_BOT_UID ||
-        String(den?.name || "").toLowerCase().includes("ai")
-    );
-}
 function aiFastFallbackMove(moves) {
     if (!moves || !moves.length) return null;
 
@@ -6099,10 +6049,8 @@ function requestAiMoveFromWorker(room, side = "den") {
 
             console.log("AI WORKER RESULT:", data.result);
 
-            // Worker đã tự lọc nước hợp lệ. Ở main chỉ kiểm tra cơ bản bằng board Firebase,
-            // tránh bị sai do góc nhìn DOM / mySide làm AI không chịu đi.
-            if (!isAiMoveBasicLegalFromRoom(room, move, side)) {
-                console.warn("AI WORKER MOVE BASIC INVALID, fallback:", move);
+            if (!isAiWorkerMoveLegal(move, side)) {
+                console.warn("AI WORKER MOVE ILLEGAL, fallback:", move);
                 resolve(null);
                 return;
             }
@@ -6115,7 +6063,7 @@ function requestAiMoveFromWorker(room, side = "den") {
         worker.postMessage({
             type: "findMove",
             id,
-            board: aiMatrixForWorker(room),
+            board: aiMatrixForWorker(),
             side,
             maxDepth: AI_WORKER_DEPTH,
             timeLimitMs: AI_WORKER_TIME_MS,
@@ -6192,19 +6140,6 @@ async function tryResumeRealtimeMatch(preferredMode = null) {
     const isDo = room.players?.do?.uid === me.uid;
     const isDen = room.players?.den?.uid === me.uid;
     const canResume = !room.winner && (room.status === "playing" || room.status === "waiting");
-
-    const boardOk =
-        Array.isArray(room.board) &&
-        room.board.length === 10 &&
-        room.board.every(row => Array.isArray(row) && row.length === 9);
-
-    // Nếu trận cũ bị lỗi: status playing nhưng không có board chuẩn,
-    // xóa snapshot để app không bị kẹt màn xanh trống.
-    if (room.status === "playing" && !boardOk) {
-        console.warn("CLEAR BROKEN ACTIVE MATCH:", saved.roomId, room);
-        clearActiveMatchSnapshot(saved.roomId);
-        return false;
-    }
 
     if (!canResume || (!isDo && !isDen)) {
         clearActiveMatchSnapshot(saved.roomId);
@@ -9195,7 +9130,7 @@ function aiMoveLeavesSafe(side, c1, r1, c2, r2, mt) {
     const temp = aiCloneMatrix(mt);
     temp[r2][c2] = temp[r1][c1];
     temp[r1][c1] = null;
-    return !laBiChieu(side, temp) && !isTwoKingsFacing(temp);
+    return !laBiChieu(side, temp);
 }
 
 function aiCollectLegalMoves(side = "den") {
@@ -9288,410 +9223,142 @@ function aiRevealPieceIfNeeded(pieceEl) {
 
     pieceEl.src = `images/${side}_${names[type]}.png`;
 }
-function aiDirectPieceSrc(side, type) {
-    const names = {
-        "車": "xe", "车": "xe", "俥": "xe",
-        "馬": "ma", "马": "ma", "傌": "ma",
-        "象": "tuong", "相": "tuong",
-        "士": "si", "仕": "si",
-        "將": "tuong_soai", "将": "tuong_soai", "帥": "tuong_soai", "帅": "tuong_soai",
-        "砲": "phao", "炮": "phao",
-        "卒": "tot", "兵": "tot"
-    };
 
-    return `images/${side}_${names[type] || "tuong_soai"}.png`;
-}
-
-function aiDirectIsKing(type) {
-    return ["帥", "帅", "將", "将"].includes(type);
-}
-
-function aiDirectBoardArray(room) {
-    if (!Array.isArray(room?.board)) return [];
-
-    // Nếu board dạng matrix 10x9 thì đổi về list quân
-    if (Array.isArray(room.board[0])) {
-        const out = [];
-        room.board.forEach((row, r) => {
-            (row || []).forEach((p, c) => {
-                if (p) {
-                    out.push({
-                        c,
-                        r,
-                        side: p.side,
-                        type: p.type,
-                        isUp: !!p.isUp,
-                        src: p.src || aiDirectPieceSrc(p.side, p.type)
-                    });
-                }
-            });
-        });
-        return out;
-    }
-
-    return room.board
-        .filter(p => p && Number.isFinite(Number(p.c)) && Number.isFinite(Number(p.r)))
-        .map(p => ({ ...p, c: Number(p.c), r: Number(p.r) }));
-}
-
-function aiDirectMatrixFromBoard(boardArr) {
-    const mt = Array(10).fill(null).map(() => Array(9).fill(null));
-
-    boardArr.forEach(p => {
-        const c = Number(p.c);
-        const r = Number(p.r);
-        if (c >= 0 && c < 9 && r >= 0 && r < 10) {
-            mt[r][c] = p;
-        }
-    });
-
-    return mt;
-}
-
-function aiDirectKind(type) {
-    if (["帥", "帅", "將", "将"].includes(type)) return "king";
-    if (["俥", "車", "车"].includes(type)) return "rook";
-    if (["傌", "馬", "马"].includes(type)) return "horse";
-    if (["相", "象"].includes(type)) return "elephant";
-    if (["仕", "士"].includes(type)) return "advisor";
-    if (["炮", "砲"].includes(type)) return "cannon";
-    if (["兵", "卒"].includes(type)) return "pawn";
-    return "unknown";
-}
-
-function aiDirectValue(type) {
-    return {
-        king: 100000,
-        rook: 900,
-        cannon: 520,
-        horse: 480,
-        elephant: 230,
-        advisor: 230,
-        pawn: 120,
-        unknown: 40
-    }[aiDirectKind(type)] || 40;
-}
-
-function aiDirectIsPalace(side, c, r) {
-    if (c < 3 || c > 5) return false;
-    if (side === "do") return r >= 7 && r <= 9;
-    return r >= 0 && r <= 2;
-}
-
-function aiDirectCountBetween(mt, c1, r1, c2, r2) {
-    let n = 0;
-
-    if (c1 === c2) {
-        for (let r = Math.min(r1, r2) + 1; r <= Math.max(r1, r2) - 1; r++) {
-            if (mt[r][c1]) n++;
-        }
-        return n;
-    }
-
-    if (r1 === r2) {
-        for (let c = Math.min(c1, c2) + 1; c <= Math.max(c1, c2) - 1; c++) {
-            if (mt[r1][c]) n++;
-        }
-        return n;
-    }
-
-    return 999;
-}
-
-function aiDirectCanMove(piece, c1, r1, c2, r2, mt) {
-    if (!piece) return false;
-    if (c2 < 0 || c2 > 8 || r2 < 0 || r2 > 9) return false;
-
-    const side = piece.side;
-    const target = mt[r2][c2];
-
-    if (target && target.side === side) return false;
-
-    const dc = c2 - c1;
-    const dr = r2 - r1;
-    const ax = Math.abs(dc);
-    const ay = Math.abs(dr);
-    const k = aiDirectKind(piece.type);
-
-    if (k === "king") {
-        if (!aiDirectIsPalace(side, c2, r2)) return false;
-        return ax + ay === 1;
-    }
-
-    if (k === "advisor") {
-        if (!aiDirectIsPalace(side, c2, r2)) return false;
-        return ax === 1 && ay === 1;
-    }
-
-    if (k === "elephant") {
-        if (!(ax === 2 && ay === 2)) return false;
-        if (side === "do" && r2 < 5) return false;
-        if (side === "den" && r2 > 4) return false;
-
-        const blockC = c1 + dc / 2;
-        const blockR = r1 + dr / 2;
-        return !mt[blockR][blockC];
-    }
-
-    if (k === "horse") {
-        if (!((ax === 2 && ay === 1) || (ax === 1 && ay === 2))) return false;
-
-        let blockC = c1;
-        let blockR = r1;
-
-        if (ax === 2) blockC = c1 + Math.sign(dc);
-        if (ay === 2) blockR = r1 + Math.sign(dr);
-
-        return !mt[blockR][blockC];
-    }
-
-    if (k === "rook") {
-        if (c1 !== c2 && r1 !== r2) return false;
-        return aiDirectCountBetween(mt, c1, r1, c2, r2) === 0;
-    }
-
-    if (k === "cannon") {
-        if (c1 !== c2 && r1 !== r2) return false;
-
-        const between = aiDirectCountBetween(mt, c1, r1, c2, r2);
-        if (target) return between === 1;
-        return between === 0;
-    }
-
-    if (k === "pawn") {
-        if (side === "do") {
-            if (dc === 0 && dr === -1) return true;
-            if (r1 <= 4 && dr === 0 && ax === 1) return true;
-            return false;
-        }
-
-        if (dc === 0 && dr === 1) return true;
-        if (r1 >= 5 && dr === 0 && ax === 1) return true;
-        return false;
-    }
-
-    return false;
-}
-
-function aiDirectFallbackMove(room, side = "den") {
-    const boardArr = aiDirectBoardArray(room);
-    const mt = aiDirectMatrixFromBoard(boardArr);
-    const moves = [];
-
-    for (let r1 = 0; r1 < 10; r1++) {
-        for (let c1 = 0; c1 < 9; c1++) {
-            const piece = mt[r1][c1];
-            if (!piece || piece.side !== side) continue;
-
-            for (let r2 = 0; r2 < 10; r2++) {
-                for (let c2 = 0; c2 < 9; c2++) {
-                    if (!aiDirectCanMove(piece, c1, r1, c2, r2, mt)) continue;
-
-                    moves.push({
-                        from: { c: c1, r: r1 },
-                        to: { c: c2, r: r2 },
-                        piece,
-                        target: mt[r2][c2] || null
-                    });
-                }
-            }
-        }
-    }
-
-    return moves
-        .sort((a, b) => {
-            const av = a.target ? aiDirectValue(a.target.type) : 0;
-            const bv = b.target ? aiDirectValue(b.target.type) : 0;
-            return bv - av;
-        })[0] || null;
-}
-
-function aiDirectApplyMoveToBoard(room, move, side = "den") {
-    if (!room || !move?.from || !move?.to) return null;
-
-    const boardArr = aiDirectBoardArray(room);
-    const nextBoard = [];
-
-    let moving = null;
-    let captured = null;
-
-    for (const p of boardArr) {
-        const sameFrom = Number(p.c) === Number(move.from.c) && Number(p.r) === Number(move.from.r);
-        const sameTo = Number(p.c) === Number(move.to.c) && Number(p.r) === Number(move.to.r);
-
-        if (sameFrom) {
-            if (p.side !== side) return null;
-            moving = { ...p };
-            continue;
-        }
-
-        if (sameTo) {
-            if (p.side === side) return null;
-            captured = { ...p };
-            continue;
-        }
-
-        nextBoard.push({ ...p });
-    }
-
-    if (!moving) return null;
-
-    moving.c = Number(move.to.c);
-    moving.r = Number(move.to.r);
-
-    if (moving.isUp) {
-        moving.isUp = false;
-        moving.src = aiDirectPieceSrc(moving.side, moving.type);
-    }
-
-    nextBoard.push(moving);
-
-    return {
-        board: nextBoard,
-        captured
-    };
-}
 async function aiMakeMoveNow(roomId) {
-    if (!roomId || currentRoomId !== roomId) return false;
+    if (!roomId || currentRoomId !== roomId) return;
 
     const snap = await db.ref("matches/" + roomId).once("value");
     const room = snap.val() || {};
 
-    if (!roomHasAiBot(room) || room.status !== "playing" || room.winner) {
-        return false;
+    if (!room.aiMode || room.status !== "playing" || room.winner) return;
+    if ((room.turn || luotDi) !== "den") return;
+
+    const moves = aiCollectLegalMoves("den");
+console.log("AI LEGAL MOVES:", moves.length, {
+    roomId,
+    turn: room.turn,
+    status: room.status,
+    aiMode: room.aiMode,
+    mySide
+});
+
+    if (!moves.length) {
+        await db.ref("matches/" + roomId).update({
+            winner: "do",
+            winReason: "ai_no_move",
+            status: "finished",
+            finishedAt: firebase.database.ServerValue.TIMESTAMP,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+        return;
     }
 
-    const turnNow = String(room.turn || luotDi || "").toLowerCase();
-    if (turnNow !== "den") {
-        return false;
+    renderTimerUI();
+
+// Nhả main thread 1 nhịp để đồng hồ kịp vẽ trước khi AI suy nghĩ
+await new Promise(resolve => setTimeout(resolve, 80));
+
+let move = await requestAiMoveFromWorker(room, "den");
+
+if (!move) {
+    move = aiFastFallbackMove(moves);
+}
+
+if (!move) return;;
+
+    const pieceEl = aiGetPieceElAtReal(move.from.c, move.from.r);
+    const targetEl = aiGetPieceElAtReal(move.to.c, move.to.r);
+
+    if (!pieceEl) return;
+
+    const capturedKing = targetEl && isKingPiece(targetEl.dataset.type);
+
+    if (targetEl) {
+        targetEl.remove();
+        playSnd("capture");
+    } else {
+        playSnd("click");
     }
 
-    console.log("AI DIRECT TRY MOVE:", {
-        roomId,
-        turn: room.turn,
-        status: room.status,
-        aiMode: room.aiMode,
-        boardLen: Array.isArray(room.board) ? room.board.length : 0
-    });
+    lastMoveFrom = { c: move.from.c, r: move.from.r };
+    lastMoveTo = { c: move.to.c, r: move.to.r };
 
-    let move = null;
+    const viewTo = mapBoardToView(move.to.c, move.to.r);
+    pieceEl.style.left = columns[viewTo.c] + "%";
+    pieceEl.style.top = rows[viewTo.r] + "%";
 
-    try {
-        move = await requestAiMoveFromWorker(room, "den");
-    } catch (err) {
-        console.error("AI WORKER FAILED, USE DIRECT FALLBACK:", err);
-        move = null;
-    }
-
-    if (!move) {
-        console.warn("AI WORKER NO MOVE, USE DIRECT FALLBACK");
-        move = aiDirectFallbackMove(room, "den");
-    }
-
-    if (!move) {
-        console.warn("AI DIRECT NO MOVE FOUND");
-        return false;
-    }
-
-    let applied = aiDirectApplyMoveToBoard(room, move, "den");
-
-    if (!applied) {
-        console.warn("AI WORKER MOVE APPLY FAILED, RETRY FALLBACK:", move);
-        move = aiDirectFallbackMove(room, "den");
-        applied = aiDirectApplyMoveToBoard(room, move, "den");
-    }
-
-    if (!applied) {
-        console.warn("AI DIRECT APPLY STILL FAILED");
-        return false;
-    }
-
-    const updates = {
-        board: applied.board,
-        turn: "do",
-        isCoUp: !!room.isCoUp,
-        timeDo: typeof room.timeDo === "number" ? room.timeDo : timeDo,
-        timeDen: typeof room.timeDen === "number" ? room.timeDen : timeDen,
-        lastMoveFrom: move.from,
-        lastMoveTo: move.to,
-        moveCount: firebase.database.ServerValue.increment(1),
-        updatedAt: firebase.database.ServerValue.TIMESTAMP
-    };
-
-    if (applied.captured && aiDirectIsKing(applied.captured.type)) {
-        updates.winner = "den";
-        updates.winReason = "ai_capture_king";
-        updates.status = "finished";
-        updates.finishedAt = firebase.database.ServerValue.TIMESTAMP;
-    }
-
-    await db.ref("matches/" + roomId).update(updates);
+    aiRevealPieceIfNeeded(pieceEl);
 
     luotDi = "do";
-    lastMoveFrom = move.from;
-    lastMoveTo = move.to;
-    aiThinking = false;
-    aiMoveScheduledKey = "";
+    selectedPiece = null;
+    clearMoveHints();
+    drawLastMoveMarks();
+    updateTurnUIOnly();
+    refreshTimerRings();
 
-    console.log("AI DIRECT MOVED OK:", move);
-    return true;
+    let winnerSide = "";
+    let winReason = "";
+
+    if (capturedKing) {
+        winnerSide = "den";
+        winReason = "ai_capture_king";
+    } else {
+        setTimeout(() => {
+            updateCheckEffectFromBoard();
+        }, 50);
+
+        if (laBiChieu("do", taoMaTran()) && checkMate("do")) {
+            winnerSide = "den";
+            winReason = "ai_checkmate";
+        }
+    }
+
+    const extra = {
+        moveCount: firebase.database.ServerValue.increment(1)
+    };
+
+    if (winnerSide) {
+        extra.winner = winnerSide;
+        extra.winReason = winReason;
+        extra.status = "finished";
+        extra.finishedAt = firebase.database.ServerValue.TIMESTAMP;
+    }
+
+    await syncRoomFromBoard(extra);
 }
 
 function maybeScheduleAiMove(room, roomId) {
     if (!room || !roomId) return;
-    if (!roomHasAiBot(room)) return;
+    if (!room.aiMode) return;
     if (room.status !== "playing") return;
     if (room.winner) return;
 
-    const turnNow = String(room.turn || luotDi || "").toLowerCase();
+    // Chỉ chủ phòng / bên đỏ thật điều khiển AI
+    if (mySide !== "do") return;
+
+    const turnNow = room.turn || luotDi || "";
     if (turnNow !== "den") return;
 
     const boardKey = JSON.stringify(room.board || []);
     const key = roomId + ":" + String(room.moveCount || 0) + ":" + turnNow + ":" + boardKey;
 
-    if (aiMoveScheduledKey === key && aiThinking) return;
+    if (aiMoveScheduledKey === key || aiThinking) return;
 
     aiMoveScheduledKey = key;
     clearTimeout(aiMoveTimer);
 
-    console.log("AI SCHEDULED:", {
-        roomId,
-        turnNow,
-        aiMode: room.aiMode,
-        denPlayer: room.players?.den,
-        mySide
-    });
-
     aiMoveTimer = setTimeout(async () => {
-        let moved = false;
-
         try {
             aiThinking = true;
-            moved = await aiMakeMoveNow(roomId);
+            await aiMakeMoveNow(roomId);
         } catch (err) {
             console.error("AI MOVE ERROR:", err);
+            alert("AI bị lỗi nên chưa đi được. Mở Console xem AI MOVE ERROR.");
         } finally {
             aiThinking = false;
-
-            if (!moved) {
-                aiMoveScheduledKey = "";
-
-                // Tự đọc lại phòng và thử lại, không chờ Firebase event mới.
-                setTimeout(async () => {
-                    try {
-                        if (!currentRoomId || currentRoomId !== roomId) return;
-                        const retrySnap = await db.ref("matches/" + roomId).once("value");
-                        const retryRoom = retrySnap.val() || {};
-                        maybeScheduleAiMove(retryRoom, roomId);
-                    } catch (e) {
-                        console.error("AI RETRY ERROR:", e);
-                    }
-                }, 700);
-            }
         }
     }, 120);
 }
-
 function toggleProfileMenu(event) {
     event.stopPropagation();
     const menu = document.getElementById("profile-dropdown");
