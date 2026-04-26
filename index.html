@@ -6348,6 +6348,7 @@ function formatTime(s) {
 
 function startTimer() {
     clearInterval(interval);
+    interval = null;
     renderTimerUI();
 
     if (!currentRoomId || currentRoomStatus !== "playing" || isGameOver) {
@@ -8421,26 +8422,34 @@ if (newBoardHash && newBoardHash !== lastRoomBoardHash) {
 }
 
 // Quan trọng: luôn đồng bộ lượt + giờ từ Firebase, không phụ thuộc board hash
-luotDi = room.turn || "do";
-timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
-timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
+const serverClockChanged = timerSig !== lastTimerRoomSig;
 
-updateTurnUIOnly();
-renderTimerUI();
+if (serverClockChanged) {
+    lastTimerRoomSig = timerSig;
+
+    // Chỉ đồng bộ giờ từ Firebase khi board/lượt/giờ server thật sự đổi.
+    // Không reset giờ local vì mấy event phụ như levelMeta/chat/player update.
+    luotDi = room.turn || "do";
+    timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
+    timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
+
+    updateTurnUIOnly();
+    renderTimerUI();
+}
 
 if (room.status === "playing" && !room.winner) {
     readyOverlayWaitingShown = false;
     isGameOver = false;
     closeReadyOverlay();
 
-    // Chỉ restart timer khi trạng thái thật sự đổi, tránh bị reset liên tục
-    if (timerSig !== lastTimerRoomSig) {
-        lastTimerRoomSig = timerSig;
+    if (serverClockChanged) {
         startTimer();
     }
 
-    // Gọi AI SAU KHI bàn cờ + lượt + giờ đã đồng bộ xong
     maybeScheduleAiMove(room, listeningRoomId);
+} else {
+    updateTurnUIOnly();
+    renderTimerUI();
 }
         if (room.drawRequest && room.drawRequest.from !== mySide && room.drawRequest.at !== lastDrawRequestAt) {
             lastDrawRequestAt = room.drawRequest.at;
@@ -8927,9 +8936,10 @@ function aiCollectLegalMoves(side = "den") {
     return moves;
 }
 
-const AI_SEARCH_DEPTH = 2;
-const AI_TOP_MOVES_LIMIT = 18;
-const AI_MISTAKE_RATE = 0.02;   // 0.08 = thỉnh thoảng sai nhẹ cho giống người
+const AI_SEARCH_DEPTH = 1;      // để 1 trước cho MEMU/Pi Browser không bị đứng timer
+const AI_TOP_MOVES_LIMIT = 8;   // giảm số nước xét
+const AI_MISTAKE_RATE = 0.08;
+const AI_MAX_THINK_MS = 450;    // AI chỉ được nghĩ tối đa khoảng nửa giây
 
 function aiPieceValue(type) {
     const map = {
@@ -9070,16 +9080,9 @@ function aiEvaluateMatrix(mt, aiSide = "den") {
         }
     }
 
-    // Đang chiếu đối thủ thì cộng điểm
+    // Giữ chiếu/tự bị chiếu, bỏ phần tính mobility vì nó cực nặng trên MEMU
     if (laBiChieu(enemySide, mt)) score += 180;
-
-    // Bị chiếu thì trừ mạnh
     if (laBiChieu(aiSide, mt)) score -= 260;
-
-    // Nước linh hoạt nhiều hơn thì cộng nhẹ
-    const myMobility = aiCollectLegalMovesFromMatrix(aiSide, mt).length;
-    const enemyMobility = aiCollectLegalMovesFromMatrix(enemySide, mt).length;
-    score += (myMobility - enemyMobility) * 4;
 
     return score;
 }
@@ -9176,6 +9179,7 @@ function aiMinimax(mt, depth, sideToMove, aiSide, alpha, beta) {
 }
 
 function aiFindBestMove(side = "den", depth = AI_SEARCH_DEPTH) {
+    const started = Date.now();
     const mt = taoMaTran();
     let moves = aiCollectLegalMovesFromMatrix(side, mt);
 
@@ -9183,7 +9187,7 @@ function aiFindBestMove(side = "den", depth = AI_SEARCH_DEPTH) {
 
     moves = aiOrderMoves(moves, side, mt).slice(0, AI_TOP_MOVES_LIMIT);
 
-    // Cho AI thỉnh thoảng chọn nước top 2/top 3 để đỡ quá máy móc
+    // Thỉnh thoảng chọn top 2/top 3 cho giống người
     if (Math.random() < AI_MISTAKE_RATE && moves.length >= 3) {
         return moves[Math.floor(Math.random() * Math.min(3, moves.length))];
     }
@@ -9192,8 +9196,20 @@ function aiFindBestMove(side = "den", depth = AI_SEARCH_DEPTH) {
     let bestScore = -Infinity;
 
     for (const move of moves) {
+        // Chặn AI nghĩ quá lâu làm đơ timer
+        if (Date.now() - started > AI_MAX_THINK_MS) {
+            break;
+        }
+
         const next = aiApplyMoveToMatrix(mt, move);
-        const score = aiMinimax(next, depth - 1, aiOtherSide(side), side, -Infinity, Infinity);
+        const score = aiMinimax(
+            next,
+            Math.max(0, depth - 1),
+            aiOtherSide(side),
+            side,
+            -Infinity,
+            Infinity
+        );
 
         move.finalScore = score;
 
@@ -9202,14 +9218,6 @@ function aiFindBestMove(side = "den", depth = AI_SEARCH_DEPTH) {
             bestMove = move;
         }
     }
-
-    console.log("AI BEST MOVE", {
-        bestScore,
-        from: bestMove.from,
-        to: bestMove.to,
-        piece: bestMove.piece,
-        target: bestMove.target
-    });
 
     return bestMove;
 }
@@ -9270,8 +9278,16 @@ console.log("AI LEGAL MOVES:", moves.length, {
         return;
     }
 
-    const move = aiPickMove(moves);
-    if (!move) return;
+    renderTimerUI();
+
+// Nhả main thread 1 nhịp để đồng hồ kịp vẽ trước khi AI suy nghĩ
+await new Promise(resolve => setTimeout(resolve, 80));
+
+const thinkStart = Date.now();
+const move = aiPickMove(moves);
+console.log("AI THINK MS:", Date.now() - thinkStart);
+
+if (!move) return;
 
     const pieceEl = aiGetPieceElAtReal(move.from.c, move.from.r);
     const targetEl = aiGetPieceElAtReal(move.to.c, move.to.r);
