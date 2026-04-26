@@ -5984,7 +5984,16 @@ function isAiWorkerMoveLegal(move, side = "den") {
 
     return true;
 }
+function roomHasAiBot(room) {
+    const den = room?.players?.den || {};
 
+    return !!(
+        room?.aiMode ||
+        den?.isAI ||
+        den?.uid === AI_BOT_UID ||
+        String(den?.name || "").toLowerCase().includes("ai")
+    );
+}
 function aiFastFallbackMove(moves) {
     if (!moves || !moves.length) return null;
 
@@ -9243,8 +9252,14 @@ async function aiMakeMoveNow(roomId) {
     const snap = await db.ref("matches/" + roomId).once("value");
     const room = snap.val() || {};
 
-    if (!room.aiMode || room.status !== "playing" || room.winner) return;
-    if ((room.turn || luotDi) !== "den") return;
+    if (!roomHasAiBot(room) || room.status !== "playing" || room.winner) {
+    return false;
+}
+
+const turnNow = String(room.turn || luotDi || "").toLowerCase();
+if (turnNow !== "den") {
+    return false;
+}
 
     const moves = aiCollectLegalMoves("den");
 console.log("AI LEGAL MOVES:", moves.length, {
@@ -9256,14 +9271,7 @@ console.log("AI LEGAL MOVES:", moves.length, {
 });
 
     if (!moves.length) {
-        await db.ref("matches/" + roomId).update({
-            winner: "do",
-            winReason: "ai_no_move",
-            status: "finished",
-            finishedAt: firebase.database.ServerValue.TIMESTAMP,
-            updatedAt: firebase.database.ServerValue.TIMESTAMP
-        });
-        return;
+        return true;
     }
 
     renderTimerUI();
@@ -9277,12 +9285,12 @@ if (!move) {
     move = aiFastFallbackMove(moves);
 }
 
-if (!move) return;
+if (!move) return false;
 
     const pieceEl = aiGetPieceElAtReal(move.from.c, move.from.r);
     const targetEl = aiGetPieceElAtReal(move.to.c, move.to.r);
 
-    if (!pieceEl) return;
+    if (!pieceEl) return false;
 
     const capturedKing = targetEl && isKingPiece(targetEl.dataset.type);
 
@@ -9338,18 +9346,19 @@ if (!move) return;
     }
 
     await syncRoomFromBoard(extra);
+return true;
 }
 
 function maybeScheduleAiMove(room, roomId) {
     if (!room || !roomId) return;
-    if (!room.aiMode) return;
+    if (!roomHasAiBot(room)) return;
     if (room.status !== "playing") return;
     if (room.winner) return;
 
-    // Chỉ chủ phòng / bên đỏ thật điều khiển AI
-    if (mySide !== "do") return;
+    // Nếu người thật đang là bên ĐEN thì không cho tự điều khiển AI
+    if (mySide === "den") return;
 
-    const turnNow = room.turn || luotDi || "";
+    const turnNow = String(room.turn || luotDi || "").toLowerCase();
     if (turnNow !== "den") return;
 
     const boardKey = JSON.stringify(room.board || []);
@@ -9360,15 +9369,30 @@ function maybeScheduleAiMove(room, roomId) {
     aiMoveScheduledKey = key;
     clearTimeout(aiMoveTimer);
 
+    console.log("AI SCHEDULED:", {
+        roomId,
+        turnNow,
+        aiMode: room.aiMode,
+        denPlayer: room.players?.den,
+        mySide
+    });
+
     aiMoveTimer = setTimeout(async () => {
+        let moved = false;
+
         try {
             aiThinking = true;
-            await aiMakeMoveNow(roomId);
+            moved = await aiMakeMoveNow(roomId);
         } catch (err) {
             console.error("AI MOVE ERROR:", err);
             alert("AI bị lỗi nên chưa đi được. Mở Console xem AI MOVE ERROR.");
         } finally {
             aiThinking = false;
+
+            // Nếu chưa đi được thì mở khóa để Firebase event kế tiếp còn gọi lại
+            if (!moved) {
+                aiMoveScheduledKey = "";
+            }
         }
     }, 120);
 }
