@@ -6453,9 +6453,10 @@ function endGame(main, sub) {
     }
 
     if (wrap) {
-        wrap.style.transform = "translate(-50%, -50%) scale(1)";
-        wrap.style.pointerEvents = "auto";
-    }
+    wrap.style.zIndex = "50000";
+    wrap.style.transform = "translate(-50%, -50%) scale(1)";
+    wrap.style.pointerEvents = "auto";
+}
 }
 function hideVictoryPopup() {
     const wrap = document.getElementById("victory-wrap");
@@ -7275,15 +7276,23 @@ function exportBoardState() {
     });
 }
 
-function applyBoardStateFromRoom(pieces) {
-    isGameOver = false;
-    hideVictoryPopup();
+function applyBoardStateFromRoom(pieces, options = {}) {
+    const keepVictory = !!options.keepVictory;
+
+    // Khi trận đã có winner thì KHÔNG được hạ isGameOver và KHÔNG được giấu bảng thắng/thua
+    if (!keepVictory) {
+        isGameOver = false;
+        hideVictoryPopup();
+    }
+
     document.querySelectorAll(".piece").forEach(p => p.remove());
     clearMoveHints();
     clearLastMoveMarks();
     selectedPiece = null;
 
-    if (sounds.heartbeat) sounds.heartbeat.pause();
+    if (!keepVictory && sounds.heartbeat) {
+        sounds.heartbeat.pause();
+    }
 
     (pieces || []).forEach(item => {
         const img = document.createElement("img");
@@ -8428,7 +8437,7 @@ if (room.status === "playing" && !room.winner) {
         if (newBoardHash && newBoardHash !== lastRoomBoardHash) {
             lastRoomBoardHash = newBoardHash;
 
-            applyBoardStateFromRoom(room.board || []);
+            applyBoardStateFromRoom(room.board || [], { keepVictory: !!room.winner });
             isCoUp = !!room.isCoUp;
             luotDi = room.turn || "do";
             timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
@@ -8464,7 +8473,18 @@ if (room.status === "playing" && !room.winner) {
                 await db.ref("matches/" + roomId + "/drawRequest").remove();
             }
         }
-        if (room.winner) {
+       window.__settledPmcRooms = window.__settledPmcRooms || {};
+
+const settleKey = [
+    listeningRoomId,
+    room.winner || "",
+    room.winReason || "",
+    room.finishedAt || ""
+].join("_");
+
+if (room.winner && !window.__settledPmcRooms[settleKey]) {
+    window.__settledPmcRooms[settleKey] = true;
+
     setTimeout(() => {
         settlePmcViaApi(listeningRoomId);
     }, 0);
