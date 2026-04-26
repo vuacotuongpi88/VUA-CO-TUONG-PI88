@@ -8856,17 +8856,29 @@ function makeRewardRoundKey(roomId, room = {}) {
     ].join("_").replace(/[.#$\[\]\/]/g, "_");
 }
 
-function getRewardWalletKey(room, side) {
-    const p = room?.players?.[side] || {};
-    return String(
-        p.walletKey ||
-        p.walletDbKey ||
-        p.wallet ||
-        p.uid ||
-        ""
-    ).replace(/[.#$\[\]\/]/g, "_");
+function normalizeWalletKey(raw) {
+    return String(raw || "")
+        .trim()
+        .replace(/\s+/g, "_")
+        .replace(/[.#$\[\]\/]/g, "_");
 }
 
+function getRewardWalletKey(room, side) {
+    const p = room?.players?.[side] || {};
+
+    const directKey = p.walletKey || p.walletDbKey || p.wallet || "";
+    if (directKey) return normalizeWalletKey(directKey);
+
+    const uid = String(p.uid || "").trim();
+    if (!uid) return "";
+
+    // Nếu uid chưa có prefix thì convert về key ví giống makeWalletDbKey()
+    if (uid.startsWith("google_") || uid.startsWith("pi_") || uid.startsWith("guest_")) {
+        return normalizeWalletKey(uid);
+    }
+
+    return normalizeWalletKey("google_" + uid);
+}
 function getRewardProfile(room, side) {
     const p = room?.players?.[side] || {};
     return {
@@ -8907,7 +8919,7 @@ async function creditPmcForWinnerRound(roomId, room) {
     const roundKey = makeRewardRoundKey(roomId, room);
     if (!roundKey) return;
 
-    const myWalletKey = makeWalletDbKey();
+    const myWalletKey = normalizeWalletKey(makeWalletDbKey());
     const roomWinnerKey = getRewardWalletKey(room, room.winner);
 
     if (roomWinnerKey && roomWinnerKey !== myWalletKey) {
@@ -9051,7 +9063,7 @@ async function awardExpForBothSidesRound(roomId, room) {
     const roundKey = makeRewardRoundKey(roomId, room);
     if (!roundKey) return;
 
-    const myWalletKey = makeWalletDbKey();
+    const myWalletKey = normalizeWalletKey(makeWalletDbKey());
     const roomMyKey = getRewardWalletKey(room, mySide);
 
     if (roomMyKey && roomMyKey !== myWalletKey) {
@@ -9207,21 +9219,57 @@ function bindRoom(roomId) {
         const room = snap.val();
         if (!room) return;
 const me = getCurrentPlayerProfile();
-const myWalletKeyNow = makeWalletDbKey();
+const myWalletKeyNow = normalizeWalletKey(makeWalletDbKey());
+const myUidNow = String(me.uid || "").trim();
+
 const doPlayerNow = room.players?.do || {};
 const denPlayerNow = room.players?.den || {};
 
-// Ưu tiên nhận diện bằng walletKey, vì Pi/guest nhiều lúc uid không chuẩn
-if (
-    doPlayerNow.walletKey === myWalletKeyNow ||
-    doPlayerNow.uid === me.uid
-) {
-    mySide = "do";
-} else if (
-    denPlayerNow.walletKey === myWalletKeyNow ||
-    denPlayerNow.uid === me.uid
-) {
-    mySide = "den";
+const doWalletNow = getRewardWalletKey(room, "do");
+const denWalletNow = getRewardWalletKey(room, "den");
+
+const doUidNow = String(doPlayerNow.uid || "").trim();
+const denUidNow = String(denPlayerNow.uid || "").trim();
+
+let detectedSide = "";
+
+// ƯU TIÊN TUYỆT ĐỐI walletKey.
+// Không để uid làm máy đen bị nhận nhầm thành đỏ.
+if (myWalletKeyNow && doWalletNow === myWalletKeyNow && denWalletNow !== myWalletKeyNow) {
+    detectedSide = "do";
+} else if (myWalletKeyNow && denWalletNow === myWalletKeyNow && doWalletNow !== myWalletKeyNow) {
+    detectedSide = "den";
+} else if (myWalletKeyNow && doWalletNow === myWalletKeyNow) {
+    detectedSide = "do";
+} else if (myWalletKeyNow && denWalletNow === myWalletKeyNow) {
+    detectedSide = "den";
+} else {
+    // Chỉ fallback uid khi walletKey không có, tránh nhận nhầm phe.
+    const doHasWallet = !!doWalletNow;
+    const denHasWallet = !!denWalletNow;
+
+    if (!doHasWallet && !denHasWallet && myUidNow) {
+        if (doUidNow === myUidNow && denUidNow !== myUidNow) detectedSide = "do";
+        else if (denUidNow === myUidNow && doUidNow !== myUidNow) detectedSide = "den";
+    } else if (!doHasWallet && myUidNow && doUidNow === myUidNow && denUidNow !== myUidNow) {
+        detectedSide = "do";
+    } else if (!denHasWallet && myUidNow && denUidNow === myUidNow && doUidNow !== myUidNow) {
+        detectedSide = "den";
+    }
+}
+
+if (detectedSide) {
+    mySide = detectedSide;
+} else {
+    console.warn("SIDE DETECT FAIL", {
+        myWalletKeyNow,
+        myUidNow,
+        doWalletNow,
+        denWalletNow,
+        doUidNow,
+        denUidNow,
+        oldMySide: mySide
+    });
 }
 
 viewSide = mySide || "do";
