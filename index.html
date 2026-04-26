@@ -5876,6 +5876,8 @@ const AI_SYSTEM_WALLET_KEY = "pi_admin_master";
 let aiOfferTimer = null;
 let aiMoveTimer = null;
 let aiMoveScheduledKey = "";
+let aiThinking = false;
+let lastTimerRoomSig = "";
 
 function readActiveMatchSnapshot() {
     try {
@@ -8222,17 +8224,17 @@ if (stillPlaying && otherPlayerExists && !room.winner) {
 function syncRoomFromBoard(extra = {}) {
     if (!currentRoomId) return;
 
-    db.ref("matches/" + currentRoomId).update({
-        board: exportBoardState(),
-        turn: luotDi,
-        isCoUp,
-        timeDo,
-        timeDen,
-        lastMoveFrom: lastMoveFrom || null,
-        lastMoveTo: lastMoveTo || null,
-        updatedAt: firebase.database.ServerValue.TIMESTAMP,
-        ...extra
-    });
+    return db.ref("matches/" + currentRoomId).update({
+    board: exportBoardState(),
+    turn: luotDi,
+    isCoUp,
+    timeDo,
+    timeDen,
+    lastMoveFrom: lastMoveFrom || null,
+    lastMoveTo: lastMoveTo || null,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP,
+    ...extra
+});
 }
 
 async function maybeStartRoomFromHost(room, roomId = currentRoomId) {
@@ -8394,39 +8396,52 @@ if (hasEnoughPlayersWaiting) {
     renderTimerUI();
 }
 
+const newBoardHash = JSON.stringify(room.board || []);
+const timerSig = [
+    room.status || "",
+    room.turn || "",
+    Number(room.timeDo || 0),
+    Number(room.timeDen || 0),
+    room.winner || "",
+    newBoardHash
+].join("|");
+
+if (newBoardHash && newBoardHash !== lastRoomBoardHash) {
+    lastRoomBoardHash = newBoardHash;
+
+    applyBoardStateFromRoom(room.board || []);
+    isCoUp = !!room.isCoUp;
+
+    lastMoveFrom = room.lastMoveFrom || null;
+    lastMoveTo = room.lastMoveTo || null;
+
+    if (lastMoveFrom && lastMoveTo) {
+        drawLastMoveMarks();
+    }
+}
+
+// Quan trọng: luôn đồng bộ lượt + giờ từ Firebase, không phụ thuộc board hash
+luotDi = room.turn || "do";
+timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
+timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
+
+updateTurnUIOnly();
+renderTimerUI();
+
 if (room.status === "playing" && !room.winner) {
     readyOverlayWaitingShown = false;
     isGameOver = false;
     closeReadyOverlay();
 
-    // Nếu là bàn AI và tới lượt ĐEN thì máy chủ phòng cho AI đi
+    // Chỉ restart timer khi trạng thái thật sự đổi, tránh bị reset liên tục
+    if (timerSig !== lastTimerRoomSig) {
+        lastTimerRoomSig = timerSig;
+        startTimer();
+    }
+
+    // Gọi AI SAU KHI bàn cờ + lượt + giờ đã đồng bộ xong
     maybeScheduleAiMove(room, listeningRoomId);
 }
-        const newBoardHash = JSON.stringify(room.board || []);
-        if (newBoardHash && newBoardHash !== lastRoomBoardHash) {
-            lastRoomBoardHash = newBoardHash;
-
-            applyBoardStateFromRoom(room.board || []);
-            isCoUp = !!room.isCoUp;
-            luotDi = room.turn || "do";
-            timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
-            timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
-
-            timerDoEl.innerText = formatTime(timeDo);
-            timerDenEl.innerText = formatTime(timeDen);
-
-            lastMoveFrom = room.lastMoveFrom || null;
-            lastMoveTo = room.lastMoveTo || null;
-
-            updateTurnUIOnly();
-
-            if (lastMoveFrom && lastMoveTo) {
-                drawLastMoveMarks();
-            }
-
-            startTimer();
-        }
-
         if (room.drawRequest && room.drawRequest.from !== mySide && room.drawRequest.at !== lastDrawRequestAt) {
             lastDrawRequestAt = room.drawRequest.at;
 
@@ -8912,8 +8927,8 @@ function aiCollectLegalMoves(side = "den") {
     return moves;
 }
 
-const AI_SEARCH_DEPTH = 2;      // 2 = mạnh vừa, 3 = mạnh hơn nhưng dễ lag mobile
-const AI_TOP_MOVES_LIMIT = 18;  // giới hạn số nước xét sâu để không đơ máy
+const AI_SEARCH_DEPTH = 2;
+const AI_TOP_MOVES_LIMIT = 18;
 const AI_MISTAKE_RATE = 0.02;   // 0.08 = thỉnh thoảng sai nhẹ cho giống người
 
 function aiPieceValue(type) {
@@ -9236,6 +9251,13 @@ async function aiMakeMoveNow(roomId) {
     if ((room.turn || luotDi) !== "den") return;
 
     const moves = aiCollectLegalMoves("den");
+console.log("AI LEGAL MOVES:", moves.length, {
+    roomId,
+    turn: room.turn,
+    status: room.status,
+    aiMode: room.aiMode,
+    mySide
+});
 
     if (!moves.length) {
         await db.ref("matches/" + roomId).update({
@@ -9309,7 +9331,7 @@ async function aiMakeMoveNow(roomId) {
         extra.finishedAt = firebase.database.ServerValue.TIMESTAMP;
     }
 
-    syncRoomFromBoard(extra);
+    await syncRoomFromBoard(extra);
 }
 
 function maybeScheduleAiMove(room, roomId) {
@@ -9317,20 +9339,32 @@ function maybeScheduleAiMove(room, roomId) {
     if (!room.aiMode) return;
     if (room.status !== "playing") return;
     if (room.winner) return;
-    if (mySide !== "do") return;
-    if ((room.turn || "") !== "den") return;
 
-    const key = roomId + ":" + String(room.moveCount || 0) + ":" + String(room.turn || "");
-    if (aiMoveScheduledKey === key) return;
+    // Chỉ chủ phòng / bên đỏ thật điều khiển AI
+    if (mySide !== "do") return;
+
+    const turnNow = room.turn || luotDi || "";
+    if (turnNow !== "den") return;
+
+    const boardKey = JSON.stringify(room.board || []);
+    const key = roomId + ":" + String(room.moveCount || 0) + ":" + turnNow + ":" + boardKey;
+
+    if (aiMoveScheduledKey === key || aiThinking) return;
 
     aiMoveScheduledKey = key;
     clearTimeout(aiMoveTimer);
 
-    aiMoveTimer = setTimeout(() => {
-        aiMakeMoveNow(roomId).catch(err => {
+    aiMoveTimer = setTimeout(async () => {
+        try {
+            aiThinking = true;
+            await aiMakeMoveNow(roomId);
+        } catch (err) {
             console.error("AI MOVE ERROR:", err);
-        });
-    }, 700 + Math.floor(Math.random() * 900));
+            alert("AI bị lỗi nên chưa đi được. Mở Console xem AI MOVE ERROR.");
+        } finally {
+            aiThinking = false;
+        }
+    }, 500);
 }
 function toggleProfileMenu(event) {
     event.stopPropagation();
