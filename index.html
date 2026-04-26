@@ -8967,11 +8967,14 @@ function aiCollectLegalMoves(side = "den") {
     return moves;
 }
 
-const AI_SEARCH_DEPTH = 1;
-const AI_TOP_MOVES_LIMIT = 6;
-const AI_VISUAL_THINK_MS = 1800;
-const AI_MISTAKE_RATE = 0.08;
-const AI_MAX_THINK_MS = 450;    // AI chỉ được nghĩ tối đa khoảng nửa giây
+const AI_SEARCH_DEPTH = 4;          // AI sẽ tự leo depth 1 -> 4 nếu còn thời gian
+const AI_TOP_MOVES_LIMIT = 10;      // đừng để 18 trên MEMU, dễ đơ
+const AI_MISTAKE_RATE = 0.02;
+const AI_MOVE_TIME_MS = 180;        // muốn đi liền: 120-180ms, muốn mạnh hơn: 300-500ms
+const AI_CACHE_MAX = 8000;
+
+const AI_TT = new Map();            // transposition table/cache
+const AI_KILLER_MOVES = new Map();  // killer move đơn giản
 
 function aiPieceValue(type) {
     const map = {
@@ -8985,7 +8988,64 @@ function aiPieceValue(type) {
     };
     return map[type] || 50;
 }
+function aiHashMatrix(mt, side = "den") {
+    const parts = [side];
 
+    for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 9; c++) {
+            const p = mt[r][c];
+            if (!p) {
+                parts.push(".");
+            } else {
+                parts.push(p.side[0] + p.type);
+            }
+        }
+    }
+
+    return parts.join("|");
+}
+
+function aiMoveKey(move) {
+    if (!move) return "";
+    return `${move.from.c},${move.from.r}-${move.to.c},${move.to.r}`;
+}
+
+function aiSameMove(a, b) {
+    return !!a && !!b &&
+        a.from.c === b.from.c &&
+        a.from.r === b.from.r &&
+        a.to.c === b.to.c &&
+        a.to.r === b.to.r;
+}
+
+function aiTrimCache() {
+    if (AI_TT.size <= AI_CACHE_MAX) return;
+
+    const removeCount = Math.floor(AI_CACHE_MAX * 0.25);
+    let i = 0;
+
+    for (const key of AI_TT.keys()) {
+        AI_TT.delete(key);
+        i++;
+        if (i >= removeCount) break;
+    }
+}
+
+// Opening book nhỏ trước, sau này mầy thêm nhiều thế vào đây
+const AI_OPENING_BOOK = new Map();
+
+function aiRegisterOpening(hash, move) {
+    AI_OPENING_BOOK.set(hash, move);
+}
+
+function aiFindOpeningMove(mt, side = "den") {
+    const hash = aiHashMatrix(mt, side);
+    const bookMove = AI_OPENING_BOOK.get(hash);
+    if (!bookMove) return null;
+
+    const moves = aiCollectLegalMovesFromMatrix(side, mt);
+    return moves.find(m => aiSameMove(m, bookMove)) || null;
+}
 function aiCloneMatrix(mt) {
     return mt.map(row => row.map(cell => cell ? { ...cell } : null));
 }
@@ -9192,7 +9252,11 @@ function aiOrderMoves(moves, side, mt) {
         .sort((a, b) => b.quickScore - a.quickScore);
 }
 
-function aiMinimax(mt, depth, sideToMove, aiSide, alpha, beta) {
+function aiMinimax(mt, depth, sideToMove, aiSide, alpha, beta, deadline) {
+    if (Date.now() >= deadline) {
+        return aiEvaluateMatrix(mt, aiSide);
+    }
+
     const enemySide = aiOtherSide(aiSide);
 
     if (!aiFindKing(aiSide, mt)) return -999999;
@@ -9202,101 +9266,186 @@ function aiMinimax(mt, depth, sideToMove, aiSide, alpha, beta) {
         return aiEvaluateMatrix(mt, aiSide);
     }
 
+    const hash = aiHashMatrix(mt, sideToMove);
+    const ttKey = hash + "|d" + depth;
+    const cached = AI_TT.get(ttKey);
+
+    if (cached && cached.depth >= depth) {
+        return cached.score;
+    }
+
     let moves = aiCollectLegalMovesFromMatrix(sideToMove, mt);
 
     if (!moves.length) {
-        if (sideToMove === aiSide) return -888888;
-        return 888888;
+        return sideToMove === aiSide ? -888888 : 888888;
     }
 
-    moves = aiOrderMoves(moves, sideToMove, mt).slice(0, AI_TOP_MOVES_LIMIT);
+    const killerKey = sideToMove + "|d" + depth;
+    const killer = AI_KILLER_MOVES.get(killerKey);
+
+    moves = aiOrderMoves(moves, sideToMove, mt);
+
+    if (killer) {
+        moves.sort((a, b) => {
+            if (aiSameMove(a, killer)) return -1;
+            if (aiSameMove(b, killer)) return 1;
+            return 0;
+        });
+    }
+
+    moves = moves.slice(0, AI_TOP_MOVES_LIMIT);
 
     const maximizing = sideToMove === aiSide;
+    let bestScore = maximizing ? -Infinity : Infinity;
+    let bestMove = moves[0];
 
-    if (maximizing) {
-        let best = -Infinity;
+    for (const move of moves) {
+        if (Date.now() >= deadline) break;
 
-        for (const move of moves) {
-            const next = aiApplyMoveToMatrix(mt, move);
-            const val = aiMinimax(next, depth - 1, aiOtherSide(sideToMove), aiSide, alpha, beta);
+        const next = aiApplyMoveToMatrix(mt, move);
+        const val = aiMinimax(
+            next,
+            depth - 1,
+            aiOtherSide(sideToMove),
+            aiSide,
+            alpha,
+            beta,
+            deadline
+        );
 
-            best = Math.max(best, val);
+        if (maximizing) {
+            if (val > bestScore) {
+                bestScore = val;
+                bestMove = move;
+            }
+
             alpha = Math.max(alpha, val);
+        } else {
+            if (val < bestScore) {
+                bestScore = val;
+                bestMove = move;
+            }
 
-            if (beta <= alpha) break;
-        }
-
-        return best;
-    } else {
-        let best = Infinity;
-
-        for (const move of moves) {
-            const next = aiApplyMoveToMatrix(mt, move);
-            const val = aiMinimax(next, depth - 1, aiOtherSide(sideToMove), aiSide, alpha, beta);
-
-            best = Math.min(best, val);
             beta = Math.min(beta, val);
-
-            if (beta <= alpha) break;
         }
 
-        return best;
+        if (beta <= alpha) {
+            AI_KILLER_MOVES.set(killerKey, move);
+            break;
+        }
     }
-}
 
+    AI_TT.set(ttKey, {
+        depth,
+        score: bestScore,
+        bestMove,
+        at: Date.now()
+    });
+
+    aiTrimCache();
+
+    return bestScore;
+}
 function aiFindBestMove(side = "den", depth = AI_SEARCH_DEPTH) {
     const started = Date.now();
-    const mt = taoMaTran();
-    let moves = aiCollectLegalMovesFromMatrix(side, mt);
+    const deadline = started + AI_MOVE_TIME_MS;
 
+    const mt = taoMaTran();
+
+    const bookMove = aiFindOpeningMove(mt, side);
+    if (bookMove) {
+        console.log("AI BOOK MOVE:", bookMove);
+        return bookMove;
+    }
+
+    let moves = aiCollectLegalMovesFromMatrix(side, mt);
     if (!moves.length) return null;
 
     moves = aiOrderMoves(moves, side, mt).slice(0, AI_TOP_MOVES_LIMIT);
 
-    // Thỉnh thoảng chọn top 2/top 3 cho giống người
-    if (Math.random() < AI_MISTAKE_RATE && moves.length >= 3) {
-        return moves[Math.floor(Math.random() * Math.min(3, moves.length))];
+    const hash = aiHashMatrix(mt, side);
+    const cached = AI_TT.get(hash + "|best");
+
+    if (cached && cached.bestMove) {
+        const legalCached = moves.find(m => aiSameMove(m, cached.bestMove));
+        if (legalCached && Date.now() - cached.at < 10 * 60 * 1000) {
+            return legalCached;
+        }
     }
 
     let bestMove = moves[0];
     let bestScore = -Infinity;
+    let reachedDepth = 0;
 
-    for (const move of moves) {
-        // Chặn AI nghĩ quá lâu làm đơ timer
-        if (Date.now() - started > AI_MAX_THINK_MS) {
-            break;
+    for (let d = 1; d <= depth; d++) {
+        if (Date.now() >= deadline) break;
+
+        let localBestMove = bestMove;
+        let localBestScore = -Infinity;
+
+        for (const move of moves) {
+            if (Date.now() >= deadline) break;
+
+            const next = aiApplyMoveToMatrix(mt, move);
+            const score = aiMinimax(
+                next,
+                d - 1,
+                aiOtherSide(side),
+                side,
+                -Infinity,
+                Infinity,
+                deadline
+            );
+
+            move.finalScore = score;
+
+            if (score > localBestScore) {
+                localBestScore = score;
+                localBestMove = move;
+            }
         }
 
-        const next = aiApplyMoveToMatrix(mt, move);
-        const score = aiMinimax(
-            next,
-            Math.max(0, depth - 1),
-            aiOtherSide(side),
-            side,
-            -Infinity,
-            Infinity
-        );
+        if (Date.now() < deadline) {
+            bestMove = localBestMove;
+            bestScore = localBestScore;
+            reachedDepth = d;
 
-        move.finalScore = score;
-
-        if (score > bestScore) {
-            bestScore = score;
-            bestMove = move;
+            moves = moves.sort((a, b) => {
+                if (aiSameMove(a, bestMove)) return -1;
+                if (aiSameMove(b, bestMove)) return 1;
+                return (b.finalScore || 0) - (a.finalScore || 0);
+            });
         }
     }
+
+    AI_TT.set(hash + "|best", {
+        bestMove,
+        score: bestScore,
+        depth: reachedDepth,
+        at: Date.now()
+    });
+
+    console.log("AI ENGINE MOVE:", {
+        ms: Date.now() - started,
+        depth: reachedDepth,
+        score: bestScore,
+        from: bestMove.from,
+        to: bestMove.to,
+        piece: bestMove.piece,
+        target: bestMove.target
+    });
 
     return bestMove;
 }
 
 function aiPickMove(moves) {
-    // Giữ tên hàm cũ để aiMakeMoveNow không cần sửa nhiều.
-    // Nhưng bên trong dùng minimax mới, không còn chỉ ăn quân trước mắt.
     const smartMove = aiFindBestMove("den", AI_SEARCH_DEPTH);
-
     if (smartMove) return smartMove;
 
     if (!moves || !moves.length) return null;
-    return moves[Math.floor(Math.random() * moves.length)];
+
+    const ordered = aiOrderMoves(moves, "den", taoMaTran());
+    return ordered[0] || moves[0];
 }
 
 function aiRevealPieceIfNeeded(pieceEl) {
@@ -9446,7 +9595,7 @@ function maybeScheduleAiMove(room, roomId) {
         } finally {
             aiThinking = false;
         }
-    }, AI_VISUAL_THINK_MS);
+    }, 120);
 }
 function toggleProfileMenu(event) {
     event.stopPropagation();
