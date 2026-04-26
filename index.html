@@ -6346,9 +6346,13 @@ function formatTime(s) {
     return String(m).padStart(2, '0') + ":" + String(sec).padStart(2, '0');
 }
 
+let timerLastTickMs = 0;
+
 function startTimer() {
     clearInterval(interval);
     interval = null;
+
+    timerLastTickMs = Date.now();
     renderTimerUI();
 
     if (!currentRoomId || currentRoomStatus !== "playing" || isGameOver) {
@@ -6358,21 +6362,43 @@ function startTimer() {
     interval = setInterval(() => {
         if (isGameOver || !currentRoomId || currentRoomStatus !== "playing") {
             clearInterval(interval);
+            interval = null;
             return;
         }
 
-        if (luotDi === 'do') {
-            timeDo--;
-            if (timeDo === 30) playSnd('timeout');
+        const now = Date.now();
+        const elapsed = Math.floor((now - timerLastTickMs) / 1000);
+
+        if (elapsed <= 0) return;
+
+        timerLastTickMs += elapsed * 1000;
+
+        if (luotDi === "do") {
+            timeDo = Math.max(0, timeDo - elapsed);
+
+            if (timeDo <= 30 && timeDo + elapsed > 30) {
+                playSnd("timeout");
+            }
+
             renderTimerUI();
-            if (timeDo <= 0) endGame("HẾT GIỜ", "ĐEN THẮNG");
+
+            if (timeDo <= 0) {
+                endGame("HẾT GIỜ", "ĐEN THẮNG");
+            }
         } else {
-            timeDen--;
-            if (timeDen === 30) playSnd('timeout');
+            timeDen = Math.max(0, timeDen - elapsed);
+
+            if (timeDen <= 30 && timeDen + elapsed > 30) {
+                playSnd("timeout");
+            }
+
             renderTimerUI();
-            if (timeDen <= 0) endGame("HẾT GIỜ", "ĐỎ THẮNG");
+
+            if (timeDen <= 0) {
+                endGame("HẾT GIỜ", "ĐỎ THẮNG");
+            }
         }
-    }, 1000);
+    }, 250);
 }
 const FULL_TURN_SECONDS = 9 * 60;
 function renderTimerUI() {
@@ -6988,7 +7014,7 @@ if (mt[r1][c1] && mt[r1][c1].side === side) {
 for (let r2 = 0; r2 < 10; r2++) for (let c2 = 0; c2 < 9; c2++) {
 if (checkLuat(mt[r1][c1].type, side, c1, r1, c2, r2, mt)) {
 let temp = mt[r2][c2]; mt[r2][c2] = mt[r1][c1]; mt[r1][c1] = null;
-let safe = !laBiChieu(side, mt);
+let safe = !laBiChieu(side, mt) && !isTwoKingsFacing(mt);
 mt[r1][c1] = mt[r2][c2]; mt[r2][c2] = temp;
 if (safe) return false;
 }
@@ -7073,7 +7099,12 @@ if (isOwnTurnPiece) {
     mt[r2][c2] = { side: selectedPiece.dataset.side, type: selectedPiece.dataset.type };
     mt[r1][c1] = null;
 
-    if (laBiChieu(luotDi, mt)) {
+    if (isTwoKingsFacing(mt)) {
+    alert("Không được để 2 Tướng đối mặt!");
+    return;
+}
+
+if (laBiChieu(luotDi, mt)) {
     alert("Không được để Tướng bị chiếu!");
     return;
 }
@@ -8936,8 +8967,9 @@ function aiCollectLegalMoves(side = "den") {
     return moves;
 }
 
-const AI_SEARCH_DEPTH = 1;      // để 1 trước cho MEMU/Pi Browser không bị đứng timer
-const AI_TOP_MOVES_LIMIT = 8;   // giảm số nước xét
+const AI_SEARCH_DEPTH = 1;
+const AI_TOP_MOVES_LIMIT = 6;
+const AI_VISUAL_THINK_MS = 1800;
 const AI_MISTAKE_RATE = 0.08;
 const AI_MAX_THINK_MS = 450;    // AI chỉ được nghĩ tối đa khoảng nửa giây
 
@@ -8961,7 +8993,39 @@ function aiCloneMatrix(mt) {
 function aiOtherSide(side) {
     return side === "do" ? "den" : "do";
 }
+function findKingForFace(side, mt) {
+    const kingTypes = side === "do"
+        ? ["帥", "帅"]
+        : ["將", "将"];
 
+    for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 9; c++) {
+            const p = mt[r][c];
+            if (p && p.side === side && kingTypes.includes(p.type)) {
+                return { c, r };
+            }
+        }
+    }
+
+    return null;
+}
+
+function isTwoKingsFacing(mt) {
+    const doKing = findKingForFace("do", mt);
+    const denKing = findKingForFace("den", mt);
+
+    if (!doKing || !denKing) return false;
+    if (doKing.c !== denKing.c) return false;
+
+    const fromR = Math.min(doKing.r, denKing.r) + 1;
+    const toR = Math.max(doKing.r, denKing.r) - 1;
+
+    for (let r = fromR; r <= toR; r++) {
+        if (mt[r][doKing.c]) return false;
+    }
+
+    return true;
+}
 function aiFindKing(side, mt) {
     const kingTypes = side === "do" ? ["帥"] : ["將"];
 
@@ -8992,7 +9056,9 @@ function aiMoveLeavesSafe(side, c1, r1, c2, r2, mt) {
     const temp = aiCloneMatrix(mt);
     temp[r2][c2] = temp[r1][c1];
     temp[r1][c1] = null;
-    return !laBiChieu(side, temp);
+
+    // Không được tự bị chiếu và không được để 2 Tướng nhìn mặt nhau
+    return !laBiChieu(side, temp) && !isTwoKingsFacing(temp);
 }
 
 function aiCollectLegalMovesFromMatrix(side, mt) {
@@ -9380,7 +9446,7 @@ function maybeScheduleAiMove(room, roomId) {
         } finally {
             aiThinking = false;
         }
-    }, 500);
+    }, AI_VISUAL_THINK_MS);
 }
 function toggleProfileMenu(event) {
     event.stopPropagation();
