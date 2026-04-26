@@ -5868,6 +5868,14 @@ let lastRoomBoardHash = "";
 let lastDrawRequestAt = 0;
 let myLevelMetaLiveRef = null;
 const ACTIVE_MATCH_KEY = "co_tuong_active_match_v1";
+const AI_BOT_UID = "ai_bot_truc_lam_lv1";
+const AI_BOT_NAME = "AI Trúc Lâm";
+const AI_BOT_SIDE = "den";
+const AI_SYSTEM_WALLET_KEY = "pi_admin_master";
+
+let aiOfferTimer = null;
+let aiMoveTimer = null;
+let aiMoveScheduledKey = "";
 
 function readActiveMatchSnapshot() {
     try {
@@ -8390,6 +8398,9 @@ if (room.status === "playing" && !room.winner) {
     readyOverlayWaitingShown = false;
     isGameOver = false;
     closeReadyOverlay();
+
+    // Nếu là bàn AI và tới lượt ĐEN thì máy chủ phòng cho AI đi
+    maybeScheduleAiMove(room, listeningRoomId);
 }
         const newBoardHash = JSON.stringify(room.board || []);
         if (newBoardHash && newBoardHash !== lastRoomBoardHash) {
@@ -8586,8 +8597,12 @@ async function createAndPublishWaitingRoom(me, mode, stakePMC, bucket) {
     currentRoomStakePMC = stakePMC;
 
     saveActiveMatchSnapshot({ roomId: newRoomId, mode, side: "do" });
-    bindRoom(newRoomId);
-    return true;
+bindRoom(newRoomId);
+
+// Chủ phòng chờ 30 giây chưa có ai vào thì hỏi đánh với AI
+startAiOfferTimerForWaitingRoom(newRoomId);
+
+return true;
 }
 async function joinOrCreateRealtimeMatch(mode, stakePMC = 0) {
     await ensureMyLevelMetaLoaded();
@@ -8713,6 +8728,342 @@ const created = await createAndPublishWaitingRoom(
     closeReadyOverlay();
     readyOverlayWaitingShown = false;
     updateReadyUI();
+}
+function startAiOfferTimerForWaitingRoom(roomId) {
+    clearTimeout(aiOfferTimer);
+
+    aiOfferTimer = setTimeout(async () => {
+        try {
+            if (!roomId || currentRoomId !== roomId || mySide !== "do") return;
+
+            const snap = await db.ref("matches/" + roomId).once("value");
+            const room = snap.val() || {};
+
+            if (!room || room.status !== "waiting" || room.winner) return;
+            if (room.players?.den) return;
+
+            const ok = confirm(
+                "Chờ 30 giây chưa có đối thủ.\n\n" +
+                "Mầy có muốn đánh với AI không?\n\n" +
+                "- Thắng vẫn nhận PMC như trận thường.\n" +
+                "- AI thắng thì PMC chảy về ví quỹ hệ thống."
+            );
+
+            if (!ok) return;
+
+            await startAiOpponentRoom(roomId, room);
+        } catch (err) {
+            console.error("AI OFFER ERROR:", err);
+        }
+    }, 30000);
+}
+
+async function startAiOpponentRoom(roomId, room) {
+    if (!roomId || !room) return;
+    if (mySide !== "do") return;
+
+    const stake = Math.max(0, Math.floor(Number(room.stakePMC || currentRoomStakePMC || 0) || 0));
+    if (!stake) {
+        alert("Phòng chưa có mức cược PMC.");
+        return;
+    }
+
+    // 1) Trừ stake của người chơi trước
+    const readyResult = await chargeStakeForReady(roomId, "do");
+    if (!readyResult.ok) {
+        alert("Không thể sẵn sàng để đánh AI.");
+        return;
+    }
+
+    // 2) Trừ stake của AI từ ví quỹ hệ thống để pot đủ 2 bên
+    const aiBankPaid = await adjustPmcWalletByKey(AI_SYSTEM_WALLET_KEY, -stake, {
+        name: "Ví quỹ hệ thống",
+        photo: "images/den_tuong.png"
+    });
+
+    if (aiBankPaid == null) {
+        await maybeRefundWaitingStakePMC(roomId, room, "do").catch(() => {});
+        alert("Ví quỹ hệ thống không đủ PMC để cho AI vào bàn.");
+        return;
+    }
+
+    try {
+        isCoUp = (room.mode || currentRoomMode) === "co-up";
+        resetToStartup();
+
+        const freshBoard = exportBoardState();
+        const bucket = room.roomBucket || currentRoomBucket;
+
+        const aiPlayer = {
+            uid: AI_BOT_UID,
+            name: AI_BOT_NAME,
+            photo: "images/den_tuong.png",
+            walletKey: AI_SYSTEM_WALLET_KEY,
+            pmcBalance: aiBankPaid,
+            isAI: true,
+            levelMeta: {
+                level: 1,
+                title: "AI Nhập Môn",
+                frameClass: "title-frame-beginner",
+                pillClass: "title-pill-beginner"
+            }
+        };
+
+        const updates = {};
+
+        updates[`matches/${roomId}/players/den`] = aiPlayer;
+        updates[`matches/${roomId}/ready/do`] = true;
+        updates[`matches/${roomId}/ready/den`] = true;
+
+        updates[`matches/${roomId}/stakeLocked/den`] = {
+            done: true,
+            walletKey: AI_SYSTEM_WALLET_KEY,
+            stake,
+            at: Date.now(),
+            uid: AI_BOT_UID,
+            ai: true
+        };
+
+        updates[`matches/${roomId}/aiMode`] = true;
+        updates[`matches/${roomId}/aiSide`] = "den";
+        updates[`matches/${roomId}/aiName`] = AI_BOT_NAME;
+
+        updates[`matches/${roomId}/status`] = "playing";
+        updates[`matches/${roomId}/isCoUp`] = isCoUp;
+        updates[`matches/${roomId}/board`] = freshBoard;
+        updates[`matches/${roomId}/moveCount`] = 0;
+        updates[`matches/${roomId}/startedAt`] = firebase.database.ServerValue.TIMESTAMP;
+        updates[`matches/${roomId}/finishedAt`] = null;
+        updates[`matches/${roomId}/turn`] = "do";
+        updates[`matches/${roomId}/timeDo`] = 540;
+        updates[`matches/${roomId}/timeDen`] = 540;
+        updates[`matches/${roomId}/lastMoveFrom`] = null;
+        updates[`matches/${roomId}/lastMoveTo`] = null;
+        updates[`matches/${roomId}/winner`] = null;
+        updates[`matches/${roomId}/winReason`] = null;
+        updates[`matches/${roomId}/drawRequest`] = null;
+        updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+        if (bucket) {
+            updates[`waitingRooms/${bucket}/${roomId}`] = null;
+        }
+
+        await db.ref().update(updates);
+
+        alert("AI đã vào bàn. Mầy cầm ĐỎ, AI cầm ĐEN.");
+    } catch (err) {
+        console.error("START AI ROOM ERROR:", err);
+
+        await adjustPmcWalletByKey(AI_SYSTEM_WALLET_KEY, stake, {
+            name: "Ví quỹ hệ thống",
+            photo: "images/den_tuong.png"
+        }).catch(() => {});
+
+        await maybeRefundWaitingStakePMC(roomId, room, "do").catch(() => {});
+        alert("Lỗi tạo bàn AI, đã cố hoàn stake.");
+    }
+}
+
+function aiGetPieceElAtReal(c, r) {
+    const view = mapBoardToView(c, r);
+    return Array.from(document.querySelectorAll(".piece")).find(p => {
+        const pc = columns.indexOf(parseFloat(p.style.left));
+        const pr = rows.indexOf(parseFloat(p.style.top));
+        return pc === view.c && pr === view.r;
+    }) || null;
+}
+
+function aiCloneMatrix(mt) {
+    return mt.map(row => row.map(cell => cell ? { ...cell } : null));
+}
+
+function aiMoveLeavesSafe(side, c1, r1, c2, r2, mt) {
+    const temp = aiCloneMatrix(mt);
+    temp[r2][c2] = temp[r1][c1];
+    temp[r1][c1] = null;
+    return !laBiChieu(side, temp);
+}
+
+function aiCollectLegalMoves(side = "den") {
+    const mt = taoMaTran();
+    const moves = [];
+
+    for (let r1 = 0; r1 < 10; r1++) {
+        for (let c1 = 0; c1 < 9; c1++) {
+            const piece = mt[r1][c1];
+            if (!piece || piece.side !== side) continue;
+
+            for (let r2 = 0; r2 < 10; r2++) {
+                for (let c2 = 0; c2 < 9; c2++) {
+                    if (!checkLuat(piece.type, side, c1, r1, c2, r2, mt)) continue;
+                    if (!aiMoveLeavesSafe(side, c1, r1, c2, r2, mt)) continue;
+
+                    moves.push({
+                        from: { c: c1, r: r1 },
+                        to: { c: c2, r: r2 },
+                        piece,
+                        target: mt[r2][c2] || null
+                    });
+                }
+            }
+        }
+    }
+
+    return moves;
+}
+
+function aiPieceValue(type) {
+    const map = {
+        "帥": 999, "將": 999,
+        "俥": 90, "車": 90,
+        "炮": 45, "砲": 45,
+        "傌": 40, "馬": 40,
+        "相": 20, "象": 20,
+        "仕": 20, "士": 20,
+        "兵": 10, "卒": 10
+    };
+    return map[type] || 1;
+}
+
+function aiPickMove(moves) {
+    if (!moves.length) return null;
+
+    moves.sort((a, b) => {
+        const scoreA =
+            (a.target ? aiPieceValue(a.target.type) * 10 : 0) +
+            Math.random();
+
+        const scoreB =
+            (b.target ? aiPieceValue(b.target.type) * 10 : 0) +
+            Math.random();
+
+        return scoreB - scoreA;
+    });
+
+    return moves[0];
+}
+
+function aiRevealPieceIfNeeded(pieceEl) {
+    if (!pieceEl || !isCoUp || pieceEl.dataset.isUp !== "true") return;
+
+    pieceEl.dataset.isUp = "false";
+
+    const side = pieceEl.dataset.side;
+    const type = pieceEl.dataset.type;
+
+    const names = {
+        "車": "xe", "馬": "ma", "象": "tuong", "士": "si", "將": "tuong_soai", "砲": "phao", "卒": "tot",
+        "俥": "xe", "傌": "ma", "相": "tuong", "仕": "si", "帥": "tuong_soai", "炮": "phao", "兵": "tot"
+    };
+
+    pieceEl.src = `images/${side}_${names[type]}.png`;
+}
+
+async function aiMakeMoveNow(roomId) {
+    if (!roomId || currentRoomId !== roomId) return;
+
+    const snap = await db.ref("matches/" + roomId).once("value");
+    const room = snap.val() || {};
+
+    if (!room.aiMode || room.status !== "playing" || room.winner) return;
+    if ((room.turn || luotDi) !== "den") return;
+
+    const moves = aiCollectLegalMoves("den");
+
+    if (!moves.length) {
+        await db.ref("matches/" + roomId).update({
+            winner: "do",
+            winReason: "ai_no_move",
+            status: "finished",
+            finishedAt: firebase.database.ServerValue.TIMESTAMP,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+        return;
+    }
+
+    const move = aiPickMove(moves);
+    if (!move) return;
+
+    const pieceEl = aiGetPieceElAtReal(move.from.c, move.from.r);
+    const targetEl = aiGetPieceElAtReal(move.to.c, move.to.r);
+
+    if (!pieceEl) return;
+
+    const capturedKing = targetEl && isKingPiece(targetEl.dataset.type);
+
+    if (targetEl) {
+        targetEl.remove();
+        playSnd("capture");
+    } else {
+        playSnd("click");
+    }
+
+    lastMoveFrom = { c: move.from.c, r: move.from.r };
+    lastMoveTo = { c: move.to.c, r: move.to.r };
+
+    const viewTo = mapBoardToView(move.to.c, move.to.r);
+    pieceEl.style.left = columns[viewTo.c] + "%";
+    pieceEl.style.top = rows[viewTo.r] + "%";
+
+    aiRevealPieceIfNeeded(pieceEl);
+
+    luotDi = "do";
+    selectedPiece = null;
+    clearMoveHints();
+    drawLastMoveMarks();
+    updateTurnUIOnly();
+    refreshTimerRings();
+
+    let winnerSide = "";
+    let winReason = "";
+
+    if (capturedKing) {
+        winnerSide = "den";
+        winReason = "ai_capture_king";
+    } else {
+        setTimeout(() => {
+            updateCheckEffectFromBoard();
+        }, 50);
+
+        if (laBiChieu("do", taoMaTran()) && checkMate("do")) {
+            winnerSide = "den";
+            winReason = "ai_checkmate";
+        }
+    }
+
+    const extra = {
+        moveCount: firebase.database.ServerValue.increment(1)
+    };
+
+    if (winnerSide) {
+        extra.winner = winnerSide;
+        extra.winReason = winReason;
+        extra.status = "finished";
+        extra.finishedAt = firebase.database.ServerValue.TIMESTAMP;
+    }
+
+    syncRoomFromBoard(extra);
+}
+
+function maybeScheduleAiMove(room, roomId) {
+    if (!room || !roomId) return;
+    if (!room.aiMode) return;
+    if (room.status !== "playing") return;
+    if (room.winner) return;
+    if (mySide !== "do") return;
+    if ((room.turn || "") !== "den") return;
+
+    const key = roomId + ":" + String(room.moveCount || 0) + ":" + String(room.turn || "");
+    if (aiMoveScheduledKey === key) return;
+
+    aiMoveScheduledKey = key;
+    clearTimeout(aiMoveTimer);
+
+    aiMoveTimer = setTimeout(() => {
+        aiMakeMoveNow(roomId).catch(err => {
+            console.error("AI MOVE ERROR:", err);
+        });
+    }, 700 + Math.floor(Math.random() * 900));
 }
 function toggleProfileMenu(event) {
     event.stopPropagation();
@@ -10467,17 +10818,6 @@ function clearPmcDebugLog() {}
 function getMoneyWalletKey(linkState = null) {
     const clean = v => String(v || "").trim().replace(/[.#$\[\]\/]/g, "_");
 
-    // Quan trọng: ví tiền phải đi theo đúng walletRef() đang dùng để nạp/load/set số dư.
-    // walletRef() = wallets/makeWalletDbKey()
-    const mainWalletKey = clean(
-        typeof makeWalletDbKey === "function" ? makeWalletDbKey() : ""
-    );
-
-    if (mainWalletKey) return mainWalletKey;
-
-    const cachedWalletKey = clean(localStorage.getItem("walletKey"));
-    if (cachedWalletKey) return cachedWalletKey;
-
     const linkedWalletKey = clean(linkState?.walletKey);
     if (linkedWalletKey) return linkedWalletKey;
 
@@ -10487,9 +10827,15 @@ function getMoneyWalletKey(linkState = null) {
         localStorage.getItem("pi-user-name")
     );
 
-    if (piName) return clean("pi_" + piName.toLowerCase());
+    if (piName) {
+        return clean("pi_" + piName.toLowerCase());
+    }
+
+    const cachedWalletKey = clean(localStorage.getItem("walletKey"));
+    if (cachedWalletKey) return cachedWalletKey;
 
     return clean(
+        (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "") ||
         localStorage.getItem("uid") ||
         localStorage.getItem("currentUserUid") ||
         firebase.auth().currentUser?.uid ||
@@ -12398,15 +12744,15 @@ async function onIncompletePaymentFound(payment) {
       data
     });
 
-    if (!res.ok || !data?.ok) {
-  window.__PI_PENDING_PAYMENT_BLOCKED__ = true;
-  window.__PI_PENDING_PAYMENT_MSG__ =
-    data?.error ||
-    data?.note ||
-    "Payment Pi cũ chưa được xử lý sạch ở server.";
-  alert(window.__PI_PENDING_PAYMENT_MSG__);
-  return true;
-}
+    if (!res.ok || !data?.ok || data?.note) {
+      window.__PI_PENDING_PAYMENT_BLOCKED__ = true;
+      window.__PI_PENDING_PAYMENT_MSG__ =
+        data?.note ||
+        data?.error ||
+        "Payment Pi cũ chưa được xử lý sạch ở server.";
+      alert(window.__PI_PENDING_PAYMENT_MSG__);
+      return true;
+    }
 
     window.__PI_PENDING_PAYMENT_BLOCKED__ = false;
     window.__PI_PENDING_PAYMENT_MSG__ = "";
