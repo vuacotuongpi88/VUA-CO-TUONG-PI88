@@ -6411,10 +6411,20 @@ function applyLoggedInUI(displayName, photoURL) {
     localStorage.setItem("user-name-display", safeName);
 localStorage.setItem("user-photo", safePhoto);
 
-currentWalletBalance = 0;
-currentPmcBalance = 0;
-updateBalanceUI(0);
-updatePmcUI(0);
+// KHÔNG RESET SỐ DƯ VỀ 0 KHI VỪA LOGIN / RESTORE APP
+// Giữ cache cũ để tránh màn hình trong trận nhảy về 0.
+currentWalletBalance = Math.max(
+    0,
+    Number(localStorage.getItem(getBalanceCacheKey()) || currentWalletBalance || 0) || 0
+);
+
+currentPmcBalance = Math.max(
+    0,
+    Math.floor(Number(localStorage.getItem(getPmcCacheKey()) || currentPmcBalance || 0) || 0)
+);
+
+updateBalanceUI(currentWalletBalance);
+updatePmcUI(currentPmcBalance);
 
 loadWalletBalance().catch(err => console.error("Lỗi tải ví:", err));
 
@@ -8532,25 +8542,34 @@ const bottomPmcBox = document.getElementById("player-do-pmc");
 
     const roomStake = Number(room?.stakePMC || 0);
 
-const localWalletKeyForRender = typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "";
-const myRoomWalletKey = String(myPlayer.walletKey || myPlayer.walletDbKey || myPlayer.wallet || "").trim();
-const myIsLocalWallet = localWalletKeyForRender && myRoomWalletKey === localWalletKeyForRender;
+const localPmcNow = Math.max(
+    0,
+    Math.floor(Number(
+        typeof getPmcBalance === "function" ? getPmcBalance() : currentPmcBalance || 0
+    ) || 0)
+);
+
+const localPiNow = Math.max(
+    0,
+    Number(typeof getPiBalance === "function" ? getPiBalance() : currentWalletBalance || 0) || 0
+);
 
 const oppPmc = Math.max(0, Math.floor(Number(oppPlayer.pmcBalance || 0) || 0));
-
 const myRoomPmc = Math.max(0, Math.floor(Number(myPlayer.pmcBalance || 0) || 0));
-const myLivePmc = Math.max(0, Math.floor(Number(getPmcBalance ? getPmcBalance() : currentPmcBalance || 0) || 0));
 
-// Nếu là chính máy mình, không cho room cũ 0 đè ví thật đang có.
-const myPmc = myIsLocalWallet ? Math.max(myRoomPmc, myLivePmc) : myRoomPmc;
+// BOTTOM luôn là máy mình.
+// Không cho matches/players/.../pmcBalance = 0 đè số dư thật/cache của mình.
+const myPmc = Math.max(myRoomPmc, localPmcNow);
 
 const oppPi = Number(
     oppPlayer.balance != null ? oppPlayer.balance : (oppPlayer.piBalance || 0)
 ) || 0;
 
-const myPi = Number(
+const myRoomPi = Number(
     myPlayer.balance != null ? myPlayer.balance : (myPlayer.piBalance || 0)
 ) || 0;
+
+const myPi = Math.max(myRoomPi, localPiNow);
 
  const oppLevelMeta = buildLevelMeta(oppPlayer?.levelMeta || {});
 
@@ -9434,24 +9453,59 @@ function saveWithdrawState(state) {
 async function loadWalletBalance() {
     try {
         const snap = await walletRef().once("value");
-        const data = snap.val() || {};
+        const data = snap.val();
 
-        let piAmount = 0;
+        const cachedPi = Math.max(
+            0,
+            Number(localStorage.getItem(getBalanceCacheKey()) || currentWalletBalance || 0) || 0
+        );
 
-// Ưu tiên piBalance vì đổi PMC -> Pi thường trả về newPiBalance.
-// Nếu ví cũ chỉ có balance thì vẫn dùng balance.
-if (data.piBalance != null || data.balance != null) {
-    piAmount = Number(data.piBalance ?? data.balance ?? 0) || 0;
-} else {
-    const scopedCache = localStorage.getItem(getBalanceCacheKey());
-    const legacy = localStorage.getItem(PI_BALANCE_KEY);
-    piAmount = Number(scopedCache ?? legacy ?? 0) || 0;
-}
-        let pmcAmount = 0;
+        const cachedPmc = Math.max(
+            0,
+            Math.floor(Number(localStorage.getItem(getPmcCacheKey()) || currentPmcBalance || 0) || 0)
+        );
+
+        // Nếu Firebase chưa có ví / đọc sai key / rỗng:
+        // KHÔNG ghi 0 ngược lên Firebase, chỉ giữ cache cũ.
+        if (!data || typeof data !== "object") {
+            currentWalletBalance = cachedPi;
+            currentPmcBalance = cachedPmc;
+
+            updateBalanceUI(currentWalletBalance);
+            updatePmcUI(currentPmcBalance);
+
+            console.warn("LOAD WALLET EMPTY - giữ cache, không ghi 0", {
+                walletKey: makeWalletDbKey(),
+                pi: currentWalletBalance,
+                pmc: currentPmcBalance
+            });
+
+            return { pi: currentWalletBalance, pmc: currentPmcBalance };
+        }
+
+        let piAmount = cachedPi;
+        if (data.piBalance != null) {
+            piAmount = Number(data.piBalance) || 0;
+        } else if (data.balance != null) {
+            piAmount = Number(data.balance) || 0;
+        }
+
+        let pmcAmount = cachedPmc;
         if (data.pmcBalance != null) {
-            pmcAmount = Math.floor(Number(data.pmcBalance) || 0);
-        } else {
-            pmcAmount = Math.floor(Number(localStorage.getItem(getPmcCacheKey()) || 0) || 0);
+            const firebasePmc = Math.floor(Number(data.pmcBalance) || 0);
+
+            // Chặn trường hợp Firebase đang 0 tạm thời đè cache đang có PMC.
+            // Ví dụ: vừa vào trận / room chưa sync / app restore chậm.
+            if (firebasePmc === 0 && cachedPmc > 0) {
+                pmcAmount = cachedPmc;
+                console.warn("PMC FIREBASE = 0, giữ cache PMC để tránh reset sai", {
+                    walletKey: makeWalletDbKey(),
+                    firebasePmc,
+                    cachedPmc
+                });
+            } else {
+                pmcAmount = firebasePmc;
+            }
         }
 
         currentWalletBalance = Math.max(0, piAmount);
@@ -9460,26 +9514,36 @@ if (data.piBalance != null || data.balance != null) {
         localStorage.setItem(getBalanceCacheKey(), String(currentWalletBalance));
         localStorage.setItem(getPmcCacheKey(), String(currentPmcBalance));
 
+        // Chỉ sync lên Firebase khi không phải tình huống kéo PMC về 0 sai.
         await walletRef().update({
-    balance: currentWalletBalance,
-    piBalance: currentWalletBalance,
-    pmcBalance: currentPmcBalance,
-    updatedAt: firebase.database.ServerValue.TIMESTAMP,
-    name: localStorage.getItem("user-name-display") || "Người chơi",
-    photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-});
+            balance: currentWalletBalance,
+            piBalance: currentWalletBalance,
+            pmcBalance: currentPmcBalance,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP,
+            name: localStorage.getItem("user-name-display") || "Người chơi",
+            photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+        });
 
         updateBalanceUI(currentWalletBalance);
         updatePmcUI(currentPmcBalance);
+
         return { pi: currentWalletBalance, pmc: currentPmcBalance };
     } catch (err) {
         console.error("Lỗi load ví:", err);
 
-        currentWalletBalance = Math.max(0, Number(localStorage.getItem(getBalanceCacheKey()) || 0) || 0);
-        currentPmcBalance = Math.max(0, Math.floor(Number(localStorage.getItem(getPmcCacheKey()) || 0) || 0));
+        currentWalletBalance = Math.max(
+            0,
+            Number(localStorage.getItem(getBalanceCacheKey()) || currentWalletBalance || 0) || 0
+        );
+
+        currentPmcBalance = Math.max(
+            0,
+            Math.floor(Number(localStorage.getItem(getPmcCacheKey()) || currentPmcBalance || 0) || 0)
+        );
 
         updateBalanceUI(currentWalletBalance);
         updatePmcUI(currentPmcBalance);
+
         return { pi: currentWalletBalance, pmc: currentPmcBalance };
     }
 }
