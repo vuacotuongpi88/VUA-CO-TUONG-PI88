@@ -8954,9 +8954,25 @@ if (room.status === "playing" && !room.winner) {
             }
         }
        if (room.winner) {
-    setTimeout(() => {
-        settlePmcMatchOnce(listeningRoomId);
-    }, 0);
+    window.__pmcSettleStarted = window.__pmcSettleStarted || {};
+
+    const pmcSettleKey = [
+        listeningRoomId,
+        room.winner || "",
+        room.winReason || "",
+        room.finishedAt || ""
+    ].join("_");
+
+    if (!window.__pmcSettleStarted[pmcSettleKey]) {
+        window.__pmcSettleStarted[pmcSettleKey] = true;
+
+        setTimeout(() => {
+            settlePmcMatchOnce(listeningRoomId).catch(err => {
+                console.error("settlePmcMatchOnce lỗi:", err);
+                delete window.__pmcSettleStarted[pmcSettleKey];
+            });
+        }, 0);
+    }
 }
         if (room.winner) {
     const victoryKey = [
@@ -9549,15 +9565,29 @@ function getMatchPmcPlayer(room, side) {
     return room?.players?.[side] || {};
 }
 
+function normalizePmcWalletKey(key) {
+    return String(key || "")
+        .trim()
+        .replace(/[.#$\[\]\/]/g, "_");
+}
+
 function getMatchPmcWalletKey(room, side) {
     const p = getMatchPmcPlayer(room, side);
-    return String(
+
+    // ƯU TIÊN ví đã bị trừ cược khi bấm SẴN SÀNG.
+    // Đây là ví chắc chắn đúng nhất.
+    const locked = room?.stakeLocked?.[side];
+    const lockedKey = locked && typeof locked === "object"
+        ? locked.walletKey
+        : "";
+
+    return normalizePmcWalletKey(
+        lockedKey ||
         p.walletKey ||
         p.walletDbKey ||
         p.wallet ||
-        p.uid ||
         ""
-    ).trim();
+    );
 }
 
 function getMatchPmcProfile(room, side) {
@@ -9567,7 +9597,48 @@ function getMatchPmcProfile(room, side) {
         photo: p.photo || p.photoURL || "images/do_tuong.png"
     };
 }
+async function getLivePmcByWalletKey(walletKey) {
+    const safeKey = normalizePmcWalletKey(walletKey);
+    if (!safeKey) return null;
 
+    const snap = await db.ref("wallets/" + safeKey).once("value");
+    const data = snap.val() || {};
+
+    return Math.max(0, Math.floor(Number(data.pmcBalance || 0) || 0));
+}
+
+async function syncMatchPmcBalancesFromWallets(roomId, room) {
+    if (!roomId || !room) return {};
+
+    const doKey = getMatchPmcWalletKey(room, "do");
+    const denKey = getMatchPmcWalletKey(room, "den");
+
+    const updates = {};
+    let doPmc = null;
+    let denPmc = null;
+
+    if (doKey) {
+        doPmc = await getLivePmcByWalletKey(doKey);
+        if (doPmc != null) {
+            updates[`matches/${roomId}/players/do/walletKey`] = doKey;
+            updates[`matches/${roomId}/players/do/pmcBalance`] = doPmc;
+        }
+    }
+
+    if (denKey) {
+        denPmc = await getLivePmcByWalletKey(denKey);
+        if (denPmc != null) {
+            updates[`matches/${roomId}/players/den/walletKey`] = denKey;
+            updates[`matches/${roomId}/players/den/pmcBalance`] = denPmc;
+        }
+    }
+
+    if (Object.keys(updates).length) {
+        await db.ref().update(updates);
+    }
+
+    return { doKey, denKey, doPmc, denPmc };
+}
 function refreshLocalWalletSoon() {
     setTimeout(() => {
         loadWalletBalance().catch(() => {});
@@ -9589,97 +9660,84 @@ async function settlePmcMatchOnce(roomId) {
 
     if (!stake || !winnerSide) return;
 
-    const settlementRef = db.ref(`matches/${roomId}/settlement`);
+    const lockRef = db.ref(`matches/${roomId}/settlement/pmc`);
 
-    const lock = await runRefTransaction(settlementRef, current => {
-        if (current && current.pmcDone) return;
+    const lock = await runRefTransaction(lockRef, current => {
+        if (current && current.done) return;
 
-        const runningAt = Number(current?.pmcRunningAt || 0) || 0;
-        const stillRunning = current?.pmcRunning && Date.now() - runningAt < 10000;
+        const runningAt = Number(current?.runningAt || 0) || 0;
+        const stillRunning = current?.running && Date.now() - runningAt < 10000;
 
         if (stillRunning) return;
 
         return {
-            ...(current || {}),
-            pmcDone: false,
-            pmcRunning: true,
-            pmcRunningAt: Date.now(),
+            done: false,
+            running: true,
+            runningAt: Date.now(),
             winner: winnerSide,
             stakePMC: stake,
             byWallet: makeWalletDbKey()
         };
     });
 
-    if (!lock.committed) {
-        refreshLocalWalletSoon();
-        return;
-    }
+    if (!lock.committed) return;
 
     try {
+        const doKey = getMatchPmcWalletKey(room, "do");
+        const denKey = getMatchPmcWalletKey(room, "den");
+
+        console.log("PMC SETTLE START", {
+            roomId,
+            winnerSide,
+            stake,
+            doKey,
+            denKey,
+            stakeLocked: room.stakeLocked || null,
+            players: room.players || null
+        });
+
         // ===== HÒA: trả lại tiền cược cho 2 bên =====
         if (winnerSide === "hoa") {
-            const doKey = getMatchPmcWalletKey(room, "do");
-            const denKey = getMatchPmcWalletKey(room, "den");
-
-            if (!doKey && !denKey) {
-                throw new Error("missing_refund_wallet_keys");
+            if (!doKey || !denKey) {
+                throw new Error("missing_refund_wallet_key");
             }
 
-            let doPaid = null;
-            let denPaid = null;
+            await adjustPmcWalletByKey(doKey, stake, getMatchPmcProfile(room, "do"));
+            await adjustPmcWalletByKey(denKey, stake, getMatchPmcProfile(room, "den"));
 
-            if (doKey) {
-                doPaid = await adjustPmcWalletByKey(
-                    doKey,
-                    stake,
-                    getMatchPmcProfile(room, "do")
-                );
-            }
+            const live = await syncMatchPmcBalancesFromWallets(roomId, room);
 
-            if (denKey && denKey !== doKey) {
-                denPaid = await adjustPmcWalletByKey(
-                    denKey,
-                    stake,
-                    getMatchPmcProfile(room, "den")
-                );
-            }
+            await lockRef.set({
+                done: true,
+                running: false,
+                type: "refund",
+                stakePMC: stake,
+                doKey,
+                denKey,
+                doPmc: live.doPmc,
+                denPmc: live.denPmc,
+                paidAt: Date.now()
+            });
 
-            const updates = {};
-            updates[`matches/${roomId}/settlement/pmcDone`] = true;
-            updates[`matches/${roomId}/settlement/pmcRunning`] = false;
-            updates[`matches/${roomId}/settlement/type`] = "refund";
-            updates[`matches/${roomId}/settlement/stakePMC`] = stake;
-            updates[`matches/${roomId}/settlement/doKey`] = doKey || "";
-            updates[`matches/${roomId}/settlement/denKey`] = denKey || "";
-            updates[`matches/${roomId}/settlement/doPaid`] = doPaid;
-            updates[`matches/${roomId}/settlement/denPaid`] = denPaid;
-            updates[`matches/${roomId}/settlement/pmcPaidAt`] = firebase.database.ServerValue.TIMESTAMP;
-
-            if (doPaid != null) updates[`matches/${roomId}/players/do/pmcBalance`] = doPaid;
-            if (denPaid != null) updates[`matches/${roomId}/players/den/pmcBalance`] = denPaid;
-
-            await db.ref().update(updates);
             await loadWalletBalance().catch(() => {});
-            refreshLocalWalletSoon();
 
             console.log("PMC MATCH REFUND OK", {
                 roomId,
                 stake,
                 doKey,
                 denKey,
-                doPaid,
-                denPaid
+                live
             });
 
             return;
         }
 
-        // ===== CÓ NGƯỜI THẮNG: cộng tiền cho ví thắng =====
+        // ===== CÓ NGƯỜI THẮNG =====
         if (winnerSide !== "do" && winnerSide !== "den") {
             throw new Error("invalid_winner_side_" + winnerSide);
         }
 
-        const winnerKey = getMatchPmcWalletKey(room, winnerSide);
+        const winnerKey = winnerSide === "do" ? doKey : denKey;
 
         if (!winnerKey) {
             throw new Error("missing_winner_wallet_key");
@@ -9705,7 +9763,6 @@ async function settlePmcMatchOnce(roomId) {
 
         let adminPaid = null;
 
-        // Phí admin lỗi thì không được làm hỏng thưởng người thắng.
         try {
             if (feePMC > 0) {
                 adminPaid = await adjustPmcWalletByKey("pi_admin_master", feePMC, {
@@ -9717,24 +9774,30 @@ async function settlePmcMatchOnce(roomId) {
             console.warn("PMC admin fee lỗi, bỏ qua:", adminErr);
         }
 
-        const updates = {};
-        updates[`matches/${roomId}/settlement/pmcDone`] = true;
-        updates[`matches/${roomId}/settlement/pmcRunning`] = false;
-        updates[`matches/${roomId}/settlement/type`] = "winner";
-        updates[`matches/${roomId}/settlement/winner`] = winnerSide;
-        updates[`matches/${roomId}/settlement/winnerKey`] = winnerKey;
-        updates[`matches/${roomId}/settlement/stakePMC`] = stake;
-        updates[`matches/${roomId}/settlement/totalPot`] = totalPot;
-        updates[`matches/${roomId}/settlement/feePMC`] = feePMC;
-        updates[`matches/${roomId}/settlement/winnerReceivePMC`] = winnerReceivePMC;
-        updates[`matches/${roomId}/settlement/paid`] = paid;
-        updates[`matches/${roomId}/settlement/adminPaid`] = adminPaid;
-        updates[`matches/${roomId}/settlement/pmcPaidAt`] = firebase.database.ServerValue.TIMESTAMP;
-        updates[`matches/${roomId}/players/${winnerSide}/pmcBalance`] = paid;
+        // Quan trọng: đọc lại ví thật rồi ghi lại cả 2 player trong room.
+        // Như vậy UI không còn hiện 0 do room.players cũ nữa.
+        const live = await syncMatchPmcBalancesFromWallets(roomId, room);
 
-        await db.ref().update(updates);
+        await lockRef.set({
+            done: true,
+            running: false,
+            type: "winner",
+            winner: winnerSide,
+            winnerKey,
+            stakePMC: stake,
+            totalPot,
+            feePMC,
+            winnerReceivePMC,
+            paid,
+            adminPaid,
+            doKey,
+            denKey,
+            doPmc: live.doPmc,
+            denPmc: live.denPmc,
+            paidAt: Date.now()
+        });
+
         await loadWalletBalance().catch(() => {});
-        refreshLocalWalletSoon();
 
         console.log("PMC MATCH SETTLE OK", {
             roomId,
@@ -9745,16 +9808,16 @@ async function settlePmcMatchOnce(roomId) {
             feePMC,
             winnerReceivePMC,
             paid,
-            adminPaid
+            live
         });
     } catch (err) {
         console.error("PMC MATCH SETTLE FAIL:", err);
 
-        await settlementRef.update({
-            pmcDone: false,
-            pmcRunning: false,
-            pmcError: err?.message || String(err),
-            pmcErrorAt: Date.now()
+        await lockRef.update({
+            done: false,
+            running: false,
+            error: err?.message || String(err),
+            errorAt: Date.now()
         }).catch(() => {});
     }
 }
