@@ -6280,6 +6280,8 @@ appId: "1:818801429743:web:27ed0c854b8be5c8a95f1a"
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.database();
+window.db = db;
+window.auth = auth;
 const provider = new firebase.auth.GoogleAuthProvider();
 
 let currentRoomId = null;
