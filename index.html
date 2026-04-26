@@ -4053,7 +4053,8 @@ body.in-match .hamburger-menu-container{
 .level-exp-hud{
   position: fixed;
   left: 50%;
-  top: max(8px, env(safe-area-inset-top, 0px) + 6px);
+  bottom: max(8px, env(safe-area-inset-bottom, 0px) + 6px);
+  top: auto;
   transform: translateX(-50%);
   z-index: 12018;
   width: min(58vw, 360px);
@@ -4310,8 +4311,845 @@ body.in-match #arena-shop-btn{ display:none !important; }
 .cosmetic-avatar-skin-diamond_blue{ border-color:#74b9ff!important; box-shadow:0 0 18px rgba(116,185,255,.78), inset 0 0 8px rgba(255,255,255,.2)!important; }
 .cosmetic-avatar-skin-king_rainbow{ border-color:#fff!important; box-shadow:0 0 9px #ff3cac,0 0 16px #55efc4,0 0 24px #f4c542!important; }
 .cosmetic-avatar-skin-god_neon{ border-color:#ff00e5!important; box-shadow:0 0 12px #ff00e5,0 0 22px #00ffe1,0 0 32px rgba(255,255,255,.35)!important; animation: godSkinGlow 1.2s ease-in-out infinite alternate; }
-@keyframes godSkinGlow{ from{ filter:brightness(1); } to{ filter:brightness(1.18); } }
+@keyframes godSkinGlow{ from{ filter:brightness(1); } to{ filter:brightness(1.18); } 
+}
+/* ===== SKIN BỌC KHUNG AVATAR - CÓ HUY HIỆU TRÊN ĐẦU ===== */
 
+.avatar-skin-frame-target{
+  position: relative !important;
+  overflow: visible !important;
+  isolation: isolate;
+}
+
+.avatar-skin-frame-target > img{
+  position: relative;
+  z-index: 3;
+}
+
+.avatar-skin-frame-target .player-chip-meta{
+  position: relative;
+  z-index: 3;
+}
+
+.avatar-skin-frame-target::after{
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 18px;
+  pointer-events: none;
+  z-index: 1;
+  border: 2px solid transparent;
+}
+
+.avatar-skin-frame-target::before{
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -19px;
+  transform: translateX(-50%);
+  width: 31px;
+  height: 31px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 2px 5px rgba(0,0,0,.9);
+}
+
+/* ===== VIỀN TRÚC KIM ===== */
+.avatar-frame-skin_bamboo_gold::before{
+  content: "🎋";
+  background:
+    radial-gradient(circle at 30% 25%, #fff8cf, #f4c542 42%, #745600 100%);
+  border: 2px solid #fff3a3;
+  box-shadow:
+    0 0 8px rgba(244,197,66,.9),
+    0 0 16px rgba(85,239,196,.45);
+  animation: skinBadgeFloat 1.8s ease-in-out infinite alternate;
+}
+
+.avatar-frame-skin_bamboo_gold::after{
+  border-color: #f4c542;
+  background:
+    linear-gradient(rgba(10,25,15,.72), rgba(10,25,15,.72)) padding-box,
+    conic-gradient(from 0deg, #f4c542, #55efc4, #fff7a8, #f4c542) border-box;
+  box-shadow:
+    0 0 10px rgba(244,197,66,.85),
+    0 0 20px rgba(85,239,196,.38);
+  animation: skinFramePulseGold 1.6s ease-in-out infinite alternate;
+}
+
+/* ===== LONG ẢNH TÍM - BÁ ĐẠO HƠN ===== */
+.avatar-frame-skin_dragon_purple::before{
+  content: "龍";
+  color: #fff7ff;
+  background:
+    radial-gradient(circle at 35% 25%, #ffffff, #d8b4fe 22%, #7c3aed 58%, #21003d 100%);
+  border: 2px solid #f4c542;
+  box-shadow:
+    0 0 8px rgba(255,255,255,.75),
+    0 0 14px rgba(179,104,255,.95),
+    0 0 26px rgba(124,58,237,.85),
+    0 0 36px rgba(244,197,66,.38);
+  animation:
+    dragonBadgeFly 1.15s ease-in-out infinite alternate,
+    dragonBadgeFlash 2.4s linear infinite;
+}
+
+.avatar-frame-skin_dragon_purple::after{
+  border: 2px solid transparent;
+  background:
+    linear-gradient(rgba(12,4,28,.76), rgba(12,4,28,.76)) padding-box,
+    conic-gradient(
+      from var(--dragon-spin, 0deg),
+      #4c1d95,
+      #b368ff,
+      #ffffff,
+      #f4c542,
+      #7c3aed,
+      #4c1d95
+    ) border-box;
+  box-shadow:
+    0 0 8px rgba(179,104,255,.85),
+    0 0 18px rgba(179,104,255,.9),
+    0 0 30px rgba(124,58,237,.55),
+    inset 0 0 12px rgba(255,255,255,.08);
+  animation:
+    dragonFramePulse 1.05s ease-in-out infinite alternate,
+    dragonFrameRotate 2.6s linear infinite;
+}
+
+/* 2 cánh sáng hai bên cho Long Ảnh Tím */
+.avatar-frame-skin_dragon_purple{
+  filter: drop-shadow(0 0 7px rgba(179,104,255,.65));
+}
+
+.avatar-frame-skin_dragon_purple .player-chip-meta::after{
+  content: "✦";
+  position: absolute;
+  right: -13px;
+  top: -8px;
+  color: #f4c542;
+  font-size: 12px;
+  text-shadow:
+    0 0 6px #f4c542,
+    0 0 12px #b368ff;
+  animation: skinStarBlink .85s ease-in-out infinite alternate;
+}
+
+/* ===== PHƯỢNG HỎA ĐỎ ===== */
+.avatar-frame-skin_phoenix_red::before{
+  content: "🔥";
+  background:
+    radial-gradient(circle at 35% 25%, #fff6d5, #ff7675 35%, #8b0000 100%);
+  border: 2px solid #ffd166;
+  box-shadow:
+    0 0 10px rgba(255,92,122,.9),
+    0 0 24px rgba(255,209,102,.45);
+  animation: skinBadgeFloat 1.3s ease-in-out infinite alternate;
+}
+
+.avatar-frame-skin_phoenix_red::after{
+  border-color: #ff5c7a;
+  box-shadow:
+    0 0 12px rgba(255,92,122,.95),
+    0 0 24px rgba(255,209,102,.32);
+  animation: skinFirePulse .9s ease-in-out infinite alternate;
+}
+
+/* ===== KIM CƯƠNG LAM ===== */
+.avatar-frame-skin_diamond_blue::before{
+  content: "💎";
+  left: -6px;
+  top: -8px;
+  transform: translateX(0);
+  width: 28px;
+  height: 28px;
+  font-size: 16px;
+  background:
+    radial-gradient(circle at 35% 25%, #ffffff, #74b9ff 45%, #003a6b 100%);
+  border: 2px solid #e8f7ff;
+  box-shadow:
+    0 0 12px rgba(116,185,255,.95),
+    0 0 25px rgba(255,255,255,.35);
+  animation: diamondBadgeShine 1.4s ease-in-out infinite alternate;
+}
+
+.avatar-frame-skin_diamond_blue::after{
+  border-color: #74b9ff;
+  box-shadow:
+    0 0 14px rgba(116,185,255,.95),
+    0 0 26px rgba(255,255,255,.3);
+}
+
+/* ===== VƯƠNG GIẢ NGŨ SẮC ===== */
+.avatar-frame-skin_king_rainbow::before{
+  content: "👑";
+  background:
+    radial-gradient(circle at 35% 25%, #fff7b1, #ff3cac 38%, #3b0764 100%);
+  border: 2px solid #ffffff;
+  box-shadow:
+    0 0 8px #ff3cac,
+    0 0 14px #55efc4,
+    0 0 24px #f4c542;
+  animation: kingBadgeGlow 1.1s ease-in-out infinite alternate;
+}
+
+.avatar-frame-skin_king_rainbow::after{
+  border-color: #fff;
+  box-shadow:
+    0 0 8px #ff3cac,
+    0 0 14px #55efc4,
+    0 0 22px #f4c542;
+  animation: rainbowFramePulse 1.2s ease-in-out infinite alternate;
+}
+
+/* ===== THẦN QUANG NEON ===== */
+.avatar-frame-skin_god_neon::before{
+  content: "⚡";
+  background:
+    radial-gradient(circle at 35% 25%, #ffffff, #ff00e5 35%, #001b1b 100%);
+  border: 2px solid #00ffe1;
+  box-shadow:
+    0 0 10px #ff00e5,
+    0 0 22px #00ffe1,
+    0 0 36px rgba(255,255,255,.5);
+  animation: godBadgeShock .55s ease-in-out infinite alternate;
+}
+
+.avatar-frame-skin_god_neon::after{
+  border-color: #ff00e5;
+  box-shadow:
+    0 0 10px #ff00e5,
+    0 0 20px #00ffe1,
+    0 0 34px rgba(255,255,255,.5);
+  animation: godFrameShock .72s ease-in-out infinite alternate;
+}
+
+/* ===== ANIMATION ===== */
+
+@property --dragon-spin{
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes dragonFrameRotate{
+  from{ --dragon-spin: 0deg; }
+  to{ --dragon-spin: 360deg; }
+}
+
+@keyframes dragonFramePulse{
+  from{
+    transform: scale(1);
+    opacity: .82;
+  }
+  to{
+    transform: scale(1.035);
+    opacity: 1;
+  }
+}
+
+@keyframes dragonBadgeFly{
+  from{
+    transform: translateX(-50%) translateY(0) rotate(-5deg) scale(1);
+  }
+  to{
+    transform: translateX(-50%) translateY(-3px) rotate(5deg) scale(1.12);
+  }
+}
+
+@keyframes dragonBadgeFlash{
+  0%, 100%{
+    filter: brightness(1);
+  }
+  50%{
+    filter: brightness(1.35);
+  }
+}
+
+@keyframes skinBadgeFloat{
+  from{
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+  to{
+    transform: translateX(-50%) translateY(-3px) scale(1.08);
+  }
+}
+
+@keyframes skinStarBlink{
+  from{
+    opacity: .35;
+    transform: scale(.9);
+  }
+  to{
+    opacity: 1;
+    transform: scale(1.25);
+  }
+}
+
+@keyframes skinFramePulseGold{
+  from{ opacity:.78; transform:scale(1); }
+  to{ opacity:1; transform:scale(1.025); }
+}
+
+@keyframes skinFirePulse{
+  from{ opacity:.75; transform:scale(1); }
+  to{ opacity:1; transform:scale(1.035); }
+}
+
+@keyframes diamondBadgeShine{
+  from{
+    filter: brightness(1);
+    transform: translateX(0) scale(1);
+  }
+  to{
+    filter: brightness(1.32);
+    transform: translateX(0) scale(1.09);
+  }
+}
+
+@keyframes kingBadgeGlow{
+  from{ filter:brightness(1); transform:translateX(-50%) translateY(0) scale(1); }
+  to{ filter:brightness(1.25); transform:translateX(-50%) translateY(-3px) scale(1.12); }
+}
+
+@keyframes rainbowFramePulse{
+  from{ opacity:.78; transform:scale(1); }
+  to{ opacity:1; transform:scale(1.035); }
+}
+
+@keyframes godBadgeShock{
+  from{
+    transform: translateX(-50%) rotate(-8deg) scale(1);
+    filter: brightness(1);
+  }
+  to{
+    transform: translateX(-50%) rotate(8deg) scale(1.16);
+    filter: brightness(1.45);
+  }
+}
+
+@keyframes godFrameShock{
+  from{
+    opacity:.78;
+    transform:scale(1);
+  }
+  to{
+    opacity:1;
+    transform:scale(1.045);
+  }
+}
+/* ===== FINAL SKIN AVATAR FRAME - ICON GÓC TRÁI + VIỀN PHÁT SÁNG ===== */
+
+/* THÔNG SỐ CHỈNH NHANH:
+   --skin-icon-x: âm = qua trái, dương = qua phải
+   --skin-icon-y: âm = lên trên, dương = xuống dưới
+   --skin-icon-size: kích thước icon
+*/
+.avatar-skin-frame-target{
+  --skin-icon-x: -7px;
+  --skin-icon-y: -50px;
+  --skin-icon-size: 29px;
+  position: relative !important;
+  overflow: visible !important;
+  isolation: isolate;
+}
+
+.avatar-skin-frame-target > img,
+.avatar-skin-frame-target .player-chip-meta{
+  position: relative;
+  z-index: 5;
+}
+
+.avatar-skin-frame-target::after{
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 18px;
+  pointer-events: none;
+  z-index: 1;
+  border: 2px solid transparent;
+}
+
+.avatar-skin-frame-target::before{
+  position: absolute;
+  left: var(--skin-icon-x) !important;
+  top: var(--skin-icon-y) !important;
+  width: var(--skin-icon-size) !important;
+  height: var(--skin-icon-size) !important;
+  border-radius: 50%;
+  z-index: 30 !important;
+  pointer-events: none;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 17px;
+  line-height: 1;
+  font-weight: 900;
+  transform: translateX(0) translateY(0) scale(1) !important;
+  text-shadow: 0 2px 5px rgba(0,0,0,.9);
+}
+
+/* ===== TRÚC KIM ===== */
+.avatar-frame-skin_bamboo_gold::before{
+  content: "🎋";
+  background: radial-gradient(circle at 35% 25%, #fff8cf, #f4c542 42%, #745600 100%);
+  border: 2px solid #fff3a3;
+  box-shadow:
+    0 0 8px rgba(244,197,66,.95),
+    0 0 16px rgba(85,239,196,.45);
+  animation: mcSkinIconFloat 1.3s ease-in-out infinite alternate !important;
+}
+
+.avatar-frame-skin_bamboo_gold::after{
+  background:
+    linear-gradient(rgba(10,25,15,.74), rgba(10,25,15,.74)) padding-box,
+    conic-gradient(from 0deg, #f4c542, #55efc4, #fff7a8, #f4c542) border-box;
+  border: 2px solid transparent;
+  box-shadow:
+    0 0 10px rgba(244,197,66,.85),
+    0 0 20px rgba(85,239,196,.4);
+  animation: mcSkinGoldFrame 1.2s ease-in-out infinite alternate !important;
+}
+
+/* ===== LONG ẢNH TÍM ===== */
+.avatar-frame-skin_dragon_purple{
+  --skin-icon-x: -8px;
+  --skin-icon-y: -14px;
+  --skin-icon-size: 30px;
+}
+
+.avatar-frame-skin_dragon_purple::before{
+  content: "龍";
+  color: #fff7ff;
+  background: radial-gradient(circle at 35% 25%, #ffffff, #d8b4fe 22%, #7c3aed 58%, #21003d 100%);
+  border: 2px solid #f4c542;
+  box-shadow:
+    0 0 8px rgba(255,255,255,.75),
+    0 0 14px rgba(179,104,255,.95),
+    0 0 26px rgba(124,58,237,.85),
+    0 0 36px rgba(244,197,66,.38);
+  animation: mcSkinDragonIcon 1.05s ease-in-out infinite alternate !important;
+}
+
+.avatar-frame-skin_dragon_purple::after{
+  background:
+    linear-gradient(rgba(12,4,28,.76), rgba(12,4,28,.76)) padding-box,
+    conic-gradient(
+      from 0deg,
+      #4c1d95,
+      #b368ff,
+      #ffffff,
+      #f4c542,
+      #7c3aed,
+      #4c1d95
+    ) border-box;
+  border: 2px solid transparent;
+  box-shadow:
+    0 0 8px rgba(179,104,255,.85),
+    0 0 18px rgba(179,104,255,.9),
+    0 0 30px rgba(124,58,237,.55),
+    inset 0 0 12px rgba(255,255,255,.08);
+  animation: mcSkinPurpleFrame 1.05s ease-in-out infinite alternate !important;
+}
+
+/* ===== PHƯỢNG HỎA ĐỎ / NGỌN LỬA ===== */
+.avatar-frame-skin_phoenix_red{
+  --skin-icon-x: -8px;
+  --skin-icon-y: -15px;  /* muốn kéo ngọn lửa lên nữa thì đổi -17px */
+  --skin-icon-size: 30px;
+}
+
+.avatar-frame-skin_phoenix_red::before{
+  content: "🔥";
+  background: radial-gradient(circle at 35% 25%, #fff6d5, #ff7675 35%, #8b0000 100%);
+  border: 2px solid #ffd166;
+  box-shadow:
+    0 0 10px rgba(255,92,122,.95),
+    0 0 18px rgba(255,209,102,.55),
+    0 0 28px rgba(255,60,60,.35);
+  animation: mcSkinFireIcon 0.55s ease-in-out infinite alternate !important;
+}
+
+.avatar-frame-skin_phoenix_red::after{
+  background:
+    linear-gradient(rgba(36,6,6,.72), rgba(36,6,6,.72)) padding-box,
+    conic-gradient(from 0deg, #ff3131, #ffd166, #ff6b00, #ff3131) border-box;
+  border: 2px solid transparent;
+  box-shadow:
+    0 0 9px rgba(255,92,122,.92),
+    0 0 18px rgba(255,60,60,.75),
+    0 0 30px rgba(255,209,102,.36),
+    inset 0 0 12px rgba(255,120,80,.12);
+  animation: mcSkinFireFrame 0.55s ease-in-out infinite alternate !important;
+}
+
+/* ===== KIM CƯƠNG LAM ===== */
+.avatar-frame-skin_diamond_blue{
+  --skin-icon-x: -7px;
+  --skin-icon-y: -14px;
+  --skin-icon-size: 29px;
+}
+
+.avatar-frame-skin_diamond_blue::before{
+  content: "💎";
+  background: radial-gradient(circle at 35% 25%, #ffffff, #74b9ff 45%, #003a6b 100%);
+  border: 2px solid #e8f7ff;
+  box-shadow:
+    0 0 12px rgba(116,185,255,.95),
+    0 0 25px rgba(255,255,255,.35);
+  animation: mcSkinDiamondIcon 1.1s ease-in-out infinite alternate !important;
+}
+
+.avatar-frame-skin_diamond_blue::after{
+  background:
+    linear-gradient(rgba(3,18,35,.7), rgba(3,18,35,.7)) padding-box,
+    conic-gradient(from 0deg, #74b9ff, #ffffff, #00d9ff, #74b9ff) border-box;
+  border: 2px solid transparent;
+  box-shadow:
+    0 0 12px rgba(116,185,255,.95),
+    0 0 24px rgba(255,255,255,.32);
+  animation: mcSkinDiamondFrame 1.2s ease-in-out infinite alternate !important;
+}
+
+/* ===== VƯƠNG GIẢ ===== */
+.avatar-frame-skin_king_rainbow{
+  --skin-icon-x: -9px;
+  --skin-icon-y: -15px;
+  --skin-icon-size: 31px;
+}
+
+.avatar-frame-skin_king_rainbow::before{
+  content: "👑";
+  background: radial-gradient(circle at 35% 25%, #fff7b1, #ff3cac 38%, #3b0764 100%);
+  border: 2px solid #ffffff;
+  box-shadow:
+    0 0 8px #ff3cac,
+    0 0 14px #55efc4,
+    0 0 24px #f4c542;
+  animation: mcSkinKingIcon 1s ease-in-out infinite alternate !important;
+}
+
+.avatar-frame-skin_king_rainbow::after{
+  background:
+    linear-gradient(rgba(24,4,34,.72), rgba(24,4,34,.72)) padding-box,
+    conic-gradient(from 0deg, #ff3cac, #55efc4, #f4c542, #ffffff, #ff3cac) border-box;
+  border: 2px solid transparent;
+  box-shadow:
+    0 0 8px #ff3cac,
+    0 0 14px #55efc4,
+    0 0 24px #f4c542;
+  animation: mcSkinKingFrame 1s ease-in-out infinite alternate !important;
+}
+
+/* ===== THẦN QUANG ===== */
+.avatar-frame-skin_god_neon{
+  --skin-icon-x: -9px;
+  --skin-icon-y: -50px;
+  --skin-icon-size: 31px;
+}
+
+.avatar-frame-skin_god_neon::before{
+  content: "⚡";
+  background: radial-gradient(circle at 35% 25%, #ffffff, #ff00e5 35%, #001b1b 100%);
+  border: 2px solid #00ffe1;
+  box-shadow:
+    0 0 10px #ff00e5,
+    0 0 22px #00ffe1,
+    0 0 36px rgba(255,255,255,.5);
+  animation: mcSkinGodIcon .5s ease-in-out infinite alternate !important;
+}
+
+.avatar-frame-skin_god_neon::after{
+  background:
+    linear-gradient(rgba(0,18,20,.72), rgba(0,18,20,.72)) padding-box,
+    conic-gradient(from 0deg, #ff00e5, #00ffe1, #ffffff, #ff00e5) border-box;
+  border: 2px solid transparent;
+  box-shadow:
+    0 0 10px #ff00e5,
+    0 0 20px #00ffe1,
+    0 0 34px rgba(255,255,255,.5);
+  animation: mcSkinGodFrame .55s ease-in-out infinite alternate !important;
+}
+
+/* ===== FINAL ANIMATIONS - KHÔNG KÉO ICON RA GIỮA ===== */
+
+@keyframes mcSkinIconFloat{
+  from{ transform: translateX(0) translateY(0) scale(1) !important; filter: brightness(1); }
+  to{ transform: translateX(0) translateY(-3px) scale(1.08) !important; filter: brightness(1.2); }
+}
+
+@keyframes mcSkinDragonIcon{
+  from{ transform: translateX(0) translateY(0) rotate(-5deg) scale(1) !important; filter: brightness(1); }
+  to{ transform: translateX(0) translateY(-4px) rotate(5deg) scale(1.12) !important; filter: brightness(1.35); }
+}
+
+@keyframes mcSkinFireIcon{
+  from{
+    transform: translateX(0) translateY(0) scale(1) !important;
+    filter: brightness(1);
+    box-shadow:
+      0 0 8px rgba(255,92,122,.8),
+      0 0 16px rgba(255,209,102,.35);
+  }
+  to{
+    transform: translateX(0) translateY(-4px) scale(1.13) !important;
+    filter: brightness(1.45);
+    box-shadow:
+      0 0 12px rgba(255,92,122,1),
+      0 0 24px rgba(255,209,102,.75),
+      0 0 34px rgba(255,80,40,.55);
+  }
+}
+
+@keyframes mcSkinDiamondIcon{
+  from{ transform: translateX(0) translateY(0) scale(1) !important; filter: brightness(1); }
+  to{ transform: translateX(0) translateY(-3px) scale(1.1) !important; filter: brightness(1.35); }
+}
+
+@keyframes mcSkinKingIcon{
+  from{ transform: translateX(0) translateY(0) scale(1) !important; filter: brightness(1); }
+  to{ transform: translateX(0) translateY(-4px) scale(1.14) !important; filter: brightness(1.3); }
+}
+
+@keyframes mcSkinGodIcon{
+  from{ transform: translateX(0) translateY(0) rotate(-8deg) scale(1) !important; filter: brightness(1); }
+  to{ transform: translateX(0) translateY(-4px) rotate(8deg) scale(1.16) !important; filter: brightness(1.5); }
+}
+
+@keyframes mcSkinGoldFrame{
+  from{ opacity:.78; transform: scale(1); filter: brightness(1); }
+  to{ opacity:1; transform: scale(1.025); filter: brightness(1.18); }
+}
+
+@keyframes mcSkinPurpleFrame{
+  from{ opacity:.8; transform: scale(1); filter: brightness(1); }
+  to{ opacity:1; transform: scale(1.035); filter: brightness(1.22); }
+}
+
+@keyframes mcSkinFireFrame{
+  from{ opacity:.76; transform: scale(1); filter: brightness(1); }
+  to{ opacity:1; transform: scale(1.04); filter: brightness(1.38); }
+}
+
+@keyframes mcSkinDiamondFrame{
+  from{ opacity:.78; transform: scale(1); filter: brightness(1); }
+  to{ opacity:1; transform: scale(1.03); filter: brightness(1.24); }
+}
+
+@keyframes mcSkinKingFrame{
+  from{ opacity:.78; transform: scale(1); filter: brightness(1); }
+  to{ opacity:1; transform: scale(1.035); filter: brightness(1.28); }
+}
+
+@keyframes mcSkinGodFrame{
+  from{ opacity:.76; transform: scale(1); filter: brightness(1); }
+  to{ opacity:1; transform: scale(1.045); filter: brightness(1.42); }
+}
+/* ===== NÚT CHỈNH ĐỘ SÁNG VIỀN SKIN AVATAR =====
+   Chỉnh 4 số dưới này thôi:
+
+   --skin-frame-opacity: độ hiện viền, càng thấp càng mờ
+   --skin-frame-brightness: độ sáng nền viền
+   --skin-frame-brightness-to: độ sáng lúc chớp
+   --skin-frame-scale-to: độ phồng viền lúc chớp
+*/
+
+.avatar-skin-frame-target{
+  --skin-frame-opacity: 0.62;
+  --skin-frame-brightness: 0.82;
+  --skin-frame-brightness-to: 1.02;
+  --skin-frame-scale-to: 1.018;
+  --skin-frame-speed: 1.15s;
+}
+
+/* giảm sáng tổng thể viền khung, không đụng icon */
+.avatar-frame-skin_bamboo_gold::after,
+.avatar-frame-skin_dragon_purple::after,
+.avatar-frame-skin_phoenix_red::after,
+.avatar-frame-skin_diamond_blue::after,
+.avatar-frame-skin_king_rainbow::after,
+.avatar-frame-skin_god_neon::after{
+  opacity: var(--skin-frame-opacity) !important;
+  animation: mcSkinFrameSoftGlow var(--skin-frame-speed) ease-in-out infinite alternate !important;
+}
+
+/* animation mềm hơn, không chói quá */
+@keyframes mcSkinFrameSoftGlow{
+  from{
+    opacity: calc(var(--skin-frame-opacity) - 0.08);
+    transform: scale(1);
+    filter: brightness(var(--skin-frame-brightness));
+  }
+  to{
+    opacity: var(--skin-frame-opacity);
+    transform: scale(var(--skin-frame-scale-to));
+    filter: brightness(var(--skin-frame-brightness-to));
+  }
+}
+/* ===== CHỐT VỊ TRÍ ICON SKIN - DÁN CUỐI CSS =====
+   Số âm nhiều hơn = icon lên cao hơn
+   -18px thấp hơn, -24px cao hơn, -30px cao nữa
+*/
+
+.avatar-frame-skin_bamboo_gold{
+  --skin-icon-y: -22px !important;
+}
+
+.avatar-frame-skin_dragon_purple{
+  --skin-icon-y: -23px !important;
+}
+
+.avatar-frame-skin_phoenix_red{
+  --skin-icon-y: -24px !important;
+}
+
+.avatar-frame-skin_diamond_blue{
+  --skin-icon-y: -23px !important;
+}
+
+.avatar-frame-skin_king_rainbow{
+  --skin-icon-y: -24px !important;
+}
+
+.avatar-frame-skin_god_neon{
+  --skin-icon-y: -25px !important;
+}
+/* ===== HIỆU ỨNG CỘNG/TRỪ EXP NHỎ ===== */
+.exp-float-pop {
+    position: fixed;
+    left: 50%;
+    bottom: max(58px, env(safe-area-inset-bottom, 0px) + 54px);
+    transform: translateX(-50%) translateY(0) scale(1);
+    z-index: 16000;
+    pointer-events: none;
+    padding: 6px 13px;
+    border-radius: 999px;
+    font-size: 15px;
+    font-weight: 900;
+    letter-spacing: 0.4px;
+    background: rgba(0, 0, 0, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    box-shadow:
+        0 0 12px rgba(0, 0, 0, 0.55),
+        0 0 18px rgba(85, 239, 196, 0.22);
+    animation: expFloatDrop 2.8s ease-out forwards;
+}
+
+.exp-float-pop.plus {
+    color: #7dffb3;
+    border-color: rgba(125, 255, 179, 0.68);
+    text-shadow: 0 0 8px rgba(125, 255, 179, 0.55);
+}
+
+.exp-float-pop.minus {
+    color: #ff8a80;
+    border-color: rgba(255, 138, 128, 0.68);
+    text-shadow: 0 0 8px rgba(255, 138, 128, 0.45);
+}
+
+@keyframes expFloatDrop {
+    0% {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-12px) scale(0.88);
+    }
+    16% {
+        opacity: 1;
+        transform: translateX(-50%) translateY(-20px) scale(1.08);
+    }
+    72% {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translateX(-50%) translateY(24px) scale(0.94);
+    }
+}
+/* ===== TẮT VIỀN HIỆU ỨNG KHUNG AVATAR - GIỮ ICON SKIN PHÁT SÁNG ===== */
+
+/* Tắt cái viền khung chạy sáng */
+.avatar-frame-skin_bamboo_gold::after,
+.avatar-frame-skin_dragon_purple::after,
+.avatar-frame-skin_phoenix_red::after,
+.avatar-frame-skin_diamond_blue::after,
+.avatar-frame-skin_king_rainbow::after,
+.avatar-frame-skin_god_neon::after {
+    display: none !important;
+    opacity: 0 !important;
+    animation: none !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: transparent !important;
+}
+
+/* Không cho khung avatar tự vẽ viền nữa */
+.avatar-skin-frame-target {
+    border-color: transparent !important;
+}
+
+/* Nếu ảnh avatar còn bị viền màu thì bỏ viền ảnh, nhưng giữ ánh sáng */
+.cosmetic-avatar-skin-bamboo_gold,
+.cosmetic-avatar-skin-dragon_purple,
+.cosmetic-avatar-skin-phoenix_red,
+.cosmetic-avatar-skin-diamond_blue,
+.cosmetic-avatar-skin-king_rainbow,
+.cosmetic-avatar-skin-god_neon {
+    border-color: transparent !important;
+}
+
+/* Giữ icon skin phía trên vẫn hiện và vẫn sáng */
+.avatar-frame-skin_bamboo_gold::before,
+.avatar-frame-skin_dragon_purple::before,
+.avatar-frame-skin_phoenix_red::before,
+.avatar-frame-skin_diamond_blue::before,
+.avatar-frame-skin_king_rainbow::before,
+.avatar-frame-skin_god_neon::before {
+    display: block !important;
+    opacity: 1 !important;
+}
+/* ===== SHOP ICON - TONE XANH TÍM DỄ NHÌN ===== */
+#arena-shop-btn {
+    background: linear-gradient(180deg, #15e6c7, #087f8f) !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.45) !important;
+    box-shadow:
+        0 0 14px rgba(21, 230, 199, 0.42),
+        0 0 22px rgba(123, 47, 247, 0.22),
+        inset 0 0 10px rgba(255, 255, 255, 0.12) !important;
+}
+
+#arena-shop-btn .shop-icon-clean {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.35));
+}
+
+#arena-shop-btn:hover {
+    transform: scale(1.05);
+    background: linear-gradient(180deg, #28ffd9, #6d28d9) !important;
+    box-shadow:
+        0 0 18px rgba(40, 255, 217, 0.55),
+        0 0 28px rgba(109, 40, 217, 0.32) !important;
+}
+
+/* badge thông báo shop */
+#arena-shop-badge.shop-badge-dot {
+    background: #ff2d55 !important;
+    color: #ffffff !important;
+    border: 2px solid rgba(0, 0, 0, 0.75) !important;
+    box-shadow: 0 0 10px rgba(255, 45, 85, 0.55) !important;
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -5028,8 +5866,222 @@ let roomValueRef = null;
 let roomChatRef = null;
 let lastRoomBoardHash = "";
 let lastDrawRequestAt = 0;
+let myLevelMetaLiveRef = null;
 const ACTIVE_MATCH_KEY = "co_tuong_active_match_v1";
+const AI_BOT_UID = "ai_bot_truc_lam_lv1";
+const AI_BOT_NAME = "AI Trúc Lâm";
+const AI_BOT_SIDE = "den";
+const AI_SYSTEM_WALLET_KEY = "pi_admin_master";
+// Mở app với ?clearMatch=1 để xóa trận cũ bị kẹt
+if (new URLSearchParams(window.location.search).has("clearMatch")) {
+    localStorage.removeItem(ACTIVE_MATCH_KEY);
+    localStorage.removeItem("co_tuong_active_match_v1");
+    history.replaceState(null, "", location.pathname);
+}
+let aiOfferTimer = null;
+let aiMoveTimer = null;
+let aiMoveScheduledKey = "";
+let aiThinking = false;
 
+let aiWorker = null;
+let aiWorkerReqId = 0;
+
+const AI_WORKER_DEPTH = 5;
+const AI_WORKER_TIME_MS = 350;
+const AI_WORKER_TOP_MOVES = 12;
+function resetAiWorker() {
+    try {
+        if (aiWorker) aiWorker.terminate();
+    } catch (_) {}
+
+    aiWorker = null;
+    aiThinking = false;
+}
+
+function getAiWorker() {
+    if (!window.Worker) return null;
+
+    if (!aiWorker) {
+        aiWorker = new Worker("/ai-worker.js?v=20260426_ai_worker_1");
+
+        aiWorker.onerror = function (err) {
+            console.error("AI WORKER ERROR:", err);
+            resetAiWorker();
+        };
+    }
+
+    return aiWorker;
+}
+
+function aiMatrixForWorker() {
+    const mt = taoMaTran();
+
+    return mt.map(row => row.map(p => {
+        if (!p) return null;
+
+        return {
+            side: p.side,
+            type: p.type
+        };
+    }));
+}
+
+function aiMainFindKingForFace(side, mt) {
+    const kingTypes = side === "do"
+        ? ["帥", "帅"]
+        : ["將", "将"];
+
+    for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 9; c++) {
+            const p = mt[r][c];
+            if (p && p.side === side && kingTypes.includes(p.type)) {
+                return { c, r };
+            }
+        }
+    }
+
+    return null;
+}
+
+function aiMainTwoKingsFacing(mt) {
+    const a = aiMainFindKingForFace("do", mt);
+    const b = aiMainFindKingForFace("den", mt);
+
+    if (!a || !b) return false;
+    if (a.c !== b.c) return false;
+
+    const from = Math.min(a.r, b.r) + 1;
+    const to = Math.max(a.r, b.r) - 1;
+
+    for (let r = from; r <= to; r++) {
+        if (mt[r][a.c]) return false;
+    }
+
+    return true;
+}
+
+function isAiWorkerMoveLegal(move, side = "den") {
+    if (!move || !move.from || !move.to) return false;
+
+    const mt = taoMaTran();
+
+    const p = mt[move.from.r]?.[move.from.c];
+    if (!p || p.side !== side) return false;
+
+    const target = mt[move.to.r]?.[move.to.c];
+    if (target && target.side === side) return false;
+
+    if (!checkLuat(p.type, side, move.from.c, move.from.r, move.to.c, move.to.r, mt)) {
+        return false;
+    }
+
+    const temp = mt.map(row => row.map(cell => cell ? { ...cell } : null));
+    temp[move.to.r][move.to.c] = temp[move.from.r][move.from.c];
+    temp[move.from.r][move.from.c] = null;
+
+    if (isTwoKingsFacing(temp)) return false;
+    if (laBiChieu(side, temp)) return false;
+
+    return true;
+}
+function roomHasAiBot(room) {
+    const den = room?.players?.den || {};
+
+    return !!(
+        room?.aiMode ||
+        den?.isAI ||
+        den?.uid === AI_BOT_UID ||
+        String(den?.name || "").toLowerCase().includes("ai")
+    );
+}
+function aiFastFallbackMove(moves) {
+    if (!moves || !moves.length) return null;
+
+    const values = {
+        "帥": 10000, "帅": 10000, "將": 10000, "将": 10000,
+        "俥": 900, "車": 900, "车": 900,
+        "炮": 520, "砲": 520,
+        "傌": 480, "馬": 480, "马": 480,
+        "相": 230, "象": 230,
+        "仕": 230, "士": 230,
+        "兵": 120, "卒": 120
+    };
+
+    return moves
+        .slice()
+        .sort((a, b) => {
+            const av = a.target ? (values[a.target.type] || 40) : 0;
+            const bv = b.target ? (values[b.target.type] || 40) : 0;
+            return bv - av;
+        })[0] || moves[0];
+}
+
+function requestAiMoveFromWorker(room, side = "den") {
+    return new Promise((resolve) => {
+        const worker = getAiWorker();
+
+        if (!worker) {
+            resolve(null);
+            return;
+        }
+
+        const id = ++aiWorkerReqId;
+        let finished = false;
+
+        const timer = setTimeout(() => {
+            if (finished) return;
+
+            finished = true;
+            worker.removeEventListener("message", onMessage);
+            resetAiWorker();
+
+            resolve(null);
+        }, Math.max(900, AI_WORKER_TIME_MS + 500));
+
+        function onMessage(e) {
+            const data = e.data || {};
+            if (data.id !== id) return;
+
+            if (finished) return;
+
+            finished = true;
+            clearTimeout(timer);
+            worker.removeEventListener("message", onMessage);
+
+            if (!data.ok) {
+                console.error("AI WORKER RETURN ERROR:", data.error);
+                resolve(null);
+                return;
+            }
+
+            const move = data.result && data.result.move ? data.result.move : null;
+
+            console.log("AI WORKER RESULT:", data.result);
+
+            if (!isAiWorkerMoveLegal(move, side)) {
+                console.warn("AI WORKER MOVE ILLEGAL, fallback:", move);
+                resolve(null);
+                return;
+            }
+
+            resolve(move);
+        }
+
+        worker.addEventListener("message", onMessage);
+
+        worker.postMessage({
+            type: "findMove",
+            id,
+            board: aiMatrixForWorker(),
+            side,
+            maxDepth: AI_WORKER_DEPTH,
+            timeLimitMs: AI_WORKER_TIME_MS,
+            topMovesLimit: AI_WORKER_TOP_MOVES,
+            roomId: currentRoomId,
+            moveCount: room?.moveCount || 0
+        });
+    });
+}
 function readActiveMatchSnapshot() {
     try {
         return JSON.parse(localStorage.getItem(ACTIVE_MATCH_KEY) || "null");
@@ -5097,6 +6149,19 @@ async function tryResumeRealtimeMatch(preferredMode = null) {
     const isDo = room.players?.do?.uid === me.uid;
     const isDen = room.players?.den?.uid === me.uid;
     const canResume = !room.winner && (room.status === "playing" || room.status === "waiting");
+
+    const boardOk =
+        Array.isArray(room.board) &&
+        room.board.length === 10 &&
+        room.board.every(row => Array.isArray(row) && row.length === 9);
+
+    // Nếu trận cũ bị lỗi: status playing nhưng không có board chuẩn,
+    // xóa snapshot để app không bị kẹt màn xanh trống.
+    if (room.status === "playing" && !boardOk) {
+        console.warn("CLEAR BROKEN ACTIVE MATCH:", saved.roomId, room);
+        clearActiveMatchSnapshot(saved.roomId);
+        return false;
+    }
 
     if (!canResume || (!isDo && !isDen)) {
         clearActiveMatchSnapshot(saved.roomId);
@@ -5497,8 +6562,13 @@ function formatTime(s) {
     return String(m).padStart(2, '0') + ":" + String(sec).padStart(2, '0');
 }
 
+let timerLastTickMs = 0;
+
 function startTimer() {
     clearInterval(interval);
+    interval = null;
+
+    timerLastTickMs = Date.now();
     renderTimerUI();
 
     if (!currentRoomId || currentRoomStatus !== "playing" || isGameOver) {
@@ -5508,21 +6578,43 @@ function startTimer() {
     interval = setInterval(() => {
         if (isGameOver || !currentRoomId || currentRoomStatus !== "playing") {
             clearInterval(interval);
+            interval = null;
             return;
         }
 
-        if (luotDi === 'do') {
-            timeDo--;
-            if (timeDo === 30) playSnd('timeout');
+        const now = Date.now();
+        const elapsed = Math.floor((now - timerLastTickMs) / 1000);
+
+        if (elapsed <= 0) return;
+
+        timerLastTickMs += elapsed * 1000;
+
+        if (luotDi === "do") {
+            timeDo = Math.max(0, timeDo - elapsed);
+
+            if (timeDo <= 30 && timeDo + elapsed > 30) {
+                playSnd("timeout");
+            }
+
             renderTimerUI();
-            if (timeDo <= 0) endGame("HẾT GIỜ", "ĐEN THẮNG");
+
+            if (timeDo <= 0) {
+                endGame("HẾT GIỜ", "ĐEN THẮNG");
+            }
         } else {
-            timeDen--;
-            if (timeDen === 30) playSnd('timeout');
+            timeDen = Math.max(0, timeDen - elapsed);
+
+            if (timeDen <= 30 && timeDen + elapsed > 30) {
+                playSnd("timeout");
+            }
+
             renderTimerUI();
-            if (timeDen <= 0) endGame("HẾT GIỜ", "ĐỎ THẮNG");
+
+            if (timeDen <= 0) {
+                endGame("HẾT GIỜ", "ĐỎ THẮNG");
+            }
         }
-    }, 1000);
+    }, 250);
 }
 const FULL_TURN_SECONDS = 9 * 60;
 function renderTimerUI() {
@@ -5636,53 +6728,160 @@ async function playNextMatch() {
     clearInterval(interval);
     clearInterval(readyInterval);
 
+    // reset cờ bảng sẵn sàng cho ván mới
+    readyOverlayWaitingShown = false;
+    closeReadyOverlay();
+
     if (sounds.bgm) sounds.bgm.pause();
     if (sounds.heartbeat) sounds.heartbeat.pause();
 
-    // Online: đánh lại với đúng người đang cùng phòng
+    // Online
     if (currentRoomId) {
-    readyDo = false;
-    readyDen = false;
+        const roomId = currentRoomId;
 
-    // chưa hạ isGameOver vội, chờ Firebase xoá winner xong đã
-    selectedPiece = null;
-    lastMoveFrom = null;
-    lastMoveTo = null;
-    lastRoomBoardHash = "";
+        readyDo = false;
+        readyDen = false;
+        selectedPiece = null;
+        lastMoveFrom = null;
+        lastMoveTo = null;
+        lastRoomBoardHash = "";
+        isGameOver = false;
 
-    const roomId = currentRoomId;
+        const roomSnap = await db.ref("matches/" + roomId).once("value");
+        const room = roomSnap.val() || {};
 
-    await db.ref("matches/" + roomId).update({
-        status: "waiting",
-        ready: {
-            do: false,
-            den: false
-        },
-        stakeLocked: {
-            do: false,
-            den: false
-        },
-        board: null,
-        moveCount: 0,
-        startedAt: null,
-        finishedAt: null,
-        turn: "do",
-        timeDo: 540,
-        timeDen: 540,
-        lastMoveFrom: null,
-        lastMoveTo: null,
-        winner: null,
-        winReason: null,
-        drawRequest: null,
-        settlement: null,
-        refunds: null,
-        updatedAt: firebase.database.ServerValue.TIMESTAMP
-    });
+        const me = getCurrentPlayerProfile();
+        const bucket = room.roomBucket || currentRoomBucket || makeStakeBucket(room.mode || currentRoomMode || "co-tuong", room.stakePMC || currentRoomStakePMC || 0);
+        const inviteCode = room.inviteCode || makeInviteCodeFromRoomId(roomId);
 
-    isGameOver = false;
-    hideVictoryPopup();
-    return;
-}
+        // Chạy settle trước khi reset phòng, để tiền + EXP xử lý xong
+        if (room.winner) {
+            await settlePmcViaApi(roomId).catch(err => {
+                console.error("Settle trước khi tạo lại phòng lỗi:", err);
+            });
+        }
+
+        const isQuitWin =
+            room.winReason === "bochay" ||
+            room.quitSide ||
+            !room.players?.do ||
+            !room.players?.den;
+
+        // Nếu đối thủ thoát, người còn lại dùng lại phòng này làm chủ phòng mới
+        if (isQuitWin) {
+            const freshMe = {
+                ...me,
+                walletKey: makeWalletDbKey(),
+                balance: currentWalletBalance || me.balance || 0,
+                piBalance: currentWalletBalance || me.piBalance || 0,
+                pmcBalance: currentPmcBalance || me.pmcBalance || 0,
+                levelMeta: getCachedLevelMeta(),
+                equippedAvatarSkin: typeof getEquippedAvatarSkin === "function"
+                    ? getEquippedAvatarSkin()
+                    : (me.equippedAvatarSkin || "skin_default")
+            };
+
+            const updates = {};
+
+            updates[`matches/${roomId}/status`] = "waiting";
+            updates[`matches/${roomId}/turn`] = "do";
+            updates[`matches/${roomId}/isCoUp`] = (room.mode || currentRoomMode) === "co-up";
+            updates[`matches/${roomId}/timeDo`] = 540;
+            updates[`matches/${roomId}/timeDen`] = 540;
+            updates[`matches/${roomId}/players/do`] = freshMe;
+            updates[`matches/${roomId}/players/den`] = null;
+            updates[`matches/${roomId}/ready/do`] = false;
+            updates[`matches/${roomId}/ready/den`] = false;
+            updates[`matches/${roomId}/stakeLocked/do`] = false;
+            updates[`matches/${roomId}/stakeLocked/den`] = false;
+            updates[`matches/${roomId}/board`] = null;
+            updates[`matches/${roomId}/moveCount`] = 0;
+            updates[`matches/${roomId}/startedAt`] = null;
+            updates[`matches/${roomId}/finishedAt`] = null;
+            updates[`matches/${roomId}/lastMoveFrom`] = null;
+            updates[`matches/${roomId}/lastMoveTo`] = null;
+            updates[`matches/${roomId}/winner`] = null;
+            updates[`matches/${roomId}/winReason`] = null;
+            updates[`matches/${roomId}/quitSide`] = null;
+            updates[`matches/${roomId}/quitUid`] = null;
+            updates[`matches/${roomId}/quitAt`] = null;
+            updates[`matches/${roomId}/drawRequest`] = null;
+            updates[`matches/${roomId}/settlement`] = null;
+            updates[`matches/${roomId}/refunds`] = null;
+            updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+            // Đăng lại phòng ra danh sách chờ để người khác vào được
+            updates[`waitingRooms/${bucket}/${roomId}`] = {
+                roomId,
+                uid: freshMe.uid,
+                name: freshMe.name,
+                mode: room.mode || currentRoomMode || "co-tuong",
+                stakePMC: Math.max(0, Math.floor(Number(room.stakePMC || currentRoomStakePMC || 0) || 0)),
+                inviteCode,
+                createdAt: Date.now(),
+                claimedBy: null,
+                claimedAt: null
+            };
+
+            await db.ref().update(updates);
+
+            mySide = "do";
+            viewSide = "do";
+            currentRoomId = roomId;
+            currentRoomMode = room.mode || currentRoomMode || "co-tuong";
+            currentRoomStakePMC = Math.max(0, Math.floor(Number(room.stakePMC || currentRoomStakePMC || 0) || 0));
+            currentRoomBucket = bucket;
+
+            saveActiveMatchSnapshot({
+                roomId,
+                mode: currentRoomMode,
+                side: "do"
+            });
+
+            closeReadyOverlay();
+            readyOverlayWaitingShown = false;
+            hideVictoryPopup();
+
+            if (typeof applyBoardPerspective === "function") {
+                applyBoardPerspective();
+            }
+
+            return;
+        }
+
+        // Nếu 2 người vẫn còn trong phòng thì đánh lại với đúng người cũ
+        await db.ref("matches/" + roomId).update({
+            status: "waiting",
+            ready: {
+                do: false,
+                den: false
+            },
+            stakeLocked: {
+                do: false,
+                den: false
+            },
+            board: null,
+            moveCount: 0,
+            startedAt: null,
+            finishedAt: null,
+            turn: "do",
+            timeDo: 540,
+            timeDen: 540,
+            lastMoveFrom: null,
+            lastMoveTo: null,
+            winner: null,
+            winReason: null,
+            drawRequest: null,
+            settlement: null,
+            refunds: null,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+
+        closeReadyOverlay();
+        readyOverlayWaitingShown = false;
+        hideVictoryPopup();
+        return;
+    }
 
     // Offline fallback
     isGameOver = false;
@@ -5716,7 +6915,6 @@ async function playNextMatch() {
 
     startTimer();
 }
-
 function exitAfterMatch() {
     hideVictoryPopup();
     backToMenu();
@@ -5867,11 +7065,10 @@ function drawLastMoveMarks() {
 
 function isMoveSafe(pieceType, pieceSide, c1, r1, c2, r2, mt) {
     const tempTarget = mt[r2][c2];
-
     mt[r2][c2] = { side: pieceSide, type: pieceType };
     mt[r1][c1] = null;
 
-    const safe = !isTwoKingsFacing(mt) && !laBiChieu(pieceSide, mt);
+    const safe = !laBiChieu(pieceSide, mt);
 
     mt[r1][c1] = { side: pieceSide, type: pieceType };
     mt[r2][c2] = tempTarget;
@@ -5896,7 +7093,7 @@ function showMoveHints(pieceEl) {
     for (let tr = 0; tr < 10; tr++) {
         for (let tc = 0; tc < 9; tc++) {
             if (!checkLuat(pieceEl.dataset.type, pieceEl.dataset.side, c1, r1, tc, tr, mt)) continue;
-           if (!isMoveSafe(pieceEl.dataset.type, pieceEl.dataset.side, c1, r1, tc, tr, mt)) continue;
+           // if (!isMoveSafe(pieceEl.dataset.type, pieceEl.dataset.side, c1, r1, tc, tr, mt)) continue;
 
             const viewPos = mapBoardToView(tc, tr);
 
@@ -6005,95 +7202,44 @@ case '兵': case '卒': {
 return false;
 }
 
-function isKingTypeBySide(type, side) {
-    if (side === "do") return ["帥", "帅"].includes(type);
-    if (side === "den") return ["將", "将"].includes(type);
-    return ["帥", "帅", "將", "将"].includes(type);
-}
-
-function findKingOnMatrix(side, mt) {
-    for (let r = 0; r < 10; r++) {
-        for (let c = 0; c < 9; c++) {
-            const p = mt[r][c];
-            if (p && p.side === side && isKingTypeBySide(p.type, side)) {
-                return { c, r };
-            }
-        }
-    }
-    return null;
-}
-
-function isTwoKingsFacing(mt) {
-    const doKing = findKingOnMatrix("do", mt);
-    const denKing = findKingOnMatrix("den", mt);
-
-    if (!doKing || !denKing) return false;
-    if (doKing.c !== denKing.c) return false;
-
-    const fromR = Math.min(doKing.r, denKing.r) + 1;
-    const toR = Math.max(doKing.r, denKing.r) - 1;
-
-    for (let r = fromR; r <= toR; r++) {
-        if (mt[r][doKing.c]) return false;
-    }
-
-    return true;
-}
-
-function isKingTypeBySide(type, side) {
-    if (side === "do") return ["帥", "帅"].includes(type);
-    if (side === "den") return ["將", "将"].includes(type);
-    return ["帥", "帅", "將", "将"].includes(type);
-}
-
-function findKingOnMatrix(side, mt) {
-    for (let r = 0; r < 10; r++) {
-        for (let c = 0; c < 9; c++) {
-            const p = mt[r][c];
-            if (p && p.side === side && isKingTypeBySide(p.type, side)) {
-                return { c, r };
-            }
-        }
-    }
-    return null;
-}
-
-function isTwoKingsFacing(mt) {
-    const doKing = findKingOnMatrix("do", mt);
-    const denKing = findKingOnMatrix("den", mt);
-
-    if (!doKing || !denKing) return false;
-    if (doKing.c !== denKing.c) return false;
-
-    const fromR = Math.min(doKing.r, denKing.r) + 1;
-    const toR = Math.max(doKing.r, denKing.r) - 1;
-
-    for (let r = fromR; r <= toR; r++) {
-        if (mt[r][doKing.c]) return false;
-    }
-
-    return true;
-}
-
 function laBiChieu(side, mt) {
-    if (isTwoKingsFacing(mt)) return true;
-
-    const tPos = findKingOnMatrix(side, mt);
-    if (!tPos) return false;
-
-    for (let r = 0; r < 10; r++) {
-        for (let c = 0; c < 9; c++) {
-            const p = mt[r][c];
-            if (!p || p.side === side) continue;
-
-            if (checkLuat(p.type, p.side, c, r, tPos.c, tPos.r, mt)) {
-                return true;
-            }
-        }
-    }
-
-    return false;
+let tPos = null;
+for (let r = 0; r < 10; r++) {
+for (let c = 0; c < 9; c++) {
+if (mt[r][c] && mt[r][c].side === side && (mt[r][c].type === '帥' || mt[r][c].type === '將')) {
+tPos = { c, r }; break;
 }
+}
+if (tPos) break;
+}
+if (!tPos) return false;
+for (let r = 0; r < 10; r++) {
+for (let c = 0; c < 9; c++) {
+if (mt[r][c] && mt[r][c].side !== side) {
+if (checkLuat(mt[r][c].type, mt[r][c].side, c, r, tPos.c, tPos.r, mt)) return true;
+}
+}
+}
+return false;
+}
+
+function checkMate(side) {
+let mt = taoMaTran();
+for (let r1 = 0; r1 < 10; r1++) for (let c1 = 0; c1 < 9; c1++) {
+if (mt[r1][c1] && mt[r1][c1].side === side) {
+for (let r2 = 0; r2 < 10; r2++) for (let c2 = 0; c2 < 9; c2++) {
+if (checkLuat(mt[r1][c1].type, side, c1, r1, c2, r2, mt)) {
+let temp = mt[r2][c2]; mt[r2][c2] = mt[r1][c1]; mt[r1][c1] = null;
+let safe = !laBiChieu(side, mt) && !isTwoKingsFacing(mt);
+mt[r1][c1] = mt[r2][c2]; mt[r2][c2] = temp;
+if (safe) return false;
+}
+}
+}
+}
+return true;
+}
+
 board.onclick = (e) => {
     console.log("CLICK", { mySide, luotDi, currentRoomId });
     const overlay = document.getElementById("ready-overlay");
@@ -6166,10 +7312,10 @@ if (isOwnTurnPiece) {
     }
 
     let mt = taoMaTran();
-mt[r2][c2] = { side: selectedPiece.dataset.side, type: selectedPiece.dataset.type };
-mt[r1][c1] = null;
+    mt[r2][c2] = { side: selectedPiece.dataset.side, type: selectedPiece.dataset.type };
+    mt[r1][c1] = null;
 
-if (isTwoKingsFacing(mt)) {
+    if (isTwoKingsFacing(mt)) {
     alert("Không được để 2 Tướng đối mặt!");
     return;
 }
@@ -6555,7 +7701,14 @@ function getStableDeviceIdForLevel() {
 
 function getLevelXpNeedFromLevel(level) {
   const lv = Math.max(1, Math.min(LEVEL_MAX - 1, Math.floor(Number(level || 1))));
-  return Math.floor(18 * Math.pow(1.045, lv - 1) + lv * 2);
+
+  /*
+    Lv.1 -> Lv.2 cần 100 EXP.
+    Càng lên cao càng khó theo cấp số nhân.
+    Muốn khó hơn: tăng 1.075 lên 1.085 hoặc 1.09.
+    Muốn dễ hơn: giảm xuống 1.065.
+  */
+  return Math.floor(100 * Math.pow(1.075, lv - 1));
 }
 
 function getLevelFrameByLevel(level) {
@@ -6674,13 +7827,36 @@ function getLevelProgress(meta = {}) {
   const safe = buildLevelMeta(meta);
   const current = getLevelInfoByLevel(safe.level);
   const next = getNextLevelInfoByXp(safe.xp);
+
   if (next.level <= safe.level) {
-    return { safe, gotXp: 0, needXp: 0, pct: 100, maxed: true };
+    return {
+      safe,
+      gotXp: 0,
+      needXp: 0,
+      pct: 100,
+      maxed: true,
+      currentLevel: safe.level,
+      nextLevel: safe.level,
+      currentTotalXp: current.xp,
+      nextTotalXp: current.xp
+    };
   }
+
   const needXp = Math.max(1, next.xp - current.xp);
   const gotXp = Math.max(0, safe.xp - current.xp);
   const pct = Math.max(0, Math.min(100, (gotXp / needXp) * 100));
-  return { safe, gotXp, needXp, pct, maxed: false };
+
+  return {
+    safe,
+    gotXp,
+    needXp,
+    pct,
+    maxed: false,
+    currentLevel: current.level,
+    nextLevel: next.level,
+    currentTotalXp: current.xp,
+    nextTotalXp: next.xp
+  };
 }
 
 function renderPlayerExpBar(rankEl, meta = {}) {
@@ -6695,7 +7871,7 @@ function renderPlayerExpBar(rankEl, meta = {}) {
   wrap.innerHTML = `
     <div class="player-exp-text">
       <span>EXP</span>
-      <span>${p.maxed ? "MAX" : `${Math.floor(p.gotXp)}/${Math.floor(p.needXp)}`}</span>
+      <span>${p.maxed ? "MAX" : `${Math.floor(p.gotXp).toLocaleString('vi-VN')}/${Math.floor(p.needXp).toLocaleString('vi-VN')}`}</span>
     </div>
     <div class="player-exp-bar"><div class="player-exp-fill" style="width:${p.pct}%"></div></div>
   `;
@@ -6717,7 +7893,35 @@ function ensureLevelHudMounted() {
   document.body.appendChild(hud);
   return hud;
 }
+function showExpFloat(delta) {
+    const n = Math.floor(Number(delta || 0) || 0);
+    if (!n) return;
 
+    const old = document.querySelector(".exp-float-pop");
+    if (old) old.remove();
+
+    const el = document.createElement("div");
+    el.className = "exp-float-pop " + (n > 0 ? "plus" : "minus");
+    el.textContent = (n > 0 ? "+" : "") + n + " EXP";
+
+    document.body.appendChild(el);
+
+    setTimeout(() => {
+    el.remove();
+    }, 3000);
+}
+
+function maybeShowExpFloat(meta = {}) {
+    const delta = Math.floor(Number(meta.lastXpDelta || 0) || 0);
+    const updatedAt = Number(meta.updatedAt || 0) || 0;
+    if (!delta || !updatedAt) return;
+
+    const key = `${updatedAt}_${delta}`;
+    if (window.__lastExpFloatKey === key) return;
+
+    window.__lastExpFloatKey = key;
+    showExpFloat(delta);
+}
 function renderLevelHud(meta = {}) {
   const hud = ensureLevelHudMounted();
   const p = getLevelProgress(meta);
@@ -6725,9 +7929,14 @@ function renderLevelHud(meta = {}) {
   const statEl = document.getElementById("level-exp-hud-stat");
   const fillEl = document.getElementById("level-exp-hud-fill");
   if (titleEl) titleEl.innerText = `${p.safe.title} • Lv.${p.safe.level}`;
-  if (statEl) statEl.innerText = p.maxed ? `MAX • T:${p.safe.wins} B:${p.safe.losses}` : `${Math.floor(p.gotXp)}/${Math.floor(p.needXp)} EXP • T:${p.safe.wins} B:${p.safe.losses}`;
+  if (statEl) {
+  statEl.innerText = p.maxed
+    ? `MAX • Tổng EXP: ${Math.floor(p.safe.xp).toLocaleString('vi-VN')} • T:${p.safe.wins} B:${p.safe.losses}`
+    : `${Math.floor(p.gotXp).toLocaleString('vi-VN')}/${Math.floor(p.needXp).toLocaleString('vi-VN')} EXP lên Lv.${p.nextLevel || (p.safe.level + 1)} • T:${p.safe.wins} B:${p.safe.losses}`;
+}
   if (fillEl) fillEl.style.width = `${p.pct}%`;
   hud.classList.add("show");
+  maybeShowExpFloat(p.safe);
 }
 
 function hideLevelHud() {
@@ -6762,6 +7971,7 @@ async function ensureMyLevelMetaLoaded() {
   try {
     const snap = await getWalletLevelRef(walletKey).once("value");
     const meta = buildLevelMeta(snap.val() || {});
+    window.__lastExpFloatKey = `${Number(meta.updatedAt || 0) || 0}_${Number(meta.lastXpDelta || 0) || 0}`;
     localStorage.setItem("level-meta-cache", JSON.stringify(meta));
     renderLevelHud(meta);
     return meta;
@@ -6786,7 +7996,50 @@ function getCachedLevelMeta() {
   if (!raw) return getDefaultLevelMeta();
   try { return buildLevelMeta(JSON.parse(raw)); } catch (_) { return getDefaultLevelMeta(); }
 }
+function setCachedLevelMeta(meta = {}) {
+    const safe = buildLevelMeta(meta || {});
+    localStorage.setItem("level-meta-cache", JSON.stringify(safe));
+    renderLevelHud(safe);
+    return safe;
+}
 
+function pickNewestLevelMeta(a = {}, b = {}) {
+    const aa = buildLevelMeta(a || {});
+    const bb = buildLevelMeta(b || {});
+
+    const atA = Number(aa.updatedAt || 0) || 0;
+    const atB = Number(bb.updatedAt || 0) || 0;
+
+    if (atA || atB) return atB >= atA ? bb : aa;
+
+    // fallback: cái nào EXP cao hơn thì lấy
+    return Number(bb.xp || 0) >= Number(aa.xp || 0) ? bb : aa;
+}
+function startMyLevelMetaLiveSync() {
+    const walletKey = makeWalletDbKey();
+    if (!walletKey || !db) return;
+
+    if (myLevelMetaLiveRef) {
+        myLevelMetaLiveRef.off();
+        myLevelMetaLiveRef = null;
+    }
+
+    myLevelMetaLiveRef = getWalletLevelRef(walletKey);
+
+    myLevelMetaLiveRef.on("value", snap => {
+        const meta = buildLevelMeta(snap.val() || {});
+        setCachedLevelMeta(meta);
+
+        // Nếu đang trong phòng thì đẩy level mới vô room luôn để avatar chip cập nhật ngay
+        if (currentRoomId && mySide) {
+            db.ref("matches/" + currentRoomId + "/players/" + mySide + "/levelMeta")
+                .set(meta)
+                .catch(() => {});
+        }
+    }, err => {
+        console.warn("Không nghe được levelMeta live:", err);
+    });
+}
 function getLevelTodayKey(now = new Date()) {
   const d = now instanceof Date ? now : new Date(now);
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
@@ -6802,12 +8055,17 @@ function getRoomPlayerKeyForLevel(player = {}) {
 
 function getRepeatAdjustedXpAbs(pairCount) {
   const n = Math.max(1, Number(pairCount || 1) || 1);
-  if (n >= 10) return 5;
-  if (n >= 5) return 13;
-  if (n === 4) return 15;
-  if (n === 3) return 16;
-  if (n === 2) return 17;
-  return 18;
+
+  if (n === 1) return 30;
+  if (n === 2) return 24;
+  if (n === 3) return 20;
+  if (n === 4) return 16;
+  if (n <= 6) return 12;
+  if (n <= 8) return 8;
+  if (n <= 10) return 5;
+  if (n <= 15) return 3;
+  if (n <= 20) return 2;
+  return 1;
 }
 
 async function reserveLevelPairCount(walletKey, opponentKey, roomId) {
@@ -6844,12 +8102,11 @@ function isSameLevelDevice(room = {}) {
 }
 
 function getLevelMatchBlockReason(room = {}, pairCount = 1) {
-  if (isSameLevelDevice(room)) return "same_device";
-  if (Math.max(0, Number(room.moveCount || 0) || 0) > 0 && Math.max(0, Number(room.moveCount || 0) || 0) < LEVEL_FAST_MATCH_MIN_MOVES) return "too_fast";
-  if (pairCount > LEVEL_SAME_PAIR_NO_XP_AFTER) return "same_pair_too_many";
-  if (getPmcBalance() < LEVEL_MIN_PMC_FOR_REWARDED_XP) return "low_pmc_balance";
+  // Bản mới: không block EXP nữa.
+  // EXP chỉ giảm theo getRepeatAdjustedXpAbs(pairCount).
   return "";
 }
+
 
 async function awardLevelProgressForFinishedRoom(roomId, room) {
   if (!roomId || !room || !room.winner || room.winner === "hoa") return;
@@ -6869,10 +8126,28 @@ async function awardLevelProgressForFinishedRoom(roomId, room) {
   });
   if (!claimTx.committed) return;
 
-  const pair = await reserveLevelPairCount(walletKey, opponentKey, roomId);
-  const blockReason = getLevelMatchBlockReason(room, pair.count);
-  const absXp = blockReason ? 0 : getRepeatAdjustedXpAbs(pair.count);
-  const xpDelta = resultType === "win" ? absXp : -absXp;
+const pair = await reserveLevelPairCount(walletKey, opponentKey, roomId);
+
+// BẢN MỚI:
+// Không chặn EXP vì nghèo.
+// Không chặn EXP vì đánh mốc thấp.
+// Không chặn EXP vì ván nhanh.
+// Không chặn EXP vì cùng device.
+// Chỉ giảm dần khi hôm nay gặp lại cùng 1 đối thủ nhiều lần.
+const blockReason = "";
+const absXp = getRepeatAdjustedXpAbs(pair.count);
+const xpDelta = resultType === "win" ? absXp : -absXp;
+
+console.log("LEVEL_EXP_DEBUG", {
+  roomId,
+  walletKey,
+  opponentKey,
+  resultType,
+  pairCount: pair.count,
+  absXp,
+  xpDelta,
+  note: pair.count > 1 ? "repeat_opponent_reduced_xp" : "normal_xp"
+});
 
   let beforeMeta = getDefaultLevelMeta();
   let afterMeta = getDefaultLevelMeta();
@@ -6916,17 +8191,30 @@ async function awardLevelProgressForFinishedRoom(roomId, room) {
 
 function getLocalLevelMissionsForBoard() {
   const meta = getCachedLevelMeta();
-  const level = Math.max(1, Number(meta.level || 1) || 1);
+  const safe = buildLevelMeta(meta);
+  const currentXp = Math.floor(Number(safe.xp || 0) || 0);
+
   return getLevelMilestoneRows().map(row => {
-    const reached = level >= row.level;
+    const targetXp = Math.floor(Number(row.xp || 0) || 0);
+    const reached = currentXp >= targetXp || safe.level >= row.level;
+    const progressPct = reached
+      ? 100
+      : Math.max(0, Math.min(99, Math.floor((currentXp / Math.max(1, targetXp)) * 100)));
+
+    const needMore = Math.max(0, targetXp - currentXp);
+
     return {
       id: `level_unlock_${row.level}`,
       title: `Mốc Lv.${row.level}`,
-      desc: `Đạt Lv.${row.level} để mở khóa skin và rương cấp trong Shop.`,
-      progressText: reached ? `Đã đạt Lv.${level}/${row.level}` : `Lv.${level}/${row.level}`,
-      progressPercent: reached ? 100 : Math.max(0, Math.min(99, Math.floor((level / row.level) * 100))),
+      desc: `Cần tổng ${targetXp.toLocaleString('vi-VN')} EXP để đạt Lv.${row.level}.`,
+      progressText: reached
+        ? `Đã đạt: ${currentXp.toLocaleString('vi-VN')}/${targetXp.toLocaleString('vi-VN')} EXP`
+        : `Còn thiếu ${needMore.toLocaleString('vi-VN')} EXP • hiện có ${currentXp.toLocaleString('vi-VN')}/${targetXp.toLocaleString('vi-VN')}`,
+      progressPercent: progressPct,
       rewardText: row.unlockReward ? (row.unlockReward + " + rương cấp") : "Skin / khung + rương cấp",
-      note: reached ? "Vào Shop > Rương cấp để mở quà nếu chưa nhận." : "Cày bằng trận thật; gặp lại một acc nhiều lần sẽ giảm EXP.",
+      note: reached
+        ? "Vào Shop > Rương cấp để mở quà nếu chưa nhận."
+        : "EXP tăng/giảm sau trận thật. Gặp lại cùng một người nhiều lần trong ngày sẽ giảm EXP.",
       ready: false,
       claimed: reached
     };
@@ -6979,12 +8267,27 @@ const myPi = Number(
     myPlayer.balance != null ? myPlayer.balance : (myPlayer.piBalance || 0)
 ) || 0;
 
-    const oppLevelMeta = buildLevelMeta(oppPlayer?.levelMeta || {});
+ const oppLevelMeta = buildLevelMeta(oppPlayer?.levelMeta || {});
+
+const roomMyLevelMeta = buildLevelMeta(myPlayer?.levelMeta || {});
+const cacheMyLevelMeta = getCachedLevelMeta();
+
 const myLevelMeta = buildLevelMeta(
     myPlayer?.uid === (firebase.auth().currentUser?.uid || "")
-        ? getCachedLevelMeta()
-        : (myPlayer?.levelMeta || {})
+        ? pickNewestLevelMeta(cacheMyLevelMeta, roomMyLevelMeta)
+        : roomMyLevelMeta
 );
+
+// Chỉ lưu room levelMeta vào cache nếu room thật sự mới hơn cache.
+// Không cho room cũ 0/100 đè cache ví mới.
+if (myPlayer?.uid === (firebase.auth().currentUser?.uid || "")) {
+    const roomAt = Number(roomMyLevelMeta.updatedAt || 0) || 0;
+    const cacheAt = Number(cacheMyLevelMeta.updatedAt || 0) || 0;
+
+    if (roomAt && roomAt >= cacheAt) {
+        setCachedLevelMeta(myLevelMeta);
+    }
+}
 if (topPi) topPi.innerText = `${oppPi.toFixed(2)} π`;
 if (topPmcBox) topPmcBox.innerText = `${formatPMC(oppPmc)} PMC`;
 
@@ -7005,11 +8308,25 @@ renderLevelHud(myLevelMeta);
 
 if (topAvatar) {
     applyAvatarFrame(topAvatar, oppLevelMeta);
-    if (typeof applyCosmeticSkinToAvatar === "function") applyCosmeticSkinToAvatar(topAvatar, oppPlayer.equippedAvatarSkin || "skin_default");
+
+    if (typeof applyCosmeticSkinToAvatar === "function") {
+        applyCosmeticSkinToAvatar(
+            topAvatar,
+            oppPlayer.equippedAvatarSkin || "skin_default"
+        );
+    }
 }
+
 if (bottomAvatar) {
     applyAvatarFrame(bottomAvatar, myLevelMeta);
-    if (typeof applyCosmeticSkinToAvatar === "function") applyCosmeticSkinToAvatar(bottomAvatar, myPlayer.equippedAvatarSkin || (typeof getEquippedAvatarSkin === "function" ? getEquippedAvatarSkin() : "skin_default"));
+
+    if (typeof applyCosmeticSkinToAvatar === "function") {
+        applyCosmeticSkinToAvatar(
+            bottomAvatar,
+            myPlayer.equippedAvatarSkin ||
+            (typeof getEquippedAvatarSkin === "function" ? getEquippedAvatarSkin() : "skin_default")
+        );
+    }
 }
 
     const inviteCode = String(
@@ -7068,20 +8385,27 @@ async function leaveRealtimeMatch() {
         const stillPlaying = room.status === "playing";
         const otherPlayerExists = !!room.players?.[otherSide];
 
-        // ===== Nếu đang chơi mà 1 bên thoát => xử thua như cũ =====
-        if (stillPlaying && otherPlayerExists && !room.winner) {
-            await db.ref("matches/" + roomId).update({
-                winner: otherSide,
-                winReason: "bochay",
-                finishedAt: firebase.database.ServerValue.TIMESTAMP,
-                updatedAt: firebase.database.ServerValue.TIMESTAMP
-            });
+        // ===== Nếu đang chơi mà 1 bên thoát => bên thoát xử THUA, bên còn lại THẮNG =====
+// TUYỆT ĐỐI KHÔNG xóa players / ready / stakeLocked ở đây.
+// Vì /api/pmc/settle cần đủ players.do + players.den để chia PMC và cộng/trừ EXP.
+if (stillPlaying && otherPlayerExists && !room.winner) {
+    const updates = {
+        winner: otherSide,
+        winReason: "bochay",
+        status: "finished",
+        finishedAt: firebase.database.ServerValue.TIMESTAMP,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+    };
 
-            await db.ref("matches/" + roomId + "/players/" + side).remove().catch(() => {});
-            await db.ref("matches/" + roomId + "/ready/" + side).remove().catch(() => {});
-            await db.ref("matches/" + roomId + "/stakeLocked/" + side).set(false).catch(() => {});
-            return;
-        }
+    updates["quitSide"] = side;
+    updates["quitUid"] = me.uid || "";
+    updates["quitAt"] = firebase.database.ServerValue.TIMESTAMP;
+
+    await db.ref("matches/" + roomId).update(updates);
+
+    // Bên thoát tự rời UI thôi, dữ liệu trong room giữ nguyên để server settle.
+    return;
+}
 
         // ===== HOST (do) rời khi phòng đang chờ và đã có người được mời =====
         if (
@@ -7148,17 +8472,17 @@ async function leaveRealtimeMatch() {
 function syncRoomFromBoard(extra = {}) {
     if (!currentRoomId) return;
 
-    db.ref("matches/" + currentRoomId).update({
-        board: exportBoardState(),
-        turn: luotDi,
-        isCoUp,
-        timeDo,
-        timeDen,
-        lastMoveFrom: lastMoveFrom || null,
-        lastMoveTo: lastMoveTo || null,
-        updatedAt: firebase.database.ServerValue.TIMESTAMP,
-        ...extra
-    });
+    return db.ref("matches/" + currentRoomId).update({
+    board: exportBoardState(),
+    turn: luotDi,
+    isCoUp,
+    timeDo,
+    timeDen,
+    lastMoveFrom: lastMoveFrom || null,
+    lastMoveTo: lastMoveTo || null,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP,
+    ...extra
+});
 }
 
 async function maybeStartRoomFromHost(room, roomId = currentRoomId) {
@@ -7225,8 +8549,19 @@ function bindRoom(roomId) {
     const listeningRoomId = roomId;
 
     currentRoomId = listeningRoomId;
-roomValueRef = db.ref("matches/" + listeningRoomId);
-roomChatRef = db.ref("matches/" + listeningRoomId + "/chat");
+
+    // Bắt đầu nghe EXP thật từ ví ngay khi bind phòng
+    ensureMyLevelMetaLoaded()
+        .then(meta => {
+            startMyLevelMetaLiveSync();
+            renderLevelHud(buildLevelMeta(meta));
+        })
+        .catch(() => {
+            renderLevelHud(getCachedLevelMeta());
+        });
+
+    roomValueRef = db.ref("matches/" + listeningRoomId);
+    roomChatRef = db.ref("matches/" + listeningRoomId + "/chat");
 
     const content = document.getElementById("match-content-popup");
     if (content) {
@@ -7246,6 +8581,16 @@ if (room.players?.do?.uid === me.uid) {
 }
 
 viewSide = mySide || "do";
+
+// Khi đã biết mình là đỏ/đen thì ép level mới nhất vào room + hiện thanh EXP
+if (mySide) {
+    const latestMeta = getCachedLevelMeta();
+    renderLevelHud(latestMeta);
+
+    db.ref("matches/" + listeningRoomId + "/players/" + mySide + "/levelMeta")
+        .set(buildLevelMeta(latestMeta))
+        .catch(() => {});
+}
 if (typeof applyBoardPerspective === "function") {
     applyBoardPerspective();
 }
@@ -7263,14 +8608,16 @@ if (typeof applyBoardPerspective === "function") {
             });
         }
 
-        if (room.winner) {
-    await maybeSettleStakeRoom(room, listeningRoomId);
-}
+     
 
         renderPlayersFromRoom(room);
         updateReadyUI();
 
-const hasEnoughPlayersWaiting = !!room.players?.do && !!room.players?.den && room.status === "waiting" && !room.winner;
+const hasEnoughPlayersWaiting =
+    !!room.players?.do &&
+    !!room.players?.den &&
+    room.status === "waiting" &&
+    !room.winner;
 
 if (hasEnoughPlayersWaiting) {
     isGameOver = false;
@@ -7279,9 +8626,17 @@ if (hasEnoughPlayersWaiting) {
     hideVictoryPopup();
     renderTimerUI();
 
-    if (!readyOverlayWaitingShown) {
-        readyOverlayWaitingShown = true;
-        showReadyOverlay(room.mode);
+    const overlay = document.getElementById("ready-overlay");
+    const overlayVisible = overlay && overlay.style.display === "flex";
+
+    // Quan trọng: đừng chỉ tin biến readyOverlayWaitingShown.
+    // Phải nhìn trạng thái thật của bảng SS.
+    readyOverlayWaitingShown = true;
+
+    if (!overlayVisible) {
+        showReadyOverlay(room.mode || currentRoomMode);
+    } else {
+        updateReadyUI();
     }
 } else {
     readyOverlayWaitingShown = false;
@@ -7289,37 +8644,60 @@ if (hasEnoughPlayersWaiting) {
     renderTimerUI();
 }
 
+const newBoardHash = JSON.stringify(room.board || []);
+const timerSig = [
+    room.status || "",
+    room.turn || "",
+    Number(room.timeDo || 0),
+    Number(room.timeDen || 0),
+    room.winner || "",
+    newBoardHash
+].join("|");
+
+if (newBoardHash && newBoardHash !== lastRoomBoardHash) {
+    lastRoomBoardHash = newBoardHash;
+
+    applyBoardStateFromRoom(room.board || []);
+    isCoUp = !!room.isCoUp;
+
+    lastMoveFrom = room.lastMoveFrom || null;
+    lastMoveTo = room.lastMoveTo || null;
+
+    if (lastMoveFrom && lastMoveTo) {
+        drawLastMoveMarks();
+    }
+}
+
+// Quan trọng: luôn đồng bộ lượt + giờ từ Firebase, không phụ thuộc board hash
+const serverClockChanged = timerSig !== lastTimerRoomSig;
+
+if (serverClockChanged) {
+    lastTimerRoomSig = timerSig;
+
+    // Chỉ đồng bộ giờ từ Firebase khi board/lượt/giờ server thật sự đổi.
+    // Không reset giờ local vì mấy event phụ như levelMeta/chat/player update.
+    luotDi = room.turn || "do";
+    timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
+    timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
+
+    updateTurnUIOnly();
+    renderTimerUI();
+}
+
 if (room.status === "playing" && !room.winner) {
     readyOverlayWaitingShown = false;
     isGameOver = false;
-    const overlay = document.getElementById("ready-overlay");
-    if (overlay) overlay.style.display = "none";
+    closeReadyOverlay();
+
+    if (serverClockChanged) {
+        startTimer();
+    }
+
+    maybeScheduleAiMove(room, listeningRoomId);
+} else {
+    updateTurnUIOnly();
+    renderTimerUI();
 }
-        const newBoardHash = JSON.stringify(room.board || []);
-        if (newBoardHash && newBoardHash !== lastRoomBoardHash) {
-            lastRoomBoardHash = newBoardHash;
-
-            applyBoardStateFromRoom(room.board || []);
-            isCoUp = !!room.isCoUp;
-            luotDi = room.turn || "do";
-            timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
-            timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
-
-            timerDoEl.innerText = formatTime(timeDo);
-            timerDenEl.innerText = formatTime(timeDen);
-
-            lastMoveFrom = room.lastMoveFrom || null;
-            lastMoveTo = room.lastMoveTo || null;
-
-            updateTurnUIOnly();
-
-            if (lastMoveFrom && lastMoveTo) {
-                drawLastMoveMarks();
-            }
-
-            startTimer();
-        }
-
         if (room.drawRequest && room.drawRequest.from !== mySide && room.drawRequest.at !== lastDrawRequestAt) {
             lastDrawRequestAt = room.drawRequest.at;
 
@@ -7338,11 +8716,6 @@ if (room.status === "playing" && !room.winner) {
         if (room.winner) {
     setTimeout(() => {
         settlePmcViaApi(listeningRoomId);
-    }, 0);
-
-    setTimeout(() => {
-        awardLevelProgressForFinishedRoom(listeningRoomId, room)
-            .catch(err => console.error("Lỗi tăng cấp người chơi:", err));
     }, 0);
 }
         if (room.winner && !isGameOver) {
@@ -7495,14 +8868,33 @@ async function createAndPublishWaitingRoom(me, mode, stakePMC, bucket) {
     currentRoomStakePMC = stakePMC;
 
     saveActiveMatchSnapshot({ roomId: newRoomId, mode, side: "do" });
-    bindRoom(newRoomId);
-    return true;
+bindRoom(newRoomId);
+
+// Chủ phòng chờ 30 giây chưa có ai vào thì hỏi đánh với AI
+startAiOfferTimerForWaitingRoom(newRoomId);
+
+return true;
 }
 async function joinOrCreateRealtimeMatch(mode, stakePMC = 0) {
-    if (await tryResumeRealtimeMatch(mode)) return;
+    await ensureMyLevelMetaLoaded();
+    startMyLevelMetaLiveSync();
+
+    if (await tryResumeRealtimeMatch(mode)) {
+        await ensureMyLevelMetaLoaded();
+        startMyLevelMetaLiveSync();
+
+        if (currentRoomId && mySide) {
+            await db.ref("matches/" + currentRoomId + "/players/" + mySide + "/levelMeta")
+                .set(getCachedLevelMeta())
+                .catch(() => {});
+        }
+
+        return;
+    }
 
     const safeStake = Math.max(0, Math.floor(Number(stakePMC) || 0));
     const me = getCurrentPlayerProfile();
+    me.levelMeta = getCachedLevelMeta();
 
     if (safeStake <= 0) {
         alert("Mức PMC không hợp lệ.");
@@ -7574,11 +8966,27 @@ for (const waiting of waitingList) {
     );
 
     if (joined) {
-        closeReadyOverlay();
-        readyOverlayWaitingShown = false;
+    // Bên mới vào phòng KHÔNG được đóng bảng sẵn sàng.
+    // bindRoom(roomId) sẽ tự nghe Firebase và bật ready overlay khi đủ 2 người.
+    readyOverlayWaitingShown = false;
+
+    setTimeout(() => {
         updateReadyUI();
-        return;
-    }
+
+        const overlay = document.getElementById("ready-overlay");
+        if (
+            currentRoomId &&
+            mySide &&
+            currentRoomStatus === "waiting" &&
+            overlay &&
+            overlay.style.display !== "flex"
+        ) {
+            showReadyOverlay(currentRoomMode || mode);
+        }
+    }, 250);
+
+    return;
+}
 }
 
 const created = await createAndPublishWaitingRoom(
@@ -7591,6 +8999,402 @@ const created = await createAndPublishWaitingRoom(
     closeReadyOverlay();
     readyOverlayWaitingShown = false;
     updateReadyUI();
+}
+function startAiOfferTimerForWaitingRoom(roomId) {
+    clearTimeout(aiOfferTimer);
+
+    aiOfferTimer = setTimeout(async () => {
+        try {
+            if (!roomId || currentRoomId !== roomId || mySide !== "do") return;
+
+            const snap = await db.ref("matches/" + roomId).once("value");
+            const room = snap.val() || {};
+
+            if (!room || room.status !== "waiting" || room.winner) return;
+            if (room.players?.den) return;
+
+            const ok = confirm(
+                "Chờ 30 giây chưa có đối thủ.\n\n" +
+                "Mầy có muốn đánh với AI không?\n\n" +
+                "- Thắng vẫn nhận PMC như trận thường.\n" +
+                "- AI thắng thì PMC chảy về ví quỹ hệ thống."
+            );
+
+            if (!ok) return;
+
+            await startAiOpponentRoom(roomId, room);
+        } catch (err) {
+            console.error("AI OFFER ERROR:", err);
+        }
+    }, 30000);
+}
+
+async function startAiOpponentRoom(roomId, room) {
+    if (!roomId || !room) return;
+    if (mySide !== "do") return;
+
+    const stake = Math.max(0, Math.floor(Number(room.stakePMC || currentRoomStakePMC || 0) || 0));
+    if (!stake) {
+        alert("Phòng chưa có mức cược PMC.");
+        return;
+    }
+
+    // 1) Trừ stake của người chơi trước
+    const readyResult = await chargeStakeForReady(roomId, "do");
+    if (!readyResult.ok) {
+        alert("Không thể sẵn sàng để đánh AI.");
+        return;
+    }
+
+    // 2) Trừ stake của AI từ ví quỹ hệ thống để pot đủ 2 bên
+    const aiBankPaid = await adjustPmcWalletByKey(AI_SYSTEM_WALLET_KEY, -stake, {
+        name: "Ví quỹ hệ thống",
+        photo: "images/den_tuong.png"
+    });
+
+    if (aiBankPaid == null) {
+        await maybeRefundWaitingStakePMC(roomId, room, "do").catch(() => {});
+        alert("Ví quỹ hệ thống không đủ PMC để cho AI vào bàn.");
+        return;
+    }
+
+    try {
+        isCoUp = (room.mode || currentRoomMode) === "co-up";
+        resetToStartup();
+
+        const freshBoard = exportBoardState();
+        const bucket = room.roomBucket || currentRoomBucket;
+
+        const aiPlayer = {
+            uid: AI_BOT_UID,
+            name: AI_BOT_NAME,
+            photo: "images/den_tuong.png",
+            walletKey: AI_SYSTEM_WALLET_KEY,
+            pmcBalance: aiBankPaid,
+            isAI: true,
+            levelMeta: {
+                level: 1,
+                title: "AI Nhập Môn",
+                frameClass: "title-frame-beginner",
+                pillClass: "title-pill-beginner"
+            }
+        };
+
+        const updates = {};
+
+        updates[`matches/${roomId}/players/den`] = aiPlayer;
+        updates[`matches/${roomId}/ready/do`] = true;
+        updates[`matches/${roomId}/ready/den`] = true;
+
+        updates[`matches/${roomId}/stakeLocked/den`] = {
+            done: true,
+            walletKey: AI_SYSTEM_WALLET_KEY,
+            stake,
+            at: Date.now(),
+            uid: AI_BOT_UID,
+            ai: true
+        };
+
+        updates[`matches/${roomId}/aiMode`] = true;
+        updates[`matches/${roomId}/aiSide`] = "den";
+        updates[`matches/${roomId}/aiName`] = AI_BOT_NAME;
+
+        updates[`matches/${roomId}/status`] = "playing";
+        updates[`matches/${roomId}/isCoUp`] = isCoUp;
+        updates[`matches/${roomId}/board`] = freshBoard;
+        updates[`matches/${roomId}/moveCount`] = 0;
+        updates[`matches/${roomId}/startedAt`] = firebase.database.ServerValue.TIMESTAMP;
+        updates[`matches/${roomId}/finishedAt`] = null;
+        updates[`matches/${roomId}/turn`] = "do";
+        updates[`matches/${roomId}/timeDo`] = 540;
+        updates[`matches/${roomId}/timeDen`] = 540;
+        updates[`matches/${roomId}/lastMoveFrom`] = null;
+        updates[`matches/${roomId}/lastMoveTo`] = null;
+        updates[`matches/${roomId}/winner`] = null;
+        updates[`matches/${roomId}/winReason`] = null;
+        updates[`matches/${roomId}/drawRequest`] = null;
+        updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+        if (bucket) {
+            updates[`waitingRooms/${bucket}/${roomId}`] = null;
+        }
+
+        await db.ref().update(updates);
+
+        alert("AI đã vào bàn. Mầy cầm ĐỎ, AI cầm ĐEN.");
+    } catch (err) {
+        console.error("START AI ROOM ERROR:", err);
+
+        await adjustPmcWalletByKey(AI_SYSTEM_WALLET_KEY, stake, {
+            name: "Ví quỹ hệ thống",
+            photo: "images/den_tuong.png"
+        }).catch(() => {});
+
+        await maybeRefundWaitingStakePMC(roomId, room, "do").catch(() => {});
+        alert("Lỗi tạo bàn AI, đã cố hoàn stake.");
+    }
+}
+
+function aiGetPieceElAtReal(c, r) {
+    const view = mapBoardToView(c, r);
+    return Array.from(document.querySelectorAll(".piece")).find(p => {
+        const pc = columns.indexOf(parseFloat(p.style.left));
+        const pr = rows.indexOf(parseFloat(p.style.top));
+        return pc === view.c && pr === view.r;
+    }) || null;
+}
+
+function aiCloneMatrix(mt) {
+    return mt.map(row => row.map(cell => cell ? { ...cell } : null));
+}
+
+function aiMoveLeavesSafe(side, c1, r1, c2, r2, mt) {
+    const temp = aiCloneMatrix(mt);
+    temp[r2][c2] = temp[r1][c1];
+    temp[r1][c1] = null;
+    return !laBiChieu(side, temp);
+}
+
+function aiCollectLegalMoves(side = "den") {
+    const mt = taoMaTran();
+    const moves = [];
+
+    for (let r1 = 0; r1 < 10; r1++) {
+        for (let c1 = 0; c1 < 9; c1++) {
+            const piece = mt[r1][c1];
+            if (!piece || piece.side !== side) continue;
+
+            for (let r2 = 0; r2 < 10; r2++) {
+                for (let c2 = 0; c2 < 9; c2++) {
+                    if (!checkLuat(piece.type, side, c1, r1, c2, r2, mt)) continue;
+                    if (!aiMoveLeavesSafe(side, c1, r1, c2, r2, mt)) continue;
+
+                    moves.push({
+                        from: { c: c1, r: r1 },
+                        to: { c: c2, r: r2 },
+                        piece,
+                        target: mt[r2][c2] || null
+                    });
+                }
+            }
+        }
+    }
+
+    return moves;
+}
+
+function aiCloneMatrix(mt) {
+    return mt.map(row => row.map(cell => cell ? { ...cell } : null));
+}
+
+function findKingForFace(side, mt) {
+    const kingTypes = side === "do"
+        ? ["帥", "帅"]
+        : ["將", "将"];
+
+    for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 9; c++) {
+            const p = mt[r][c];
+            if (p && p.side === side && kingTypes.includes(p.type)) {
+                return { c, r };
+            }
+        }
+    }
+
+    return null;
+}
+
+function isTwoKingsFacing(mt) {
+    const doKing = findKingForFace("do", mt);
+    const denKing = findKingForFace("den", mt);
+
+    if (!doKing || !denKing) return false;
+    if (doKing.c !== denKing.c) return false;
+
+    const fromR = Math.min(doKing.r, denKing.r) + 1;
+    const toR = Math.max(doKing.r, denKing.r) - 1;
+
+    for (let r = fromR; r <= toR; r++) {
+        if (mt[r][doKing.c]) return false;
+    }
+
+    return true;
+}
+
+function aiMoveLeavesSafe(side, c1, r1, c2, r2, mt) {
+    const temp = aiCloneMatrix(mt);
+    temp[r2][c2] = temp[r1][c1];
+    temp[r1][c1] = null;
+
+    // Không được tự bị chiếu và không được để 2 Tướng nhìn mặt nhau
+    return !laBiChieu(side, temp) && !isTwoKingsFacing(temp);
+}
+
+function aiRevealPieceIfNeeded(pieceEl) {
+    if (!pieceEl || !isCoUp || pieceEl.dataset.isUp !== "true") return;
+
+    pieceEl.dataset.isUp = "false";
+
+    const side = pieceEl.dataset.side;
+    const type = pieceEl.dataset.type;
+
+    const names = {
+        "車": "xe", "馬": "ma", "象": "tuong", "士": "si", "將": "tuong_soai", "砲": "phao", "卒": "tot",
+        "俥": "xe", "傌": "ma", "相": "tuong", "仕": "si", "帥": "tuong_soai", "炮": "phao", "兵": "tot"
+    };
+
+    pieceEl.src = `images/${side}_${names[type]}.png`;
+}
+
+async function aiMakeMoveNow(roomId) {
+    if (!roomId || currentRoomId !== roomId) return;
+
+    const snap = await db.ref("matches/" + roomId).once("value");
+    const room = snap.val() || {};
+
+    if (!roomHasAiBot(room) || room.status !== "playing" || room.winner) {
+    return false;
+}
+
+const turnNow = String(room.turn || luotDi || "").toLowerCase();
+if (turnNow !== "den") {
+    return false;
+}
+
+    const moves = aiCollectLegalMoves("den");
+console.log("AI LEGAL MOVES:", moves.length, {
+    roomId,
+    turn: room.turn,
+    status: room.status,
+    aiMode: room.aiMode,
+    mySide
+});
+
+    if (!moves.length) {
+        return true;
+    }
+
+    renderTimerUI();
+
+// Nhả main thread 1 nhịp để đồng hồ kịp vẽ trước khi AI suy nghĩ
+await new Promise(resolve => setTimeout(resolve, 80));
+
+let move = await requestAiMoveFromWorker(room, "den");
+
+if (!move) {
+    move = aiFastFallbackMove(moves);
+}
+
+if (!move) return false;
+
+    const pieceEl = aiGetPieceElAtReal(move.from.c, move.from.r);
+    const targetEl = aiGetPieceElAtReal(move.to.c, move.to.r);
+
+    if (!pieceEl) return false;
+
+    const capturedKing = targetEl && isKingPiece(targetEl.dataset.type);
+
+    if (targetEl) {
+        targetEl.remove();
+        playSnd("capture");
+    } else {
+        playSnd("click");
+    }
+
+    lastMoveFrom = { c: move.from.c, r: move.from.r };
+    lastMoveTo = { c: move.to.c, r: move.to.r };
+
+    const viewTo = mapBoardToView(move.to.c, move.to.r);
+    pieceEl.style.left = columns[viewTo.c] + "%";
+    pieceEl.style.top = rows[viewTo.r] + "%";
+
+    aiRevealPieceIfNeeded(pieceEl);
+
+    luotDi = "do";
+    selectedPiece = null;
+    clearMoveHints();
+    drawLastMoveMarks();
+    updateTurnUIOnly();
+    refreshTimerRings();
+
+    let winnerSide = "";
+    let winReason = "";
+
+    if (capturedKing) {
+        winnerSide = "den";
+        winReason = "ai_capture_king";
+    } else {
+        setTimeout(() => {
+            updateCheckEffectFromBoard();
+        }, 50);
+
+        if (laBiChieu("do", taoMaTran()) && checkMate("do")) {
+            winnerSide = "den";
+            winReason = "ai_checkmate";
+        }
+    }
+
+    const extra = {
+        moveCount: firebase.database.ServerValue.increment(1)
+    };
+
+    if (winnerSide) {
+        extra.winner = winnerSide;
+        extra.winReason = winReason;
+        extra.status = "finished";
+        extra.finishedAt = firebase.database.ServerValue.TIMESTAMP;
+    }
+
+    await syncRoomFromBoard(extra);
+return true;
+}
+
+function maybeScheduleAiMove(room, roomId) {
+    if (!room || !roomId) return;
+    if (!roomHasAiBot(room)) return;
+    if (room.status !== "playing") return;
+    if (room.winner) return;
+
+    // Nếu người thật đang là bên ĐEN thì không cho tự điều khiển AI
+    if (mySide === "den") return;
+
+    const turnNow = String(room.turn || luotDi || "").toLowerCase();
+    if (turnNow !== "den") return;
+
+    const boardKey = JSON.stringify(room.board || []);
+    const key = roomId + ":" + String(room.moveCount || 0) + ":" + turnNow + ":" + boardKey;
+
+    if (aiMoveScheduledKey === key || aiThinking) return;
+
+    aiMoveScheduledKey = key;
+    clearTimeout(aiMoveTimer);
+
+    console.log("AI SCHEDULED:", {
+        roomId,
+        turnNow,
+        aiMode: room.aiMode,
+        denPlayer: room.players?.den,
+        mySide
+    });
+
+    aiMoveTimer = setTimeout(async () => {
+        let moved = false;
+
+        try {
+            aiThinking = true;
+            moved = await aiMakeMoveNow(roomId);
+        } catch (err) {
+            console.error("AI MOVE ERROR:", err);
+            alert("AI bị lỗi nên chưa đi được. Mở Console xem AI MOVE ERROR.");
+        } finally {
+            aiThinking = false;
+
+            // Nếu chưa đi được thì mở khóa để Firebase event kế tiếp còn gọi lại
+            if (!moved) {
+                aiMoveScheduledKey = "";
+            }
+        }
+    }, 120);
 }
 function toggleProfileMenu(event) {
     event.stopPropagation();
@@ -7736,14 +9540,16 @@ async function loadWalletBalance() {
         const data = snap.val() || {};
 
         let piAmount = 0;
-        if (data.balance != null) {
-            piAmount = Number(data.balance) || 0;
-        } else {
-            const scopedCache = localStorage.getItem(getBalanceCacheKey());
-            const legacy = localStorage.getItem(PI_BALANCE_KEY);
-            piAmount = Number(scopedCache ?? legacy ?? 0) || 0;
-        }
 
+// Ưu tiên piBalance vì đổi PMC -> Pi thường trả về newPiBalance.
+// Nếu ví cũ chỉ có balance thì vẫn dùng balance.
+if (data.piBalance != null || data.balance != null) {
+    piAmount = Number(data.piBalance ?? data.balance ?? 0) || 0;
+} else {
+    const scopedCache = localStorage.getItem(getBalanceCacheKey());
+    const legacy = localStorage.getItem(PI_BALANCE_KEY);
+    piAmount = Number(scopedCache ?? legacy ?? 0) || 0;
+}
         let pmcAmount = 0;
         if (data.pmcBalance != null) {
             pmcAmount = Math.floor(Number(data.pmcBalance) || 0);
@@ -7758,12 +9564,13 @@ async function loadWalletBalance() {
         localStorage.setItem(getPmcCacheKey(), String(currentPmcBalance));
 
         await walletRef().update({
-            balance: currentWalletBalance,
-            pmcBalance: currentPmcBalance,
-            updatedAt: firebase.database.ServerValue.TIMESTAMP,
-            name: localStorage.getItem("user-name-display") || "Người chơi",
-            photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-        });
+    balance: currentWalletBalance,
+    piBalance: currentWalletBalance,
+    pmcBalance: currentPmcBalance,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP,
+    name: localStorage.getItem("user-name-display") || "Người chơi",
+    photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+});
 
         updateBalanceUI(currentWalletBalance);
         updatePmcUI(currentPmcBalance);
@@ -7798,12 +9605,13 @@ function setPiBalance(amount) {
     updateBalanceUI(safeAmount);
 
     walletRef().update({
-        balance: safeAmount,
-        pmcBalance: getPmcBalance(),
-        updatedAt: firebase.database.ServerValue.TIMESTAMP,
-        name: localStorage.getItem("user-name-display") || "Người chơi",
-        photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-    }).catch(err => {
+    balance: safeAmount,
+    piBalance: safeAmount,
+    pmcBalance: getPmcBalance(),
+    updatedAt: firebase.database.ServerValue.TIMESTAMP,
+    name: localStorage.getItem("user-name-display") || "Người chơi",
+    photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+}).catch(err => {
         console.error("Lỗi sync số dư Pi:", err);
     });
 }
@@ -7815,14 +9623,16 @@ function setPmcBalance(amount) {
     localStorage.setItem(getPmcCacheKey(), String(safeAmount));
     updatePmcUI(safeAmount);
 
-    walletRef().update({
-        balance: getPiBalance(),
-        pmcBalance: safeAmount,
-        updatedAt: firebase.database.ServerValue.TIMESTAMP,
-        name: localStorage.getItem("user-name-display") || "Người chơi",
-        photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-    }).catch(err => {
-        console.error("Lỗi sync số dư PMC:", err);
+    const livePi = getPiBalance();
+
+walletRef().update({
+    balance: livePi,
+    piBalance: livePi,
+    pmcBalance: safeAmount,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP,
+    name: localStorage.getItem("user-name-display") || "Người chơi",
+    photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+}).catch(err => {
     });
 }
 function walletRefByKey(walletKey) {
@@ -7883,10 +9693,9 @@ async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
 }
 async function settlePmcViaApi(roomId) {
     try {
-        console.log("firebase uid:", firebase.auth().currentUser?.uid);
-console.log("local uid:", localStorage.getItem("uid"));
-console.log("walletKey:", walletKey);
-        const res = await fetch("/api/pmc/settle-safe-v2", {
+    console.log("settle roomId:", roomId);
+    console.log("my walletKey:", makeWalletDbKey());
+        const res = await fetch("/api/pmc/settle?t=" + Date.now(), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ roomId, feeRate: MATCH_SYSTEM_FEE_RATE })
@@ -7911,7 +9720,38 @@ try {
         }
 
         console.log("Settle PMC qua API OK:", data);
-        await loadWalletBalance().catch(() => {});
+
+// Cập nhật cache EXP sau khi server settle xong.
+// Nếu không có đoạn này, ra sảnh/tạo phòng mới sẽ bị quay về cache cũ 0/100.
+try {
+    const myWalletKey = makeWalletDbKey();
+    let myExp = null;
+
+    if (data?.expResult?.do?.walletKey === myWalletKey) {
+        myExp = data.expResult.do.levelMeta;
+    }
+
+    if (data?.expResult?.den?.walletKey === myWalletKey) {
+        myExp = data.expResult.den.levelMeta;
+    }
+
+    if (!myExp && mySide === "do") myExp = data?.expResult?.do?.levelMeta;
+    if (!myExp && mySide === "den") myExp = data?.expResult?.den?.levelMeta;
+
+    if (myExp) {
+        setCachedLevelMeta(myExp);
+
+        if (currentRoomId && mySide) {
+            await db.ref("matches/" + currentRoomId + "/players/" + mySide + "/levelMeta")
+                .set(buildLevelMeta(myExp))
+                .catch(() => {});
+        }
+    }
+} catch (e) {
+    console.warn("Không sync cache EXP sau settle:", e);
+}
+
+await loadWalletBalance().catch(() => {});
     } catch (err) {
         console.error("Lỗi gọi API settle PMC:", err);
     }
@@ -8292,39 +10132,76 @@ async function chargeStakeForReady(roomId, side) {
     try {
         if (!roomId || !side) return { ok: false, stage: "input" };
 
-        const roomSnap = await db.ref("matches/" + roomId).once("value");
+        const roomRef = db.ref("matches/" + roomId);
+        const roomSnap = await roomRef.once("value");
         const room = roomSnap.val() || {};
 
-        const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
-        if (!stake) return { ok: true, stage: "no_stake" };
-        if (room?.stakeLocked?.[side]) return { ok: true, stage: "already_locked" };
+        const stake = Math.max(
+            0,
+            Math.floor(Number(room?.stakePMC || currentRoomStakePMC || 0) || 0)
+        );
+
+        if (!stake) {
+            console.error("READY FAIL no_stake", {
+                roomId,
+                side,
+                roomStake: room?.stakePMC,
+                currentRoomStakePMC
+            });
+            alert("Lỗi: phòng này chưa có mức cược PMC.");
+            return { ok: false, stage: "no_stake" };
+        }
 
         const localProfile = getCurrentPlayerProfile();
         const sidePlayer = room?.players?.[side] || {};
-        let targetWalletKey = sidePlayer.walletKey || localProfile.walletKey;
 
-        if (sidePlayer.uid === localProfile.uid && targetWalletKey !== localProfile.walletKey) {
+        let targetWalletKey = "";
+
+        // Ưu tiên ví của chính máy đang bấm sẵn sàng
+        if (sidePlayer.uid === localProfile.uid) {
             targetWalletKey = localProfile.walletKey;
-
-            await db.ref("matches/" + roomId + "/players/" + side).update({
-                walletKey: localProfile.walletKey,
-                name: localProfile.name,
-                photo: localProfile.photo
-            });
+        } else {
+            targetWalletKey = sidePlayer.walletKey || localProfile.walletKey;
         }
 
-        const safeWalletKey = String(targetWalletKey || "").replace(/[.#$\[\]\/]/g, "_");
-        const targetWalletSnap = await db.ref("wallets/" + safeWalletKey).once("value");
-        const targetWallet = targetWalletSnap.val() || {};
-        const targetPmc = Math.max(0, Math.floor(Number(targetWallet.pmcBalance || 0) || 0));
-
         if (!targetWalletKey) {
-            console.error("READY FAIL wallet_key_missing", { roomId, side });
+            console.error("READY FAIL wallet_key_missing", { roomId, side, localProfile, sidePlayer });
+            alert("Lỗi: không xác định được ví người chơi.");
             return { ok: false, stage: "wallet_key_missing" };
         }
 
-        if (targetPmc < stake) {
-            console.error("READY FAIL insufficient_wallet", { targetWalletKey, targetPmc, stake });
+        const safeWalletKey = String(targetWalletKey).replace(/[.#$\[\]\/]/g, "_");
+
+        // Khóa trước để bấm nhiều lần không bị trừ lặp
+        const lockRef = db.ref("matches/" + roomId + "/stakeLocked/" + side);
+        const lockTx = await runRefTransaction(lockRef, current => {
+            if (current && current.done) return;
+            return {
+                done: true,
+                walletKey: safeWalletKey,
+                stake,
+                at: Date.now(),
+                uid: localProfile.uid || ""
+            };
+        });
+
+        if (!lockTx.committed) {
+            console.log("READY already locked:", { roomId, side });
+            return { ok: true, stage: "already_locked" };
+        }
+
+        const walletSnap = await db.ref("wallets/" + safeWalletKey).once("value");
+        const wallet = walletSnap.val() || {};
+        const beforePmc = Math.floor(Number(wallet.pmcBalance || 0) || 0);
+
+        if (beforePmc < stake) {
+            await lockRef.set(false).catch(() => {});
+            console.error("READY FAIL insufficient_wallet", {
+                targetWalletKey,
+                beforePmc,
+                stake
+            });
+            alert("PMC không đủ để sẵn sàng.");
             return { ok: false, stage: "insufficient_wallet" };
         }
 
@@ -8334,9 +10211,25 @@ async function chargeStakeForReady(roomId, side) {
         });
 
         if (paid == null) {
-            console.error("READY FAIL tx_not_committed", { targetWalletKey, targetPmc, stake });
+            await lockRef.set(false).catch(() => {});
+            console.error("READY FAIL tx_not_committed", {
+                targetWalletKey,
+                beforePmc,
+                stake
+            });
+            alert("Lỗi trừ PMC, thử lại.");
             return { ok: false, stage: "tx_not_committed" };
         }
+
+        // Cập nhật lại player trong room để UI thấy số dư mới
+        await roomRef.child("players/" + side).update({
+            walletKey: targetWalletKey,
+            name: sidePlayer.name || localProfile.name || "Người chơi",
+            photo: sidePlayer.photo || localProfile.photo || "images/do_tuong.png",
+            pmcBalance: paid
+        });
+
+        await db.ref("matches/" + roomId + "/ready/" + side).set(true);
 
         if (targetWalletKey === localProfile.walletKey) {
             currentPmcBalance = paid;
@@ -8346,13 +10239,31 @@ async function chargeStakeForReady(roomId, side) {
             await loadWalletBalance().catch(() => {});
         }
 
-        await db.ref("matches/" + roomId + "/stakeLocked/" + side).set(true);
+        console.log("READY PAID OK", {
+            roomId,
+            side,
+            targetWalletKey,
+            stake,
+            beforePmc,
+            afterPmc: paid
+        });
 
-        return { ok: true, stage: "done", walletKey: targetWalletKey, paid };
+        return {
+            ok: true,
+            stage: "done",
+            walletKey: targetWalletKey,
+            stake,
+            beforePmc,
+            paid
+        };
     } catch (err) {
         console.error("chargeStakeForReady exception:", err);
         alert("Lỗi trừ PMC, thử lại.");
-        return { ok: false, stage: "exception", error: String(err?.message || err) };
+        return {
+            ok: false,
+            stage: "exception",
+            error: String(err?.message || err)
+        };
     }
 }
 
@@ -8632,7 +10543,7 @@ async function syncPiPendingBeforeWithdraw() {
 async function processWithdraw() {
     const state = getWithdrawState();
     if (state.count >= MAX_WITHDRAW_PER_DAY) {
-        alert("Hôm nay đã rút đủ 5 lần rồi. Mai quay lại nhé!");
+        alert("Hôm nay đã rút đủ 50 lần rồi. Mai quay lại nhé!");
         return;
     }
 
@@ -8644,32 +10555,54 @@ async function processWithdraw() {
         return;
     }
 
-    if (amount > MAX_WITHDRAW_PER_TX) {
-        alert(`Mỗi lần chỉ được rút tối đa ${MAX_WITHDRAW_PER_TX} Pi.`);
-        return;
-    }
+   const linkState = await getPiLinkState().catch(() => ({ ok: false }));
 
-    const currentBalance = Number(getPiBalance() || 0);
-    if (amount > currentBalance) {
-        alert(`Số dư không đủ. Hiện còn ${currentBalance.toFixed(2)} Pi.`);
-        return;
-    }
-
-    const linkState = await getPiLinkState().catch(() => ({ ok: false }));
-
-const walletKey = String(
-    linkState?.walletKey ||
-    (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "") ||
-    ""
-).trim();
-
-const piUid = String(linkState?.piUid || "").trim();
-const piUsername = String(linkState?.piUsername || "").trim();
+const walletKey = getMoneyWalletKey(linkState);
 
 if (!walletKey) {
     alert("Thiếu walletKey nội bộ.");
     return;
 }
+
+// Đọc số dư Pi thật trực tiếp từ Firebase, không lấy cache trên màn hình
+// Đọc số dư Pi thật trực tiếp từ Firebase, không lấy cache trên màn hình
+const liveSnap = await walletRefByKey(walletKey).once("value");
+const liveWallet = liveSnap.val() && typeof liveSnap.val() === "object" ? liveSnap.val() : {};
+
+// Lấy số lớn nhất giữa piBalance / balance / pi
+// để tránh 1 cột cũ kéo số dư về 13 hoặc 0
+const piBalanceValue = Number(liveWallet.piBalance);
+const balanceValue = Number(liveWallet.balance);
+const piValue = Number(liveWallet.pi);
+
+const currentBalance = Math.max(
+    Number.isFinite(piBalanceValue) ? piBalanceValue : 0,
+    Number.isFinite(balanceValue) ? balanceValue : 0,
+    Number.isFinite(piValue) ? piValue : 0
+);
+
+// Chỉ cập nhật UI/cache, KHÔNG gọi setPiBalance() ở đây
+// vì setPiBalance() có thể ghi nhầm ví mặc định.
+currentWalletBalance = currentBalance;
+localStorage.setItem(getBalanceCacheKey(), String(currentWalletBalance));
+localStorage.setItem(PI_BALANCE_KEY, String(currentWalletBalance));
+updateBalanceUI(currentWalletBalance);
+
+// Đồng bộ lại đúng node ví đang rút
+await walletRefByKey(walletKey).update({
+    balance: currentBalance,
+    piBalance: currentBalance,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP
+}).catch(() => {});
+
+if (amount > currentBalance) {
+    alert(`Số dư không đủ. Ví ${walletKey} hiện còn ${currentBalance.toFixed(2)} Pi.`);
+    return;
+}
+
+const piUid = String(linkState?.piUid || "").trim();
+const piUsername = String(linkState?.piUsername || "").trim();
+
 
 const withdrawUrl = "/api/pi/withdraw-auto-v2?v=" + Date.now();
 
@@ -9090,12 +11023,11 @@ async function setReady() {
     const result = await chargeStakeForReady(currentRoomId, mySide);
 
     if (!result.ok) {
-        // không alert thêm ở đây nữa
         console.error("READY FAIL:", result);
         return;
     }
 
-    await db.ref("matches/" + currentRoomId + "/ready/" + mySide).set(true);
+    console.log("READY OK:", result);
 }
 
 async function batDauTranDau(loai) {
@@ -9214,6 +11146,33 @@ function previewPmcToPiExchange() {
 function pmcDebugLog() {}
 function clearPmcDebugLog() {}
 
+function getMoneyWalletKey(linkState = null) {
+    const clean = v => String(v || "").trim().replace(/[.#$\[\]\/]/g, "_");
+
+    const linkedWalletKey = clean(linkState?.walletKey);
+    if (linkedWalletKey) return linkedWalletKey;
+
+    const piName = clean(
+        linkState?.piUsername ||
+        localStorage.getItem("pi-verified-username") ||
+        localStorage.getItem("pi-user-name")
+    );
+
+    if (piName) {
+        return clean("pi_" + piName.toLowerCase());
+    }
+
+    const cachedWalletKey = clean(localStorage.getItem("walletKey"));
+    if (cachedWalletKey) return cachedWalletKey;
+
+    return clean(
+        (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "") ||
+        localStorage.getItem("uid") ||
+        localStorage.getItem("currentUserUid") ||
+        firebase.auth().currentUser?.uid ||
+        ""
+    );
+}
 async function confirmPmcToPiExchange() {
     const input = document.getElementById("pmc-to-pi-input");
     const pmcAmount = Math.max(0, Math.floor(Number(input?.value || 0) || 0));
@@ -9223,13 +11182,7 @@ async function confirmPmcToPiExchange() {
         return;
     }
 
-    const currentUser = firebase.auth().currentUser;
-    const walletKey =
-        currentUser?.uid ||
-        localStorage.getItem("uid") ||
-        localStorage.getItem("walletKey") ||
-        localStorage.getItem("currentUserUid") ||
-        (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "");
+    const walletKey = getMoneyWalletKey();
 
     if (!walletKey) {
         alert("Không lấy được mã ví để đổi PMC sang Pi.");
@@ -11979,7 +13932,7 @@ async function refreshMissionLobbyBadgeSilently() {
 
 <script id="skin-shop-script">
 (function(){
-  const SHOP_API = '/api/cosmetics-v1';
+  const SHOP_API = '/api/missions-v1';
   const SHOP_STATE = { board:null, activeTab:'shop', loading:false, acting:false };
   const FALLBACK_CATALOG = [
     { id:'skin_bamboo_gold', name:'Viền Trúc Kim', icon:'🎋', pricePmc:25000, unlockLevel:10, desc:'Viền vàng xanh cho avatar, mốc đầu cho người chăm cày.' },
@@ -12004,15 +13957,51 @@ async function refreshMissionLobbyBadgeSilently() {
   function currentSkinId(){
     return localStorage.getItem('equipped-avatar-skin') || 'skin_default';
   }
-  function skinCssClass(id){
-    return 'cosmetic-avatar-' + String(id || 'skin_default').replace(/^skin_/, 'skin-').replace(/_/g, '_');
-  }
-  window.applyCosmeticSkinToAvatar = function(imgEl, skinId){
+  function skinFrameClass(id){
+    return 'avatar-frame-' + String(id || 'skin_default').replace(/[^\w-]/g, '_');
+}
+
+function oldSkinImgClass(id){
+    return 'cosmetic-avatar-' + String(id || 'skin_default')
+        .replace(/^skin_/, 'skin-')
+        .replace(/_/g, '_');
+}
+
+function findAvatarFrameTarget(imgEl){
+    if (!imgEl) return null;
+
+    // Trong trận: bọc nguyên khung avatar + tên + rank
+    const chip = imgEl.closest('.player-chip-inline');
+    if (chip) return chip;
+
+    // Góc sảnh / avatar nhỏ: bọc phần cha gần nhất
+    return imgEl.parentElement || imgEl;
+}
+
+window.applyCosmeticSkinToAvatar = function(imgEl, skinId){
     if (!imgEl) return;
-    FALLBACK_CATALOG.forEach(item => imgEl.classList.remove(skinCssClass(item.id)));
+
+    const target = findAvatarFrameTarget(imgEl);
+    if (!target) return;
+
+    // Dọn class skin cũ trên cả img và khung, để không còn dính vào ảnh
+    FALLBACK_CATALOG.forEach(item => {
+        imgEl.classList.remove(oldSkinImgClass(item.id));
+        imgEl.classList.remove(skinFrameClass(item.id));
+
+        target.classList.remove(oldSkinImgClass(item.id));
+        target.classList.remove(skinFrameClass(item.id));
+    });
+
+    target.classList.remove('avatar-skin-frame-target');
+
     const id = skinId || currentSkinId();
-    if (id && id !== 'skin_default') imgEl.classList.add(skinCssClass(id));
-  };
+    if (!id || id === 'skin_default') return;
+
+    // Skin chỉ gắn vào khung, không gắn vào ảnh đại diện
+    target.classList.add('avatar-skin-frame-target');
+    target.classList.add(skinFrameClass(id));
+};
   function applyMySkinNow(){
     const id = currentSkinId();
     ['corner-avatar-img','player-do-avatar','player-den-avatar','edit-user-photo'].forEach(domId => {
@@ -12028,7 +14017,18 @@ async function refreshMissionLobbyBadgeSilently() {
     btn = document.createElement('div');
     btn.id = 'arena-shop-btn';
     btn.setAttribute('onclick','openSkinShop()');
-    btn.innerHTML = '🛒<span id="arena-shop-badge" class="shop-badge-dot">0</span>';
+    btn.innerHTML = `
+  <span class="shop-icon-clean">
+    <svg viewBox="0 0 24 24" width="25" height="25" aria-hidden="true">
+      <path d="M6 7h14l-1.4 8.2a2 2 0 0 1-2 1.7H9.1a2 2 0 0 1-2-1.6L5.2 4.8H3"
+            fill="none" stroke="currentColor" stroke-width="2.2"
+            stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="9.5" cy="20" r="1.4" fill="currentColor"/>
+      <circle cx="17" cy="20" r="1.4" fill="currentColor"/>
+    </svg>
+  </span>
+  <span id="arena-shop-badge" class="shop-badge-dot">0</span>
+`;
     document.body.appendChild(btn);
     return btn;
   }
@@ -12073,7 +14073,7 @@ async function refreshMissionLobbyBadgeSilently() {
     const res = await fetch(SHOP_API + '?v=' + Date.now(), {
       method:'POST',
       headers:{ 'Content-Type':'application/json', 'x-wallet-key':walletKey },
-      body:JSON.stringify({ action:'board', walletKey })
+      body:JSON.stringify({ action:'shop_board', walletKey })
     });
     const data = await res.json().catch(()=>({}));
     if (!res.ok || !data.ok) throw new Error(data.error || 'Không tải được shop.');
@@ -12189,7 +14189,7 @@ async function refreshMissionLobbyBadgeSilently() {
   window.buyCosmeticSkin = async function(itemId){
     if (SHOP_STATE.acting) return; SHOP_STATE.acting = true; shopToast('Đang mua skin...');
     try {
-      const data = await postShop('buy', { itemId });
+      const data = await postShop('shop_buy', { itemId });
       if (typeof data.newPmcBalance === 'number' && typeof setPmcBalance === 'function') setPmcBalance(data.newPmcBalance);
       await fetchShopBoard(true); renderShop();
       alert('Mua skin thành công: ' + (data.itemName || itemId));
@@ -12200,7 +14200,7 @@ async function refreshMissionLobbyBadgeSilently() {
   window.equipCosmeticSkin = async function(itemId){
     if (SHOP_STATE.acting) return; SHOP_STATE.acting = true; shopToast('Đang gắn skin...');
     try {
-      const data = await postShop('equip', { itemId });
+      const data = await postShop('shop_equip', { itemId });
       localStorage.setItem('equipped-avatar-skin', data.equippedAvatarSkin || itemId);
       if (typeof currentRoomId !== 'undefined' && currentRoomId && typeof mySide !== 'undefined' && mySide) {
         try { await firebase.database().ref('matches/' + currentRoomId + '/players/' + mySide + '/equippedAvatarSkin').set(data.equippedAvatarSkin || itemId); } catch(_) {}
@@ -12213,7 +14213,7 @@ async function refreshMissionLobbyBadgeSilently() {
   window.openLevelGiftChest = async function(level){
     if (SHOP_STATE.acting) return; SHOP_STATE.acting = true; shopToast('Đang mở rương...');
     try {
-      const data = await postShop('open_chest', { level });
+      const data = await postShop('shop_open_chest', { level });
       if (typeof data.newPmcBalance === 'number' && typeof setPmcBalance === 'function') setPmcBalance(data.newPmcBalance);
       await fetchShopBoard(true); renderShop();
       alert('🎁 Mở rương Lv.' + level + ' thành công!\nNhận: ' + shopFormatPmc(data.rewardPmc || 0) + ' PMC');
