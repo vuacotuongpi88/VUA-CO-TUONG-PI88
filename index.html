@@ -5913,17 +5913,41 @@ function getAiWorker() {
     return aiWorker;
 }
 
-function aiMatrixForWorker() {
-    const mt = taoMaTran();
+function roomBoardToAiMatrix(room) {
+    const mt = Array(10).fill(null).map(() => Array(9).fill(null));
 
+    (room?.board || []).forEach(item => {
+        const c = Number(item?.c);
+        const r = Number(item?.r);
+        if (Number.isInteger(c) && Number.isInteger(r) && c >= 0 && c < 9 && r >= 0 && r < 10) {
+            mt[r][c] = {
+                side: item.side,
+                type: item.type
+            };
+        }
+    });
+
+    return mt;
+}
+
+function aiMatrixForWorker(room = null) {
+    if (room && Array.isArray(room.board) && room.board.length) {
+        return roomBoardToAiMatrix(room);
+    }
+
+    const mt = taoMaTran();
     return mt.map(row => row.map(p => {
         if (!p) return null;
-
-        return {
-            side: p.side,
-            type: p.type
-        };
+        return { side: p.side, type: p.type };
     }));
+}
+
+function isAiMoveBasicLegalFromRoom(room, move, side = "den") {
+    if (!move || !move.from || !move.to) return false;
+    const mt = roomBoardToAiMatrix(room);
+    const p = mt[move.from.r]?.[move.from.c];
+    const target = mt[move.to.r]?.[move.to.c];
+    return !!p && p.side === side && !(target && target.side === side);
 }
 
 function aiMainFindKingForFace(side, mt) {
@@ -6058,8 +6082,10 @@ function requestAiMoveFromWorker(room, side = "den") {
 
             console.log("AI WORKER RESULT:", data.result);
 
-            if (!isAiWorkerMoveLegal(move, side)) {
-                console.warn("AI WORKER MOVE ILLEGAL, fallback:", move);
+            // Worker đã tự lọc nước hợp lệ. Ở main chỉ kiểm tra cơ bản bằng board Firebase,
+            // tránh bị sai do góc nhìn DOM / mySide làm AI không chịu đi.
+            if (!isAiMoveBasicLegalFromRoom(room, move, side)) {
+                console.warn("AI WORKER MOVE BASIC INVALID, fallback:", move);
                 resolve(null);
                 return;
             }
@@ -6072,7 +6098,7 @@ function requestAiMoveFromWorker(room, side = "den") {
         worker.postMessage({
             type: "findMove",
             id,
-            board: aiMatrixForWorker(),
+            board: aiMatrixForWorker(room),
             side,
             maxDepth: AI_WORKER_DEPTH,
             timeLimitMs: AI_WORKER_TIME_MS,
@@ -9152,7 +9178,7 @@ function aiMoveLeavesSafe(side, c1, r1, c2, r2, mt) {
     const temp = aiCloneMatrix(mt);
     temp[r2][c2] = temp[r1][c1];
     temp[r1][c1] = null;
-    return !laBiChieu(side, temp);
+    return !laBiChieu(side, temp) && !isTwoKingsFacing(temp);
 }
 
 function aiCollectLegalMoves(side = "den") {
@@ -9247,50 +9273,67 @@ function aiRevealPieceIfNeeded(pieceEl) {
 }
 
 async function aiMakeMoveNow(roomId) {
-    if (!roomId || currentRoomId !== roomId) return;
+    if (!roomId || currentRoomId !== roomId) return false;
 
     const snap = await db.ref("matches/" + roomId).once("value");
     const room = snap.val() || {};
 
     if (!roomHasAiBot(room) || room.status !== "playing" || room.winner) {
-    return false;
-}
-
-const turnNow = String(room.turn || luotDi || "").toLowerCase();
-if (turnNow !== "den") {
-    return false;
-}
-
-    const moves = aiCollectLegalMoves("den");
-console.log("AI LEGAL MOVES:", moves.length, {
-    roomId,
-    turn: room.turn,
-    status: room.status,
-    aiMode: room.aiMode,
-    mySide
-});
-
-    if (!moves.length) {
-        return true;
+        return false;
     }
 
+    const turnNow = String(room.turn || luotDi || "").toLowerCase();
+    if (turnNow !== "den") {
+        return false;
+    }
+
+    console.log("AI TRY MOVE:", {
+        roomId,
+        turn: room.turn,
+        status: room.status,
+        aiMode: room.aiMode,
+        denPlayer: room.players?.den,
+        mySide,
+        boardLen: Array.isArray(room.board) ? room.board.length : 0
+    });
+
     renderTimerUI();
+    await new Promise(resolve => setTimeout(resolve, 60));
 
-// Nhả main thread 1 nhịp để đồng hồ kịp vẽ trước khi AI suy nghĩ
-await new Promise(resolve => setTimeout(resolve, 80));
+    // Ưu tiên worker dùng board Firebase thật, không dùng DOM để tránh lệch góc nhìn.
+    let move = await requestAiMoveFromWorker(room, "den");
 
-let move = await requestAiMoveFromWorker(room, "den");
+    // Nếu worker lỗi/timeout thì fallback bằng luật cũ trên DOM.
+    if (!move) {
+        const fallbackMoves = aiCollectLegalMoves("den");
+        console.log("AI FALLBACK LEGAL MOVES:", fallbackMoves.length);
+        move = aiFastFallbackMove(fallbackMoves);
+    }
 
-if (!move) {
-    move = aiFastFallbackMove(moves);
-}
+    if (!move) {
+        console.warn("AI NO MOVE FOUND");
+        return false;
+    }
 
-if (!move) return false;
+    let pieceEl = aiGetPieceElAtReal(move.from.c, move.from.r);
+    let targetEl = aiGetPieceElAtReal(move.to.c, move.to.r);
 
-    const pieceEl = aiGetPieceElAtReal(move.from.c, move.from.r);
-    const targetEl = aiGetPieceElAtReal(move.to.c, move.to.r);
+    // Nếu worker trả nước từ Firebase nhưng DOM chưa khớp, thử fallback DOM một lần.
+    if (!pieceEl) {
+        console.warn("AI PIECE NOT FOUND FROM WORKER MOVE, fallback DOM move:", move);
+        const fallbackMoves = aiCollectLegalMoves("den");
+        const fb = aiFastFallbackMove(fallbackMoves);
+        if (fb) {
+            move = fb;
+            pieceEl = aiGetPieceElAtReal(move.from.c, move.from.r);
+            targetEl = aiGetPieceElAtReal(move.to.c, move.to.r);
+        }
+    }
 
-    if (!pieceEl) return false;
+    if (!pieceEl) {
+        console.warn("AI PIECE STILL NOT FOUND:", move);
+        return false;
+    }
 
     const capturedKing = targetEl && isKingPiece(targetEl.dataset.type);
 
@@ -9346,7 +9389,8 @@ if (!move) return false;
     }
 
     await syncRoomFromBoard(extra);
-return true;
+    console.log("AI MOVED OK:", move);
+    return true;
 }
 
 function maybeScheduleAiMove(room, roomId) {
@@ -9355,16 +9399,13 @@ function maybeScheduleAiMove(room, roomId) {
     if (room.status !== "playing") return;
     if (room.winner) return;
 
-    // Nếu người thật đang là bên ĐEN thì không cho tự điều khiển AI
-    if (mySide === "den") return;
-
     const turnNow = String(room.turn || luotDi || "").toLowerCase();
     if (turnNow !== "den") return;
 
     const boardKey = JSON.stringify(room.board || []);
     const key = roomId + ":" + String(room.moveCount || 0) + ":" + turnNow + ":" + boardKey;
 
-    if (aiMoveScheduledKey === key || aiThinking) return;
+    if (aiMoveScheduledKey === key && aiThinking) return;
 
     aiMoveScheduledKey = key;
     clearTimeout(aiMoveTimer);
@@ -9385,17 +9426,28 @@ function maybeScheduleAiMove(room, roomId) {
             moved = await aiMakeMoveNow(roomId);
         } catch (err) {
             console.error("AI MOVE ERROR:", err);
-            alert("AI bị lỗi nên chưa đi được. Mở Console xem AI MOVE ERROR.");
         } finally {
             aiThinking = false;
 
-            // Nếu chưa đi được thì mở khóa để Firebase event kế tiếp còn gọi lại
             if (!moved) {
                 aiMoveScheduledKey = "";
+
+                // Tự đọc lại phòng và thử lại, không chờ Firebase event mới.
+                setTimeout(async () => {
+                    try {
+                        if (!currentRoomId || currentRoomId !== roomId) return;
+                        const retrySnap = await db.ref("matches/" + roomId).once("value");
+                        const retryRoom = retrySnap.val() || {};
+                        maybeScheduleAiMove(retryRoom, roomId);
+                    } catch (e) {
+                        console.error("AI RETRY ERROR:", e);
+                    }
+                }, 700);
             }
         }
     }, 120);
 }
+
 function toggleProfileMenu(event) {
     event.stopPropagation();
     const menu = document.getElementById("profile-dropdown");
