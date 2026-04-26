@@ -8912,35 +8912,302 @@ function aiCollectLegalMoves(side = "den") {
     return moves;
 }
 
+const AI_SEARCH_DEPTH = 2;      // 2 = mạnh vừa, 3 = mạnh hơn nhưng dễ lag mobile
+const AI_TOP_MOVES_LIMIT = 18;  // giới hạn số nước xét sâu để không đơ máy
+const AI_MISTAKE_RATE = 0.02;   // 0.08 = thỉnh thoảng sai nhẹ cho giống người
+
 function aiPieceValue(type) {
     const map = {
-        "帥": 999, "將": 999,
-        "俥": 90, "車": 90,
-        "炮": 45, "砲": 45,
-        "傌": 40, "馬": 40,
-        "相": 20, "象": 20,
-        "仕": 20, "士": 20,
-        "兵": 10, "卒": 10
+        "帥": 10000, "將": 10000,
+        "俥": 900, "車": 900,
+        "炮": 480, "砲": 480,
+        "傌": 450, "馬": 450,
+        "相": 220, "象": 220,
+        "仕": 220, "士": 220,
+        "兵": 120, "卒": 120
     };
-    return map[type] || 1;
+    return map[type] || 50;
+}
+
+function aiCloneMatrix(mt) {
+    return mt.map(row => row.map(cell => cell ? { ...cell } : null));
+}
+
+function aiOtherSide(side) {
+    return side === "do" ? "den" : "do";
+}
+
+function aiFindKing(side, mt) {
+    const kingTypes = side === "do" ? ["帥"] : ["將"];
+
+    for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 9; c++) {
+            const p = mt[r][c];
+            if (p && p.side === side && kingTypes.includes(p.type)) {
+                return { c, r };
+            }
+        }
+    }
+
+    return null;
+}
+
+function aiIsInBoard(c, r) {
+    return c >= 0 && c < 9 && r >= 0 && r < 10;
+}
+
+function aiApplyMoveToMatrix(mt, move) {
+    const next = aiCloneMatrix(mt);
+    next[move.to.r][move.to.c] = next[move.from.r][move.from.c];
+    next[move.from.r][move.from.c] = null;
+    return next;
+}
+
+function aiMoveLeavesSafe(side, c1, r1, c2, r2, mt) {
+    const temp = aiCloneMatrix(mt);
+    temp[r2][c2] = temp[r1][c1];
+    temp[r1][c1] = null;
+    return !laBiChieu(side, temp);
+}
+
+function aiCollectLegalMovesFromMatrix(side, mt) {
+    const moves = [];
+
+    for (let r1 = 0; r1 < 10; r1++) {
+        for (let c1 = 0; c1 < 9; c1++) {
+            const piece = mt[r1][c1];
+            if (!piece || piece.side !== side) continue;
+
+            for (let r2 = 0; r2 < 10; r2++) {
+                for (let c2 = 0; c2 < 9; c2++) {
+                    if (!aiIsInBoard(c2, r2)) continue;
+
+                    const target = mt[r2][c2];
+                    if (target && target.side === side) continue;
+
+                    if (!checkLuat(piece.type, side, c1, r1, c2, r2, mt)) continue;
+                    if (!aiMoveLeavesSafe(side, c1, r1, c2, r2, mt)) continue;
+
+                    moves.push({
+                        from: { c: c1, r: r1 },
+                        to: { c: c2, r: r2 },
+                        piece,
+                        target: target || null
+                    });
+                }
+            }
+        }
+    }
+
+    return moves;
+}
+
+function aiPositionBonus(piece, c, r) {
+    if (!piece) return 0;
+
+    const type = piece.type;
+    const side = piece.side;
+    let score = 0;
+
+    // Xe, pháo, mã thích hoạt động ở giữa bàn
+    const centerDist = Math.abs(c - 4);
+    if (["俥", "車", "炮", "砲", "傌", "馬"].includes(type)) {
+        score += (4 - centerDist) * 6;
+    }
+
+    // Tốt/soldier qua sông thì giá trị tăng
+    if (type === "兵") {
+        if (r <= 4) score += 70;
+        score += (9 - r) * 6;
+    }
+
+    if (type === "卒") {
+        if (r >= 5) score += 70;
+        score += r * 6;
+    }
+
+    // Tướng đừng lao ra linh tinh
+    if (["帥", "將"].includes(type)) {
+        score -= centerDist * 8;
+    }
+
+    return side === "den" ? score : score;
+}
+
+function aiEvaluateMatrix(mt, aiSide = "den") {
+    const enemySide = aiOtherSide(aiSide);
+
+    if (!aiFindKing(aiSide, mt)) return -999999;
+    if (!aiFindKing(enemySide, mt)) return 999999;
+
+    let score = 0;
+
+    for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 9; c++) {
+            const p = mt[r][c];
+            if (!p) continue;
+
+            let v = aiPieceValue(p.type);
+            v += aiPositionBonus(p, c, r);
+
+            if (p.side === aiSide) score += v;
+            else score -= v;
+        }
+    }
+
+    // Đang chiếu đối thủ thì cộng điểm
+    if (laBiChieu(enemySide, mt)) score += 180;
+
+    // Bị chiếu thì trừ mạnh
+    if (laBiChieu(aiSide, mt)) score -= 260;
+
+    // Nước linh hoạt nhiều hơn thì cộng nhẹ
+    const myMobility = aiCollectLegalMovesFromMatrix(aiSide, mt).length;
+    const enemyMobility = aiCollectLegalMovesFromMatrix(enemySide, mt).length;
+    score += (myMobility - enemyMobility) * 4;
+
+    return score;
+}
+
+function aiQuickMoveScore(move, side, mt) {
+    let score = 0;
+
+    if (move.target) {
+        score += aiPieceValue(move.target.type) * 12;
+        score -= aiPieceValue(move.piece.type) * 0.35;
+    }
+
+    const next = aiApplyMoveToMatrix(mt, move);
+    const enemySide = aiOtherSide(side);
+
+    if (!aiFindKing(enemySide, next)) score += 999999;
+    if (laBiChieu(enemySide, next)) score += 450;
+    if (laBiChieu(side, next)) score -= 9999;
+
+    // Ưu tiên nước làm quân mạnh ra trung tâm
+    score += aiPositionBonus(move.piece, move.to.c, move.to.r);
+
+    // Đừng tự đưa quân lớn vào chỗ dễ bị ăn
+    const enemyReplies = aiCollectLegalMovesFromMatrix(enemySide, next);
+    let worstCapture = 0;
+
+    for (const rep of enemyReplies) {
+        if (rep.target && rep.target.side === side) {
+            worstCapture = Math.max(worstCapture, aiPieceValue(rep.target.type));
+        }
+    }
+
+    score -= worstCapture * 1.3;
+
+    return score + Math.random();
+}
+
+function aiOrderMoves(moves, side, mt) {
+    return moves
+        .map(m => ({ ...m, quickScore: aiQuickMoveScore(m, side, mt) }))
+        .sort((a, b) => b.quickScore - a.quickScore);
+}
+
+function aiMinimax(mt, depth, sideToMove, aiSide, alpha, beta) {
+    const enemySide = aiOtherSide(aiSide);
+
+    if (!aiFindKing(aiSide, mt)) return -999999;
+    if (!aiFindKing(enemySide, mt)) return 999999;
+
+    if (depth <= 0) {
+        return aiEvaluateMatrix(mt, aiSide);
+    }
+
+    let moves = aiCollectLegalMovesFromMatrix(sideToMove, mt);
+
+    if (!moves.length) {
+        if (sideToMove === aiSide) return -888888;
+        return 888888;
+    }
+
+    moves = aiOrderMoves(moves, sideToMove, mt).slice(0, AI_TOP_MOVES_LIMIT);
+
+    const maximizing = sideToMove === aiSide;
+
+    if (maximizing) {
+        let best = -Infinity;
+
+        for (const move of moves) {
+            const next = aiApplyMoveToMatrix(mt, move);
+            const val = aiMinimax(next, depth - 1, aiOtherSide(sideToMove), aiSide, alpha, beta);
+
+            best = Math.max(best, val);
+            alpha = Math.max(alpha, val);
+
+            if (beta <= alpha) break;
+        }
+
+        return best;
+    } else {
+        let best = Infinity;
+
+        for (const move of moves) {
+            const next = aiApplyMoveToMatrix(mt, move);
+            const val = aiMinimax(next, depth - 1, aiOtherSide(sideToMove), aiSide, alpha, beta);
+
+            best = Math.min(best, val);
+            beta = Math.min(beta, val);
+
+            if (beta <= alpha) break;
+        }
+
+        return best;
+    }
+}
+
+function aiFindBestMove(side = "den", depth = AI_SEARCH_DEPTH) {
+    const mt = taoMaTran();
+    let moves = aiCollectLegalMovesFromMatrix(side, mt);
+
+    if (!moves.length) return null;
+
+    moves = aiOrderMoves(moves, side, mt).slice(0, AI_TOP_MOVES_LIMIT);
+
+    // Cho AI thỉnh thoảng chọn nước top 2/top 3 để đỡ quá máy móc
+    if (Math.random() < AI_MISTAKE_RATE && moves.length >= 3) {
+        return moves[Math.floor(Math.random() * Math.min(3, moves.length))];
+    }
+
+    let bestMove = moves[0];
+    let bestScore = -Infinity;
+
+    for (const move of moves) {
+        const next = aiApplyMoveToMatrix(mt, move);
+        const score = aiMinimax(next, depth - 1, aiOtherSide(side), side, -Infinity, Infinity);
+
+        move.finalScore = score;
+
+        if (score > bestScore) {
+            bestScore = score;
+            bestMove = move;
+        }
+    }
+
+    console.log("AI BEST MOVE", {
+        bestScore,
+        from: bestMove.from,
+        to: bestMove.to,
+        piece: bestMove.piece,
+        target: bestMove.target
+    });
+
+    return bestMove;
 }
 
 function aiPickMove(moves) {
-    if (!moves.length) return null;
+    // Giữ tên hàm cũ để aiMakeMoveNow không cần sửa nhiều.
+    // Nhưng bên trong dùng minimax mới, không còn chỉ ăn quân trước mắt.
+    const smartMove = aiFindBestMove("den", AI_SEARCH_DEPTH);
 
-    moves.sort((a, b) => {
-        const scoreA =
-            (a.target ? aiPieceValue(a.target.type) * 10 : 0) +
-            Math.random();
+    if (smartMove) return smartMove;
 
-        const scoreB =
-            (b.target ? aiPieceValue(b.target.type) * 10 : 0) +
-            Math.random();
-
-        return scoreB - scoreA;
-    });
-
-    return moves[0];
+    if (!moves || !moves.length) return null;
+    return moves[Math.floor(Math.random() * moves.length)];
 }
 
 function aiRevealPieceIfNeeded(pieceEl) {
