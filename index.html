@@ -6414,6 +6414,7 @@ function refreshTimerRings() {
 
 function endGame(main, sub) {
     isGameOver = true;
+    window.__victoryLocked = true;
     clearInterval(interval);
     clearInterval(readyInterval);
 
@@ -6453,12 +6454,23 @@ function endGame(main, sub) {
     }
 
     if (wrap) {
+    wrap.style.display = "block";
+    wrap.style.visibility = "visible";
+    wrap.style.opacity = "1";
     wrap.style.zIndex = "50000";
     wrap.style.transform = "translate(-50%, -50%) scale(1)";
     wrap.style.pointerEvents = "auto";
 }
 }
-function hideVictoryPopup() {
+function hideVictoryPopup(force = false) {
+    // Khi popup thắng/thua đã khóa, không cho Firebase sync tự giấu nữa
+    if (window.__victoryLocked && !force) return;
+
+    if (force) {
+        window.__victoryLocked = false;
+        window.__lastVictoryKey = "";
+    }
+
     const wrap = document.getElementById("victory-wrap");
     if (!wrap) return;
 
@@ -6627,7 +6639,7 @@ async function playNextMatch() {
 
         closeReadyOverlay();
         readyOverlayWaitingShown = false;
-        hideVictoryPopup();
+        hideVictoryPopup(true);
         return;
     }
 
@@ -6664,7 +6676,7 @@ async function playNextMatch() {
     startTimer();
 }
 function exitAfterMatch() {
-    hideVictoryPopup();
+    hideVictoryPopup(true);
     backToMenu();
 }
 function getViewSide() {
@@ -7277,7 +7289,7 @@ function exportBoardState() {
 }
 
 function applyBoardStateFromRoom(pieces, options = {}) {
-    const keepVictory = !!options.keepVictory;
+    const keepVictory = !!options.keepVictory || !!window.__victoryLocked || isGameOver;
 
     // Khi trận đã có winner thì KHÔNG được hạ isGameOver và KHÔNG được giấu bảng thắng/thua
     if (!keepVictory) {
@@ -8489,18 +8501,32 @@ if (room.winner && !window.__settledPmcRooms[settleKey]) {
         settlePmcViaApi(listeningRoomId);
     }, 0);
 }
-        if (room.winner && !isGameOver) {
-    if (room.winner === "hoa") {
-        endGame("HÒA CỜ", "2 BÊN HÒA");
-    } else {
-        let title = "CHIẾU BÍ";
-        if (room.winReason === "dauhang") title = "ĐẦU HÀNG";
-        if (room.winReason === "bochay") title = "ĐỐI THỦ THOÁT";
+        if (room.winner) {
+    const victoryKey = [
+        listeningRoomId,
+        room.winner || "",
+        room.winReason || "",
+        room.finishedAt || ""
+    ].join("_");
 
-        endGame(
-            title,
-            `BÊN ${room.winner === "do" ? "ĐỎ" : "ĐEN"} THẮNG`
-        );
+    const wrap = document.getElementById("victory-wrap");
+    const popupHidden = !wrap || String(wrap.style.transform || "").includes("scale(0)");
+
+    if (window.__lastVictoryKey !== victoryKey || popupHidden) {
+        window.__lastVictoryKey = victoryKey;
+
+        if (room.winner === "hoa") {
+            endGame("HÒA CỜ", "2 BÊN HÒA");
+        } else {
+            let title = "CHIẾU BÍ";
+            if (room.winReason === "dauhang") title = "ĐẦU HÀNG";
+            if (room.winReason === "bochay") title = "ĐỐI THỦ THOÁT";
+
+            endGame(
+                title,
+                `BÊN ${room.winner === "do" ? "ĐỎ" : "ĐEN"} THẮNG`
+            );
+        }
     }
 }
 
