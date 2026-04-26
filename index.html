@@ -7044,7 +7044,21 @@ async function playNextMatch() {
 
             return;
         }
+        // CHỐT PMC TRƯỚC KHI RESET VÁN MỚI
+// Nếu reset winner/settlement trước, bên thắng sẽ không cộng PMC.
+if (room.winner) {
+    await settlePmcMatchOnce(roomId).catch(err => {
+        console.error("Chốt PMC trước khi đánh tiếp lỗi:", err);
+    });
 
+    const settleSnap = await db.ref(`matches/${roomId}/settlement`).once("value");
+    const settle = settleSnap.val() || {};
+
+    if (!settle.pmcDone) {
+        alert("Đang chốt thưởng PMC, bấm TIẾP TỤC lại sau 1-2 giây.");
+        return;
+    }
+}
         // Nếu 2 người vẫn còn trong phòng thì đánh lại với đúng người cũ
         await db.ref("matches/" + roomId).update({
             status: "waiting",
@@ -7068,7 +7082,8 @@ async function playNextMatch() {
             winner: null,
             winReason: null,
             drawRequest: null,
-            settlement: null,
+            lastSettlement: room.settlement || null,
+settlement: null,
             refunds: null,
             updatedAt: firebase.database.ServerValue.TIMESTAMP
         });
