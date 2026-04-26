@@ -5291,6 +5291,202 @@ body.in-match #arena-shop-btn{ display:none !important; }
         padding: 6px 9px;
     }
 }
+/* ===== ICON TOP / BẢNG VINH DANH ===== */
+#arena-top-btn {
+    position: fixed;
+    top: 16px;
+    right: 192px;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, #f4c542, #8e5a00);
+    color: #2a1147;
+    font-size: 24px;
+    cursor: pointer;
+    z-index: 12018;
+    box-shadow:
+        0 0 14px rgba(244,197,66,0.42),
+        0 0 18px rgba(123,47,247,0.18);
+    border: 1px solid rgba(255,255,255,0.42);
+}
+
+#arena-top-btn:hover {
+    transform: scale(1.05);
+}
+
+body.in-match #arena-top-btn {
+    display: none !important;
+}
+
+/* xếp hàng icon mobile: bạn bè | nhiệm vụ | shop | top */
+@media (max-width: 600px) {
+    #arena-friend-btn {
+        top: 16px !important;
+        right: 12px !important;
+        bottom: auto !important;
+    }
+
+    #arena-mission-btn {
+        top: 16px !important;
+        right: 72px !important;
+        bottom: auto !important;
+    }
+
+    #arena-shop-btn {
+        top: 16px !important;
+        right: 132px !important;
+        bottom: auto !important;
+    }
+
+    #arena-top-btn {
+        top: 16px !important;
+        right: 192px !important;
+        bottom: auto !important;
+    }
+}
+
+/* desktop cũng nằm ngang hàng trên góc phải */
+@media (min-width: 601px) {
+    #arena-friend-btn {
+        top: 20px !important;
+        right: 24px !important;
+        bottom: auto !important;
+    }
+
+    #arena-mission-btn {
+        top: 20px !important;
+        right: 88px !important;
+        bottom: auto !important;
+    }
+
+    #arena-shop-btn {
+        top: 20px !important;
+        right: 152px !important;
+        bottom: auto !important;
+    }
+
+    #arena-top-btn {
+        top: 20px !important;
+        right: 216px !important;
+        bottom: auto !important;
+    }
+}
+
+/* ===== MODAL BẢNG VINH DANH ===== */
+#top-leaderboard-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 26080;
+    background: rgba(0,0,0,0.76);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    box-sizing: border-box;
+}
+
+#top-leaderboard-modal.show {
+    display: flex;
+}
+
+.top-leaderboard-box {
+    width: min(94vw, 440px);
+    max-height: 84vh;
+    overflow: hidden;
+    background: rgba(18, 8, 34, 0.98);
+    border: 2px solid #f4c542;
+    border-radius: 18px;
+    box-shadow:
+        0 0 18px rgba(244,197,66,0.22),
+        0 0 22px rgba(123,47,247,0.26);
+}
+
+.top-leaderboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 13px 14px;
+    background: linear-gradient(180deg, #f4c542, #9b5c00);
+    color: #2a1147;
+    font-size: 15px;
+    font-weight: 900;
+}
+
+.top-leaderboard-close {
+    cursor: pointer;
+    color: #fff;
+    font-size: 18px;
+    text-shadow: 0 0 5px rgba(0,0,0,0.5);
+}
+
+.top-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    padding: 10px;
+    background: rgba(0,0,0,0.22);
+}
+
+.top-tab-btn {
+    padding: 8px 6px !important;
+    border-radius: 10px !important;
+    font-size: 10px !important;
+    font-weight: 900 !important;
+    background: linear-gradient(180deg, #2d3436, #111) !important;
+    color: #dfe6e9 !important;
+    border: 1px solid rgba(85,239,196,0.25) !important;
+}
+
+.top-tab-btn.active {
+    background: linear-gradient(180deg, #7b2ff7, #4d1d95) !important;
+    color: #fff8d6 !important;
+    border-color: #f4c542 !important;
+}
+
+#top-leaderboard-list {
+    max-height: 58vh;
+    overflow-y: auto;
+    padding: 8px 10px 12px;
+}
+
+.top-row {
+    display: grid;
+    grid-template-columns: 42px 1fr auto;
+    gap: 8px;
+    align-items: center;
+    padding: 9px 8px;
+    border-bottom: 1px solid rgba(85,239,196,0.14);
+    color: #fff;
+    font-size: 12px;
+}
+
+.top-row strong {
+    color: #55efc4;
+}
+
+.top-name {
+    font-weight: 900;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.top-value {
+    color: #ffeaa7;
+    font-weight: 900;
+    white-space: nowrap;
+}
+
+.top-empty {
+    padding: 18px 10px;
+    text-align: center;
+    color: #dfe6e9;
+    font-size: 12px;
+    line-height: 1.5;
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -6451,6 +6647,11 @@ if (missionBtn) missionBtn.style.display = "none";
 
 const shopBtn = document.getElementById("arena-shop-btn");
 if (shopBtn) shopBtn.style.display = "none";
+const topBtn = document.getElementById("arena-top-btn");
+if (topBtn) topBtn.style.display = "none";
+
+const topModal = document.getElementById("top-leaderboard-modal");
+if (topModal) topModal.classList.remove("show");
 
 const shopBadge = document.getElementById("arena-shop-badge");
 if (shopBadge) {
@@ -6476,6 +6677,9 @@ function showHomeUI() {
 
     const shopBtn = document.getElementById("arena-shop-btn");
     if (shopBtn) shopBtn.style.display = "flex";
+
+    const topBtn = document.getElementById("arena-top-btn");
+if (topBtn) topBtn.style.display = "flex";
 
     if (typeof refreshShopBadgeSilently === "function") {
         refreshShopBadgeSilently();
@@ -14228,7 +14432,245 @@ function initAdBookSlider() {
 
 document.addEventListener("DOMContentLoaded", initAdBookSlider);
 </script>
+(function () {
+    const TOP_TABS = {
+        wins: {
+            label: "🏆 THẮNG NGÀY",
+            field: "todayWins",
+            suffix: " trận"
+        },
+        exp: {
+            label: "⚡ EXP",
+            field: "exp",
+            suffix: " EXP"
+        },
+        asset: {
+            label: "💰 TÀI SẢN",
+            field: "asset",
+            suffix: " PMC"
+        },
+        skin: {
+            label: "💎 SKIN",
+            field: "skin",
+            suffix: " skin"
+        },
+        online: {
+            label: "🟢 ONLINE",
+            field: "online",
+            suffix: " phút"
+        }
+    };
 
+    function safeTopKey() {
+        try {
+            if (typeof makeWalletDbKey === "function") return makeWalletDbKey();
+        } catch (_) {}
+
+        return String(
+            localStorage.getItem("walletKey") ||
+            localStorage.getItem("pi-username") ||
+            localStorage.getItem("user-name-display") ||
+            "guest"
+        ).replace(/[.#$\[\]\/]/g, "_");
+    }
+
+    function topTodayKey() {
+        const d = new Date();
+        return [
+            d.getFullYear(),
+            String(d.getMonth() + 1).padStart(2, "0"),
+            String(d.getDate()).padStart(2, "0")
+        ].join("-");
+    }
+
+    function topName() {
+        return (
+            localStorage.getItem("user-name-display") ||
+            localStorage.getItem("pi-username") ||
+            "Người chơi"
+        );
+    }
+
+    function topNumber(v) {
+        return Math.max(0, Math.floor(Number(v) || 0));
+    }
+
+    function ensureTopButton() {
+        if (!document.getElementById("arena-top-btn")) {
+            const btn = document.createElement("div");
+            btn.id = "arena-top-btn";
+            btn.title = "Bảng vinh danh";
+            btn.innerHTML = "🏆";
+            btn.onclick = openTopLeaderboardModal;
+            document.body.appendChild(btn);
+        }
+
+        refreshTopButtonVisible();
+    }
+
+    function ensureTopModal() {
+        if (document.getElementById("top-leaderboard-modal")) return;
+
+        const modal = document.createElement("div");
+        modal.id = "top-leaderboard-modal";
+        modal.onclick = function (e) {
+            if (e.target === modal) closeTopLeaderboardModal();
+        };
+
+        modal.innerHTML = `
+            <div class="top-leaderboard-box">
+                <div class="top-leaderboard-header">
+                    <span>🏆 BẢNG VINH DANH</span>
+                    <span class="top-leaderboard-close" onclick="closeTopLeaderboardModal()">✖</span>
+                </div>
+
+                <div class="top-tabs">
+                    ${Object.keys(TOP_TABS).map((key, index) => `
+                        <button class="top-tab-btn ${index === 0 ? "active" : ""}"
+                                onclick="renderTopLeaderboard('${key}', this)">
+                            ${TOP_TABS[key].label}
+                        </button>
+                    `).join("")}
+                </div>
+
+                <div id="top-leaderboard-list">
+                    <div class="top-empty">Đang tải bảng vinh danh...</div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+    }
+
+    function refreshTopButtonVisible() {
+        const btn = document.getElementById("arena-top-btn");
+        if (!btn) return;
+
+        const home = document.getElementById("home-menu");
+        const login = document.getElementById("login-screen");
+        const inMatch = document.body.classList.contains("in-match");
+
+        const loginVisible = login && getComputedStyle(login).display !== "none";
+        const homeVisible = home && getComputedStyle(home).display !== "none";
+
+        btn.style.display = (!inMatch && !loginVisible && homeVisible) ? "flex" : "none";
+    }
+
+    async function syncMyTopProfile() {
+        if (!window.db) return;
+
+        const walletKey = safeTopKey();
+        const pi = typeof getPiBalance === "function" ? Number(getPiBalance() || 0) : 0;
+        const pmc = typeof getPmcBalance === "function" ? Number(getPmcBalance() || 0) : 0;
+        const rate = typeof PMC_RATE === "number" ? PMC_RATE : 500;
+
+        let exp = 0;
+        try {
+            if (typeof getCachedLevelMeta === "function") {
+                const meta = getCachedLevelMeta() || {};
+                exp = topNumber(meta.xp || meta.exp || 0);
+            }
+        } catch (_) {}
+
+        await db.ref("leaderboards/topPlayers/" + walletKey).update({
+            walletKey,
+            name: topName(),
+            exp,
+            asset: topNumber(pmc + pi * rate),
+            updatedAt: Date.now()
+        });
+    }
+
+    async function renderTopLeaderboard(type = "wins", clickedBtn) {
+        ensureTopModal();
+
+        document.querySelectorAll(".top-tab-btn").forEach(btn => btn.classList.remove("active"));
+        if (clickedBtn) clickedBtn.classList.add("active");
+
+        const box = document.getElementById("top-leaderboard-list");
+        if (!box) return;
+
+        box.innerHTML = `<div class="top-empty">Đang tải ${TOP_TABS[type]?.label || "TOP"}...</div>`;
+
+        try {
+            if (!window.db) {
+                box.innerHTML = `<div class="top-empty">Chưa kết nối Firebase.</div>`;
+                return;
+            }
+
+            await syncMyTopProfile();
+
+            const tab = TOP_TABS[type] || TOP_TABS.wins;
+            let ref;
+
+            if (type === "wins") {
+                ref = db.ref("leaderboards/dailyWins/" + topTodayKey()).orderByChild("wins").limitToLast(50);
+            } else {
+                ref = db.ref("leaderboards/topPlayers").orderByChild(tab.field).limitToLast(50);
+            }
+
+            const snap = await ref.once("value");
+            const rows = [];
+
+            snap.forEach(child => {
+                const v = child.val() || {};
+                rows.push({
+                    key: child.key,
+                    name: v.name || "Người chơi",
+                    value: type === "wins" ? topNumber(v.wins) : topNumber(v[tab.field])
+                });
+            });
+
+            rows.sort((a, b) => b.value - a.value);
+
+            if (!rows.length) {
+                box.innerHTML = `<div class="top-empty">Chưa có dữ liệu. Chơi vài trận là lên bảng.</div>`;
+                return;
+            }
+
+            box.innerHTML = rows.slice(0, 50).map((row, index) => `
+                <div class="top-row">
+                    <strong>#${index + 1}</strong>
+                    <div class="top-name">${String(row.name).replace(/</g, "&lt;")}</div>
+                    <div class="top-value">${row.value.toLocaleString("vi-VN")}${tab.suffix}</div>
+                </div>
+            `).join("");
+        } catch (err) {
+            console.error("LOAD_TOP_FAIL", err);
+            box.innerHTML = `<div class="top-empty">Lỗi tải bảng top.</div>`;
+        }
+    }
+
+    function openTopLeaderboardModal(event) {
+        if (event && event.stopPropagation) event.stopPropagation();
+
+        ensureTopModal();
+
+        const modal = document.getElementById("top-leaderboard-modal");
+        if (modal) modal.classList.add("show");
+
+        renderTopLeaderboard("wins");
+    }
+
+    function closeTopLeaderboardModal() {
+        const modal = document.getElementById("top-leaderboard-modal");
+        if (modal) modal.classList.remove("show");
+    }
+
+    window.openTopLeaderboardModal = openTopLeaderboardModal;
+    window.closeTopLeaderboardModal = closeTopLeaderboardModal;
+    window.renderTopLeaderboard = renderTopLeaderboard;
+    window.refreshTopButtonVisible = refreshTopButtonVisible;
+
+    document.addEventListener("DOMContentLoaded", function () {
+        ensureTopButton();
+        ensureTopModal();
+
+        setTimeout(refreshTopButtonVisible, 800);
+        setInterval(refreshTopButtonVisible, 1500);
+    });
+})();
+</script>
 </body>
 
 </html>
