@@ -5979,21 +5979,12 @@ function isAiWorkerMoveLegal(move, side = "den") {
     temp[move.to.r][move.to.c] = temp[move.from.r][move.from.c];
     temp[move.from.r][move.from.c] = null;
 
-    if (isTwoKingsFacing(temp)) return false;
+    if (aiMainTwoKingsFacing(temp)) return false;
     if (laBiChieu(side, temp)) return false;
 
     return true;
 }
-function roomHasAiBot(room) {
-    const den = room?.players?.den || {};
 
-    return !!(
-        room?.aiMode ||
-        den?.isAI ||
-        den?.uid === AI_BOT_UID ||
-        String(den?.name || "").toLowerCase().includes("ai")
-    );
-}
 function aiFastFallbackMove(moves) {
     if (!moves || !moves.length) return null;
 
@@ -6149,19 +6140,6 @@ async function tryResumeRealtimeMatch(preferredMode = null) {
     const isDo = room.players?.do?.uid === me.uid;
     const isDen = room.players?.den?.uid === me.uid;
     const canResume = !room.winner && (room.status === "playing" || room.status === "waiting");
-
-    const boardOk =
-        Array.isArray(room.board) &&
-        room.board.length === 10 &&
-        room.board.every(row => Array.isArray(row) && row.length === 9);
-
-    // Nếu trận cũ bị lỗi: status playing nhưng không có board chuẩn,
-    // xóa snapshot để app không bị kẹt màn xanh trống.
-    if (room.status === "playing" && !boardOk) {
-        console.warn("CLEAR BROKEN ACTIVE MATCH:", saved.roomId, room);
-        clearActiveMatchSnapshot(saved.roomId);
-        return false;
-    }
 
     if (!canResume || (!isDo && !isDen)) {
         clearActiveMatchSnapshot(saved.roomId);
@@ -9252,14 +9230,8 @@ async function aiMakeMoveNow(roomId) {
     const snap = await db.ref("matches/" + roomId).once("value");
     const room = snap.val() || {};
 
-    if (!roomHasAiBot(room) || room.status !== "playing" || room.winner) {
-    return false;
-}
-
-const turnNow = String(room.turn || luotDi || "").toLowerCase();
-if (turnNow !== "den") {
-    return false;
-}
+    if (!room.aiMode || room.status !== "playing" || room.winner) return;
+    if ((room.turn || luotDi) !== "den") return;
 
     const moves = aiCollectLegalMoves("den");
 console.log("AI LEGAL MOVES:", moves.length, {
@@ -9271,7 +9243,14 @@ console.log("AI LEGAL MOVES:", moves.length, {
 });
 
     if (!moves.length) {
-        return true;
+        await db.ref("matches/" + roomId).update({
+            winner: "do",
+            winReason: "ai_no_move",
+            status: "finished",
+            finishedAt: firebase.database.ServerValue.TIMESTAMP,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+        return;
     }
 
     renderTimerUI();
@@ -9285,12 +9264,12 @@ if (!move) {
     move = aiFastFallbackMove(moves);
 }
 
-if (!move) return false;
+if (!move) return;;
 
     const pieceEl = aiGetPieceElAtReal(move.from.c, move.from.r);
     const targetEl = aiGetPieceElAtReal(move.to.c, move.to.r);
 
-    if (!pieceEl) return false;
+    if (!pieceEl) return;
 
     const capturedKing = targetEl && isKingPiece(targetEl.dataset.type);
 
@@ -9346,19 +9325,18 @@ if (!move) return false;
     }
 
     await syncRoomFromBoard(extra);
-return true;
 }
 
 function maybeScheduleAiMove(room, roomId) {
     if (!room || !roomId) return;
-    if (!roomHasAiBot(room)) return;
+    if (!room.aiMode) return;
     if (room.status !== "playing") return;
     if (room.winner) return;
 
-    // Nếu người thật đang là bên ĐEN thì không cho tự điều khiển AI
-    if (mySide === "den") return;
+    // Chỉ chủ phòng / bên đỏ thật điều khiển AI
+    if (mySide !== "do") return;
 
-    const turnNow = String(room.turn || luotDi || "").toLowerCase();
+    const turnNow = room.turn || luotDi || "";
     if (turnNow !== "den") return;
 
     const boardKey = JSON.stringify(room.board || []);
@@ -9369,30 +9347,15 @@ function maybeScheduleAiMove(room, roomId) {
     aiMoveScheduledKey = key;
     clearTimeout(aiMoveTimer);
 
-    console.log("AI SCHEDULED:", {
-        roomId,
-        turnNow,
-        aiMode: room.aiMode,
-        denPlayer: room.players?.den,
-        mySide
-    });
-
     aiMoveTimer = setTimeout(async () => {
-        let moved = false;
-
         try {
             aiThinking = true;
-            moved = await aiMakeMoveNow(roomId);
+            await aiMakeMoveNow(roomId);
         } catch (err) {
             console.error("AI MOVE ERROR:", err);
             alert("AI bị lỗi nên chưa đi được. Mở Console xem AI MOVE ERROR.");
         } finally {
             aiThinking = false;
-
-            // Nếu chưa đi được thì mở khóa để Firebase event kế tiếp còn gọi lại
-            if (!moved) {
-                aiMoveScheduledKey = "";
-            }
         }
     }, 120);
 }
