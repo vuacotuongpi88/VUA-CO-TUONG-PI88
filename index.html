@@ -6768,36 +6768,6 @@ function formatTime(s) {
     const sec = s % 60;
     return String(m).padStart(2, '0') + ":" + String(sec).padStart(2, '0');
 }
-function finishOnlineGame(winnerSide, winReason = "checkmate") {
-    if (!winnerSide) return;
-
-    const resultSub = `BÊN ${winnerSide === "do" ? "ĐỎ" : "ĐEN"} THẮNG`;
-    const title =
-        winReason === "timeout" ? "HẾT GIỜ" :
-        winReason === "dauhang" ? "ĐẦU HÀNG" :
-        winReason === "bochay" ? "ĐỐI THỦ THOÁT" :
-        "CHIẾU BÍ";
-
-    if (!currentRoomId) {
-        endGame(title, resultSub);
-        return;
-    }
-
-    db.ref("matches/" + currentRoomId).once("value").then(snap => {
-        const room = snap.val() || {};
-        if (room.winner) return;
-
-        return db.ref("matches/" + currentRoomId).update({
-            winner: winnerSide,
-            winReason,
-            status: "finished",
-            finishedAt: firebase.database.ServerValue.TIMESTAMP,
-            updatedAt: firebase.database.ServerValue.TIMESTAMP
-        });
-    }).catch(err => {
-        console.error("finishOnlineGame lỗi:", err);
-    });
-}
 
 function startTimer() {
     clearInterval(interval);
@@ -6817,18 +6787,12 @@ function startTimer() {
             timeDo--;
             if (timeDo === 30) playSnd('timeout');
             renderTimerUI();
-            if (timeDo <= 0) {
-    finishOnlineGame("den", "timeout");
-    return;
-}
+            if (timeDo <= 0) endGame("HẾT GIỜ", "ĐEN THẮNG");
         } else {
             timeDen--;
             if (timeDen === 30) playSnd('timeout');
             renderTimerUI();
-            if (timeDen <= 0) {
-    finishOnlineGame("do", "timeout");
-    return;
-}
+            if (timeDen <= 0) endGame("HẾT GIỜ", "ĐỎ THẮNG");
         }
     }, 1000);
 }
@@ -6986,10 +6950,10 @@ async function playNextMatch() {
         const bucket = room.roomBucket || currentRoomBucket || makeStakeBucket(room.mode || currentRoomMode || "co-tuong", room.stakePMC || currentRoomStakePMC || 0);
         const inviteCode = room.inviteCode || makeInviteCodeFromRoomId(roomId);
 
-        // Chạy chốt thưởng trước khi reset phòng, để PMC + EXP xử lý xong
-if (room.winner) {
-    await finalizeMatchRewardOnce(roomId, room).catch(err => {
-        console.error("Chốt thưởng trước khi tạo lại phòng lỗi:", err);
+        // Chạy settle trước khi reset phòng, để tiền + EXP xử lý xong
+        if (room.winner) {
+    await settlePmcMatchOnce(roomId).catch(err => {
+        console.error("Settle PMC trước khi tạo lại phòng lỗi:", err);
     });
 }
 
@@ -8553,39 +8517,38 @@ const bottomPmcBox = document.getElementById("player-do-pmc");
 
     const roomStake = Number(room?.stakePMC || 0);
 
-const localProfile = getCurrentPlayerProfile();
-const localWalletKey = makeWalletDbKey();
-
-const myPlayerIsLocal =
-    !!mySide &&
-    (
-        myPlayer.walletKey === localWalletKey ||
-        myPlayer.uid === localProfile.uid
-    );
-
 const oppPmc = Number(oppPlayer.pmcBalance || 0);
-const myPmc = myPlayerIsLocal
-    ? getPmcBalance()
-    : Number(myPlayer.pmcBalance || 0);
+const myPmc = Number(myPlayer.pmcBalance || 0);
 
 const oppPi = Number(
     oppPlayer.balance != null ? oppPlayer.balance : (oppPlayer.piBalance || 0)
 ) || 0;
 
-const myPi = myPlayerIsLocal
-    ? getPiBalance()
-    : Number(myPlayer.balance != null ? myPlayer.balance : (myPlayer.piBalance || 0)) || 0;
+const myPi = Number(
+    myPlayer.balance != null ? myPlayer.balance : (myPlayer.piBalance || 0)
+) || 0;
 
-const oppLevelMeta = buildLevelMeta(oppPlayer?.levelMeta || {});
+ const oppLevelMeta = buildLevelMeta(oppPlayer?.levelMeta || {});
 
 const roomMyLevelMeta = buildLevelMeta(myPlayer?.levelMeta || {});
 const cacheMyLevelMeta = getCachedLevelMeta();
 
 const myLevelMeta = buildLevelMeta(
-    myPlayerIsLocal
+    myPlayer?.uid === (firebase.auth().currentUser?.uid || "")
         ? pickNewestLevelMeta(cacheMyLevelMeta, roomMyLevelMeta)
         : roomMyLevelMeta
 );
+
+// Chỉ lưu room levelMeta vào cache nếu room thật sự mới hơn cache.
+// Không cho room cũ 0/100 đè cache ví mới.
+if (myPlayer?.uid === (firebase.auth().currentUser?.uid || "")) {
+    const roomAt = Number(roomMyLevelMeta.updatedAt || 0) || 0;
+    const cacheAt = Number(cacheMyLevelMeta.updatedAt || 0) || 0;
+
+    if (roomAt && roomAt >= cacheAt) {
+        setCachedLevelMeta(myLevelMeta);
+    }
+}
 if (topPi) topPi.innerText = `${oppPi.toFixed(2)} π`;
 if (topPmcBox) topPmcBox.innerText = `${formatPMC(oppPmc)} PMC`;
 
@@ -8842,354 +8805,6 @@ function appendMatchChatMessage(msg) {
     content.appendChild(row);
     content.scrollTop = content.scrollHeight;
 }
-function makeRewardRoundKey(roomId, room = {}) {
-    // Không dùng Date.now() ở đây, vì mỗi máy sẽ ra key khác nhau.
-    // Chờ finishedAt có thật rồi mới chốt thưởng.
-    const finishedAt = room.finishedAt || "";
-    if (!roomId || !room.winner || !finishedAt) return "";
-
-    return [
-        String(roomId || ""),
-        String(room.winner || ""),
-        String(room.winReason || ""),
-        String(finishedAt || "")
-    ].join("_").replace(/[.#$\[\]\/]/g, "_");
-}
-
-function normalizeWalletKey(raw) {
-    return String(raw || "")
-        .trim()
-        .replace(/\s+/g, "_")
-        .replace(/[.#$\[\]\/]/g, "_");
-}
-
-function getRewardWalletKey(room, side) {
-    const p = room?.players?.[side] || {};
-
-    const directKey = p.walletKey || p.walletDbKey || p.wallet || "";
-    if (directKey) return normalizeWalletKey(directKey);
-
-    const uid = String(p.uid || "").trim();
-    if (!uid) return "";
-
-    // Nếu uid chưa có prefix thì convert về key ví giống makeWalletDbKey()
-    if (uid.startsWith("google_") || uid.startsWith("pi_") || uid.startsWith("guest_")) {
-        return normalizeWalletKey(uid);
-    }
-
-    return normalizeWalletKey("google_" + uid);
-}
-function getRewardProfile(room, side) {
-    const p = room?.players?.[side] || {};
-    return {
-        name: p.name || p.displayName || "Người chơi",
-        photo: p.photo || p.photoURL || "images/do_tuong.png"
-    };
-}
-
-async function pushMyLiveWalletAndLevelToRoom(roomId) {
-    if (!roomId || !mySide) return;
-
-    const bal = typeof loadWalletBalance === "function"
-        ? await loadWalletBalance().catch(() => ({ pi: getPiBalance(), pmc: getPmcBalance() }))
-        : { pi: getPiBalance(), pmc: getPmcBalance() };
-
-    const meta = typeof ensureMyLevelMetaLoaded === "function"
-        ? await ensureMyLevelMetaLoaded().catch(() => getCachedLevelMeta())
-        : getCachedLevelMeta();
-
-    const safeMeta = buildLevelMeta(meta);
-    setCachedLevelMeta(safeMeta);
-    renderLevelHud(safeMeta);
-
-    await db.ref(`matches/${roomId}/players/${mySide}`).update({
-        balance: Number(bal.pi || getPiBalance() || 0),
-        piBalance: Number(bal.pi || getPiBalance() || 0),
-        pmcBalance: Math.floor(Number(bal.pmc || getPmcBalance() || 0)),
-        levelMeta: safeMeta,
-        updatedAt: firebase.database.ServerValue.TIMESTAMP
-    }).catch(() => {});
-}
-
-async function creditPmcForWinnerRound(roomId, room) {
-    const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
-    if (!roomId || !room?.winner || room.winner === "hoa" || !stake) return;
-    if (!mySide || room.winner !== mySide) return;
-
-    const roundKey = makeRewardRoundKey(roomId, room);
-    if (!roundKey) return;
-
-    const myWalletKey = normalizeWalletKey(makeWalletDbKey());
-    const roomWinnerKey = getRewardWalletKey(room, room.winner);
-
-    if (roomWinnerKey && roomWinnerKey !== myWalletKey) {
-        console.warn("REWARD PMC SKIP: winner key không khớp máy thắng", {
-            myWalletKey,
-            roomWinnerKey,
-            winner: room.winner,
-            mySide
-        });
-        return;
-    }
-
-    const lockRef = db.ref(`matches/${roomId}/rewardResults/${roundKey}/pmc_${mySide}_${myWalletKey}`);
-
-    const lock = await runRefTransaction(lockRef, current => {
-        if (current && current.done) return;
-
-        const runningAt = Number(current?.runningAt || 0) || 0;
-        if (current?.running && Date.now() - runningAt < 8000) return;
-
-        return {
-            done: false,
-            running: true,
-            runningAt: Date.now(),
-            side: mySide,
-            walletKey: myWalletKey
-        };
-    });
-
-    if (!lock.committed) return;
-
-    const totalPot = stake * 2;
-    const feeRate = typeof MATCH_SYSTEM_FEE_RATE === "number" ? MATCH_SYSTEM_FEE_RATE : 0.02;
-    const feePMC = Math.max(0, Math.floor(totalPot * feeRate));
-    const winnerReceivePMC = totalPot - feePMC;
-
-    try {
-        const paid = await adjustPmcWalletByKey(
-            myWalletKey,
-            winnerReceivePMC,
-            getRewardProfile(room, mySide)
-        );
-
-        if (paid == null) {
-            await lockRef.set({
-                done: false,
-                running: false,
-                error: "winner_pmc_credit_failed",
-                errorAt: Date.now(),
-                winnerReceivePMC
-            });
-            return;
-        }
-
-        let adminPaid = null;
-
-        // Phí hệ thống không được làm hỏng thưởng người chơi.
-        // Nếu ví admin lỗi quyền/rules thì vẫn cho người thắng nhận PMC.
-        try {
-            if (feePMC > 0) {
-                adminPaid = await adjustPmcWalletByKey("pi_admin_master", feePMC, {
-                    name: "Ví phí hệ thống",
-                    photo: "images/do_tuong.png"
-                });
-            }
-        } catch (adminErr) {
-            console.warn("REWARD PMC: cộng phí admin lỗi, bỏ qua để không chặn thưởng:", adminErr);
-        }
-
-        await lockRef.set({
-            done: true,
-            running: false,
-            type: "winner",
-            winnerSide: mySide,
-            winnerKey: myWalletKey,
-            stakePMC: stake,
-            totalPot,
-            feePMC,
-            winnerReceivePMC,
-            paid,
-            adminPaid,
-            at: Date.now()
-        });
-
-        await loadWalletBalance().catch(() => {});
-    } catch (err) {
-        console.error("REWARD PMC FAIL:", err);
-
-        await lockRef.update({
-            done: false,
-            running: false,
-            error: err?.message || String(err),
-            errorAt: Date.now()
-        }).catch(() => {});
-    }
-}
-
-async function updateLevelMetaByWalletKey(walletKey, xpDelta, resultType) {
-    if (!walletKey) return null;
-
-    const safeWalletKey = String(walletKey).replace(/[.#$\[\]\/]/g, "_");
-    const levelRef = getWalletLevelRef(safeWalletKey);
-
-    let afterMeta = getDefaultLevelMeta();
-
-    await runRefTransaction(levelRef, current => {
-        const beforeMeta = buildLevelMeta(current || {});
-        const maxXp = getLevelInfoByLevel(LEVEL_MAX).xp;
-
-        const nextXp = Math.max(
-            0,
-            Math.min(maxXp, Number(beforeMeta.xp || 0) + Number(xpDelta || 0))
-        );
-
-        afterMeta = buildLevelMeta({
-            ...beforeMeta,
-            xp: nextXp,
-            wins: beforeMeta.wins + (resultType === "win" ? 1 : 0),
-            losses: beforeMeta.losses + (resultType === "lose" ? 1 : 0),
-            matches: beforeMeta.matches + 1,
-            lastResult: resultType,
-            lastXpDelta: xpDelta,
-            updatedAt: Date.now()
-        });
-
-        return afterMeta;
-    });
-
-    if (safeWalletKey === makeWalletDbKey()) {
-        setCachedLevelMeta(afterMeta);
-        renderLevelHud(afterMeta);
-    }
-
-    return afterMeta;
-}
-
-async function awardExpForBothSidesRound(roomId, room) {
-    if (!roomId || !room?.winner || room.winner === "hoa") return;
-    if (!mySide) return;
-
-    const roundKey = makeRewardRoundKey(roomId, room);
-    if (!roundKey) return;
-
-    const myWalletKey = normalizeWalletKey(makeWalletDbKey());
-    const roomMyKey = getRewardWalletKey(room, mySide);
-
-    if (roomMyKey && roomMyKey !== myWalletKey) {
-        console.warn("REWARD EXP SKIP: walletKey không khớp máy hiện tại", {
-            mySide,
-            myWalletKey,
-            roomMyKey
-        });
-        return;
-    }
-
-    const resultType = room.winner === mySide ? "win" : "lose";
-    const xpDelta = resultType === "win" ? 18 : -18;
-
-    const lockRef = db.ref(`matches/${roomId}/rewardResults/${roundKey}/exp_${mySide}_${myWalletKey}`);
-
-    const lock = await runRefTransaction(lockRef, current => {
-        if (current && current.done) return;
-
-        const runningAt = Number(current?.runningAt || 0) || 0;
-        if (current?.running && Date.now() - runningAt < 8000) return;
-
-        return {
-            done: false,
-            running: true,
-            runningAt: Date.now(),
-            side: mySide,
-            walletKey: myWalletKey,
-            resultType
-        };
-    });
-
-    if (!lock.committed) return;
-
-    try {
-        const meta = await updateLevelMetaByWalletKey(myWalletKey, xpDelta, resultType);
-
-        await db.ref().update({
-            [`matches/${roomId}/players/${mySide}/levelMeta`]: meta,
-            [`matches/${roomId}/rewardResults/${roundKey}/exp_${mySide}_${myWalletKey}`]: {
-                done: true,
-                running: false,
-                side: mySide,
-                walletKey: myWalletKey,
-                resultType,
-                xpDelta,
-                meta,
-                at: Date.now()
-            }
-        });
-
-        setCachedLevelMeta(meta);
-        renderLevelHud(meta);
-    } catch (err) {
-        console.error("REWARD EXP FAIL:", err);
-
-        await lockRef.update({
-            done: false,
-            running: false,
-            error: err?.message || String(err),
-            errorAt: Date.now()
-        }).catch(() => {});
-    }
-}
-
-async function finalizeMatchRewardOnce(roomId, room) {
-    if (!roomId || !room || !room.winner) return;
-
-    const roundKey = makeRewardRoundKey(roomId, room);
-
-    // Chờ Firebase trả finishedAt thật rồi mới chốt, tránh mỗi máy ra 1 khóa khác nhau.
-    if (!roundKey) return;
-
-    window.__rewardRunningByRound = window.__rewardRunningByRound || {};
-    const localRunKey = `${roundKey}_${mySide || "unknown"}`;
-
-    if (window.__rewardRunningByRound[localRunKey]) return;
-    window.__rewardRunningByRound[localRunKey] = true;
-
-    try {
-        console.log("REWARD_FINALIZE_START", {
-            roomId,
-            roundKey,
-            winner: room.winner,
-            mySide,
-            stakePMC: room.stakePMC,
-            doKey: getRewardWalletKey(room, "do"),
-            denKey: getRewardWalletKey(room, "den")
-        });
-
-        // PMC: chỉ máy bên thắng tự cộng cho ví mình.
-        await creditPmcForWinnerRound(roomId, room);
-
-        // EXP: mỗi máy tự cộng/trừ cho ví của chính nó.
-        await awardExpForBothSidesRound(roomId, room);
-
-        // Load lại ví thật + EXP thật rồi đẩy lên room.
-        await pushMyLiveWalletAndLevelToRoom(roomId);
-
-        renderPlayersFromRoom({
-            ...room,
-            players: {
-                ...(room.players || {}),
-                [mySide]: {
-                    ...(room.players?.[mySide] || {}),
-                    balance: getPiBalance(),
-                    piBalance: getPiBalance(),
-                    pmcBalance: getPmcBalance(),
-                    levelMeta: buildLevelMeta(getCachedLevelMeta())
-                }
-            }
-        });
-
-        console.log("REWARD_FINALIZE_DONE", {
-            roomId,
-            roundKey,
-            winner: room.winner,
-            mySide,
-            pmc: getPmcBalance(),
-            levelMeta: getCachedLevelMeta()
-        });
-    } catch (err) {
-        console.error("FINALIZE_MATCH_REWARD_FAIL:", err);
-        delete window.__rewardRunningByRound[localRunKey];
-    }
-}
 function bindRoom(roomId) {
     cleanupRoomListeners();
     const listeningRoomId = roomId;
@@ -9219,78 +8834,23 @@ function bindRoom(roomId) {
         const room = snap.val();
         if (!room) return;
 const me = getCurrentPlayerProfile();
-const myWalletKeyNow = normalizeWalletKey(makeWalletDbKey());
-const myUidNow = String(me.uid || "").trim();
 
-const doPlayerNow = room.players?.do || {};
-const denPlayerNow = room.players?.den || {};
-
-const doWalletNow = getRewardWalletKey(room, "do");
-const denWalletNow = getRewardWalletKey(room, "den");
-
-const doUidNow = String(doPlayerNow.uid || "").trim();
-const denUidNow = String(denPlayerNow.uid || "").trim();
-
-let detectedSide = "";
-
-// ƯU TIÊN TUYỆT ĐỐI walletKey.
-// Không để uid làm máy đen bị nhận nhầm thành đỏ.
-if (myWalletKeyNow && doWalletNow === myWalletKeyNow && denWalletNow !== myWalletKeyNow) {
-    detectedSide = "do";
-} else if (myWalletKeyNow && denWalletNow === myWalletKeyNow && doWalletNow !== myWalletKeyNow) {
-    detectedSide = "den";
-} else if (myWalletKeyNow && doWalletNow === myWalletKeyNow) {
-    detectedSide = "do";
-} else if (myWalletKeyNow && denWalletNow === myWalletKeyNow) {
-    detectedSide = "den";
-} else {
-    // Chỉ fallback uid khi walletKey không có, tránh nhận nhầm phe.
-    const doHasWallet = !!doWalletNow;
-    const denHasWallet = !!denWalletNow;
-
-    if (!doHasWallet && !denHasWallet && myUidNow) {
-        if (doUidNow === myUidNow && denUidNow !== myUidNow) detectedSide = "do";
-        else if (denUidNow === myUidNow && doUidNow !== myUidNow) detectedSide = "den";
-    } else if (!doHasWallet && myUidNow && doUidNow === myUidNow && denUidNow !== myUidNow) {
-        detectedSide = "do";
-    } else if (!denHasWallet && myUidNow && denUidNow === myUidNow && doUidNow !== myUidNow) {
-        detectedSide = "den";
-    }
-}
-
-if (detectedSide) {
-    mySide = detectedSide;
-} else {
-    console.warn("SIDE DETECT FAIL", {
-        myWalletKeyNow,
-        myUidNow,
-        doWalletNow,
-        denWalletNow,
-        doUidNow,
-        denUidNow,
-        oldMySide: mySide
-    });
+if (room.players?.do?.uid === me.uid) {
+    mySide = "do";
+} else if (room.players?.den?.uid === me.uid) {
+    mySide = "den";
 }
 
 viewSide = mySide || "do";
 
-// Chỉ đồng bộ EXP lên room khi trận CHƯA kết thúc.
-// Không được ghi cache cũ đè EXP sau khi thắng/thua.
-if (mySide && !room.winner) {
-    const latestMeta = buildLevelMeta(getCachedLevelMeta());
+// Khi đã biết mình là đỏ/đen thì ép level mới nhất vào room + hiện thanh EXP
+if (mySide) {
+    const latestMeta = getCachedLevelMeta();
     renderLevelHud(latestMeta);
 
-    const sidePlayer = room.players?.[mySide] || {};
-    const roomMeta = buildLevelMeta(sidePlayer.levelMeta || {});
-
-    const cacheAt = Number(latestMeta.updatedAt || 0) || 0;
-    const roomAt = Number(roomMeta.updatedAt || 0) || 0;
-
-    if (!sidePlayer.levelMeta || cacheAt > roomAt) {
-        db.ref("matches/" + listeningRoomId + "/players/" + mySide + "/levelMeta")
-            .set(latestMeta)
-            .catch(() => {});
-    }
+    db.ref("matches/" + listeningRoomId + "/players/" + mySide + "/levelMeta")
+        .set(buildLevelMeta(latestMeta))
+        .catch(() => {});
 }
 if (typeof applyBoardPerspective === "function") {
     applyBoardPerspective();
@@ -9394,7 +8954,9 @@ if (room.status === "playing" && !room.winner) {
             }
         }
        if (room.winner) {
-    await finalizeMatchRewardOnce(listeningRoomId, room);
+    setTimeout(() => {
+        settlePmcMatchOnce(listeningRoomId);
+    }, 0);
 }
         if (room.winner) {
     const victoryKey = [
@@ -9414,9 +8976,8 @@ if (room.status === "playing" && !room.winner) {
             endGame("HÒA CỜ", "2 BÊN HÒA");
         } else {
             let title = "CHIẾU BÍ";
-if (room.winReason === "timeout") title = "HẾT GIỜ";
-if (room.winReason === "dauhang") title = "ĐẦU HÀNG";
-if (room.winReason === "bochay") title = "ĐỐI THỦ THOÁT";
+            if (room.winReason === "dauhang") title = "ĐẦU HÀNG";
+            if (room.winReason === "bochay") title = "ĐỐI THỦ THOÁT";
 
             endGame(
                 title,
@@ -9984,69 +9545,217 @@ async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
 
     return nextPmc;
 }
-async function settlePmcViaApi(roomId) {
-    try {
-    console.log("settle roomId:", roomId);
-    console.log("my walletKey:", makeWalletDbKey());
-        const res = await fetch("/api/pmc/settle?t=" + Date.now(), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ roomId, feeRate: MATCH_SYSTEM_FEE_RATE })
-        });
-
-        const rawText = await res.text();
-let data = {};
-
-try {
-    data = rawText ? JSON.parse(rawText) : {};
-} catch (parseErr) {
-    console.error("PMC→PI raw response =", rawText);
-    throw new Error(
-        "API không trả JSON. Response thật: " +
-        String(rawText || "").slice(0, 200)
-    );
+function getMatchPmcPlayer(room, side) {
+    return room?.players?.[side] || {};
 }
 
-        if (!res.ok || data.ok === false) {
-            console.error("Lỗi settle PMC qua API:", data);
+function getMatchPmcWalletKey(room, side) {
+    const p = getMatchPmcPlayer(room, side);
+    return String(
+        p.walletKey ||
+        p.walletDbKey ||
+        p.wallet ||
+        p.uid ||
+        ""
+    ).trim();
+}
+
+function getMatchPmcProfile(room, side) {
+    const p = getMatchPmcPlayer(room, side);
+    return {
+        name: p.name || p.displayName || "Người chơi",
+        photo: p.photo || p.photoURL || "images/do_tuong.png"
+    };
+}
+
+function refreshLocalWalletSoon() {
+    setTimeout(() => {
+        loadWalletBalance().catch(() => {});
+    }, 800);
+
+    setTimeout(() => {
+        loadWalletBalance().catch(() => {});
+    }, 2500);
+}
+
+async function settlePmcMatchOnce(roomId) {
+    if (!roomId) return;
+
+    const roomSnap = await db.ref("matches/" + roomId).once("value");
+    const room = roomSnap.val() || {};
+
+    const stake = Math.max(0, Math.floor(Number(room.stakePMC || 0) || 0));
+    const winnerSide = String(room.winner || "").trim();
+
+    if (!stake || !winnerSide) return;
+
+    const settlementRef = db.ref(`matches/${roomId}/settlement`);
+
+    const lock = await runRefTransaction(settlementRef, current => {
+        if (current && current.pmcDone) return;
+
+        const runningAt = Number(current?.pmcRunningAt || 0) || 0;
+        const stillRunning = current?.pmcRunning && Date.now() - runningAt < 10000;
+
+        if (stillRunning) return;
+
+        return {
+            ...(current || {}),
+            pmcDone: false,
+            pmcRunning: true,
+            pmcRunningAt: Date.now(),
+            winner: winnerSide,
+            stakePMC: stake,
+            byWallet: makeWalletDbKey()
+        };
+    });
+
+    if (!lock.committed) {
+        refreshLocalWalletSoon();
+        return;
+    }
+
+    try {
+        // ===== HÒA: trả lại tiền cược cho 2 bên =====
+        if (winnerSide === "hoa") {
+            const doKey = getMatchPmcWalletKey(room, "do");
+            const denKey = getMatchPmcWalletKey(room, "den");
+
+            if (!doKey && !denKey) {
+                throw new Error("missing_refund_wallet_keys");
+            }
+
+            let doPaid = null;
+            let denPaid = null;
+
+            if (doKey) {
+                doPaid = await adjustPmcWalletByKey(
+                    doKey,
+                    stake,
+                    getMatchPmcProfile(room, "do")
+                );
+            }
+
+            if (denKey && denKey !== doKey) {
+                denPaid = await adjustPmcWalletByKey(
+                    denKey,
+                    stake,
+                    getMatchPmcProfile(room, "den")
+                );
+            }
+
+            const updates = {};
+            updates[`matches/${roomId}/settlement/pmcDone`] = true;
+            updates[`matches/${roomId}/settlement/pmcRunning`] = false;
+            updates[`matches/${roomId}/settlement/type`] = "refund";
+            updates[`matches/${roomId}/settlement/stakePMC`] = stake;
+            updates[`matches/${roomId}/settlement/doKey`] = doKey || "";
+            updates[`matches/${roomId}/settlement/denKey`] = denKey || "";
+            updates[`matches/${roomId}/settlement/doPaid`] = doPaid;
+            updates[`matches/${roomId}/settlement/denPaid`] = denPaid;
+            updates[`matches/${roomId}/settlement/pmcPaidAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+            if (doPaid != null) updates[`matches/${roomId}/players/do/pmcBalance`] = doPaid;
+            if (denPaid != null) updates[`matches/${roomId}/players/den/pmcBalance`] = denPaid;
+
+            await db.ref().update(updates);
+            await loadWalletBalance().catch(() => {});
+            refreshLocalWalletSoon();
+
+            console.log("PMC MATCH REFUND OK", {
+                roomId,
+                stake,
+                doKey,
+                denKey,
+                doPaid,
+                denPaid
+            });
+
             return;
         }
 
-        console.log("Settle PMC qua API OK:", data);
-
-// Cập nhật cache EXP sau khi server settle xong.
-// Nếu không có đoạn này, ra sảnh/tạo phòng mới sẽ bị quay về cache cũ 0/100.
-try {
-    const myWalletKey = makeWalletDbKey();
-    let myExp = null;
-
-    if (data?.expResult?.do?.walletKey === myWalletKey) {
-        myExp = data.expResult.do.levelMeta;
-    }
-
-    if (data?.expResult?.den?.walletKey === myWalletKey) {
-        myExp = data.expResult.den.levelMeta;
-    }
-
-    if (!myExp && mySide === "do") myExp = data?.expResult?.do?.levelMeta;
-    if (!myExp && mySide === "den") myExp = data?.expResult?.den?.levelMeta;
-
-    if (myExp) {
-        setCachedLevelMeta(myExp);
-
-        if (currentRoomId && mySide) {
-            await db.ref("matches/" + currentRoomId + "/players/" + mySide + "/levelMeta")
-                .set(buildLevelMeta(myExp))
-                .catch(() => {});
+        // ===== CÓ NGƯỜI THẮNG: cộng tiền cho ví thắng =====
+        if (winnerSide !== "do" && winnerSide !== "den") {
+            throw new Error("invalid_winner_side_" + winnerSide);
         }
-    }
-} catch (e) {
-    console.warn("Không sync cache EXP sau settle:", e);
-}
 
-await loadWalletBalance().catch(() => {});
+        const winnerKey = getMatchPmcWalletKey(room, winnerSide);
+
+        if (!winnerKey) {
+            throw new Error("missing_winner_wallet_key");
+        }
+
+        const totalPot = stake * 2;
+        const feeRate = typeof MATCH_SYSTEM_FEE_RATE === "number"
+            ? MATCH_SYSTEM_FEE_RATE
+            : 0.02;
+
+        const feePMC = Math.max(0, Math.floor(totalPot * feeRate));
+        const winnerReceivePMC = totalPot - feePMC;
+
+        const paid = await adjustPmcWalletByKey(
+            winnerKey,
+            winnerReceivePMC,
+            getMatchPmcProfile(room, winnerSide)
+        );
+
+        if (paid == null) {
+            throw new Error("winner_pmc_credit_failed");
+        }
+
+        let adminPaid = null;
+
+        // Phí admin lỗi thì không được làm hỏng thưởng người thắng.
+        try {
+            if (feePMC > 0) {
+                adminPaid = await adjustPmcWalletByKey("pi_admin_master", feePMC, {
+                    name: "Ví phí hệ thống",
+                    photo: "images/do_tuong.png"
+                });
+            }
+        } catch (adminErr) {
+            console.warn("PMC admin fee lỗi, bỏ qua:", adminErr);
+        }
+
+        const updates = {};
+        updates[`matches/${roomId}/settlement/pmcDone`] = true;
+        updates[`matches/${roomId}/settlement/pmcRunning`] = false;
+        updates[`matches/${roomId}/settlement/type`] = "winner";
+        updates[`matches/${roomId}/settlement/winner`] = winnerSide;
+        updates[`matches/${roomId}/settlement/winnerKey`] = winnerKey;
+        updates[`matches/${roomId}/settlement/stakePMC`] = stake;
+        updates[`matches/${roomId}/settlement/totalPot`] = totalPot;
+        updates[`matches/${roomId}/settlement/feePMC`] = feePMC;
+        updates[`matches/${roomId}/settlement/winnerReceivePMC`] = winnerReceivePMC;
+        updates[`matches/${roomId}/settlement/paid`] = paid;
+        updates[`matches/${roomId}/settlement/adminPaid`] = adminPaid;
+        updates[`matches/${roomId}/settlement/pmcPaidAt`] = firebase.database.ServerValue.TIMESTAMP;
+        updates[`matches/${roomId}/players/${winnerSide}/pmcBalance`] = paid;
+
+        await db.ref().update(updates);
+        await loadWalletBalance().catch(() => {});
+        refreshLocalWalletSoon();
+
+        console.log("PMC MATCH SETTLE OK", {
+            roomId,
+            winnerSide,
+            winnerKey,
+            stake,
+            totalPot,
+            feePMC,
+            winnerReceivePMC,
+            paid,
+            adminPaid
+        });
     } catch (err) {
-        console.error("Lỗi gọi API settle PMC:", err);
+        console.error("PMC MATCH SETTLE FAIL:", err);
+
+        await settlementRef.update({
+            pmcDone: false,
+            pmcRunning: false,
+            pmcError: err?.message || String(err),
+            pmcErrorAt: Date.now()
+        }).catch(() => {});
     }
 }
 async function maybeRefundWaitingStakePMC(roomId, room, side) {
@@ -10173,254 +9882,7 @@ async function ensureInviteHostControl(roomId = currentRoomId) {
 
     return room;
 }
-async function maybeSettleStakeRoom(room, roomId) {
-    const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
-    if (!roomId || !stake || !room?.winner) return;
 
-    const doPlayer = room?.players?.do || {};
-    const denPlayer = room?.players?.den || {};
-    const localWalletKey = makeWalletDbKey();
-
-    // ===== HÒA =====
-    if (room.winner === "hoa") {
-        const refundTargets = [];
-
-        if (doPlayer.walletKey) {
-            refundTargets.push({
-                walletKey: doPlayer.walletKey,
-                name: doPlayer.name,
-                photo: doPlayer.photo
-            });
-        } else if (mySide === "do") {
-            refundTargets.push({
-                walletKey: localWalletKey,
-                name: localStorage.getItem("user-name-display") || "Người chơi",
-                photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-            });
-        }
-
-        if (denPlayer.walletKey) {
-            refundTargets.push({
-                walletKey: denPlayer.walletKey,
-                name: denPlayer.name,
-                photo: denPlayer.photo
-            });
-        } else if (mySide === "den") {
-            refundTargets.push({
-                walletKey: localWalletKey,
-                name: localStorage.getItem("user-name-display") || "Người chơi",
-                photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-            });
-        }
-
-        const uniqueTargets = [];
-        const seen = new Set();
-        for (const item of refundTargets) {
-            if (!item.walletKey || seen.has(item.walletKey)) continue;
-            seen.add(item.walletKey);
-            uniqueTargets.push(item);
-        }
-
-        // Chưa xác định đủ ví thì chưa được đóng cờ done
-        if (!uniqueTargets.length) return;
-
-        const settlementRef = db.ref(`matches/${roomId}/settlement`);
-        const result = await runRefTransaction(settlementRef, current => {
-            if (current && current.done) return;
-            return {
-                done: true,
-                winner: room.winner,
-                stakePMC: stake,
-                at: Date.now(),
-                by: getCurrentPlayerProfile().uid || ""
-            };
-        });
-
-        if (!result.committed) return;
-
-        for (const item of uniqueTargets) {
-            await adjustPmcWalletByKey(item.walletKey, stake, {
-                name: item.name,
-                photo: item.photo
-            });
-        }
-
-        await loadWalletBalance().catch(() => {});
-        return;
-    }
-
-    // ===== CÓ NGƯỜI THẮNG =====
- // ===== CÓ NGƯỜI THẮNG =====
-if (room.winner !== mySide) {
-    return;
-}
-
-const winnerPaidRef = db.ref(`matches/${roomId}/settlement/winnerPaid`);
-const myProfile = {
-    name: localStorage.getItem("user-name-display") || "Người chơi",
-    photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-};
-const myWalletKey = localWalletKey;
-
-const winLock = await Promise.race([
-    runRefTransaction(winnerPaidRef, current => {
-        if (current && current.done) return;
-        return {
-            done: true,
-            side: mySide,
-            winner: room.winner,
-            stakePMC: stake,
-            at: Date.now(),
-            uid: getCurrentPlayerProfile().uid || ""
-        };
-    }),
-    new Promise(resolve => setTimeout(() => resolve({ timeout: true }), 3000))
-]);
-
-if (winLock && winLock.timeout) {
-    return;
-}
-
-if (!winLock.committed) {
-    return;
-}
-
-const totalPot = stake * 2;
-const feePMC = Math.max(0, Math.floor(totalPot * MATCH_SYSTEM_FEE_RATE));
-const winnerReceivePMC = totalPot - feePMC;
-const adminWalletKey = "pi_admin_master";
-const settleDebugRef = db.ref(`matches/${roomId}/settlement/debug`);
-
-try {
-    await settleDebugRef.update({
-        stage: "before_winner_credit",
-        at: Date.now(),
-        myWalletKey,
-        adminWalletKey,
-        totalPot,
-        feePMC,
-        winnerReceivePMC
-    });
-
-    // 1) cộng cho winner sau khi trừ phí
-    const paid = await adjustPmcWalletByKey(myWalletKey, winnerReceivePMC, myProfile);
-
-    if (paid == null) {
-        await winnerPaidRef.update({
-            done: false,
-            error: "winner_payout_failed",
-            errorAt: Date.now()
-        });
-
-        await settleDebugRef.update({
-            stage: "winner_credit_failed",
-            at: Date.now()
-        });
-
-        alert(
-            "SETTLE FAIL: cộng ví bên thắng thất bại\n" +
-            "wallet: " + myWalletKey + "\n" +
-            "winnerReceivePMC: " + winnerReceivePMC
-        );
-        return;
-    }
-
-    await settleDebugRef.update({
-        stage: "after_winner_credit",
-        at: Date.now(),
-        paid
-    });
-
-    // 2) cộng phí vào ví admin nội bộ
-    let adminPaid = null;
-
-    if (feePMC > 0) {
-        await settleDebugRef.update({
-            stage: "before_admin_credit",
-            at: Date.now()
-        });
-
-        adminPaid = await adjustPmcWalletByKey(adminWalletKey, feePMC, {
-            name: "Ví phí hệ thống",
-            photo: "images/do_tuong.png"
-        });
-
-        if (adminPaid == null) {
-            await winnerPaidRef.update({
-                done: false,
-                error: "admin_fee_credit_failed",
-                errorAt: Date.now()
-            });
-
-            await settleDebugRef.update({
-                stage: "admin_credit_failed",
-                at: Date.now()
-            });
-
-            alert(
-                "SETTLE FAIL: cộng phí về ví admin thất bại\n" +
-                "adminWalletKey: " + adminWalletKey + "\n" +
-                "feePMC: " + feePMC
-            );
-            return;
-        }
-
-        await settleDebugRef.update({
-            stage: "after_admin_credit",
-            at: Date.now(),
-            adminPaid
-        });
-
-        await db.ref("walletTransactions").push({
-            type: "match_fee_credit",
-            roomId,
-            walletKey: adminWalletKey,
-            feePMC,
-            winnerWalletKey: myWalletKey,
-            stakePMC: stake,
-            totalPot,
-            createdAt: Date.now(),
-            status: "done"
-        });
-
-        await settleDebugRef.update({
-            stage: "after_fee_log",
-            at: Date.now()
-        });
-    }
-
-    await settleDebugRef.update({
-        stage: "before_settlement_update",
-        at: Date.now()
-    });
-
-    await db.ref(`matches/${roomId}/settlement`).update({
-        paid: true,
-        paidAt: Date.now(),
-        winner: room.winner,
-        stakePMC: stake,
-        totalPot,
-        feePMC,
-        winnerReceivePMC,
-        adminWalletKey
-    });
-
-    await settleDebugRef.update({
-        stage: "done",
-        at: Date.now()
-    });
-
-    await loadWalletBalance().catch(() => {});
-} catch (err) {
-    console.error("SETTLE THROW:", err);
-
-    await settleDebugRef.update({
-        stage: "thrown",
-        at: Date.now(),
-        message: err?.message || String(err)
-    });
-}
-}
 async function chargeStakeForReady(roomId, side) {
     try {
         if (!roomId || !side) return { ok: false, stage: "input" };
