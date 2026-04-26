@@ -6950,12 +6950,13 @@ async function playNextMatch() {
         const bucket = room.roomBucket || currentRoomBucket || makeStakeBucket(room.mode || currentRoomMode || "co-tuong", room.stakePMC || currentRoomStakePMC || 0);
         const inviteCode = room.inviteCode || makeInviteCodeFromRoomId(roomId);
 
-        // Chạy settle trước khi reset phòng, để tiền + EXP xử lý xong
-        if (room.winner) {
-            await settlePmcViaApi(roomId).catch(err => {
-                console.error("Settle trước khi tạo lại phòng lỗi:", err);
-            });
-        }
+        // Chốt PMC bằng client trước khi reset phòng.
+// Không dùng settlePmcViaApi ở đây nữa để tránh lệch API/client.
+if (room.winner) {
+    await maybeSettleStakeRoom(room, roomId).catch(err => {
+        console.error("Settle PMC client trước khi tạo lại phòng lỗi:", err);
+    });
+}
 
         const isQuitWin =
             room.winReason === "bochay" ||
@@ -8531,8 +8532,17 @@ const bottomPmcBox = document.getElementById("player-do-pmc");
 
     const roomStake = Number(room?.stakePMC || 0);
 
-const oppPmc = Number(oppPlayer.pmcBalance || 0);
-const myPmc = Number(myPlayer.pmcBalance || 0);
+const localWalletKeyForRender = typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "";
+const myRoomWalletKey = String(myPlayer.walletKey || myPlayer.walletDbKey || myPlayer.wallet || "").trim();
+const myIsLocalWallet = localWalletKeyForRender && myRoomWalletKey === localWalletKeyForRender;
+
+const oppPmc = Math.max(0, Math.floor(Number(oppPlayer.pmcBalance || 0) || 0));
+
+const myRoomPmc = Math.max(0, Math.floor(Number(myPlayer.pmcBalance || 0) || 0));
+const myLivePmc = Math.max(0, Math.floor(Number(getPmcBalance ? getPmcBalance() : currentPmcBalance || 0) || 0));
+
+// Nếu là chính máy mình, không cho room cũ 0 đè ví thật đang có.
+const myPmc = myIsLocalWallet ? Math.max(myRoomPmc, myLivePmc) : myRoomPmc;
 
 const oppPi = Number(
     oppPlayer.balance != null ? oppPlayer.balance : (oppPlayer.piBalance || 0)
@@ -8979,8 +8989,16 @@ const settleKey = [
 if (room.winner && !window.__settledPmcRooms[settleKey]) {
     window.__settledPmcRooms[settleKey] = true;
 
-    setTimeout(() => {
-        settlePmcViaApi(listeningRoomId);
+    setTimeout(async () => {
+        try {
+            const freshSnap = await db.ref("matches/" + listeningRoomId).once("value");
+            const freshRoom = freshSnap.val() || room;
+
+            await maybeSettleStakeRoom(freshRoom, listeningRoomId);
+        } catch (err) {
+            console.error("AUTO PMC SETTLE CLIENT FAIL:", err);
+            delete window.__settledPmcRooms[settleKey];
+        }
     }, 0);
 }
         if (room.winner) {
@@ -9980,23 +9998,39 @@ try {
         at: Date.now()
     });
 
-    await db.ref(`matches/${roomId}/settlement`).update({
-        paid: true,
-        paidAt: Date.now(),
-        winner: room.winner,
-        stakePMC: stake,
-        totalPot,
-        feePMC,
-        winnerReceivePMC,
-        adminWalletKey
-    });
+const settlementUpdates = {};
 
-    await settleDebugRef.update({
-        stage: "done",
-        at: Date.now()
-    });
+settlementUpdates[`matches/${roomId}/settlement/done`] = true;
+settlementUpdates[`matches/${roomId}/settlement/pmcDone`] = true;
+settlementUpdates[`matches/${roomId}/settlement/paid`] = true;
+settlementUpdates[`matches/${roomId}/settlement/paidAt`] = Date.now();
+settlementUpdates[`matches/${roomId}/settlement/winner`] = room.winner;
+settlementUpdates[`matches/${roomId}/settlement/winnerSide`] = mySide;
+settlementUpdates[`matches/${roomId}/settlement/winnerWalletKey`] = myWalletKey;
+settlementUpdates[`matches/${roomId}/settlement/stakePMC`] = stake;
+settlementUpdates[`matches/${roomId}/settlement/totalPot`] = totalPot;
+settlementUpdates[`matches/${roomId}/settlement/feePMC`] = feePMC;
+settlementUpdates[`matches/${roomId}/settlement/winnerReceivePMC`] = winnerReceivePMC;
+settlementUpdates[`matches/${roomId}/settlement/adminWalletKey`] = adminWalletKey;
 
-    await loadWalletBalance().catch(() => {});
+// Quan trọng: cập nhật lại số PMC của người thắng vào room,
+// để UI không còn hiện 0 sau khi thắng.
+settlementUpdates[`matches/${roomId}/players/${mySide}/walletKey`] = myWalletKey;
+settlementUpdates[`matches/${roomId}/players/${mySide}/pmcBalance`] = paid;
+
+await db.ref().update(settlementUpdates);
+
+await settleDebugRef.update({
+    stage: "done",
+    at: Date.now(),
+    paid
+});
+
+currentPmcBalance = paid;
+localStorage.setItem(getPmcCacheKey(), String(paid));
+updatePmcUI(paid);
+
+await loadWalletBalance().catch(() => {});
 } catch (err) {
     console.error("SETTLE THROW:", err);
 
