@@ -13315,6 +13315,58 @@ document.addEventListener("click", function(e) {
     font-size: 12px;
     color: #f7e7b1;
 }
+/* --- CLICK TRANG QUẢNG CÁO ĐỂ ĐI TỚI KHU TƯƠNG ỨNG --- */
+.ad-book-page {
+    cursor: pointer;
+}
+
+.ad-book-page.active {
+    z-index: 2;
+}
+
+.ad-book-cta {
+    width: fit-content;
+    max-width: 100%;
+    margin: 3px auto 0;
+    padding: 7px 12px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #6d28d9, #3b0764);
+    border: 1px solid rgba(85,239,196,0.45);
+    color: #fff8d6;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    transition: 0.18s ease;
+    box-shadow: 0 0 10px rgba(109,40,217,0.28);
+}
+
+.ad-book-page:hover .ad-book-cta {
+    transform: scale(1.05);
+    box-shadow: 0 0 14px rgba(85,239,196,0.36);
+}
+
+.ad-book-dot {
+    cursor: pointer;
+}
+
+.ad-target-flash {
+    animation: adTargetFlash 0.7s ease-in-out 2;
+}
+
+@keyframes adTargetFlash {
+    0% {
+        box-shadow: 0 0 0 rgba(85,239,196,0);
+        transform: scale(1);
+    }
+    50% {
+        box-shadow: 0 0 28px rgba(85,239,196,0.65);
+        transform: scale(1.02);
+    }
+    100% {
+        box-shadow: 0 0 0 rgba(85,239,196,0);
+        transform: scale(1);
+    }
+}
 @media (max-width: 768px) {
     .mission-summary-grid,
     .mission-top-tabs,
@@ -14012,19 +14064,130 @@ window.applyCosmeticSkinToAvatar = function(imgEl, skinId){
     }, 30000);
   });
 })();
+function openAdBookTarget(target) {
+    if (!target) return;
+
+    if (typeof closeActionMenu === "function") {
+        closeActionMenu();
+    }
+
+    if (target === "games") {
+        const el =
+            document.querySelector(".desktop-game-grid") ||
+            document.getElementById("mobile-game-row");
+
+        if (el) {
+            el.classList.add("ad-target-flash");
+            setTimeout(() => el.classList.remove("ad-target-flash"), 1500);
+
+            if (typeof el.scrollIntoView === "function") {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+        }
+        return;
+    }
+
+    if (target === "mission-day") {
+        if (typeof openMissionHub === "function") {
+            openMissionHub();
+            setTimeout(() => {
+                if (typeof switchMissionTab === "function") {
+                    switchMissionTab("day");
+                }
+            }, 300);
+        }
+        return;
+    }
+
+    if (target === "mission-referral") {
+        if (typeof openMissionHub === "function") {
+            openMissionHub();
+            setTimeout(() => {
+                if (typeof switchMissionTab === "function") {
+                    switchMissionTab("referral");
+                }
+            }, 300);
+        }
+        return;
+    }
+
+    if (target === "ranking") {
+        if (typeof openRankingModal === "function") {
+            openRankingModal({
+                stopPropagation: function () {},
+                preventDefault: function () {}
+            });
+        } else {
+            const rankCard =
+                document.querySelector(".desktop-ranking-panel") ||
+                document.querySelector(".mobile-rank-card");
+
+            if (rankCard) {
+                rankCard.classList.add("ad-target-flash");
+                setTimeout(() => rankCard.classList.remove("ad-target-flash"), 1500);
+            }
+        }
+        return;
+    }
+
+    if (target === "shop") {
+        if (typeof openSkinShop === "function") {
+            openSkinShop();
+        } else {
+            const shopBtn = document.getElementById("arena-shop-btn");
+            if (shopBtn) shopBtn.click();
+        }
+    }
+}
+
 function initAdBookSlider() {
     const books = document.querySelectorAll(".ad-book-zone");
     if (!books.length) return;
 
+    const targets = [
+        "games",
+        "mission-day",
+        "mission-referral",
+        "ranking",
+        "shop"
+    ];
+
+    const ctaTexts = [
+        "BẤM ĐỂ CHỌN GAME ➜",
+        "BẤM ĐỂ MỞ NHIỆM VỤ ➜",
+        "BẤM ĐỂ XEM MỜI BẠN ➜",
+        "BẤM ĐỂ XEM BÀN / TOP ➜",
+        "BẤM ĐỂ MỞ SHOP ➜"
+    ];
+
     books.forEach((book) => {
+        if (book.dataset.adBookReady === "1") return;
+        book.dataset.adBookReady = "1";
+
         const pages = Array.from(book.querySelectorAll(".ad-book-page"));
         const dotsBox = book.querySelector(".ad-book-dots");
         if (!pages.length || !dotsBox) return;
 
-        let current = 0;
+        let current = Math.max(0, pages.findIndex(p => p.classList.contains("active")));
+        if (current < 0) current = 0;
+
+        pages.forEach((page, index) => {
+            page.dataset.target = targets[index] || "";
+
+            if (!page.querySelector(".ad-book-cta")) {
+                const cta = document.createElement("div");
+                cta.className = "ad-book-cta";
+                cta.textContent = ctaTexts[index] || "BẤM ĐỂ ĐI TỚI ➜";
+                page.appendChild(cta);
+            }
+
+            page.onclick = function () {
+                openAdBookTarget(page.dataset.target);
+            };
+        });
 
         dotsBox.innerHTML = pages.map((_, i) => {
-            return `<span class="ad-book-dot ${i === 0 ? "active" : ""}"></span>`;
+            return `<span class="ad-book-dot ${i === current ? "active" : ""}"></span>`;
         }).join("");
 
         const dots = Array.from(dotsBox.querySelectorAll(".ad-book-dot"));
@@ -14032,22 +14195,28 @@ function initAdBookSlider() {
         function showPage(next) {
             if (next === current) return;
 
-            pages[current].classList.remove("active");
-            pages[current].classList.add("leaving");
-            dots[current]?.classList.remove("active");
+            const oldIndex = current;
+
+            pages[oldIndex].classList.remove("active");
+            pages[oldIndex].classList.add("leaving");
+            dots[oldIndex]?.classList.remove("active");
 
             pages[next].classList.remove("leaving");
             pages[next].classList.add("active");
             dots[next]?.classList.add("active");
 
+            current = next;
+
             setTimeout(() => {
-                pages[current]?.classList.remove("leaving");
-                current = next;
+                pages[oldIndex]?.classList.remove("leaving");
             }, 780);
         }
 
         dots.forEach((dot, i) => {
-            dot.onclick = () => showPage(i);
+            dot.onclick = (e) => {
+                e.stopPropagation();
+                showPage(i);
+            };
         });
 
         setInterval(() => {
