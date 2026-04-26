@@ -14582,65 +14582,167 @@ document.addEventListener("DOMContentLoaded", initAdBookSlider);
         });
     }
 
-    async function renderTopLeaderboard(type = "wins", clickedBtn) {
-        ensureTopModal();
+    function getTopDb() {
+    if (window.db) return window.db;
 
-        document.querySelectorAll(".top-tab-btn").forEach(btn => btn.classList.remove("active"));
-        if (clickedBtn) clickedBtn.classList.add("active");
+    try {
+        if (typeof db !== "undefined") return db;
+    } catch (_) {}
 
-        const box = document.getElementById("top-leaderboard-list");
-        if (!box) return;
+    return null;
+}
 
-        box.innerHTML = `<div class="top-empty">Đang tải ${TOP_TABS[type]?.label || "TOP"}...</div>`;
+function escapeTopHtml(text) {
+    return String(text || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
 
-        try {
-            if (!window.db) {
-                box.innerHTML = `<div class="top-empty">Chưa kết nối Firebase.</div>`;
-                return;
-            }
+function getTopSkinCount() {
+    // Tạm lấy từ biến nếu shop có cập nhật. Chưa có thì = 0 để không lỗi.
+    return topNumber(
+        window.__rankSkinCount ||
+        localStorage.getItem("rankSkinCount") ||
+        0
+    );
+}
 
-            await syncMyTopProfile();
+function getTopOnlineMinutes() {
+    const key = "topOnlineMinutes_" + topTodayKey();
+    return topNumber(localStorage.getItem(key) || 0);
+}
 
-            const tab = TOP_TABS[type] || TOP_TABS.wins;
-            let ref;
+async function syncMyTopProfile() {
+    const dbx = getTopDb();
+    if (!dbx) return;
 
-            if (type === "wins") {
-                ref = db.ref("leaderboards/dailyWins/" + topTodayKey()).orderByChild("wins").limitToLast(50);
-            } else {
-                ref = db.ref("leaderboards/topPlayers").orderByChild(tab.field).limitToLast(50);
-            }
+    const walletKey = safeTopKey();
 
-            const snap = await ref.once("value");
-            const rows = [];
+    const pi = typeof getPiBalance === "function" ? Number(getPiBalance() || 0) : 0;
+    const pmc = typeof getPmcBalance === "function" ? Number(getPmcBalance() || 0) : 0;
+    const rate = typeof PMC_RATE === "number" ? PMC_RATE : 500;
+
+    let exp = 0;
+
+    try {
+        if (typeof getCachedLevelMeta === "function") {
+            const meta = getCachedLevelMeta() || {};
+            exp = topNumber(meta.xp || meta.exp || 0);
+        }
+    } catch (_) {}
+
+    const profile = {
+        walletKey,
+        name: topName(),
+        exp: topNumber(exp),
+        asset: topNumber(pmc + pi * rate),
+        skin: getTopSkinCount(),
+        online: getTopOnlineMinutes(),
+        todayWins: topNumber(localStorage.getItem("topTodayWins_" + topTodayKey()) || 0),
+        onlineDate: topTodayKey(),
+        updatedAt: Date.now()
+    };
+
+    // Không để lỗi ghi dữ liệu làm sập bảng top
+    try {
+        await dbx.ref("leaderboards/topPlayers/" + walletKey).update(profile);
+    } catch (err) {
+        console.warn("SYNC_TOP_PROFILE_FAIL:", err && err.message ? err.message : err);
+    }
+}
+
+async function renderTopLeaderboard(type = "wins", clickedBtn) {
+    ensureTopModal();
+
+    document.querySelectorAll(".top-tab-btn").forEach(btn => btn.classList.remove("active"));
+    if (clickedBtn) clickedBtn.classList.add("active");
+
+    const box = document.getElementById("top-leaderboard-list");
+    if (!box) return;
+
+    const tab = TOP_TABS[type] || TOP_TABS.wins;
+    box.innerHTML = `<div class="top-empty">Đang tải ${tab.label}...</div>`;
+
+    try {
+        const dbx = getTopDb();
+
+        if (!dbx) {
+            box.innerHTML = `<div class="top-empty">Chưa lấy được Firebase db.</div>`;
+            return;
+        }
+
+        await syncMyTopProfile();
+
+        let rows = [];
+
+        if (type === "wins") {
+            // Đọc thắng ngày trước
+            const snap = await dbx.ref("leaderboards/dailyWins/" + topTodayKey()).once("value");
 
             snap.forEach(child => {
                 const v = child.val() || {};
                 rows.push({
                     key: child.key,
                     name: v.name || "Người chơi",
-                    value: type === "wins" ? topNumber(v.wins) : topNumber(v[tab.field])
+                    value: topNumber(v.wins || v.todayWins || 0)
                 });
             });
 
-            rows.sort((a, b) => b.value - a.value);
-
+            // Nếu chưa có nhánh dailyWins thì lấy tạm todayWins trong topPlayers
             if (!rows.length) {
-                box.innerHTML = `<div class="top-empty">Chưa có dữ liệu. Chơi vài trận là lên bảng.</div>`;
-                return;
+                const snap2 = await dbx.ref("leaderboards/topPlayers").once("value");
+                snap2.forEach(child => {
+                    const v = child.val() || {};
+                    rows.push({
+                        key: child.key,
+                        name: v.name || "Người chơi",
+                        value: topNumber(v.todayWins || 0)
+                    });
+                });
             }
+        } else {
+            // Không dùng orderByChild nữa để tránh lỗi index/rules
+            const snap = await dbx.ref("leaderboards/topPlayers").once("value");
 
-            box.innerHTML = rows.slice(0, 50).map((row, index) => `
-                <div class="top-row">
-                    <strong>#${index + 1}</strong>
-                    <div class="top-name">${String(row.name).replace(/</g, "&lt;")}</div>
-                    <div class="top-value">${row.value.toLocaleString("vi-VN")}${tab.suffix}</div>
-                </div>
-            `).join("");
-        } catch (err) {
-            console.error("LOAD_TOP_FAIL", err);
-            box.innerHTML = `<div class="top-empty">Lỗi tải bảng top.</div>`;
+            snap.forEach(child => {
+                const v = child.val() || {};
+                rows.push({
+                    key: child.key,
+                    name: v.name || "Người chơi",
+                    value: topNumber(v[tab.field] || 0)
+                });
+            });
         }
+
+        rows.sort((a, b) => b.value - a.value);
+
+        if (!rows.length) {
+            box.innerHTML = `<div class="top-empty">Chưa có dữ liệu. Chơi vài trận là lên bảng.</div>`;
+            return;
+        }
+
+        box.innerHTML = rows.slice(0, 50).map((row, index) => `
+            <div class="top-row">
+                <strong>#${index + 1}</strong>
+                <div class="top-name">${escapeTopHtml(row.name)}</div>
+                <div class="top-value">${topNumber(row.value).toLocaleString("vi-VN")}${tab.suffix}</div>
+            </div>
+        `).join("");
+    } catch (err) {
+        console.error("LOAD_TOP_FAIL", err);
+
+        const msg = err && err.message ? err.message : "Không rõ lỗi";
+        box.innerHTML = `
+            <div class="top-empty">
+                Lỗi tải bảng top:<br>
+                ${escapeTopHtml(msg)}
+            </div>
+        `;
     }
+}
 
     function openTopLeaderboardModal(event) {
         if (event && event.stopPropagation) event.stopPropagation();
