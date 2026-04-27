@@ -9633,14 +9633,19 @@ async function createAndPublishWaitingRoom(me, mode, stakePMC, bucket) {
         claimedAt: null
     });
 
-    mySide = "do";
-    currentRoomId = newRoomId;
-    currentRoomMode = mode;
-    currentRoomStakePMC = stakePMC;
+   mySide = "do";
+viewSide = "do";
+currentRoomId = newRoomId;
+currentRoomMode = mode;
+currentRoomStakePMC = stakePMC;
+currentRoomBucket = bucket;
+currentRoomStatus = "waiting";
 
-    saveActiveMatchSnapshot({ roomId: newRoomId, mode, side: "do" });
-    bindRoom(newRoomId);
-    return true;
+await setPlayerPresence("arena").catch(() => {});
+
+saveActiveMatchSnapshot({ roomId: newRoomId, mode, side: "do" });
+bindRoom(newRoomId);
+return true;
 }
 async function joinOrCreateRealtimeMatch(mode, stakePMC = 0) {
     await ensureMyLevelMetaLoaded();
@@ -11561,16 +11566,92 @@ function autoResetNextMatch() {
         showReadyOverlay(getCurrentMode());
     }, 5000);
 }
+async function getReadyOverlayGate(roomId = currentRoomId) {
+    if (!roomId) {
+        return { ok: false, room: null, side: null, reason: "no_room" };
+    }
 
-function showReadyOverlay(mode) {
-    pendingGameMode = mode || pendingGameMode || currentRoomMode || "tong";
+    const snap = await db.ref("matches/" + roomId).once("value").catch(() => null);
+    const room = snap?.val?.();
+
+    if (!room) {
+        return { ok: false, room: null, side: null, reason: "room_missing" };
+    }
+
+    const hasDo = hasRoomPlayer(room.players?.do);
+    const hasDen = hasRoomPlayer(room.players?.den);
+
+    if (!hasDo || !hasDen) {
+        return { ok: false, room, side: null, reason: "not_enough_players" };
+    }
+
+    if (sameRoomPerson(room.players?.do || {}, room.players?.den || {})) {
+        return { ok: false, room, side: null, reason: "same_player_two_sides" };
+    }
+
+    if (room.status !== "waiting" || room.winner) {
+        return { ok: false, room, side: null, reason: "not_waiting" };
+    }
+
+    let side = null;
+
+    if (isMeRoomPlayer(room.players?.do)) {
+        side = "do";
+    } else if (isMeRoomPlayer(room.players?.den)) {
+        side = "den";
+    }
+
+    if (!side) {
+        return { ok: false, room, side: null, reason: "me_not_in_room" };
+    }
+
+    return { ok: true, room, side, reason: "ok" };
+}
+async function showReadyOverlay(mode) {
     const overlay = document.getElementById("ready-overlay");
-    if (!overlay) return;
+    if (!overlay) return false;
+
+    // Online: chỉ mở bảng SS khi Firebase thật sự có đủ đỏ + đen
+    if (currentRoomId) {
+        const gate = await getReadyOverlayGate(currentRoomId);
+
+        if (!gate.ok) {
+            console.warn("READY OVERLAY BLOCKED:", gate.reason, {
+                roomId: currentRoomId,
+                mySide,
+                status: gate.room?.status,
+                doPlayer: gate.room?.players?.do,
+                denPlayer: gate.room?.players?.den
+            });
+
+            overlay.style.display = "none";
+            readyOverlayWaitingShown = false;
+            clearInterval(readyInterval);
+            return false;
+        }
+
+        const room = gate.room;
+
+        mySide = gate.side;
+        viewSide = gate.side;
+        currentRoomMode = room.mode || currentRoomMode || mode || "co-tuong";
+        currentRoomStatus = room.status || "waiting";
+        currentRoomStakePMC = pickRoomStakePMC(room) || currentRoomStakePMC;
+        currentRoomBucket = room.roomBucket || currentRoomBucket;
+
+        readyDo = !!room.ready?.do;
+        readyDen = !!room.ready?.den;
+    }
+
+    pendingGameMode = mode || pendingGameMode || currentRoomMode || "tong";
 
     overlay.style.display = "flex";
+    readyOverlayWaitingShown = true;
     readyTime = 30;
     updateReadyUI();
     startReadyCountdown();
+
+    return true;
 }
 let hostReadyOverlayPollTimer = null;
 
@@ -11665,6 +11746,25 @@ function startHostReadyOverlayPoll(roomId = currentRoomId) {
 }
 async function setReady() {
     if (!currentRoomId || !mySide) return;
+
+    const gate = await getReadyOverlayGate(currentRoomId);
+
+    if (!gate.ok) {
+        console.warn("READY BUTTON BLOCKED:", gate.reason);
+
+        closeReadyOverlay();
+
+        if (gate.reason === "not_enough_players") {
+            alert("Chưa đủ 2 người, chưa được bấm sẵn sàng.");
+        } else {
+            alert("Phòng chưa hợp lệ để sẵn sàng.");
+        }
+
+        return;
+    }
+
+    mySide = gate.side;
+    viewSide = gate.side;
 
     const result = await chargeStakeForReady(currentRoomId, mySide);
 
