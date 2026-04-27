@@ -7827,6 +7827,32 @@ function roomHasTwoRealPlayersWaiting(room) {
         hasRoomPlayer(room.players?.den)
     );
 }
+async function isRoomPlayerActiveInRoom(player, roomId) {
+    if (!player || !roomId) return false;
+
+    const walletKey = String(player.walletKey || "").trim();
+    if (!walletKey) return false;
+
+    const snap = await db.ref("social/playerState/" + walletKey).once("value").catch(() => null);
+    const state = snap?.val?.() || {};
+
+    const age = state.updatedAt ? Date.now() - Number(state.updatedAt || 0) : 999999;
+
+    return (
+        state.state === "arena" &&
+        state.roomId === roomId &&
+        age < 15000
+    );
+}
+
+async function roomHasTwoActivePlayersWaiting(room, roomId) {
+    if (!roomHasTwoRealPlayersWaiting(room)) return false;
+
+    const doActive = await isRoomPlayerActiveInRoom(room.players?.do, roomId);
+    const denActive = await isRoomPlayerActiveInRoom(room.players?.den, roomId);
+
+    return doActive && denActive;
+}
 function sameRoomPerson(a = {}, b = {}) {
     const aUid = String(a.uid || "").trim();
     const bUid = String(b.uid || "").trim();
@@ -9589,18 +9615,35 @@ async function joinOrCreateRealtimeMatch(mode, stakePMC = 0) {
 const waitingSnap = await waitingBucketRef.once("value");
 const waitingMap = waitingSnap.val() || {};
 
-const waitingList = Object.entries(waitingMap)
-    .map(([id, value]) => ({ id, ...(value || {}) }))
-    .filter(item =>
-        item.roomId &&
-        item.uid !== me.uid &&
-        !item.claimedBy
-    )
-    .sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0));
+const activeWaitingList = [];
+
+for (const item of waitingList) {
+    const roomSnap = await db.ref("matches/" + item.roomId).once("value").catch(() => null);
+    const room = roomSnap?.val?.();
+
+    if (!room || room.status !== "waiting" || room.winner) {
+        await db.ref("waitingRooms/" + currentRoomBucket + "/" + item.id).remove().catch(() => {});
+        continue;
+    }
+
+    if (!hasRoomPlayer(room.players?.do) || hasRoomPlayer(room.players?.den)) {
+        await db.ref("waitingRooms/" + currentRoomBucket + "/" + item.id).remove().catch(() => {});
+        continue;
+    }
+
+    const hostActive = await isRoomPlayerActiveInRoom(room.players.do, item.roomId);
+
+    if (!hostActive) {
+        await db.ref("waitingRooms/" + currentRoomBucket + "/" + item.id).remove().catch(() => {});
+        continue;
+    }
+
+    activeWaitingList.push(item);
+}
 
 let joined = false;
 
-for (const waiting of waitingList) {
+for (const waiting of activeWaitingList) {
     const waitingRoomRef = db.ref("waitingRooms/" + currentRoomBucket + "/" + waiting.id);
 
     const claimed = await waitingRoomRef.transaction((current) => {
@@ -9643,13 +9686,13 @@ for (const waiting of waitingList) {
             const freshSnap = await db.ref("matches/" + roomId).once("value");
             const freshRoom = freshSnap.val();
 
-            if (roomHasTwoRealPlayersWaiting(freshRoom)) {
-                forceShowReadyOverlayIfWaitingRoom(freshRoom, roomId, mySide);
-            } else {
-                closeReadyOverlay();
-                readyOverlayWaitingShown = false;
-                updateReadyUI();
-            }
+           if (await roomHasTwoActivePlayersWaiting(freshRoom, roomId)) {
+    await forceShowReadyOverlayIfWaitingRoom(freshRoom, roomId, mySide);
+} else {
+    closeReadyOverlay();
+    readyOverlayWaitingShown = false;
+    updateReadyUI();
+}
         } catch (err) {
             console.error("CHECK READY AFTER JOIN FAIL:", err);
         }
@@ -11644,9 +11687,9 @@ function autoResetNextMatch() {
             const freshSnap = await db.ref("matches/" + currentRoomId).once("value");
             const freshRoom = freshSnap.val();
 
-            if (roomHasTwoRealPlayersWaiting(freshRoom)) {
-                forceShowReadyOverlayIfWaitingRoom(freshRoom, currentRoomId, mySide);
-            } else {
+            if (await roomHasTwoActivePlayersWaiting(freshRoom, currentRoomId)) {
+    await forceShowReadyOverlayIfWaitingRoom(freshRoom, currentRoomId, mySide);
+} else {
                 closeReadyOverlay();
                 readyOverlayWaitingShown = false;
                 updateReadyUI();
@@ -11677,12 +11720,17 @@ function stopHostReadyOverlayPoll() {
     }
 }
 
-function forceShowReadyOverlayIfWaitingRoom(room, roomId = currentRoomId, forceSide = null) {
+async function forceShowReadyOverlayIfWaitingRoom(room, roomId = currentRoomId, forceSide = null) {
     if (!roomId || !room) return false;
 
-   const hasEnoughPlayersWaiting = roomHasTwoRealPlayersWaiting(room);
+    const hasEnoughPlayersWaiting = await roomHasTwoActivePlayersWaiting(room, roomId);
 
-    if (!hasEnoughPlayersWaiting) return false;
+    if (!hasEnoughPlayersWaiting) {
+        closeReadyOverlay();
+        readyOverlayWaitingShown = false;
+        updateReadyUI();
+        return false;
+    }
 
     if (forceSide) {
         mySide = forceSide;
@@ -11750,9 +11798,9 @@ function startHostReadyOverlayPoll(roomId = currentRoomId) {
         const snap = await db.ref("matches/" + roomId).once("value").catch(() => null);
         const room = snap?.val?.();
 
-        if (forceShowReadyOverlayIfWaitingRoom(room, roomId, "do")) {
-            stopHostReadyOverlayPoll();
-        }
+        if (await forceShowReadyOverlayIfWaitingRoom(room, roomId, "do")) {
+    stopHostReadyOverlayPoll();
+}
     }, 500);
 }
 async function setReady() {
@@ -13692,13 +13740,13 @@ setTimeout(async () => {
         const freshSnap = await db.ref("matches/" + roomId).once("value");
         const freshRoom = freshSnap.val();
 
-        if (roomHasTwoRealPlayersWaiting(freshRoom)) {
-            forceShowReadyOverlayIfWaitingRoom(freshRoom, roomId, "den");
-        } else {
-            closeReadyOverlay();
-            readyOverlayWaitingShown = false;
-            updateReadyUI();
-        }
+        if (await roomHasTwoActivePlayersWaiting(freshRoom, roomId)) {
+    await forceShowReadyOverlayIfWaitingRoom(freshRoom, roomId, "den");
+} else {
+    closeReadyOverlay();
+    readyOverlayWaitingShown = false;
+    updateReadyUI();
+}
     } catch (err) {
         console.error("CHECK READY AFTER INVITE JOIN FAIL:", err);
     }
