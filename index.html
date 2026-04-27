@@ -11337,7 +11337,97 @@ function showReadyOverlay(mode) {
     updateReadyUI();
     startReadyCountdown();
 }
+let hostReadyOverlayPollTimer = null;
 
+function stopHostReadyOverlayPoll() {
+    if (hostReadyOverlayPollTimer) {
+        clearInterval(hostReadyOverlayPollTimer);
+        hostReadyOverlayPollTimer = null;
+    }
+}
+
+function forceShowReadyOverlayIfWaitingRoom(room, roomId = currentRoomId, forceSide = null) {
+    if (!roomId || !room) return false;
+
+    const hasEnoughPlayersWaiting =
+        !!room.players?.do &&
+        !!room.players?.den &&
+        room.status === "waiting" &&
+        !room.winner;
+
+    if (!hasEnoughPlayersWaiting) return false;
+
+    if (forceSide) {
+        mySide = forceSide;
+    } else if (isMeRoomPlayer(room.players.do)) {
+        mySide = "do";
+    } else if (isMeRoomPlayer(room.players.den)) {
+        mySide = "den";
+    }
+
+    if (!mySide) return false;
+
+    viewSide = mySide;
+    currentRoomId = roomId;
+    currentRoomMode = room.mode || currentRoomMode || "co-tuong";
+    currentRoomStatus = "waiting";
+    currentRoomStakePMC = pickRoomStakePMC(room) || currentRoomStakePMC;
+    currentRoomBucket = room.roomBucket || currentRoomBucket;
+
+    readyDo = !!room.ready?.do;
+    readyDen = !!room.ready?.den;
+    readyOverlayWaitingShown = true;
+    isGameOver = false;
+    selectedPiece = null;
+
+    clearMoveHints();
+    clearLastMoveMarks();
+    hideVictoryPopup(true);
+
+    prepareRealtimeArenaUI();
+    renderPlayersFromRoom(room);
+    renderTimerUI();
+
+    saveActiveMatchSnapshot({
+        roomId,
+        mode: currentRoomMode,
+        side: mySide
+    });
+
+    const overlay = document.getElementById("ready-overlay");
+
+    if (!overlay || overlay.style.display !== "flex") {
+        showReadyOverlay(currentRoomMode);
+    } else {
+        updateReadyUI();
+    }
+
+    return true;
+}
+
+function startHostReadyOverlayPoll(roomId = currentRoomId) {
+    stopHostReadyOverlayPoll();
+
+    if (!roomId) return;
+
+    let tick = 0;
+
+    hostReadyOverlayPollTimer = setInterval(async () => {
+        tick++;
+
+        if (!roomId || currentRoomId !== roomId || tick > 60) {
+            stopHostReadyOverlayPoll();
+            return;
+        }
+
+        const snap = await db.ref("matches/" + roomId).once("value").catch(() => null);
+        const room = snap?.val?.();
+
+        if (forceShowReadyOverlayIfWaitingRoom(room, roomId, "do")) {
+            stopHostReadyOverlayPoll();
+        }
+    }, 500);
+}
 async function setReady() {
     if (!currentRoomId || !mySide) return;
 
@@ -13406,7 +13496,13 @@ saveActiveMatchSnapshot({
 await setPlayerPresence("arena").catch(() => {});
 
 // Bảo đảm listener phòng vẫn còn sống.
+prepareRealtimeArenaUI();
 bindRoom(currentRoomId);
+
+// CHỐT LỖI B KHÔNG NỔI BẢNG SS:
+// Sau khi B mời A/C, nếu Pi Browser không tự bắn realtime,
+// poll thẳng Firebase tới khi players/den xuất hiện thì ép B bật bảng SS.
+startHostReadyOverlayPoll(currentRoomId);
 
 alert("Đã gửi lời mời vào phòng cho " + (displayName || "bạn bè") + "!");
 closeArenaFriendBox();
