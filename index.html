@@ -6293,7 +6293,32 @@ let lastRoomBoardHash = "";
 let lastDrawRequestAt = 0;
 let myLevelMetaLiveRef = null;
 const ACTIVE_MATCH_KEY = "co_tuong_active_match_v1";
+let lastPushedRoomLevelMetaKey = "";
 
+async function pushMyLevelMetaToCurrentRoom(meta = null) {
+    if (!currentRoomId || !mySide) return;
+
+    const cleanMeta = buildLevelMeta(meta || getCachedLevelMeta());
+    const pushKey = [
+        currentRoomId,
+        mySide,
+        cleanMeta.level,
+        cleanMeta.exp,
+        cleanMeta.nextExp,
+        cleanMeta.title,
+        cleanMeta.titleKey
+    ].join("|");
+
+    // Chặn ghi y chang nhau gây Firebase nháy liên tục
+    if (pushKey === lastPushedRoomLevelMetaKey) return;
+    lastPushedRoomLevelMetaKey = pushKey;
+
+    await db.ref("matches/" + currentRoomId + "/players/" + mySide + "/levelMeta")
+        .set(cleanMeta)
+        .catch(() => {
+            lastPushedRoomLevelMetaKey = "";
+        });
+}
 function readActiveMatchSnapshot() {
     try {
         return JSON.parse(localStorage.getItem(ACTIVE_MATCH_KEY) || "null");
@@ -7781,8 +7806,26 @@ function isMeRoomPlayer(player) {
         (pWallet && myWalletList.includes(pWallet))
     );
 }
-    function hasRoomPlayer(player) {
-    return !!(player && (player.uid || player.walletKey));
+  function hasRoomPlayer(player) {
+    return !!(
+        player &&
+        (
+            String(player.uid || "").trim() ||
+            String(player.walletKey || "").trim()
+        )
+    );
+}
+
+function sameRoomPerson(a = {}, b = {}) {
+    const aUid = String(a.uid || "").trim();
+    const bUid = String(b.uid || "").trim();
+    const aWallet = String(a.walletKey || "").trim();
+    const bWallet = String(b.walletKey || "").trim();
+
+    return !!(
+        (aUid && bUid && aUid === bUid) ||
+        (aWallet && bWallet && aWallet === bWallet)
+    );
 }
 
 function pickRoomStakePMC(room = {}, fallback = 0) {
@@ -8523,12 +8566,8 @@ function startMyLevelMetaLiveSync() {
         const meta = buildLevelMeta(snap.val() || {});
         setCachedLevelMeta(meta);
 
-        // Nếu đang trong phòng thì đẩy level mới vô room luôn để avatar chip cập nhật ngay
-        if (currentRoomId && mySide) {
-            db.ref("matches/" + currentRoomId + "/players/" + mySide + "/levelMeta")
-                .set(meta)
-                .catch(() => {});
-        }
+                // Chỉ đẩy khi EXP thật đổi, không đẩy trong listener room để tránh loop
+        pushMyLevelMetaToCurrentRoom(meta);
     }, err => {
         console.warn("Không nghe được levelMeta live:", err);
     });
@@ -9106,10 +9145,7 @@ viewSide = mySide || "do";
 if (mySide) {
     const latestMeta = getCachedLevelMeta();
     renderLevelHud(latestMeta);
-
-    db.ref("matches/" + listeningRoomId + "/players/" + mySide + "/levelMeta")
-        .set(buildLevelMeta(latestMeta))
-        .catch(() => {});
+    // Không set levelMeta ở đây nữa, nếu set trong room listener sẽ gây Firebase chớp liên tục
 }
 if (typeof applyBoardPerspective === "function") {
     applyBoardPerspective();
@@ -9134,8 +9170,8 @@ if (typeof applyBoardPerspective === "function") {
         updateReadyUI();
 
 const hasEnoughPlayersWaiting =
-    !!room.players?.do &&
-    !!room.players?.den &&
+    hasRoomPlayer(room.players?.do) &&
+    hasRoomPlayer(room.players?.den) &&
     room.status === "waiting" &&
     !room.winner;
 
@@ -9305,47 +9341,137 @@ async function joinExistingWaitingRoom(waitingRoomRef, roomId, me, mode, stakePM
     const roomSnap = await roomRef.once("value");
     const room = roomSnap.val();
 
-    if (!room || room.mode !== mode || !room.players?.do) {
-        const currentWaiting = (await waitingRoomRef.once("value")).val();
-        if (currentWaiting && currentWaiting.roomId === roomId && currentWaiting.claimedBy === me.uid) {
-            await waitingRoomRef.remove().catch(() => {});
-        }
+    if (!room || (room.mode || "co-tuong") !== mode || !hasRoomPlayer(room.players?.do)) {
         return false;
     }
 
-    const denRef = db.ref("matches/" + roomId + "/players/den");
-    const denJoinResult = await denRef.transaction((current) => {
-        if (current && current.uid && current.uid !== me.uid) return;
-        return me;
+    // Nếu chính mình là chủ phòng thì chỉ bind lại, không tự nhảy xuống den
+    if (sameRoomPerson(room.players?.do, me)) {
+        mySide = "do";
+        viewSide = "do";
+        currentRoomId = roomId;
+        currentRoomMode = mode;
+        currentRoomStakePMC = pickRoomStakePMC(room, stakePMC);
+        currentRoomBucket = room.roomBucket || makeStakeBucket(mode, currentRoomStakePMC);
+        currentRoomStatus = room.status || "waiting";
+
+        saveActiveMatchSnapshot({
+            roomId,
+            mode,
+            side: "do"
+        });
+
+        bindRoom(roomId);
+        return true;
+    }
+
+    // Nếu room đang chơi thật sự thì không cho chen vào
+    if (room.status === "playing" && !room.winner) {
+        return false;
+    }
+
+    const actualStake = pickRoomStakePMC(room, stakePMC);
+    const bucket = room.roomBucket || makeStakeBucket(mode, actualStake);
+    const inviteCode = String(room.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
+
+    const playersRef = db.ref("matches/" + roomId + "/players");
+
+    const joinResult = await playersRef.transaction(players => {
+        players = players || {};
+
+        // Không có chủ thì phòng lỗi
+        if (!hasRoomPlayer(players.do)) return;
+
+        // Chủ click lại phòng của mình
+        if (sameRoomPerson(players.do, me)) {
+            return players;
+        }
+
+        // Nếu den đã có người khác thì báo đủ người
+        if (hasRoomPlayer(players.den) && !sameRoomPerson(players.den, me)) {
+            return;
+        }
+
+        // Den trống hoặc chính mình đang là den thì cho vào
+        players.den = {
+            ...me,
+            role: "guest",
+            joinedAt: Date.now()
+        };
+
+        return players;
     }, undefined, false);
 
-    if (!denJoinResult.committed) {
-        const currentWaiting = (await waitingRoomRef.once("value")).val();
-        if (currentWaiting && currentWaiting.roomId === roomId && currentWaiting.claimedBy === me.uid) {
-            await waitingRoomRef.remove().catch(() => {});
-        }
+    if (!joinResult.committed) {
         return false;
     }
 
-    await db.ref("matches/" + roomId + "/ready/den").set(false);
-    await db.ref("matches/" + roomId + "/stakeLocked/den").set(false);
+    const finalPlayers = joinResult.snapshot.val() || {};
 
-    const currentWaiting = (await waitingRoomRef.once("value")).val();
-    if (currentWaiting && currentWaiting.roomId === roomId && currentWaiting.claimedBy === me.uid) {
-        await waitingRoomRef.remove().catch(() => {});
+    if (sameRoomPerson(finalPlayers.do, me)) {
+        mySide = "do";
+    } else if (sameRoomPerson(finalPlayers.den, me)) {
+        mySide = "den";
+    } else {
+        return false;
     }
 
-    mySide = "den";
+    viewSide = mySide;
     currentRoomId = roomId;
     currentRoomMode = mode;
-    currentRoomStakePMC = stakePMC;
-    currentRoomBucket = room?.roomBucket || makeStakeBucket(mode, stakePMC);
+    currentRoomStakePMC = actualStake;
+    currentRoomBucket = bucket;
+    currentRoomStatus = "waiting";
+    isGameOver = false;
 
-    saveActiveMatchSnapshot({ roomId, mode, side: "den" });
+    const updates = {};
+    updates[`matches/${roomId}/status`] = "waiting";
+    updates[`matches/${roomId}/winner`] = null;
+    updates[`matches/${roomId}/winReason`] = null;
+    updates[`matches/${roomId}/quitSide`] = null;
+    updates[`matches/${roomId}/quitUid`] = null;
+    updates[`matches/${roomId}/quitAt`] = null;
+
+    updates[`matches/${roomId}/ready/do`] = false;
+    updates[`matches/${roomId}/ready/den`] = false;
+    updates[`matches/${roomId}/stakeLocked/den`] = false;
+
+    updates[`matches/${roomId}/stakePMC`] = actualStake;
+    updates[`matches/${roomId}/originalStakePMC`] = actualStake;
+    updates[`matches/${roomId}/roomBucket`] = bucket;
+    updates[`matches/${roomId}/inviteCode`] = inviteCode;
+    updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+    if (bucket) {
+        updates[`waitingRooms/${bucket}/${roomId}/claimedBy`] = null;
+        updates[`waitingRooms/${bucket}/${roomId}/claimedAt`] = null;
+    }
+
+    await db.ref().update(updates);
+
+    saveActiveMatchSnapshot({
+        roomId,
+        mode,
+        side: mySide
+    });
+
+    await setPlayerPresence("arena").catch(() => {});
+
+    prepareRealtimeArenaUI();
+    clearInterval(interval);
     bindRoom(roomId);
+
+    setTimeout(async () => {
+        const freshSnap = await db.ref("matches/" + roomId).once("value").catch(() => null);
+        const freshRoom = freshSnap?.val?.();
+
+        if (freshRoom) {
+            forceShowReadyOverlayIfWaitingRoom(freshRoom, roomId, mySide);
+        }
+    }, 250);
+
     return true;
 }
-
 async function createAndPublishWaitingRoom(me, mode, stakePMC, bucket) {
     const newRoomRef = db.ref("matches").push();
     const newRoomId = newRoomRef.key;
@@ -11349,11 +11475,11 @@ function stopHostReadyOverlayPoll() {
 function forceShowReadyOverlayIfWaitingRoom(room, roomId = currentRoomId, forceSide = null) {
     if (!roomId || !room) return false;
 
-    const hasEnoughPlayersWaiting =
-        !!room.players?.do &&
-        !!room.players?.den &&
-        room.status === "waiting" &&
-        !room.winner;
+   const hasEnoughPlayersWaiting =
+    hasRoomPlayer(room.players?.do) &&
+    hasRoomPlayer(room.players?.den) &&
+    room.status === "waiting" &&
+    !room.winner;
 
     if (!hasEnoughPlayersWaiting) return false;
 
@@ -12114,8 +12240,8 @@ function formatRoomStakePMC(stake) {
 }
 
 function getRoomLobbyState(room) {
-    const hasDo = !!room?.players?.do;
-    const hasDen = !!room?.players?.den;
+    const hasDo = hasRoomPlayer(room?.players?.do);
+const hasDen = hasRoomPlayer(room?.players?.den);
 
     if (room?.winner) return { text: "Đã xong", cls: "done" };
     if (room?.status === "playing" && hasDo && hasDen) return { text: "Đang trong trận", cls: "playing" };
