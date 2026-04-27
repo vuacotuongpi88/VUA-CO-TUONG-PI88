@@ -9273,8 +9273,7 @@ if (room.status === "playing" && !room.winner) {
                 await db.ref("matches/" + roomId + "/drawRequest").remove();
             }
         }
-              window.__settledPmcRooms = window.__settledPmcRooms || {};
-       window.__awardedLevelRooms = window.__awardedLevelRooms || {};
+       window.__settledPmcRooms = window.__settledPmcRooms || {};
 
 const settleKey = [
     listeningRoomId,
@@ -9285,45 +9284,6 @@ const settleKey = [
     room.finishedAt || ""
 ].join("_");
 
-// ===== CỘNG/TRỪ EXP KHI VÁN CÓ KẾT QUẢ =====
-if (
-    room.winner &&
-    room.winner !== "hoa" &&
-    room.finishedAt &&
-    !window.__awardedLevelRooms[settleKey]
-) {
-    window.__awardedLevelRooms[settleKey] = true;
-
-    setTimeout(async () => {
-        try {
-            const freshSnap = await db.ref("matches/" + listeningRoomId).once("value");
-            const freshRoom = freshSnap.val() || room;
-
-            await awardLevelProgressForFinishedRoom(listeningRoomId, freshRoom);
-
-            const latestMeta = await ensureMyLevelMetaLoaded().catch(() => getCachedLevelMeta());
-            const safeMeta = buildLevelMeta(latestMeta);
-
-            renderLevelHud(safeMeta);
-
-            if (typeof pushMyLevelMetaToCurrentRoom === "function") {
-                await pushMyLevelMetaToCurrentRoom(safeMeta).catch(() => {});
-            }
-
-            console.log("AUTO LEVEL AWARD DONE:", {
-                roomId: listeningRoomId,
-                roundNo: freshRoom.roundNo || 1,
-                winner: freshRoom.winner,
-                mySide
-            });
-        } catch (err) {
-            console.error("AUTO LEVEL AWARD FAIL:", err);
-            delete window.__awardedLevelRooms[settleKey];
-        }
-    }, 0);
-}
-
-// ===== CHỐT PMC =====
 if (room.winner && !window.__settledPmcRooms[settleKey]) {
     window.__settledPmcRooms[settleKey] = true;
 
