@@ -9894,51 +9894,28 @@ const stake = Math.max(
 async function ensureInviteHostControl(roomId = currentRoomId) {
     if (!roomId) return null;
 
-    const me = getCurrentPlayerProfile();
+    const meGame = getCurrentPlayerProfile();
+    const meFriend = getCurrentFriendProfile();
+
     let roomSnap = await db.ref("matches/" + roomId).once("value");
     let room = roomSnap.val() || {};
-
     if (!room) return null;
 
     // Nếu mình đã là chủ phòng rồi
-    if (room?.players?.do?.uid === me.uid) {
+    if (isSamePlayerByWalletOrUid(room?.players?.do, meGame, meFriend)) {
+        mySide = "do";
+        currentRoomId = roomId;
         return room;
     }
 
-    // Nếu mình không phải người còn lại trong phòng thì không tự lấy quyền
-    if (room?.players?.den?.uid !== me.uid) {
-        return room;
-    }
+    // Nếu mình là người còn lại bên den thì NHƯỜNG NGUYÊN ROOM CHO MÌNH
+    if (isSamePlayerByWalletOrUid(room?.players?.den, meGame, meFriend)) {
+        room = await forceMeBecomeRoomHost(roomId, room);
 
-    // Chỉ tự bàn giao khi phòng đang chờ / đã xong ván
-    const canTakeHost =
-        room.status === "waiting" ||
-        room.status === "finished" ||
-        !!room.winner;
-
-    if (!canTakeHost) return room;
-
-    const oldHost = room?.players?.do || null;
-    let oldHostState = null;
-
-    if (oldHost?.walletKey) {
-        oldHostState = (await db.ref("social/playerState/" + oldHost.walletKey).once("value")).val();
-    }
-// Nếu mình là den và phòng đang chờ/đã xong thì bàn giao luôn.
-// Không tin playerState của host cũ nữa vì nó hay bị kẹt arena/roomId cũ.
-if (true) {
-        const transferred = await transferWaitingRoomHost(
-            roomId,
-            room,
-            room.roomBucket || currentRoomBucket
-        );
-
-        if (transferred) {
-            roomSnap = await db.ref("matches/" + roomId).once("value");
-            room = roomSnap.val() || {};
-
+        if (room && isSamePlayerByWalletOrUid(room?.players?.do, meGame, meFriend)) {
             mySide = "do";
             currentRoomId = roomId;
+            currentRoomStatus = "waiting";
             currentRoomMode = room.mode || currentRoomMode || "co-tuong";
             currentRoomStakePMC = Math.max(
                 0,
@@ -9959,6 +9936,8 @@ if (true) {
 
             await setPlayerPresence("arena").catch(() => {});
         }
+
+        return room;
     }
 
     return room;
@@ -13171,6 +13150,34 @@ await db.ref().update(updates);
 activeRoomInvite = null;
 renderRoomInviteOverlay();
 }
+function isSamePlayerByWalletOrUid(player, meGame = null, meFriend = null) {
+    if (!player) return false;
+
+    meGame = meGame || getCurrentPlayerProfile();
+    meFriend = meFriend || getCurrentFriendProfile();
+
+    const myUid = String(meGame.uid || meFriend.uid || "").trim();
+    const myWallet = String(
+        meGame.walletKey ||
+        meFriend.walletKey ||
+        makeWalletDbKey() ||
+        ""
+    ).trim();
+
+    const pUid = String(player.uid || "").trim();
+    const pWallet = String(
+        player.walletKey ||
+        player.walletDbKey ||
+        player.wallet ||
+        player.piWalletAddress ||
+        ""
+    ).trim();
+
+    return (
+        (myUid && pUid && myUid === pUid) ||
+        (myWallet && pWallet && myWallet === pWallet)
+    );
+}
 async function forceMeBecomeRoomHost(roomId, room = null) {
     if (!roomId) return null;
 
@@ -13200,10 +13207,13 @@ async function forceMeBecomeRoomHost(roomId, room = null) {
     const bucket = room.roomBucket || currentRoomBucket || makeStakeBucket(mode, stake);
     const inviteCode = String(room.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
 
-    const hostData = {
-        ...me,
-        uid: me.uid || meFriend.uid || "",
-        walletKey: me.walletKey || meFriend.walletKey || makeWalletDbKey(),
+const oldDen = room?.players?.den || {};
+
+const hostData = {
+    ...oldDen,
+    ...me,
+    uid: me.uid || meFriend.uid || oldDen.uid || "",
+    walletKey: me.walletKey || meFriend.walletKey || oldDen.walletKey || makeWalletDbKey(),
         name: me.name || me.displayName || me.username || meFriend.displayName || "Người chơi",
         displayName: me.displayName || me.name || meFriend.displayName || "Người chơi",
         username: me.username || me.piUsername || meFriend.username || "",
@@ -13295,19 +13305,16 @@ if (!room) {
     return;
 }
 
-const meUid = meGame.uid;
-
-// Nếu mình chưa phải chủ phòng, ép mình thành chủ trước.
-// Đặt đoạn này TRƯỚC check room.players.den, nếu không sẽ bị chặn hoài.
-if (room?.players?.do?.uid !== meUid) {
+// Nếu mình chưa phải chủ phòng, ép nhường nguyên room cho mình trước.
+// So bằng walletKey hoặc uid để tránh lỗi uid lệch giữa Pi/Google/cache.
+if (!isSamePlayerByWalletOrUid(room?.players?.do, meGame, me)) {
     room = await forceMeBecomeRoomHost(currentRoomId, room);
 
-    if (!room || room?.players?.do?.uid !== meUid) {
+    if (!room || !isSamePlayerByWalletOrUid(room?.players?.do, meGame, me)) {
         alert("Chưa nhận được quyền chủ phòng, bấm mời lại sau 1 giây.");
         return;
     }
 }
-
 if (room.winner) {
     room = await forceMeBecomeRoomHost(currentRoomId, room);
 
