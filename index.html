@@ -7071,7 +7071,18 @@ if (room.winner) {
     }
 }
 const nextRoundNo = Math.max(1, Math.floor(Number(room.roundNo || 1) || 1) + 1);
+const keepStakePMC = Math.max(
+    0,
+    Math.floor(Number(
+        room.stakePMC ||
+        room.lastSettlement?.stakePMC ||
+        room.settlement?.stakePMC ||
+        currentRoomStakePMC ||
+        0
+    ) || 0)
+);
 
+currentRoomStakePMC = keepStakePMC;
 // Xóa khóa local của ván cũ, nếu không ván 2 cùng roomId sẽ không settle PMC.
 window.__settledPmcRooms = {};
 window.__lastVictoryKey = "";
@@ -7079,9 +7090,10 @@ window.__pmcSettleStarted = {};
 window.__finalizedMatchRewards = {};
 window.__rewardRunningByRound = {};
         // Nếu 2 người vẫn còn trong phòng thì đánh lại với đúng người cũ
-        await db.ref("matches/" + roomId).update({
+await db.ref("matches/" + roomId).update({
     status: "waiting",
     roundNo: nextRoundNo,
+    stakePMC: keepStakePMC,
             ready: {
                 do: false,
                 den: false
@@ -9858,7 +9870,16 @@ async function ensureInviteHostControl(roomId = currentRoomId) {
     return room;
 }
 async function maybeSettleStakeRoom(room, roomId) {
-    const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
+    const stake = Math.max(
+        0,
+        Math.floor(Number(
+            room?.stakePMC ||
+            room?.lastSettlement?.stakePMC ||
+            room?.settlement?.stakePMC ||
+            currentRoomStakePMC ||
+            0
+        ) || 0)
+    );
     if (!roomId || !room?.winner) return;
 
     const roundNo = Math.max(1, Math.floor(Number(room?.roundNo || 1) || 1));
@@ -9974,8 +9995,16 @@ if (!winLock.committed) {
     return;
 }
 
-const totalPot = stake * 2;
-const feePMC = Math.max(0, Math.floor(totalPot * MATCH_SYSTEM_FEE_RATE));
+// Nếu phòng có cược thì ăn pot.
+// Nếu vì lý do nào đó stake = 0, vẫn thưởng thắng để không bị "done nhưng +0".
+const WIN_BONUS_PMC = 20;
+
+const totalPot = stake > 0 ? stake * 2 : WIN_BONUS_PMC;
+
+const feePMC = stake > 0
+    ? Math.max(0, Math.floor(totalPot * MATCH_SYSTEM_FEE_RATE))
+    : 0;
+
 const winnerReceivePMC = totalPot - feePMC;
 const adminWalletKey = "pi_admin_master";
 const settleDebugRef = db.ref(`matches/${roomId}/settlements/${roundKey}/debug`);
@@ -10103,6 +10132,7 @@ writeSettlementField("winner", room.winner);
 writeSettlementField("winnerSide", mySide);
 writeSettlementField("winnerWalletKey", myWalletKey);
 writeSettlementField("stakePMC", stake);
+writeSettlementField("winBonusPMC", stake > 0 ? 0 : WIN_BONUS_PMC);
 writeSettlementField("totalPot", totalPot);
 writeSettlementField("feePMC", feePMC);
 writeSettlementField("winnerReceivePMC", winnerReceivePMC);
