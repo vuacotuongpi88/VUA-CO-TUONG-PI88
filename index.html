@@ -8651,43 +8651,14 @@ async function awardLevelProgressForFinishedRoom(roomId, room) {
   const denPlayerKey = getRoomPlayerKeyForLevel(room.players?.den || {});
   const opponentKey = mySideNow === "do" ? denPlayerKey : doPlayerKey;
 
-    const roundNo = Math.max(1, Math.floor(Number(room.roundNo || 1) || 1));
-
-  // Chỉ cộng/trừ EXP khi Firebase đã ghi xong thời điểm kết thúc ván
-  if (!room.finishedAt) return;
-
-  const levelRoundKey = [
-    roomId,
-    "round",
-    roundNo,
-    room.winner || "",
-    room.winReason || "",
-    room.finishedAt || ""
-  ].join("_");
-
-  const claimRef = db.ref(
-    `levelMatchClaimsV3/${safeLevelKey(walletKey)}/${safeLevelKey(levelRoundKey)}`
-  );
-
+  const claimRef = db.ref(`levelMatchClaimsV2/${walletKey}/${roomId}`);
   const claimTx = await runRefTransaction(claimRef, current => {
     if (current && current.done) return;
-
-    return {
-      done: true,
-      at: Date.now(),
-      roomId,
-      roundNo,
-      resultType,
-      opponentKey,
-      winner: room.winner,
-      winReason: room.winReason || "",
-      finishedAt: room.finishedAt || ""
-    };
+    return { done: true, at: Date.now(), resultType, opponentKey };
   });
-
   if (!claimTx.committed) return;
 
-const pair = await reserveLevelPairCount(walletKey, opponentKey, levelRoundKey);
+const pair = await reserveLevelPairCount(walletKey, opponentKey, roomId);
 
 // BẢN MỚI:
 // Không chặn EXP vì nghèo.
@@ -9288,43 +9259,18 @@ const settleKey = [
     room.finishedAt || ""
 ].join("_");
 
-// ===== CỘNG/TRỪ EXP SAU KHI VÁN KẾT THÚC =====
-// Không đụng ready/SS, không reset phòng, chỉ xử lý level của ví hiện tại.
-window.__awardedLevelRooms = window.__awardedLevelRooms || {};
-
-if (
-    room.winner &&
-    room.winner !== "hoa" &&
-    room.finishedAt &&
-    !window.__awardedLevelRooms[settleKey]
-) {
-    window.__awardedLevelRooms[settleKey] = true;
+if (room.winner && !window.__settledPmcRooms[settleKey]) {
+    window.__settledPmcRooms[settleKey] = true;
 
     setTimeout(async () => {
         try {
             const freshSnap = await db.ref("matches/" + listeningRoomId).once("value");
             const freshRoom = freshSnap.val() || room;
 
-            await awardLevelProgressForFinishedRoom(listeningRoomId, freshRoom);
-
-            const latestMeta = await ensureMyLevelMetaLoaded().catch(() => getCachedLevelMeta());
-            const safeMeta = buildLevelMeta(latestMeta);
-
-            renderLevelHud(safeMeta);
-
-            if (typeof pushMyLevelMetaToCurrentRoom === "function") {
-                await pushMyLevelMetaToCurrentRoom(safeMeta).catch(() => {});
-            }
-
-            console.log("AUTO LEVEL AWARD DONE:", {
-                roomId: listeningRoomId,
-                roundNo: freshRoom.roundNo || 1,
-                winner: freshRoom.winner,
-                mySide
-            });
+            await maybeSettleStakeRoom(freshRoom, listeningRoomId);
         } catch (err) {
-            console.error("AUTO LEVEL AWARD FAIL:", err);
-            delete window.__awardedLevelRooms[settleKey];
+            console.error("AUTO PMC SETTLE CLIENT FAIL:", err);
+            delete window.__settledPmcRooms[settleKey];
         }
     }, 0);
 }
