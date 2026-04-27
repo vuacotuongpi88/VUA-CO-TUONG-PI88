@@ -7112,14 +7112,6 @@ if (room.winner) {
         alert("Đang chốt thưởng PMC, bấm TIẾP TỤC lại sau 1-2 giây.");
         return;
     }
-
-    const expSnap = await db.ref(`matches/${roomId}/settlements/${oldRoundKey}/exp`).once("value").catch(() => null);
-    const expState = expSnap?.val?.() || {};
-
-    if (room.winner !== "hoa" && !expState.done) {
-        alert("Đang cộng/trừ EXP, bấm TIẾP TỤC lại sau 1-2 giây.");
-        return;
-    }
 }
 const nextRoundNo = Math.max(1, Math.floor(Number(room.roundNo || 1) || 1) + 1);
 const keepStakePMC = Math.max(
@@ -7959,7 +7951,34 @@ function sameRoomPerson(a = {}, b = {}) {
         (aUid && bUid && aUid === bUid)
     );
 }
+function getMySideFromRoomSnapshot(room = {}) {
+    const doPlayer = room.players?.do || {};
+    const denPlayer = room.players?.den || {};
 
+    const myDevice = String(
+        typeof getStableDeviceIdForLevel === "function" ? getStableDeviceIdForLevel() : ""
+    ).trim();
+
+    // Ưu tiên deviceId tuyệt đối, tránh 2 giả lập trùng uid/wallet
+    if (myDevice) {
+        if (String(doPlayer.deviceId || "").trim() === myDevice) return "do";
+        if (String(denPlayer.deviceId || "").trim() === myDevice) return "den";
+    }
+
+    // Sau đó mới dùng isMeRoomPlayer
+    const isDo = isMeRoomPlayer(doPlayer);
+    const isDen = isMeRoomPlayer(denPlayer);
+
+    if (isDo && !isDen) return "do";
+    if (isDen && !isDo) return "den";
+
+    // Nếu bị trùng cả 2 thì giữ side hiện tại, nhưng phải đúng player
+    if ((mySide === "do" || mySide === "den") && isMeRoomPlayer(room.players?.[mySide])) {
+        return mySide;
+    }
+
+    return null;
+}
 function pickRoomStakePMC(room = {}, fallback = 0) {
     return Math.max(
         0,
@@ -9058,8 +9077,27 @@ async function leaveRealtimeMatch() {
     if (!roomId) return;
 
     try {
-        const roomSnap = await db.ref("matches/" + roomId).once("value");
-        const room = roomSnap.val() || {};
+        if (
+    room.status === "waiting" &&
+    !room.winner &&
+    !room.finishedAt &&
+    roomHasTwoRealPlayersWaiting(room)
+) {
+    const realSide = getMySideFromRoomSnapshot(room);
+
+    if (realSide === "do" || realSide === "den") {
+        mySide = realSide;
+        viewSide = realSide;
+    }
+
+    currentRoomStatus = "waiting";
+    readyDo = !!room.ready?.do;
+    readyDen = !!room.ready?.den;
+    readyOverlayWaitingShown = false;
+
+    await forceShowReadyOverlayIfWaitingRoom(room, roomId, null, true);
+    return;
+}
 
         if (!side) return;
 
@@ -9820,7 +9858,7 @@ for (const waiting of activeWaitingList) {
             const freshRoom = freshSnap.val();
 
            if (await roomHasTwoActivePlayersWaiting(freshRoom, roomId)) {
-    await forceShowReadyOverlayIfWaitingRoom(freshRoom, roomId, mySide);
+    await forceShowReadyOverlayIfWaitingRoom(freshRoom, roomId, null, true);
 } else {
     closeReadyOverlay();
     readyOverlayWaitingShown = false;
@@ -10589,11 +10627,19 @@ async function maybeAwardRoomExpIfPmcDone(roomId, room) {
     const roundNo = Math.max(1, Math.floor(Number(room.roundNo || 1) || 1));
     const roundKey = "round_" + roundNo;
 
-    const expRef = db.ref(`matches/${roomId}/settlements/${roundKey}/exp`);
-    const expSnap = await expRef.once("value").catch(() => null);
-    const expState = expSnap?.val?.() || {};
+    const myRoomSide = getMySideFromRoomSnapshot(room);
 
-    if (expState.done) {
+    if (myRoomSide !== "do" && myRoomSide !== "den") {
+        return false;
+    }
+
+    const sideExpSnap = await db.ref(`matches/${roomId}/settlements/${roundKey}/expBySide/${myRoomSide}`)
+        .once("value")
+        .catch(() => null);
+
+    const sideExpState = sideExpSnap?.val?.() || {};
+
+    if (sideExpState.done) {
         return true;
     }
 
@@ -10622,57 +10668,86 @@ async function maybeAwardRoomExpIfPmcDone(roomId, room) {
         await pushMyLevelMetaToCurrentRoom(safeMeta).catch(() => {});
     }
 
-    console.log("ROOM_EXP_DONE_AFTER_PMC:", {
-        roomId,
-        roundNo,
-        winner: room.winner
-    });
-
     return true;
 }
 async function awardRoomExpAfterPmcSettled(roomId, room, roundNo) {
-    if (!roomId || !room || !room.winner || room.winner === "hoa") return;
+    if (!roomId || !room || !room.winner || room.winner === "hoa") return null;
 
-    const doPlayer = room.players?.do || {};
-    const denPlayer = room.players?.den || {};
+    const safeRoundNo = Math.max(1, Math.floor(Number(roundNo || room.roundNo || 1) || 1));
+    const roundKey = "round_" + safeRoundNo;
 
-    const winnerSide = room.winner;
-    const loserSide = winnerSide === "do" ? "den" : "do";
+    const myRoomSide = getMySideFromRoomSnapshot(room);
 
-    const winnerPlayer = winnerSide === "do" ? doPlayer : denPlayer;
-    const loserPlayer = loserSide === "do" ? doPlayer : denPlayer;
+    if (myRoomSide !== "do" && myRoomSide !== "den") {
+        console.warn("EXP SKIP: không xác định được side máy này", {
+            roomId,
+            roundNo: safeRoundNo,
+            winner: room.winner,
+            mySide,
+            doPlayer: room.players?.do,
+            denPlayer: room.players?.den
+        });
+        return null;
+    }
 
-    const winnerOpponent = winnerSide === "do" ? denPlayer : doPlayer;
-    const loserOpponent = loserSide === "do" ? denPlayer : doPlayer;
+    const player = room.players?.[myRoomSide] || {};
+    const opponentSide = myRoomSide === "do" ? "den" : "do";
+    const opponent = room.players?.[opponentSide] || {};
 
-    const winnerResult = await applyMatchExpToWalletOnce({
+    const resultType = room.winner === myRoomSide ? "win" : "lose";
+
+    const sideExpRef = db.ref(`matches/${roomId}/settlements/${roundKey}/expBySide/${myRoomSide}`);
+
+    const sideSnap = await sideExpRef.once("value").catch(() => null);
+    const sideState = sideSnap?.val?.() || {};
+
+    if (sideState.done) {
+        return {
+            ok: false,
+            duplicate: true,
+            side: myRoomSide,
+            resultType
+        };
+    }
+
+    const result = await applyMatchExpToWalletOnce({
         roomId,
-        roundNo,
-        side: winnerSide,
-        resultType: "win",
-        player: winnerPlayer,
-        opponent: winnerOpponent
+        roundNo: safeRoundNo,
+        side: myRoomSide,
+        resultType,
+        player,
+        opponent
     });
 
-    const loserResult = await applyMatchExpToWalletOnce({
-        roomId,
-        roundNo,
-        side: loserSide,
-        resultType: "lose",
-        player: loserPlayer,
-        opponent: loserOpponent
-    });
-
-    const roundKey = "round_" + Math.max(1, Math.floor(Number(roundNo || 1) || 1));
-
-    await db.ref(`matches/${roomId}/settlements/${roundKey}/exp`).update({
+    await sideExpRef.update({
         done: true,
         at: Date.now(),
-        winnerSide,
-        loserSide,
-        winnerXpDelta: winnerResult?.xpDelta || 0,
-        loserXpDelta: loserResult?.xpDelta || 0
+        side: myRoomSide,
+        resultType,
+        winner: room.winner,
+        xpDelta: result?.xpDelta || 0,
+        walletKey: result?.walletKey || getPlayerWalletKeyForExpAward(player)
     }).catch(() => {});
+
+    // Không dùng exp.done để chặn máy còn lại.
+    // Chỉ ghi dấu tổng cho debug.
+    await db.ref(`matches/${roomId}/settlements/${roundKey}/exp`).update({
+        touched: true,
+        lastSide: myRoomSide,
+        lastResultType: resultType,
+        lastAt: Date.now()
+    }).catch(() => {});
+
+    console.log("LOCAL_EXP_AWARD_DONE:", {
+        roomId,
+        roundNo: safeRoundNo,
+        side: myRoomSide,
+        winner: room.winner,
+        resultType,
+        xpDelta: result?.xpDelta || 0
+    });
+
+    return result;
 }
 async function maybeSettleStakeRoom(room, roomId) {
     const stake = Math.max(
