@@ -9307,6 +9307,63 @@ if (room.winner && !window.__settledPmcRooms[settleKey]) {
         }
     }, 0);
 }
+// ===== CỘNG/TRỪ EXP SAU KHI CÓ KẾT QUẢ =====
+// Không đụng SS, không đụng phòng, không đụng PMC.
+// Mỗi máy tự cộng/trừ EXP cho ví của chính nó.
+window.__awardedLevelRooms = window.__awardedLevelRooms || {};
+
+if (
+    room.winner &&
+    room.winner !== "hoa" &&
+    room.finishedAt &&
+    !window.__awardedLevelRooms[settleKey]
+) {
+    window.__awardedLevelRooms[settleKey] = true;
+
+    setTimeout(async () => {
+        try {
+            const freshSnap = await db.ref("matches/" + listeningRoomId).once("value");
+            const freshRoom = freshSnap.val() || room;
+
+            if (!freshRoom || !freshRoom.winner || freshRoom.winner === "hoa" || !freshRoom.finishedAt) {
+                delete window.__awardedLevelRooms[settleKey];
+                return;
+            }
+
+            // Hàm awardLevelProgressForFinishedRoom đang dùng tham số đầu làm claim key.
+            // Không truyền roomId trần nữa, để tránh đánh ván 2 cùng phòng bị khóa EXP.
+            const levelAwardKey = [
+                listeningRoomId,
+                "level",
+                "round",
+                freshRoom.roundNo || 1,
+                freshRoom.winner || "",
+                freshRoom.winReason || "",
+                freshRoom.finishedAt || ""
+            ].join("_");
+
+            await awardLevelProgressForFinishedRoom(levelAwardKey, freshRoom);
+
+            const latestMeta = getCachedLevelMeta();
+            renderLevelHud(latestMeta);
+
+            if (typeof pushMyLevelMetaToCurrentRoom === "function") {
+                await pushMyLevelMetaToCurrentRoom(latestMeta).catch(() => {});
+            }
+
+            console.log("AUTO LEVEL AWARD DONE:", {
+                roomId: listeningRoomId,
+                levelAwardKey,
+                roundNo: freshRoom.roundNo || 1,
+                winner: freshRoom.winner,
+                mySide
+            });
+        } catch (err) {
+            console.error("AUTO LEVEL AWARD FAIL:", err);
+            delete window.__awardedLevelRooms[settleKey];
+        }
+    }, 800);
+}
         if (room.winner) {
 const victoryKey = [
     listeningRoomId,
