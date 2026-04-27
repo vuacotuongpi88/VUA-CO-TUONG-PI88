@@ -7110,12 +7110,10 @@ const keepStakePMC = Math.max(
 currentRoomStakePMC = keepStakePMC;
 // Xóa khóa local của ván cũ, nếu không ván 2 cùng roomId sẽ không settle PMC.
 window.__settledPmcRooms = {};
-window.__settledLevelRooms = {};
 window.__lastVictoryKey = "";
 window.__pmcSettleStarted = {};
 window.__finalizedMatchRewards = {};
 window.__rewardRunningByRound = {};
-
         // Nếu 2 người vẫn còn trong phòng thì đánh lại với đúng người cũ
 await db.ref("matches/" + roomId).update({
     status: "waiting",
@@ -8643,174 +8641,84 @@ function getLevelMatchBlockReason(room = {}, pairCount = 1) {
 
 
 async function awardLevelProgressForFinishedRoom(roomId, room) {
-    if (!roomId || !room || !room.winner || room.winner === "hoa") return;
+  if (!roomId || !room || !room.winner || room.winner === "hoa") return;
+  const walletKey = makeWalletDbKey();
+  if (!walletKey || !mySide) return;
 
-    const walletKey = makeWalletDbKey();
-    if (!walletKey) return;
+  const mySideNow = mySide;
+  const resultType = room.winner === mySideNow ? "win" : "lose";
+  const doPlayerKey = getRoomPlayerKeyForLevel(room.players?.do || {});
+  const denPlayerKey = getRoomPlayerKeyForLevel(room.players?.den || {});
+  const opponentKey = mySideNow === "do" ? denPlayerKey : doPlayerKey;
 
-    const doPlayer = room?.players?.do || {};
-    const denPlayer = room?.players?.den || {};
+  const claimRef = db.ref(`levelMatchClaimsV2/${walletKey}/${roomId}`);
+  const claimTx = await runRefTransaction(claimRef, current => {
+    if (current && current.done) return;
+    return { done: true, at: Date.now(), resultType, opponentKey };
+  });
+  if (!claimTx.committed) return;
 
-    // Không tin mySide nữa, vì bấm tiếp tục / bàn giao chủ phòng có thể làm mySide lệch.
-    // Xác định bên thật của máy này theo uid / walletKey đang nằm trong room.
-    let mySideNow = null;
+const pair = await reserveLevelPairCount(walletKey, opponentKey, roomId);
 
-    if (isMeRoomPlayer(doPlayer)) {
-        mySideNow = "do";
-    } else if (isMeRoomPlayer(denPlayer)) {
-        mySideNow = "den";
-    }
+// BẢN MỚI:
+// Không chặn EXP vì nghèo.
+// Không chặn EXP vì đánh mốc thấp.
+// Không chặn EXP vì ván nhanh.
+// Không chặn EXP vì cùng device.
+// Chỉ giảm dần khi hôm nay gặp lại cùng 1 đối thủ nhiều lần.
+const blockReason = "";
+const absXp = getRepeatAdjustedXpAbs(pair.count);
+const xpDelta = resultType === "win" ? absXp : -absXp;
 
-    if (!mySideNow) {
-        console.warn("EXP SKIP: máy này không còn nằm trong room.players", {
-            roomId,
-            walletKey,
-            winner: room.winner
-        });
-        return;
-    }
+console.log("LEVEL_EXP_DEBUG", {
+  roomId,
+  walletKey,
+  opponentKey,
+  resultType,
+  pairCount: pair.count,
+  absXp,
+  xpDelta,
+  note: pair.count > 1 ? "repeat_opponent_reduced_xp" : "normal_xp"
+});
 
-    const roundNo = Math.max(1, Math.floor(Number(room.roundNo || 1) || 1));
-    const finishedAt = Number(room.finishedAt || room.updatedAt || 0) || 0;
-
-    // Mỗi ván trong cùng 1 room phải có key riêng.
-    // Nếu chỉ dùng roomId thì ván 2 sẽ bị chặn vì claim cũ.
-    const roundKey = [
-        "round",
-        roundNo,
-        room.winner || "",
-        room.winReason || "",
-        finishedAt || "no_time"
-    ].join("_");
-
-    const matchClaimId = safeLevelKey(`${roomId}_${roundKey}`);
-
-    const resultType = room.winner === mySideNow ? "win" : "lose";
-
-    const oppPlayer = mySideNow === "do" ? denPlayer : doPlayer;
-    const opponentKey = getRoomPlayerKeyForLevel(oppPlayer);
-
-    const now = Date.now();
-    const claimRef = db.ref(`levelMatchClaimsV3/${walletKey}/${matchClaimId}`);
-
-    const claimTx = await runRefTransaction(claimRef, current => {
-        if (current && current.done) return;
-
-        // Nếu đang chạy mà chưa quá 10 giây thì không chạy trùng.
-        if (
-            current &&
-            current.running &&
-            now - Number(current.at || 0) < 10000
-        ) {
-            return;
-        }
-
-        return {
-            running: true,
-            done: false,
-            at: now,
-            roomId,
-            roundNo,
-            roundKey,
-            side: mySideNow,
-            resultType,
-            opponentKey,
-            winner: room.winner,
-            winReason: room.winReason || ""
-        };
+  let beforeMeta = getDefaultLevelMeta();
+  let afterMeta = getDefaultLevelMeta();
+  const levelRef = getWalletLevelRef(walletKey);
+  await runRefTransaction(levelRef, current => {
+    beforeMeta = buildLevelMeta(current || {});
+    const nextXp = Math.max(0, Math.min(getLevelInfoByLevel(LEVEL_MAX).xp, beforeMeta.xp + xpDelta));
+    afterMeta = buildLevelMeta({
+      ...beforeMeta,
+      xp: nextXp,
+      wins: beforeMeta.wins + (resultType === "win" ? 1 : 0),
+      losses: beforeMeta.losses + (resultType === "lose" ? 1 : 0),
+      matches: beforeMeta.matches + 1,
+      blockedXpMatches: beforeMeta.blockedXpMatches + (blockReason ? 1 : 0),
+      lastResult: resultType,
+      lastXpDelta: xpDelta,
+      lastPairCount: pair.count,
+      lastBlockReason: blockReason,
+      updatedAt: Date.now()
     });
+    return afterMeta;
+  });
 
-    if (!claimTx.committed) return;
+  localStorage.setItem("level-meta-cache", JSON.stringify(afterMeta));
+  renderLevelHud(afterMeta);
 
-    // Dùng matchClaimId để gặp cùng đối thủ trong cùng room nhưng ván mới vẫn được tính EXP.
-    const pair = await reserveLevelPairCount(walletKey, opponentKey, matchClaimId);
+  if (blockReason) {
+    console.warn("Trận này không cộng/trừ EXP vì chống farm:", { blockReason, pairCount: pair.count, roomId, opponentKey });
+    return;
+  }
 
-    const blockReason = "";
-    const absXp = getRepeatAdjustedXpAbs(pair.count);
-    const xpDelta = resultType === "win" ? absXp : -absXp;
-
-    console.log("LEVEL_EXP_DEBUG", {
-        roomId,
-        roundNo,
-        matchClaimId,
-        walletKey,
-        side: mySideNow,
-        winner: room.winner,
-        resultType,
-        opponentKey,
-        pairCount: pair.count,
-        absXp,
-        xpDelta
-    });
-
-    let beforeMeta = getDefaultLevelMeta();
-    let afterMeta = getDefaultLevelMeta();
-
-    const levelRef = getWalletLevelRef(walletKey);
-
-    await runRefTransaction(levelRef, current => {
-        beforeMeta = buildLevelMeta(current || {});
-
-        const nextXp = Math.max(
-            0,
-            Math.min(
-                getLevelInfoByLevel(LEVEL_MAX).xp,
-                beforeMeta.xp + xpDelta
-            )
-        );
-
-        afterMeta = buildLevelMeta({
-            ...beforeMeta,
-            xp: nextXp,
-            wins: beforeMeta.wins + (resultType === "win" ? 1 : 0),
-            losses: beforeMeta.losses + (resultType === "lose" ? 1 : 0),
-            matches: beforeMeta.matches + 1,
-            blockedXpMatches: beforeMeta.blockedXpMatches + (blockReason ? 1 : 0),
-            lastResult: resultType,
-            lastXpDelta: xpDelta,
-            lastPairCount: pair.count,
-            lastBlockReason: blockReason,
-            updatedAt: Date.now()
-        });
-
-        return afterMeta;
-    });
-
-    setCachedLevelMeta(afterMeta);
-
-    // Đẩy EXP mới vào room để avatar/thanh EXP trong trận cập nhật liền.
-    await db.ref(`matches/${roomId}/players/${mySideNow}/levelMeta`)
-        .set(afterMeta)
-        .catch(err => {
-            console.warn("Không sync levelMeta vào room:", err);
-        });
-
-    await claimRef.update({
-        running: false,
-        done: true,
-        doneAt: Date.now(),
-        beforeXp: beforeMeta.xp,
-        afterXp: afterMeta.xp,
-        beforeLevel: beforeMeta.level,
-        afterLevel: afterMeta.level,
-        xpDelta,
-        pairCount: pair.count
-    }).catch(() => {});
-
-    if (afterMeta.level > beforeMeta.level) {
-        const unlocks = [];
-
-        for (let lv = beforeMeta.level + 1; lv <= afterMeta.level; lv++) {
-            const reward = getLevelUnlockReward(lv);
-            if (reward) unlocks.push(`Lv.${lv}: ${reward}`);
-        }
-
-        alert(
-            `🎉 Thăng cấp Lv.${afterMeta.level} - ${afterMeta.title}\n` +
-            `Không thưởng PMC theo level để chống farm.\n` +
-            `${unlocks.length ? "Mở khóa: " + unlocks.slice(-2).join(" • ") : "Mở khóa danh hiệu mới."}`
-        );
+  if (afterMeta.level > beforeMeta.level) {
+    const unlocks = [];
+    for (let lv = beforeMeta.level + 1; lv <= afterMeta.level; lv++) {
+      const reward = getLevelUnlockReward(lv);
+      if (reward) unlocks.push(`Lv.${lv}: ${reward}`);
     }
+    alert(`🎉 Thăng cấp Lv.${afterMeta.level} - ${afterMeta.title}\nKhông thưởng PMC theo level để chống farm.\n${unlocks.length ? "Mở khóa: " + unlocks.slice(-2).join(" • ") : "Mở khóa danh hiệu mới."}`);
+  }
 }
 
 function getLocalLevelMissionsForBoard() {
@@ -9350,23 +9258,6 @@ const settleKey = [
     room.winReason || "",
     room.finishedAt || ""
 ].join("_");
-window.__settledLevelRooms = window.__settledLevelRooms || {};
-
-if (room.winner && room.winner !== "hoa" && !window.__settledLevelRooms[settleKey]) {
-    window.__settledLevelRooms[settleKey] = true;
-
-    setTimeout(async () => {
-        try {
-            const freshSnap = await db.ref("matches/" + listeningRoomId).once("value");
-            const freshRoom = freshSnap.val() || room;
-
-            await awardLevelProgressForFinishedRoom(listeningRoomId, freshRoom);
-        } catch (err) {
-            console.error("AUTO EXP SETTLE CLIENT FAIL:", err);
-            delete window.__settledLevelRooms[settleKey];
-        }
-    }, 0);
-}
 
 if (room.winner && !window.__settledPmcRooms[settleKey]) {
     window.__settledPmcRooms[settleKey] = true;
@@ -9633,19 +9524,14 @@ async function createAndPublishWaitingRoom(me, mode, stakePMC, bucket) {
         claimedAt: null
     });
 
-   mySide = "do";
-viewSide = "do";
-currentRoomId = newRoomId;
-currentRoomMode = mode;
-currentRoomStakePMC = stakePMC;
-currentRoomBucket = bucket;
-currentRoomStatus = "waiting";
+    mySide = "do";
+    currentRoomId = newRoomId;
+    currentRoomMode = mode;
+    currentRoomStakePMC = stakePMC;
 
-await setPlayerPresence("arena").catch(() => {});
-
-saveActiveMatchSnapshot({ roomId: newRoomId, mode, side: "do" });
-bindRoom(newRoomId);
-return true;
+    saveActiveMatchSnapshot({ roomId: newRoomId, mode, side: "do" });
+    bindRoom(newRoomId);
+    return true;
 }
 async function joinOrCreateRealtimeMatch(mode, stakePMC = 0) {
     await ensureMyLevelMetaLoaded();
@@ -11566,92 +11452,16 @@ function autoResetNextMatch() {
         showReadyOverlay(getCurrentMode());
     }, 5000);
 }
-async function getReadyOverlayGate(roomId = currentRoomId) {
-    if (!roomId) {
-        return { ok: false, room: null, side: null, reason: "no_room" };
-    }
 
-    const snap = await db.ref("matches/" + roomId).once("value").catch(() => null);
-    const room = snap?.val?.();
-
-    if (!room) {
-        return { ok: false, room: null, side: null, reason: "room_missing" };
-    }
-
-    const hasDo = hasRoomPlayer(room.players?.do);
-    const hasDen = hasRoomPlayer(room.players?.den);
-
-    if (!hasDo || !hasDen) {
-        return { ok: false, room, side: null, reason: "not_enough_players" };
-    }
-
-    if (sameRoomPerson(room.players?.do || {}, room.players?.den || {})) {
-        return { ok: false, room, side: null, reason: "same_player_two_sides" };
-    }
-
-    if (room.status !== "waiting" || room.winner) {
-        return { ok: false, room, side: null, reason: "not_waiting" };
-    }
-
-    let side = null;
-
-    if (isMeRoomPlayer(room.players?.do)) {
-        side = "do";
-    } else if (isMeRoomPlayer(room.players?.den)) {
-        side = "den";
-    }
-
-    if (!side) {
-        return { ok: false, room, side: null, reason: "me_not_in_room" };
-    }
-
-    return { ok: true, room, side, reason: "ok" };
-}
-async function showReadyOverlay(mode) {
-    const overlay = document.getElementById("ready-overlay");
-    if (!overlay) return false;
-
-    // Online: chỉ mở bảng SS khi Firebase thật sự có đủ đỏ + đen
-    if (currentRoomId) {
-        const gate = await getReadyOverlayGate(currentRoomId);
-
-        if (!gate.ok) {
-            console.warn("READY OVERLAY BLOCKED:", gate.reason, {
-                roomId: currentRoomId,
-                mySide,
-                status: gate.room?.status,
-                doPlayer: gate.room?.players?.do,
-                denPlayer: gate.room?.players?.den
-            });
-
-            overlay.style.display = "none";
-            readyOverlayWaitingShown = false;
-            clearInterval(readyInterval);
-            return false;
-        }
-
-        const room = gate.room;
-
-        mySide = gate.side;
-        viewSide = gate.side;
-        currentRoomMode = room.mode || currentRoomMode || mode || "co-tuong";
-        currentRoomStatus = room.status || "waiting";
-        currentRoomStakePMC = pickRoomStakePMC(room) || currentRoomStakePMC;
-        currentRoomBucket = room.roomBucket || currentRoomBucket;
-
-        readyDo = !!room.ready?.do;
-        readyDen = !!room.ready?.den;
-    }
-
+function showReadyOverlay(mode) {
     pendingGameMode = mode || pendingGameMode || currentRoomMode || "tong";
+    const overlay = document.getElementById("ready-overlay");
+    if (!overlay) return;
 
     overlay.style.display = "flex";
-    readyOverlayWaitingShown = true;
     readyTime = 30;
     updateReadyUI();
     startReadyCountdown();
-
-    return true;
 }
 let hostReadyOverlayPollTimer = null;
 
@@ -11746,25 +11556,6 @@ function startHostReadyOverlayPoll(roomId = currentRoomId) {
 }
 async function setReady() {
     if (!currentRoomId || !mySide) return;
-
-    const gate = await getReadyOverlayGate(currentRoomId);
-
-    if (!gate.ok) {
-        console.warn("READY BUTTON BLOCKED:", gate.reason);
-
-        closeReadyOverlay();
-
-        if (gate.reason === "not_enough_players") {
-            alert("Chưa đủ 2 người, chưa được bấm sẵn sàng.");
-        } else {
-            alert("Phòng chưa hợp lệ để sẵn sàng.");
-        }
-
-        return;
-    }
-
-    mySide = gate.side;
-    viewSide = gate.side;
 
     const result = await chargeStakeForReady(currentRoomId, mySide);
 
