@@ -8773,26 +8773,55 @@ if (transferred) {
             return;
         }
 
-        // ===== Người được mời (den) rời khi đang chờ => giữ host cũ, chỉ xóa den =====
-        if (side === "den" && room.status !== "playing") {
-            await maybeRefundWaitingStakePMC(roomId, room, "den").catch(() => {});
+        // ===== Người được mời (den) rời khi đang chờ => giữ nguyên chủ phòng do =====
+if (side === "den" && room.status !== "playing") {
+    await maybeRefundWaitingStakePMC(roomId, room, "den").catch(() => {});
 
-            const updates = {};
-            updates[`matches/${roomId}/players/den`] = null;
-            updates[`matches/${roomId}/ready/den`] = false;
-            updates[`matches/${roomId}/stakeLocked/den`] = false;
-            updates[`matches/${roomId}/status`] = "waiting";
-            updates[`matches/${roomId}/drawRequest`] = null;
-            updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+    const host = room.players?.do || {};
+    const keepMode = room.mode || mode || currentRoomMode || "co-tuong";
+    const keepStake = pickRoomStakePMC(room) || leavingStakePMC || currentRoomStakePMC || 0;
+    const keepBucket = room.roomBucket || roomBucket || makeStakeBucket(keepMode, keepStake);
+    const keepInviteCode = room.inviteCode || makeInviteCodeFromRoomId(roomId);
 
-            if (roomBucket) {
-                updates[`waitingRooms/${roomBucket}/${roomId}/claimedBy`] = null;
-                updates[`waitingRooms/${roomBucket}/${roomId}/claimedAt`] = null;
-            }
+    const updates = {};
 
-            await db.ref().update(updates);
-            return;
-        }
+    updates[`matches/${roomId}/players/den`] = null;
+    updates[`matches/${roomId}/ready/den`] = false;
+    updates[`matches/${roomId}/stakeLocked/den`] = false;
+
+    // Ép lại chủ phòng còn lại cho chắc.
+    updates[`matches/${roomId}/players/do/role`] = "host";
+    updates[`matches/${roomId}/players/do/stakePMC`] = keepStake;
+    updates[`matches/${roomId}/players/do/originalStakePMC`] = keepStake;
+
+    updates[`matches/${roomId}/status`] = "waiting";
+    updates[`matches/${roomId}/winner`] = null;
+    updates[`matches/${roomId}/winReason`] = null;
+    updates[`matches/${roomId}/drawRequest`] = null;
+    updates[`matches/${roomId}/stakePMC`] = keepStake;
+    updates[`matches/${roomId}/originalStakePMC`] = keepStake;
+    updates[`matches/${roomId}/roomBucket`] = keepBucket;
+    updates[`matches/${roomId}/inviteCode`] = keepInviteCode;
+    updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+    if (keepBucket) {
+        updates[`waitingRooms/${keepBucket}/${roomId}`] = {
+            roomId,
+            uid: host.uid || "",
+            name: host.name || host.displayName || "Người chơi",
+            mode: keepMode,
+            stakePMC: keepStake,
+            originalStakePMC: keepStake,
+            inviteCode: keepInviteCode,
+            createdAt: Date.now(),
+            claimedBy: null,
+            claimedAt: null
+        };
+    }
+
+    await db.ref().update(updates);
+    return;
+}
 
         // ===== fallback an toàn =====
         await maybeRefundWaitingStakePMC(roomId, room, side).catch(() => {});
@@ -8963,28 +8992,80 @@ const hasEnoughPlayersWaiting =
     !room.winner;
 
 if (hasEnoughPlayersWaiting) {
+    currentRoomId = listeningRoomId;
+    currentRoomMode = room.mode || currentRoomMode || "co-tuong";
+    currentRoomStatus = "waiting";
+    currentRoomStakePMC = pickRoomStakePMC(room) || currentRoomStakePMC;
+    currentRoomBucket = room.roomBucket || currentRoomBucket;
+
+    if (isSameRoomPlayer(room.players.do, me, meFriend)) {
+        mySide = "do";
+    } else if (isSameRoomPlayer(room.players.den, me, meFriend)) {
+        mySide = "den";
+    }
+
+    if (mySide) {
+        saveActiveMatchSnapshot({
+            roomId: listeningRoomId,
+            mode: currentRoomMode,
+            side: mySide
+        });
+    }
+
+    // CHỐT LỖI: có đủ 2 người đang chờ thì ép máy hiện tại quay về bàn,
+    // không cho đứng ngoài lobby/home nữa.
+    prepareRealtimeArenaUI();
+
     isGameOver = false;
     selectedPiece = null;
     clearMoveHints();
-
-    // Phòng đã reset về chờ SS thì phải ép tắt popup thắng/thua ở cả 2 máy
     hideVictoryPopup(true);
-
+    renderPlayersFromRoom(room);
     renderTimerUI();
 
-    const overlay = document.getElementById("ready-overlay");
-    const overlayVisible = overlay && overlay.style.display === "flex";
-
-    // Quan trọng: đừng chỉ tin biến readyOverlayWaitingShown.
-    // Phải nhìn trạng thái thật của bảng SS.
+    readyDo = !!room.ready?.do;
+    readyDen = !!room.ready?.den;
     readyOverlayWaitingShown = true;
 
-    if (!overlayVisible) {
-        showReadyOverlay(room.mode || currentRoomMode);
+    const overlay = document.getElementById("ready-overlay");
+    if (!overlay || overlay.style.display !== "flex") {
+        showReadyOverlay(currentRoomMode || room.mode || "co-tuong");
     } else {
         updateReadyUI();
     }
 } else {
+    const iAmHostWaitingAlone =
+        room.status === "waiting" &&
+        !room.winner &&
+        room.players?.do &&
+        !room.players?.den &&
+        isSameRoomPlayer(room.players.do, me, meFriend);
+
+    // Nếu đối thủ rời lúc đang chờ, máy chủ B vẫn phải giữ room,
+    // không bị văng trạng thái thành khách / mất chủ phòng.
+    if (iAmHostWaitingAlone) {
+        currentRoomId = listeningRoomId;
+        currentRoomMode = room.mode || currentRoomMode || "co-tuong";
+        currentRoomStatus = "waiting";
+        currentRoomStakePMC = pickRoomStakePMC(room) || currentRoomStakePMC;
+        currentRoomBucket = room.roomBucket || currentRoomBucket;
+        mySide = "do";
+
+        saveActiveMatchSnapshot({
+            roomId: listeningRoomId,
+            mode: currentRoomMode,
+            side: "do"
+        });
+
+        prepareRealtimeArenaUI();
+        renderPlayersFromRoom(room);
+        renderTimerUI();
+        readyOverlayWaitingShown = false;
+        closeReadyOverlay();
+        updateReadyUI();
+        return;
+    }
+
     readyOverlayWaitingShown = false;
     closeReadyOverlay();
     renderTimerUI();
