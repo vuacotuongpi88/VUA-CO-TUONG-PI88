@@ -8915,10 +8915,13 @@ function bindRoom(roomId) {
         const room = snap.val();
         if (!room) return;
 const me = getCurrentPlayerProfile();
+const meFriend = getCurrentFriendProfile();
 
-if (room.players?.do?.uid === me.uid) {
+// Reset rồi nhận lại phe bằng walletKey hoặc uid.
+// Không dùng uid đơn lẻ nữa vì Pi/Google/cache dễ lệch.
+if (isSameRoomPlayer(room.players?.do, me, meFriend)) {
     mySide = "do";
-} else if (room.players?.den?.uid === me.uid) {
+} else if (isSameRoomPlayer(room.players?.den, me, meFriend)) {
     mySide = "den";
 }
 
@@ -13237,7 +13240,62 @@ await db.ref().update(updates);
 activeRoomInvite = null;
 renderRoomInviteOverlay();
 }
+function forceShowReadyOverlayIfWaitingRoom(room, roomId = currentRoomId) {
+    if (!roomId || !room) return false;
 
+    const hasEnoughPlayersWaiting =
+        !!room.players?.do &&
+        !!room.players?.den &&
+        room.status === "waiting" &&
+        !room.winner;
+
+    if (!hasEnoughPlayersWaiting) return false;
+
+    const meGame = getCurrentPlayerProfile();
+    const meFriend = getCurrentFriendProfile();
+
+    if (isSameRoomPlayer(room.players.do, meGame, meFriend)) {
+        mySide = "do";
+    } else if (isSameRoomPlayer(room.players.den, meGame, meFriend)) {
+        mySide = "den";
+    }
+
+    if (!mySide) return false;
+
+    currentRoomId = roomId;
+    currentRoomMode = room.mode || currentRoomMode || "co-tuong";
+    currentRoomStatus = "waiting";
+    currentRoomStakePMC = pickRoomStakePMC(room) || currentRoomStakePMC;
+    currentRoomBucket = room.roomBucket || currentRoomBucket;
+
+    isGameOver = false;
+    selectedPiece = null;
+
+    clearMoveHints();
+    hideVictoryPopup(true);
+    renderPlayersFromRoom(room);
+    renderTimerUI();
+
+    readyDo = !!room.ready?.do;
+    readyDen = !!room.ready?.den;
+
+    readyOverlayWaitingShown = true;
+
+    const overlay = document.getElementById("ready-overlay");
+    if (!overlay || overlay.style.display !== "flex") {
+        showReadyOverlay(currentRoomMode);
+    } else {
+        updateReadyUI();
+    }
+
+    saveActiveMatchSnapshot({
+        roomId,
+        mode: currentRoomMode,
+        side: mySide
+    });
+
+    return true;
+}
 async function inviteFriendToRoom(walletKey, displayName) {
     try {
         if (!currentRoomId) {
@@ -13334,8 +13392,31 @@ const payload = {
         updates[`social/roomInvitesSent/${me.walletKey}/${inviteId}`] = payload;
 
         await db.ref().update(updates);
-        alert("Đã gửi lời mời vào phòng cho " + (displayName || "bạn bè") + "!");
-        closeArenaFriendBox();
+
+// Chủ phòng tự nghe room trong vài giây.
+// Khi người kia nhận lời và players/den xuất hiện thì bật bảng SS ngay,
+// khỏi phải reload Pi Browser.
+const watchRoomId = currentRoomId;
+let watchCount = 0;
+
+const readyWatchTimer = setInterval(async () => {
+    watchCount++;
+
+    if (!watchRoomId || currentRoomId !== watchRoomId || watchCount > 20) {
+        clearInterval(readyWatchTimer);
+        return;
+    }
+
+    const snap = await db.ref("matches/" + watchRoomId).once("value").catch(() => null);
+    const freshRoom = snap?.val?.();
+
+    if (forceShowReadyOverlayIfWaitingRoom(freshRoom, watchRoomId)) {
+        clearInterval(readyWatchTimer);
+    }
+}, 500);
+
+alert("Đã gửi lời mời vào phòng cho " + (displayName || "bạn bè") + "!");
+closeArenaFriendBox();
     } catch (err) {
         console.error("Lỗi inviteFriendToRoom:", err);
         alert("Mời vào phòng lỗi.");
