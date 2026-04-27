@@ -8917,8 +8917,6 @@ function bindRoom(roomId) {
 const me = getCurrentPlayerProfile();
 const meFriend = getCurrentFriendProfile();
 
-// Reset rồi nhận lại phe bằng walletKey hoặc uid.
-// Không dùng uid đơn lẻ nữa vì Pi/Google/cache dễ lệch.
 if (isSameRoomPlayer(room.players?.do, me, meFriend)) {
     mySide = "do";
 } else if (isSameRoomPlayer(room.players?.den, me, meFriend)) {
@@ -13240,6 +13238,80 @@ await db.ref().update(updates);
 activeRoomInvite = null;
 renderRoomInviteOverlay();
 }
+let hostReadyWatchRef = null;
+let hostReadyWatchHandler = null;
+let hostReadyWatchTimeout = null;
+
+function stopHostReadyWatch() {
+    if (hostReadyWatchRef && hostReadyWatchHandler) {
+        hostReadyWatchRef.off("value", hostReadyWatchHandler);
+    }
+
+    hostReadyWatchRef = null;
+    hostReadyWatchHandler = null;
+
+    if (hostReadyWatchTimeout) {
+        clearTimeout(hostReadyWatchTimeout);
+        hostReadyWatchTimeout = null;
+    }
+}
+
+function startHostReadyWatch(roomId) {
+    if (!roomId) return;
+
+    stopHostReadyWatch();
+
+    hostReadyWatchRef = db.ref("matches/" + roomId);
+
+    hostReadyWatchHandler = (snap) => {
+        const room = snap.val();
+        if (!room) return;
+
+        const meGame = getCurrentPlayerProfile();
+        const meFriend = getCurrentFriendProfile();
+
+        const iAmInRoom =
+            isSameRoomPlayer(room?.players?.do, meGame, meFriend) ||
+            isSameRoomPlayer(room?.players?.den, meGame, meFriend);
+
+        if (!iAmInRoom) return;
+
+        // QUAN TRỌNG: giữ lại room cho máy chủ mới B.
+        currentRoomId = roomId;
+        currentRoomMode = room.mode || currentRoomMode || "co-tuong";
+        currentRoomStatus = room.status || currentRoomStatus || "waiting";
+        currentRoomStakePMC = pickRoomStakePMC(room) || currentRoomStakePMC;
+        currentRoomBucket = room.roomBucket || currentRoomBucket;
+
+        // Khi người được mời C đã vào room => ép hiện bảng SS cho B.
+        if (
+            room.status === "waiting" &&
+            !room.winner &&
+            room.players?.do &&
+            room.players?.den
+        ) {
+            prepareRealtimeArenaUI();
+
+            if (forceShowReadyOverlayIfWaitingRoom(room, roomId)) {
+                // Đã hiện SS rồi thì không cần watcher phụ nữa,
+                // bindRoom chính sẽ lo phần update ready/start trận.
+                stopHostReadyWatch();
+            }
+        }
+    };
+
+    hostReadyWatchRef.on("value", hostReadyWatchHandler);
+
+    // Giữ watcher 2 phút, không còn chết sau 10 giây.
+    hostReadyWatchTimeout = setTimeout(() => {
+        stopHostReadyWatch();
+    }, 120000);
+
+    // Đọc ngay 1 lần phòng hiện tại.
+    hostReadyWatchRef.once("value")
+        .then(snap => hostReadyWatchHandler(snap))
+        .catch(() => {});
+}
 function forceShowReadyOverlayIfWaitingRoom(room, roomId = currentRoomId) {
     if (!roomId || !room) return false;
 
@@ -13393,27 +13465,28 @@ const payload = {
 
         await db.ref().update(updates);
 
-// Chủ phòng tự nghe room trong vài giây.
-// Khi người kia nhận lời và players/den xuất hiện thì bật bảng SS ngay,
-// khỏi phải reload Pi Browser.
+// Chủ phòng mới B phải bind lại room ngay sau khi gửi lời mời.
+// Nếu không, C vào phòng sẽ có SS nhưng B có thể không tự hiện SS.
 const watchRoomId = currentRoomId;
-let watchCount = 0;
 
-const readyWatchTimer = setInterval(async () => {
-    watchCount++;
+currentRoomId = watchRoomId;
+mySide = "do";
+currentRoomStatus = "waiting";
+currentRoomMode = inviteMode;
+currentRoomStakePMC = inviteStakePMC;
+currentRoomBucket = inviteBucket;
 
-    if (!watchRoomId || currentRoomId !== watchRoomId || watchCount > 20) {
-        clearInterval(readyWatchTimer);
-        return;
-    }
+saveActiveMatchSnapshot({
+    roomId: watchRoomId,
+    mode: inviteMode,
+    side: "do"
+});
 
-    const snap = await db.ref("matches/" + watchRoomId).once("value").catch(() => null);
-    const freshRoom = snap?.val?.();
+await setPlayerPresence("arena").catch(() => {});
 
-    if (forceShowReadyOverlayIfWaitingRoom(freshRoom, watchRoomId)) {
-        clearInterval(readyWatchTimer);
-    }
-}, 500);
+prepareRealtimeArenaUI();
+bindRoom(watchRoomId);
+startHostReadyWatch(watchRoomId);
 
 alert("Đã gửi lời mời vào phòng cho " + (displayName || "bạn bè") + "!");
 closeArenaFriendBox();
