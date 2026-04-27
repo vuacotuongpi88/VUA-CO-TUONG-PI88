@@ -126,7 +126,28 @@ function getRepeatAdjustedXpAbs(pairCount) {
   if (n <= 20) return 2;
   return 1;
 }
+function makeExpRoundClaimId(roomId, room = {}) {
+  const roundNo = Math.max(
+    1,
+    Math.floor(Number(room.roundNo || room?.settlement?.roundNo || 1) || 1)
+  );
 
+  const winner = String(room.winner || "").trim().toLowerCase() || "no_winner";
+  const winReason = String(room.winReason || "").trim().toLowerCase() || "normal";
+
+  return safeWalletKey([
+    roomId,
+    "round",
+    roundNo,
+    winner,
+    winReason
+  ].join("_"));
+}
+
+function isSystemWalletKey(walletKey) {
+  const k = String(walletKey || "").trim().toLowerCase();
+  return k === "pi_admin_master" || k === "admin_master" || k === "system_wallet";
+}
 async function reserveServerLevelPairCount(db, walletKey, opponentKey, roomId) {
   const todayKey = getTodayKeyVN();
   const safeMe = safeWalletKey(walletKey);
@@ -182,11 +203,20 @@ async function reserveServerLevelPairCount(db, walletKey, opponentKey, roomId) {
   };
 }
 
-async function awardOnePlayerExp(db, roomId, walletKey, opponentKey, resultType) {
+async function awardOnePlayerExp(db, roomId, walletKey, opponentKey, resultType, room = {}) {
   const safeKey = safeWalletKey(walletKey);
-  const safeRoom = safeWalletKey(roomId);
 
-  const claimRef = db.ref(`levelMatchClaimsV3/${safeKey}/${safeRoom}`);
+  if (!safeKey || isSystemWalletKey(safeKey)) {
+    return {
+      ok: false,
+      skipped: true,
+      reason: "system_or_missing_wallet",
+      walletKey: safeKey
+    };
+  }
+
+  const matchClaimId = makeExpRoundClaimId(roomId, room);
+  const claimRef = db.ref(`levelMatchClaimsV3/${safeKey}/${matchClaimId}`);
 
   const claimTx = await claimRef.transaction(current => {
     if (current && current.done) return;
@@ -194,6 +224,10 @@ async function awardOnePlayerExp(db, roomId, walletKey, opponentKey, resultType)
     return {
       done: true,
       at: Date.now(),
+      roomId,
+      matchClaimId,
+      roundNo: Math.max(1, Math.floor(Number(room.roundNo || 1) || 1)),
+      winner: String(room.winner || ""),
       resultType,
       opponentKey: safeWalletKey(opponentKey)
     };
@@ -206,11 +240,12 @@ async function awardOnePlayerExp(db, roomId, walletKey, opponentKey, resultType)
       skipped: true,
       reason: "already_awarded",
       walletKey: safeKey,
+      matchClaimId,
       levelMeta: buildLevelMeta(snap.val() || {})
     };
   }
 
-  const pair = await reserveServerLevelPairCount(db, walletKey, opponentKey, roomId);
+  const pair = await reserveServerLevelPairCount(db, walletKey, opponentKey, matchClaimId);
   const absXp = getRepeatAdjustedXpAbs(pair.count);
   const xpDelta = resultType === "win" ? absXp : -absXp;
 
@@ -240,6 +275,7 @@ async function awardOnePlayerExp(db, roomId, walletKey, opponentKey, resultType)
 
   await db.ref("levelExpLogsV3").push({
     roomId,
+    matchClaimId,
     walletKey: safeKey,
     opponentKey: safeWalletKey(opponentKey),
     resultType,
@@ -254,6 +290,7 @@ async function awardOnePlayerExp(db, roomId, walletKey, opponentKey, resultType)
   return {
     ok: true,
     walletKey: safeKey,
+    matchClaimId,
     resultType,
     pairCount: pair.count,
     xpDelta,
@@ -301,26 +338,13 @@ async function awardMatchExpServer(db, roomId, room) {
   const doResult = winnerSide === "do" ? "win" : "lose";
   const denResult = winnerSide === "den" ? "win" : "lose";
 
-  const [doExp, denExp] = await Promise.all([
-    awardOnePlayerExp(db, roomId, doWalletKey, denWalletKey, doResult),
-    awardOnePlayerExp(db, roomId, denWalletKey, doWalletKey, denResult)
-  ]);
+  cconst [doExp, denExp] = await Promise.all([
+  awardOnePlayerExp(db, roomId, doWalletKey, denWalletKey, doResult, room),
+  awardOnePlayerExp(db, roomId, denWalletKey, doWalletKey, denResult, room)
+]);
 
-  // Ghi luôn vào room để UI trong trận thấy levelMeta mới khi renderPlayersFromRoom chạy lại.
-  const roomUpdate = {};
-
-  if (doExp?.levelMeta) {
-    roomUpdate[`matches/${roomId}/players/do/levelMeta`] = doExp.levelMeta;
-  }
-
-  if (denExp?.levelMeta) {
-    roomUpdate[`matches/${roomId}/players/den/levelMeta`] = denExp.levelMeta;
-  }
-
-  if (Object.keys(roomUpdate).length) {
-    await db.ref().update(roomUpdate);
-  }
-
+// Không ghi levelMeta vào matches/.../players ở API.
+// Chỉ ghi wallets/<walletKey>/levelMeta để không làm room listener chóp và không đụng SS.
   return {
     ok: true,
     do: doExp,
@@ -426,11 +450,47 @@ module.exports = async function handler(req, res) {
     });
 
     if (!lockResult.committed) {
-      return res.status(200).json({
-        ok: true,
-        alreadySettled: true
+  const settlementSnap = await settlementRef.once("value");
+  const settlement = settlementSnap.val() || {};
+
+  let expResult = settlement.expResult || null;
+
+  // Nếu PMC đã settle rồi nhưng EXP chưa có, cho API chạy bù EXP.
+  // awardOnePlayerExp đã có claim riêng nên không sợ cộng trùng.
+  if (
+    settlement.done &&
+    winnerRaw !== "hoa" &&
+    winnerRaw !== "draw" &&
+    (!expResult || expResult.ok === false)
+  ) {
+    try {
+      expResult = await awardMatchExpServer(db, roomId, room);
+
+      await settlementRef.update({
+        expResult,
+        expFixedAt: Date.now(),
+        expFixedRoute: "already-settled-exp-backfill"
+      });
+    } catch (expErr) {
+      expResult = {
+        ok: false,
+        error: expErr?.message || "exp_error"
+      };
+
+      await settlementRef.update({
+        expResult,
+        expFixedAt: Date.now(),
+        expFixedRoute: "already-settled-exp-error"
       });
     }
+  }
+
+  return res.status(200).json({
+    ok: true,
+    alreadySettled: true,
+    expResult
+  });
+}
 
     // HÒA => hoàn đủ, không ăn phí, không cộng/trừ EXP.
     if (winnerRaw === "hoa" || winnerRaw === "draw") {
