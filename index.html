@@ -7753,7 +7753,34 @@ function getCurrentPlayerProfile() {
         equippedAvatarSkin: (typeof getEquippedAvatarSkin === "function" ? getEquippedAvatarSkin() : (localStorage.getItem("equipped-avatar-skin") || "skin_default")),
     };
 }
+function isMeRoomPlayer(player) {
+    if (!player) return false;
 
+    const meGame = getCurrentPlayerProfile();
+    const meFriend = typeof getCurrentFriendProfile === "function"
+        ? getCurrentFriendProfile()
+        : {};
+
+    const pUid = String(player.uid || "").trim();
+    const pWallet = String(player.walletKey || "").trim();
+
+    const myUidList = [
+        meGame.uid,
+        meFriend.uid,
+        auth.currentUser?.uid
+    ].map(v => String(v || "").trim()).filter(Boolean);
+
+    const myWalletList = [
+        meGame.walletKey,
+        meFriend.walletKey,
+        makeWalletDbKey()
+    ].map(v => String(v || "").trim()).filter(Boolean);
+
+    return (
+        (pUid && myUidList.includes(pUid)) ||
+        (pWallet && myWalletList.includes(pWallet))
+    );
+}
 function updateTurnUIOnly() {
     turnBox.innerText = `Lượt: ${luotDi === 'do' ? 'ĐỎ' : 'ĐEN'}`;
     timerDoEl.className = "timer-box timer-inline";
@@ -8908,11 +8935,9 @@ function bindRoom(roomId) {
         if (currentRoomId !== listeningRoomId) return;
         const room = snap.val();
         if (!room) return;
-const me = getCurrentPlayerProfile();
-
-if (room.players?.do?.uid === me.uid) {
+if (isMeRoomPlayer(room.players?.do)) {
     mySide = "do";
-} else if (room.players?.den?.uid === me.uid) {
+} else if (isMeRoomPlayer(room.players?.den)) {
     mySide = "den";
 }
 
@@ -9780,7 +9805,7 @@ async function transferWaitingRoomHost(roomId, room, roomBucket) {
     if (!roomId || !room) return false;
 
     const newHost = room?.players?.den;
-    if (!newHost?.uid) return false;
+if (!newHost || (!newHost.uid && !newHost.walletKey)) return false;
 
     const stake = Math.max(
         0,
@@ -9869,8 +9894,7 @@ async function transferWaitingRoomHost(roomId, room, roomBucket) {
     await db.ref().update(updates);
 
     // Nếu chính máy này là người được bàn giao thì cập nhật local luôn
-    const me = getCurrentPlayerProfile();
-    if (newHost.uid === me.uid) {
+    if (isMeRoomPlayer(newHost)) {
         mySide = "do";
         currentRoomId = roomId;
         currentRoomMode = room.mode || currentRoomMode || "co-tuong";
@@ -9891,21 +9915,20 @@ async function transferWaitingRoomHost(roomId, room, roomBucket) {
 async function ensureInviteHostControl(roomId = currentRoomId) {
     if (!roomId) return null;
 
-    const me = getCurrentPlayerProfile();
     let roomSnap = await db.ref("matches/" + roomId).once("value");
     let room = roomSnap.val() || {};
 
     if (!room) return null;
 
     // Nếu mình đã là chủ phòng rồi
-    if (room?.players?.do?.uid === me.uid) {
-        return room;
-    }
+    if (isMeRoomPlayer(room?.players?.do)) {
+    return room;
+}
 
     // Chỉ người đang ở bên đen/người ở lại mới được tự nhận chủ
-    if (room?.players?.den?.uid !== me.uid) {
-        return room;
-    }
+    if (!isMeRoomPlayer(room?.players?.den)) {
+    return room;
+}
 
     const canTakeHost =
         room.status === "waiting" ||
@@ -13178,10 +13201,10 @@ async function inviteFriendToRoom(walletKey, displayName) {
             return;
         }
 
-        if (room?.players?.do?.uid !== meGame.uid) {
-            alert("Chỉ chủ phòng mới mời bạn bè vào được.");
-            return;
-        }
+        if (!isMeRoomPlayer(room?.players?.do)) {
+    alert("Chỉ chủ phòng mới mời bạn bè vào được.");
+    return;
+}
 
         const reallyBusy = await isPlayerActuallyBusy(walletKey);
 if (reallyBusy) {
@@ -13214,8 +13237,30 @@ if (reallyBusy) {
         updates[`social/roomInvitesSent/${me.walletKey}/${inviteId}`] = payload;
 
         await db.ref().update(updates);
-        alert("Đã gửi lời mời vào phòng cho " + (displayName || "bạn bè") + "!");
-        closeArenaFriendBox();
+
+// Giữ B ở đúng room, đúng vai chủ phòng sau khi gửi lời mời.
+// Tránh Pi Browser bị mất local state rồi tưởng B không còn là chủ.
+mySide = "do";
+viewSide = "do";
+currentRoomId = currentRoomId || room.roomId;
+currentRoomMode = room.mode || currentRoomMode || "co-tuong";
+currentRoomStakePMC = Math.max(0, Math.floor(Number(room.stakePMC || currentRoomStakePMC || 0) || 0));
+currentRoomBucket = room.roomBucket || currentRoomBucket;
+currentRoomStatus = "waiting";
+
+saveActiveMatchSnapshot({
+    roomId: currentRoomId,
+    mode: currentRoomMode,
+    side: "do"
+});
+
+await setPlayerPresence("arena").catch(() => {});
+
+// Bảo đảm listener phòng vẫn còn sống.
+bindRoom(currentRoomId);
+
+alert("Đã gửi lời mời vào phòng cho " + (displayName || "bạn bè") + "!");
+closeArenaFriendBox();
     } catch (err) {
         console.error("Lỗi inviteFriendToRoom:", err);
         alert("Mời vào phòng lỗi.");
