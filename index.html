@@ -10277,6 +10277,167 @@ async function ensureInviteHostControl(roomId = currentRoomId) {
 
     return room;
 }
+function getPlayerWalletKeyForExpAward(player = {}) {
+    return String(
+        player.walletKey ||
+        player.walletDbKey ||
+        player.wallet ||
+        ""
+    ).trim();
+}
+
+async function applyMatchExpToWalletOnce({ roomId, roundNo, side, resultType, player, opponent }) {
+    const walletKey = getPlayerWalletKeyForExpAward(player);
+    if (!roomId || !walletKey || !side || !resultType) {
+        return null;
+    }
+
+    const opponentKey = getRoomPlayerKeyForLevel(opponent || {});
+    const levelRoundKey = [
+        roomId,
+        "round",
+        roundNo || 1,
+        side,
+        resultType
+    ].join("_");
+
+    const claimRef = db.ref(
+        `levelMatchClaimsV4/${safeLevelKey(walletKey)}/${safeLevelKey(levelRoundKey)}`
+    );
+
+    const claimTx = await runRefTransaction(claimRef, current => {
+        if (current && current.done) return;
+
+        return {
+            done: true,
+            at: Date.now(),
+            roomId,
+            roundNo: roundNo || 1,
+            side,
+            resultType,
+            opponentKey
+        };
+    });
+
+    if (!claimTx.committed) {
+        return {
+            ok: false,
+            duplicate: true,
+            walletKey,
+            side,
+            resultType
+        };
+    }
+
+    const pair = await reserveLevelPairCount(walletKey, opponentKey, levelRoundKey);
+    const absXp = getRepeatAdjustedXpAbs(pair.count);
+    const xpDelta = resultType === "win" ? absXp : -absXp;
+
+    let beforeMeta = getDefaultLevelMeta();
+    let afterMeta = getDefaultLevelMeta();
+
+    await runRefTransaction(getWalletLevelRef(walletKey), current => {
+        beforeMeta = buildLevelMeta(current || {});
+
+        const nextXp = Math.max(
+            0,
+            Math.min(
+                getLevelInfoByLevel(LEVEL_MAX).xp,
+                beforeMeta.xp + xpDelta
+            )
+        );
+
+        afterMeta = buildLevelMeta({
+            ...beforeMeta,
+            xp: nextXp,
+            wins: beforeMeta.wins + (resultType === "win" ? 1 : 0),
+            losses: beforeMeta.losses + (resultType === "lose" ? 1 : 0),
+            matches: beforeMeta.matches + 1,
+            lastResult: resultType,
+            lastXpDelta: xpDelta,
+            lastPairCount: pair.count,
+            updatedAt: Date.now()
+        });
+
+        return afterMeta;
+    });
+
+    // Nếu ví này là máy hiện tại thì cập nhật UI ngay
+    if (walletKey === makeWalletDbKey()) {
+        localStorage.setItem("level-meta-cache", JSON.stringify(afterMeta));
+        renderLevelHud(afterMeta);
+
+        if (typeof pushMyLevelMetaToCurrentRoom === "function") {
+            await pushMyLevelMetaToCurrentRoom(afterMeta).catch(() => {});
+        }
+    }
+
+    console.log("MATCH_EXP_AWARD_DONE", {
+        roomId,
+        roundNo,
+        side,
+        resultType,
+        walletKey,
+        opponentKey,
+        pairCount: pair.count,
+        xpDelta
+    });
+
+    return {
+        ok: true,
+        walletKey,
+        side,
+        resultType,
+        xpDelta,
+        pairCount: pair.count,
+        afterMeta
+    };
+}
+
+async function awardRoomExpAfterPmcSettled(roomId, room, roundNo) {
+    if (!roomId || !room || !room.winner || room.winner === "hoa") return;
+
+    const doPlayer = room.players?.do || {};
+    const denPlayer = room.players?.den || {};
+
+    const winnerSide = room.winner;
+    const loserSide = winnerSide === "do" ? "den" : "do";
+
+    const winnerPlayer = winnerSide === "do" ? doPlayer : denPlayer;
+    const loserPlayer = loserSide === "do" ? doPlayer : denPlayer;
+
+    const winnerOpponent = winnerSide === "do" ? denPlayer : doPlayer;
+    const loserOpponent = loserSide === "do" ? denPlayer : doPlayer;
+
+    const winnerResult = await applyMatchExpToWalletOnce({
+        roomId,
+        roundNo,
+        side: winnerSide,
+        resultType: "win",
+        player: winnerPlayer,
+        opponent: winnerOpponent
+    });
+
+    const loserResult = await applyMatchExpToWalletOnce({
+        roomId,
+        roundNo,
+        side: loserSide,
+        resultType: "lose",
+        player: loserPlayer,
+        opponent: loserOpponent
+    });
+
+    const roundKey = "round_" + Math.max(1, Math.floor(Number(roundNo || 1) || 1));
+
+    await db.ref(`matches/${roomId}/settlements/${roundKey}/exp`).update({
+        done: true,
+        at: Date.now(),
+        winnerSide,
+        loserSide,
+        winnerXpDelta: winnerResult?.xpDelta || 0,
+        loserXpDelta: loserResult?.xpDelta || 0
+    }).catch(() => {});
+}
 async function maybeSettleStakeRoom(room, roomId) {
     const stake = Math.max(
         0,
@@ -10565,6 +10726,21 @@ localStorage.setItem(getPmcCacheKey(), String(paid));
 updatePmcUI(paid);
 
 await loadWalletBalance().catch(() => {});
+
+// EXP chạy SAU KHI PMC đã cộng xong.
+// Nếu EXP lỗi thì chỉ log, tuyệt đối không làm hư thưởng PMC.
+try {
+    await awardRoomExpAfterPmcSettled(roomId, room, roundNo);
+} catch (expErr) {
+    console.error("EXP_AFTER_PMC_FAIL:", expErr);
+
+    await settleDebugRef.update({
+        expStage: "failed_after_pmc_done",
+        expError: expErr?.message || String(expErr),
+        expErrorAt: Date.now()
+    }).catch(() => {});
+}
+
 } catch (err) {
     console.error("SETTLE THROW:", err);
 
