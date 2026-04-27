@@ -9821,16 +9821,33 @@ function isSameRoomPlayer(player, meGame = null, meFriend = null) {
     );
 }
 
+function stakeFromBucket(bucket) {
+    const s = String(bucket || "");
+    const m = s.match(/__(\d+)$/);
+    return m ? Math.max(0, Math.floor(Number(m[1]) || 0)) : 0;
+}
+
 function pickRoomStakePMC(room, fallback = 0) {
     const candidates = [
         room?.originalStakePMC,
         room?.stakePMC,
+
         room?.players?.do?.originalStakePMC,
         room?.players?.do?.stakePMC,
         room?.players?.den?.originalStakePMC,
         room?.players?.den?.stakePMC,
+
+        // QUAN TRỌNG: nếu phòng từng SS rồi thì stake nằm trong stakeLocked
+        room?.stakeLocked?.do?.stake,
+        room?.stakeLocked?.den?.stake,
+
         room?.lastSettlement?.stakePMC,
         room?.settlement?.stakePMC,
+
+        // QUAN TRỌNG: roomBucket dạng co-tuong__99 cũng giữ được cược
+        stakeFromBucket(room?.roomBucket),
+        stakeFromBucket(currentRoomBucket),
+
         currentRoomStakePMC,
         fallback
     ];
@@ -13021,10 +13038,27 @@ async function joinRoomFromInviteDirect(invite) {
     const me = getCurrentPlayerProfile();
     me.levelMeta = getCachedLevelMeta ? getCachedLevelMeta() : (me.levelMeta || {});
 
-    const stakePMC = Math.max(
-        0,
-        Math.floor(Number(room.stakePMC || invite.stakePMC || currentRoomStakePMC || 0) || 0)
-    );
+    const inviteFallbackStake = Math.max(
+    0,
+    Math.floor(Number(
+        invite.originalStakePMC ||
+        invite.stakePMC ||
+        stakeFromBucket(invite.roomBucket) ||
+        0
+    ) || 0)
+);
+
+const stakePMC = pickRoomStakePMC({
+    ...room,
+    roomBucket: room.roomBucket || invite.roomBucket,
+    originalStakePMC: room.originalStakePMC || invite.originalStakePMC,
+    stakePMC: room.stakePMC || invite.stakePMC
+}, inviteFallbackStake);
+
+if (!stakePMC) {
+    alert("Phòng này bị mất mức cược PMC.");
+    return false;
+}
 
     if (room.winner) {
         alert("Phòng này đã kết thúc.");
@@ -13076,11 +13110,13 @@ async function joinRoomFromInviteDirect(invite) {
     const joined = await denRef.transaction(current => {
         if (current && current.uid && current.uid !== me.uid) return;
         return {
-            ...me,
-            role: "guest",
-            joinedByInvite: true,
-            joinedAt: Date.now()
-        };
+    ...me,
+    role: "guest",
+    stakePMC,
+    originalStakePMC: stakePMC,
+    joinedByInvite: true,
+    joinedAt: Date.now()
+};
     }, undefined, false);
 
     if (!joined.committed) {
@@ -13093,16 +13129,24 @@ async function joinRoomFromInviteDirect(invite) {
 
     const updates = {};
     updates[`matches/${roomId}/ready/den`] = false;
-    updates[`matches/${roomId}/stakeLocked/den`] = false;
-    updates[`matches/${roomId}/status`] = "waiting";
-    updates[`matches/${roomId}/winner`] = null;
-    updates[`matches/${roomId}/winReason`] = null;
-    updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+updates[`matches/${roomId}/stakeLocked/den`] = false;
+updates[`matches/${roomId}/status`] = "waiting";
+updates[`matches/${roomId}/winner`] = null;
+updates[`matches/${roomId}/winReason`] = null;
+
+// QUAN TRỌNG: nhận lời mời xong phải vá lại mức cược vào room
+updates[`matches/${roomId}/stakePMC`] = stakePMC;
+updates[`matches/${roomId}/originalStakePMC`] = stakePMC;
+updates[`matches/${roomId}/roomBucket`] = bucket;
+
+updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
 
     // Dọn claim cũ trong waitingRooms nếu có, để phòng không bị kẹt.
     if (bucket) {
         updates[`waitingRooms/${bucket}/${roomId}/claimedBy`] = null;
         updates[`waitingRooms/${bucket}/${roomId}/claimedAt`] = null;
+        updates[`waitingRooms/${bucket}/${roomId}/stakePMC`] = stakePMC;
+updates[`waitingRooms/${bucket}/${roomId}/originalStakePMC`] = stakePMC;
     }
 
     await db.ref().update(updates);
@@ -13246,13 +13290,35 @@ if (reallyBusy) {
         const inviteRef = db.ref("social/roomInvitesInbox/" + walletKey).push();
         const inviteId = inviteRef.key;
 
-        const payload = {
-            inviteId,
-            roomId: currentRoomId,
-            roomBucket: room.roomBucket || currentRoomBucket || null,
-            inviteCode: room.inviteCode || makeInviteCodeFromRoomId(currentRoomId),
-            mode: room.mode || currentRoomMode || "co-tuong",
-            stakePMC: Math.max(0, Math.floor(Number(room.stakePMC || currentRoomStakePMC || 0) || 0)),
+    const inviteStakePMC = pickRoomStakePMC(room);
+const inviteMode = room.mode || currentRoomMode || "co-tuong";
+const inviteBucket = room.roomBucket || currentRoomBucket || makeStakeBucket(inviteMode, inviteStakePMC);
+
+if (!inviteStakePMC) {
+    alert("Phòng này bị mất mức cược PMC, không thể mời. Hãy thoát tạo phòng mới.");
+    return;
+}
+
+// Vá lại room trước khi gửi lời mời
+await db.ref("matches/" + currentRoomId).update({
+    stakePMC: inviteStakePMC,
+    originalStakePMC: inviteStakePMC,
+    roomBucket: inviteBucket,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP
+}).catch(() => {});
+
+room.stakePMC = inviteStakePMC;
+room.originalStakePMC = inviteStakePMC;
+room.roomBucket = inviteBucket;
+
+const payload = {
+    inviteId,
+    roomId: currentRoomId,
+    roomBucket: inviteBucket,
+    inviteCode: room.inviteCode || makeInviteCodeFromRoomId(currentRoomId),
+    mode: inviteMode,
+    stakePMC: inviteStakePMC,
+    originalStakePMC: inviteStakePMC,
             fromWalletKey: me.walletKey,
             fromUid: me.uid,
             fromName: me.displayName || me.username || "Người chơi",
