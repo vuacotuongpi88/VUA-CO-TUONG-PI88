@@ -7023,7 +7023,7 @@ if (room.winner) {
                 uid: freshMe.uid,
                 name: freshMe.name,
                 mode: room.mode || currentRoomMode || "co-tuong",
-                stakePMC: Math.max(0, Math.floor(Number(room.stakePMC || currentRoomStakePMC || 0) || 0)),
+                stakePMC: stake,
                 inviteCode,
                 createdAt: Date.now(),
                 claimedBy: null,
@@ -9168,10 +9168,11 @@ async function createAndPublishWaitingRoom(me, mode, stakePMC, bucket) {
     const waitingRoomRef = db.ref("waitingRooms/" + bucket + "/" + newRoomId);
     const inviteCode = makeInviteCodeFromRoomId(newRoomId);
 
-    await newRoomRef.set({
-        mode,
-        stakePMC,
-        roomBucket: bucket,
+ await newRoomRef.set({
+    mode,
+    stakePMC,
+    originalStakePMC: stakePMC,
+    roomBucket: bucket,
         inviteCode,
         status: "waiting",
         turn: "do",
@@ -9782,16 +9783,17 @@ async function transferWaitingRoomHost(roomId, room, roomBucket) {
     const newHost = room?.players?.den;
     if (!newHost?.uid) return false;
 
-    const stake = Math.max(
-        0,
-        Math.floor(Number(
-            room?.stakePMC ||
-            room?.settlement?.stakePMC ||
-            room?.lastSettlement?.stakePMC ||
-            currentRoomStakePMC ||
-            0
-        ) || 0)
-    );
+const stake = Math.max(
+    0,
+    Math.floor(Number(
+        room?.originalStakePMC ||
+        room?.stakePMC ||
+        room?.lastSettlement?.stakePMC ||
+        room?.settlement?.stakePMC ||
+        currentRoomStakePMC ||
+        0
+    ) || 0)
+);
 
     const inviteCode = String(room?.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
     const isCleanWaiting = room.status === "waiting" && !room.winner;
@@ -9823,6 +9825,8 @@ async function transferWaitingRoomHost(roomId, room, roomBucket) {
     // Reset phòng về trạng thái chờ để chủ mới mời người khác
     updates[`matches/${roomId}/status`] = "waiting";
     updates[`matches/${roomId}/roundNo`] = nextRoundNo;
+    updates[`matches/${roomId}/stakePMC`] = stake;
+    updates[`matches/${roomId}/originalStakePMC`] = stake;
     updates[`matches/${roomId}/turn`] = "do";
     updates[`matches/${roomId}/ready/do`] = false;
     updates[`matches/${roomId}/ready/den`] = false;
@@ -10264,10 +10268,25 @@ async function chargeStakeForReady(roomId, side) {
         const roomSnap = await roomRef.once("value");
         const room = roomSnap.val() || {};
 
-        const stake = Math.max(
-            0,
-            Math.floor(Number(room?.stakePMC || currentRoomStakePMC || 0) || 0)
-        );
+const stake = Math.max(
+    0,
+    Math.floor(Number(
+        room?.originalStakePMC ||
+        room?.stakePMC ||
+        room?.lastSettlement?.stakePMC ||
+        room?.settlement?.stakePMC ||
+        currentRoomStakePMC ||
+        0
+    ) || 0)
+);
+
+if (stake && (!room?.stakePMC || !room?.originalStakePMC)) {
+    await db.ref("matches/" + roomId).update({
+        stakePMC: stake,
+        originalStakePMC: stake,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+    }).catch(() => {});
+}
 
         if (!stake) {
             console.error("READY FAIL no_stake", {
@@ -12964,10 +12983,23 @@ async function joinRoomFromInviteDirect(invite) {
     const me = getCurrentPlayerProfile();
     me.levelMeta = getCachedLevelMeta ? getCachedLevelMeta() : (me.levelMeta || {});
 
-    const stakePMC = Math.max(
-        0,
-        Math.floor(Number(room.stakePMC || invite.stakePMC || currentRoomStakePMC || 0) || 0)
-    );
+const stakePMC = Math.max(
+    0,
+    Math.floor(Number(
+        room.originalStakePMC ||
+        room.stakePMC ||
+        invite.stakePMC ||
+        room.lastSettlement?.stakePMC ||
+        room.settlement?.stakePMC ||
+        currentRoomStakePMC ||
+        0
+    ) || 0)
+);
+
+if (!stakePMC) {
+    alert("Phòng này bị mất mức cược PMC.");
+    return false;
+}
 
     if (room.winner) {
         alert("Phòng này đã kết thúc.");
@@ -13038,6 +13070,8 @@ async function joinRoomFromInviteDirect(invite) {
     updates[`matches/${roomId}/ready/den`] = false;
     updates[`matches/${roomId}/stakeLocked/den`] = false;
     updates[`matches/${roomId}/status`] = "waiting";
+    updates[`matches/${roomId}/stakePMC`] = stakePMC;
+    updates[`matches/${roomId}/originalStakePMC`] = stakePMC;
     updates[`matches/${roomId}/winner`] = null;
     updates[`matches/${roomId}/winReason`] = null;
     updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
@@ -13169,7 +13203,33 @@ if (reallyBusy) {
     alert((displayName || "Bạn này") + " đang bận, không mời được.");
     return;
 }
+const inviteStakePMC = Math.max(
+    0,
+    Math.floor(Number(
+        room.originalStakePMC ||
+        room.stakePMC ||
+        room.lastSettlement?.stakePMC ||
+        room.settlement?.stakePMC ||
+        currentRoomStakePMC ||
+        0
+    ) || 0)
+);
 
+if (!inviteStakePMC) {
+    alert("Phòng này bị mất mức cược PMC, không thể mời. Hãy thoát tạo phòng mới.");
+    return;
+}
+
+// Vá lại room nếu thiếu stakePMC
+if (!room.stakePMC || !room.originalStakePMC) {
+    await db.ref("matches/" + currentRoomId).update({
+        stakePMC: inviteStakePMC,
+        originalStakePMC: inviteStakePMC,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+    });
+    room.stakePMC = inviteStakePMC;
+    room.originalStakePMC = inviteStakePMC;
+}
         const inviteRef = db.ref("social/roomInvitesInbox/" + walletKey).push();
         const inviteId = inviteRef.key;
 
@@ -13179,7 +13239,7 @@ if (reallyBusy) {
             roomBucket: room.roomBucket || currentRoomBucket || null,
             inviteCode: room.inviteCode || makeInviteCodeFromRoomId(currentRoomId),
             mode: room.mode || currentRoomMode || "co-tuong",
-            stakePMC: Math.max(0, Math.floor(Number(room.stakePMC || currentRoomStakePMC || 0) || 0)),
+            stakePMC: inviteStakePMC,
             fromWalletKey: me.walletKey,
             fromUid: me.uid,
             fromName: me.displayName || me.username || "Người chơi",
