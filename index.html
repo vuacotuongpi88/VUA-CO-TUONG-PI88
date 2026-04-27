@@ -8691,12 +8691,12 @@ async function leaveRealtimeMatch() {
     cleanupRoomListeners();
 
     const roomBucket = currentRoomBucket;
-const leavingStakePMC = currentRoomStakePMC;
 
-currentRoomId = null;
-mySide = null;
-currentRoomMode = null;
-currentRoomBucket = null;
+    currentRoomId = null;
+    mySide = null;
+    currentRoomMode = null;
+    currentRoomStakePMC = 0;
+    currentRoomBucket = null;
 
     if (!roomId) return;
 
@@ -8752,17 +8752,11 @@ if (
         await maybeRefundWaitingStakePMC(roomId, room, "do").catch(() => {});
     }
 
-    if (!room.stakePMC && leavingStakePMC > 0) {
-    room.stakePMC = leavingStakePMC;
-    room.originalStakePMC = leavingStakePMC;
-}
+    const transferred = await transferWaitingRoomHost(roomId, room, roomBucket);
 
-const transferred = await transferWaitingRoomHost(roomId, room, roomBucket);
-
-if (transferred) {
-    await setPlayerPresence("home").catch(() => {});
-    return;
-}
+    if (transferred) {
+        return;
+    }
 }
         // ===== HOST rời mà chưa có ai trong phòng => xóa hẳn phòng =====
         if (side === "do" && !room.players?.den) {
@@ -8773,55 +8767,26 @@ if (transferred) {
             return;
         }
 
-        // ===== Người được mời (den) rời khi đang chờ => giữ nguyên chủ phòng do =====
-if (side === "den" && room.status !== "playing") {
-    await maybeRefundWaitingStakePMC(roomId, room, "den").catch(() => {});
+        // ===== Người được mời (den) rời khi đang chờ => giữ host cũ, chỉ xóa den =====
+        if (side === "den" && room.status !== "playing") {
+            await maybeRefundWaitingStakePMC(roomId, room, "den").catch(() => {});
 
-    const host = room.players?.do || {};
-    const keepMode = room.mode || mode || currentRoomMode || "co-tuong";
-    const keepStake = pickRoomStakePMC(room) || leavingStakePMC || currentRoomStakePMC || 0;
-    const keepBucket = room.roomBucket || roomBucket || makeStakeBucket(keepMode, keepStake);
-    const keepInviteCode = room.inviteCode || makeInviteCodeFromRoomId(roomId);
+            const updates = {};
+            updates[`matches/${roomId}/players/den`] = null;
+            updates[`matches/${roomId}/ready/den`] = false;
+            updates[`matches/${roomId}/stakeLocked/den`] = false;
+            updates[`matches/${roomId}/status`] = "waiting";
+            updates[`matches/${roomId}/drawRequest`] = null;
+            updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
 
-    const updates = {};
+            if (roomBucket) {
+                updates[`waitingRooms/${roomBucket}/${roomId}/claimedBy`] = null;
+                updates[`waitingRooms/${roomBucket}/${roomId}/claimedAt`] = null;
+            }
 
-    updates[`matches/${roomId}/players/den`] = null;
-    updates[`matches/${roomId}/ready/den`] = false;
-    updates[`matches/${roomId}/stakeLocked/den`] = false;
-
-    // Ép lại chủ phòng còn lại cho chắc.
-    updates[`matches/${roomId}/players/do/role`] = "host";
-    updates[`matches/${roomId}/players/do/stakePMC`] = keepStake;
-    updates[`matches/${roomId}/players/do/originalStakePMC`] = keepStake;
-
-    updates[`matches/${roomId}/status`] = "waiting";
-    updates[`matches/${roomId}/winner`] = null;
-    updates[`matches/${roomId}/winReason`] = null;
-    updates[`matches/${roomId}/drawRequest`] = null;
-    updates[`matches/${roomId}/stakePMC`] = keepStake;
-    updates[`matches/${roomId}/originalStakePMC`] = keepStake;
-    updates[`matches/${roomId}/roomBucket`] = keepBucket;
-    updates[`matches/${roomId}/inviteCode`] = keepInviteCode;
-    updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
-
-    if (keepBucket) {
-        updates[`waitingRooms/${keepBucket}/${roomId}`] = {
-            roomId,
-            uid: host.uid || "",
-            name: host.name || host.displayName || "Người chơi",
-            mode: keepMode,
-            stakePMC: keepStake,
-            originalStakePMC: keepStake,
-            inviteCode: keepInviteCode,
-            createdAt: Date.now(),
-            claimedBy: null,
-            claimedAt: null
-        };
-    }
-
-    await db.ref().update(updates);
-    return;
-}
+            await db.ref().update(updates);
+            return;
+        }
 
         // ===== fallback an toàn =====
         await maybeRefundWaitingStakePMC(roomId, room, side).catch(() => {});
@@ -8944,11 +8909,10 @@ function bindRoom(roomId) {
         const room = snap.val();
         if (!room) return;
 const me = getCurrentPlayerProfile();
-const meFriend = getCurrentFriendProfile();
 
-if (isSameRoomPlayer(room.players?.do, me, meFriend)) {
+if (room.players?.do?.uid === me.uid) {
     mySide = "do";
-} else if (isSameRoomPlayer(room.players?.den, me, meFriend)) {
+} else if (room.players?.den?.uid === me.uid) {
     mySide = "den";
 }
 
@@ -8992,80 +8956,28 @@ const hasEnoughPlayersWaiting =
     !room.winner;
 
 if (hasEnoughPlayersWaiting) {
-    currentRoomId = listeningRoomId;
-    currentRoomMode = room.mode || currentRoomMode || "co-tuong";
-    currentRoomStatus = "waiting";
-    currentRoomStakePMC = pickRoomStakePMC(room) || currentRoomStakePMC;
-    currentRoomBucket = room.roomBucket || currentRoomBucket;
-
-    if (isSameRoomPlayer(room.players.do, me, meFriend)) {
-        mySide = "do";
-    } else if (isSameRoomPlayer(room.players.den, me, meFriend)) {
-        mySide = "den";
-    }
-
-    if (mySide) {
-        saveActiveMatchSnapshot({
-            roomId: listeningRoomId,
-            mode: currentRoomMode,
-            side: mySide
-        });
-    }
-
-    // CHỐT LỖI: có đủ 2 người đang chờ thì ép máy hiện tại quay về bàn,
-    // không cho đứng ngoài lobby/home nữa.
-    prepareRealtimeArenaUI();
-
     isGameOver = false;
     selectedPiece = null;
     clearMoveHints();
+
+    // Phòng đã reset về chờ SS thì phải ép tắt popup thắng/thua ở cả 2 máy
     hideVictoryPopup(true);
-    renderPlayersFromRoom(room);
+
     renderTimerUI();
 
-    readyDo = !!room.ready?.do;
-    readyDen = !!room.ready?.den;
+    const overlay = document.getElementById("ready-overlay");
+    const overlayVisible = overlay && overlay.style.display === "flex";
+
+    // Quan trọng: đừng chỉ tin biến readyOverlayWaitingShown.
+    // Phải nhìn trạng thái thật của bảng SS.
     readyOverlayWaitingShown = true;
 
-    const overlay = document.getElementById("ready-overlay");
-    if (!overlay || overlay.style.display !== "flex") {
-        showReadyOverlay(currentRoomMode || room.mode || "co-tuong");
+    if (!overlayVisible) {
+        showReadyOverlay(room.mode || currentRoomMode);
     } else {
         updateReadyUI();
     }
 } else {
-    const iAmHostWaitingAlone =
-        room.status === "waiting" &&
-        !room.winner &&
-        room.players?.do &&
-        !room.players?.den &&
-        isSameRoomPlayer(room.players.do, me, meFriend);
-
-    // Nếu đối thủ rời lúc đang chờ, máy chủ B vẫn phải giữ room,
-    // không bị văng trạng thái thành khách / mất chủ phòng.
-    if (iAmHostWaitingAlone) {
-        currentRoomId = listeningRoomId;
-        currentRoomMode = room.mode || currentRoomMode || "co-tuong";
-        currentRoomStatus = "waiting";
-        currentRoomStakePMC = pickRoomStakePMC(room) || currentRoomStakePMC;
-        currentRoomBucket = room.roomBucket || currentRoomBucket;
-        mySide = "do";
-
-        saveActiveMatchSnapshot({
-            roomId: listeningRoomId,
-            mode: currentRoomMode,
-            side: "do"
-        });
-
-        prepareRealtimeArenaUI();
-        renderPlayersFromRoom(room);
-        renderTimerUI();
-        readyOverlayWaitingShown = false;
-        closeReadyOverlay();
-        updateReadyUI();
-        return;
-    }
-
     readyOverlayWaitingShown = false;
     closeReadyOverlay();
     renderTimerUI();
@@ -9256,11 +9168,10 @@ async function createAndPublishWaitingRoom(me, mode, stakePMC, bucket) {
     const waitingRoomRef = db.ref("waitingRooms/" + bucket + "/" + newRoomId);
     const inviteCode = makeInviteCodeFromRoomId(newRoomId);
 
-await newRoomRef.set({
-    mode,
-    stakePMC,
-    originalStakePMC: stakePMC,
-    roomBucket: bucket,
+    await newRoomRef.set({
+        mode,
+        stakePMC,
+        roomBucket: bucket,
         inviteCode,
         status: "waiting",
         turn: "do",
@@ -9269,13 +9180,9 @@ await newRoomRef.set({
         timeDen: 540,
         createdAt: firebase.database.ServerValue.TIMESTAMP,
         players: {
-    do: {
-        ...me,
-        stakePMC,
-        originalStakePMC: stakePMC
-    },
-    den: null
-},
+            do: me,
+            den: null
+        },
         ready: {
             do: false,
             den: false
@@ -9869,92 +9776,29 @@ async function maybeRefundWaitingStakePMC(roomId, room, side) {
         photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
     });
 }
-function getRoomPlayerKey(player) {
-    return String(
-        player?.walletKey ||
-        player?.walletDbKey ||
-        player?.wallet ||
-        player?.piWalletAddress ||
-        player?.uid ||
-        ""
-    ).trim();
-}
-
-function isSameRoomPlayer(player, meGame = null, meFriend = null) {
-    if (!player) return false;
-
-    meGame = meGame || getCurrentPlayerProfile();
-    meFriend = meFriend || getCurrentFriendProfile();
-
-    const pUid = String(player.uid || "").trim();
-    const pWallet = getRoomPlayerKey(player);
-
-    const myUid = String(meGame.uid || meFriend.uid || "").trim();
-    const myWallet = String(
-        meGame.walletKey ||
-        meFriend.walletKey ||
-        makeWalletDbKey() ||
-        ""
-    ).trim();
-
-    return (
-        (pUid && myUid && pUid === myUid) ||
-        (pWallet && myWallet && pWallet === myWallet)
-    );
-}
-
-function stakeFromBucket(bucket) {
-    const s = String(bucket || "");
-    const m = s.match(/__(\d+)$/);
-    return m ? Math.max(0, Math.floor(Number(m[1]) || 0)) : 0;
-}
-
-function pickRoomStakePMC(room, fallback = 0) {
-    const candidates = [
-        room?.originalStakePMC,
-        room?.stakePMC,
-
-        room?.players?.do?.originalStakePMC,
-        room?.players?.do?.stakePMC,
-        room?.players?.den?.originalStakePMC,
-        room?.players?.den?.stakePMC,
-
-        // QUAN TRỌNG: nếu phòng từng SS rồi thì stake nằm trong stakeLocked
-        room?.stakeLocked?.do?.stake,
-        room?.stakeLocked?.den?.stake,
-
-        room?.lastSettlement?.stakePMC,
-        room?.settlement?.stakePMC,
-
-        // QUAN TRỌNG: roomBucket dạng co-tuong__99 cũng giữ được cược
-        stakeFromBucket(room?.roomBucket),
-        stakeFromBucket(currentRoomBucket),
-
-        currentRoomStakePMC,
-        fallback
-    ];
-
-    for (const v of candidates) {
-        const n = Math.max(0, Math.floor(Number(v) || 0));
-        if (n > 0) return n;
-    }
-
-    return 0;
-}
 async function transferWaitingRoomHost(roomId, room, roomBucket) {
     if (!roomId || !room) return false;
 
     const newHost = room?.players?.den;
-    if (!newHost || (!newHost.uid && !newHost.walletKey)) return false;
+    if (!newHost?.uid) return false;
 
-    const stake = pickRoomStakePMC(room);
+    const stake = Math.max(
+        0,
+        Math.floor(Number(
+            room?.stakePMC ||
+            room?.settlement?.stakePMC ||
+            room?.lastSettlement?.stakePMC ||
+            currentRoomStakePMC ||
+            0
+        ) || 0)
+    );
+
     const inviteCode = String(room?.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
-    const mode = room.mode || currentRoomMode || "co-tuong";
-    const finalBucket = roomBucket || room.roomBucket || makeStakeBucket(mode, stake);
-
     const isCleanWaiting = room.status === "waiting" && !room.winner;
 
-    if (isCleanWaiting && room?.stakeLocked?.den && newHost.walletKey && stake > 0) {
+    // Chỉ hoàn stake den nếu đang phòng chờ.
+    // Nếu ván đã kết thúc thì không refund ở đây, tránh cộng dư PMC.
+    if (isCleanWaiting && room?.stakeLocked?.den && newHost.walletKey) {
         await adjustPmcWalletByKey(newHost.walletKey, stake, {
             name: newHost.name || "Người chơi",
             photo: newHost.photo || "images/do_tuong.png"
@@ -9966,24 +9810,22 @@ async function transferWaitingRoomHost(roomId, room, roomBucket) {
         Math.floor(Number(room.roundNo || 1) || 1) + (room.winner ? 1 : 0)
     );
 
-    const hostData = {
-        ...newHost,
-        role: "host",
-        stakePMC: stake,
-        originalStakePMC: stake,
-        becameHostAt: firebase.database.ServerValue.TIMESTAMP
-    };
-
     const updates = {};
 
-    // Nhường nguyên room cho người ở lại
-    updates[`matches/${roomId}/players/do`] = hostData;
+    // Chuyển người còn lại lên làm chủ phòng
+    updates[`matches/${roomId}/players/do`] = {
+    ...newHost,
+    role: "host",
+    stakePMC: stake,
+    originalStakePMC: stake,
+    becameHostAt: firebase.database.ServerValue.TIMESTAMP
+};
     updates[`matches/${roomId}/players/den`] = null;
 
+    // Reset phòng về trạng thái chờ để chủ mới mời người khác
     updates[`matches/${roomId}/status`] = "waiting";
     updates[`matches/${roomId}/roundNo`] = nextRoundNo;
     updates[`matches/${roomId}/turn`] = "do";
-
     updates[`matches/${roomId}/ready/do`] = false;
     updates[`matches/${roomId}/ready/den`] = false;
     updates[`matches/${roomId}/stakeLocked/do`] = false;
@@ -10000,26 +9842,23 @@ async function transferWaitingRoomHost(roomId, room, roomBucket) {
     updates[`matches/${roomId}/winReason`] = null;
     updates[`matches/${roomId}/drawRequest`] = null;
 
+    // Giữ dấu vết ván cũ, nhưng mở phòng mới sạch
     updates[`matches/${roomId}/lastSettlement`] = room.settlement || room.lastSettlement || null;
     updates[`matches/${roomId}/settlement`] = null;
     updates[`matches/${roomId}/refunds`] = null;
 
-    // QUAN TRỌNG: giữ mức cược lại trong room
-    updates[`matches/${roomId}/stakePMC`] = stake;
-    updates[`matches/${roomId}/originalStakePMC`] = stake;
-    updates[`matches/${roomId}/roomBucket`] = finalBucket;
-    updates[`matches/${roomId}/inviteCode`] = inviteCode;
-
     updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+    // Đưa phòng lên lại danh sách phòng chờ với chủ mới
+    const finalBucket = roomBucket || room.roomBucket || makeStakeBucket(room.mode || "co-tuong", stake);
 
     if (finalBucket) {
         updates[`waitingRooms/${finalBucket}/${roomId}`] = {
             roomId,
-            uid: hostData.uid || "",
-            name: hostData.name || hostData.displayName || "Người chơi",
-            mode,
+            uid: newHost.uid,
+            name: newHost.name || newHost.displayName || "Người chơi",
+            mode: room.mode || "co-tuong",
             stakePMC: stake,
-            originalStakePMC: stake,
             inviteCode,
             createdAt: Date.now(),
             claimedBy: null,
@@ -10029,20 +9868,18 @@ async function transferWaitingRoomHost(roomId, room, roomBucket) {
 
     await db.ref().update(updates);
 
+    // Nếu chính máy này là người được bàn giao thì cập nhật local luôn
     const me = getCurrentPlayerProfile();
-    const meFriend = getCurrentFriendProfile();
-
-    if (isSameRoomPlayer(newHost, me, meFriend)) {
+    if (newHost.uid === me.uid) {
         mySide = "do";
         currentRoomId = roomId;
-        currentRoomMode = mode;
+        currentRoomMode = room.mode || currentRoomMode || "co-tuong";
         currentRoomStakePMC = stake;
         currentRoomBucket = finalBucket;
-        currentRoomStatus = "waiting";
 
         saveActiveMatchSnapshot({
             roomId,
-            mode,
+            mode: currentRoomMode,
             side: "do"
         });
 
@@ -10054,30 +9891,54 @@ async function transferWaitingRoomHost(roomId, room, roomBucket) {
 async function ensureInviteHostControl(roomId = currentRoomId) {
     if (!roomId) return null;
 
-    const meGame = getCurrentPlayerProfile();
-    const meFriend = getCurrentFriendProfile();
-
+    const me = getCurrentPlayerProfile();
     let roomSnap = await db.ref("matches/" + roomId).once("value");
     let room = roomSnap.val() || {};
+
     if (!room) return null;
 
-    // Nếu mình đã là chủ phòng
-    if (isSameRoomPlayer(room?.players?.do, meGame, meFriend)) {
-        mySide = "do";
-        currentRoomId = roomId;
-        currentRoomStatus = room.status || currentRoomStatus || "waiting";
+    // Nếu mình đã là chủ phòng rồi
+    if (room?.players?.do?.uid === me.uid) {
         return room;
     }
 
-    // Nếu mình là người còn lại bên den thì tự nhận nguyên room
-    if (isSameRoomPlayer(room?.players?.den, meGame, meFriend)) {
-        const canTakeHost =
-            room.status === "waiting" ||
-            room.status === "finished" ||
-            !!room.winner;
+    // Chỉ người đang ở bên đen/người ở lại mới được tự nhận chủ
+    if (room?.players?.den?.uid !== me.uid) {
+        return room;
+    }
 
-        if (!canTakeHost) return room;
+    const canTakeHost =
+        room.status === "waiting" ||
+        room.status === "finished" ||
+        !!room.winner;
 
+    if (!canTakeHost) return room;
+
+    const oldHost = room?.players?.do || null;
+    let oldHostState = null;
+
+    if (oldHost?.walletKey) {
+        oldHostState = (await db.ref("social/playerState/" + oldHost.walletKey).once("value")).val();
+    }
+
+    const stateAge = oldHostState?.updatedAt ? (Date.now() - Number(oldHostState.updatedAt || 0)) : 999999;
+
+    // CHỐT LỖI FILE 77:
+    // Nếu chủ cũ đã quitSide do / quitUid là chủ cũ thì coi như đã rời, chuyển host liền.
+    const oldHostQuit =
+        room.quitSide === "do" ||
+        (room.quitUid && oldHost?.uid && room.quitUid === oldHost.uid);
+
+    // Chỉ coi chủ cũ còn giữ phòng khi state thật sự mới và vẫn ở đúng room.
+    // Không dùng mỗi state !== "home" nữa vì Pi Browser hay kẹt arena.
+    const hostStillInThisRoom =
+        !oldHostQuit &&
+        !!oldHost &&
+        oldHostState?.roomId === roomId &&
+        oldHostState?.state === "arena" &&
+        stateAge < 8000;
+
+    if (!hostStillInThisRoom) {
         const transferred = await transferWaitingRoomHost(
             roomId,
             room,
@@ -10089,11 +9950,12 @@ async function ensureInviteHostControl(roomId = currentRoomId) {
             room = roomSnap.val() || {};
 
             mySide = "do";
+            viewSide = "do";
             currentRoomId = roomId;
-            currentRoomStatus = "waiting";
             currentRoomMode = room.mode || currentRoomMode || "co-tuong";
-            currentRoomStakePMC = pickRoomStakePMC(room);
+            currentRoomStakePMC = pickRoomStakePMC(room) || currentRoomStakePMC;
             currentRoomBucket = room.roomBucket || currentRoomBucket;
+            currentRoomStatus = "waiting";
 
             saveActiveMatchSnapshot({
                 roomId,
@@ -10103,8 +9965,6 @@ async function ensureInviteHostControl(roomId = currentRoomId) {
 
             await setPlayerPresence("arena").catch(() => {});
         }
-
-        return room;
     }
 
     return room;
@@ -10415,15 +10275,10 @@ async function chargeStakeForReady(roomId, side) {
         const roomSnap = await roomRef.once("value");
         const room = roomSnap.val() || {};
 
-        const stake = pickRoomStakePMC(room);
-
-if (stake && (!room?.stakePMC || !room?.originalStakePMC)) {
-    await db.ref("matches/" + roomId).update({
-        stakePMC: stake,
-        originalStakePMC: stake,
-        updatedAt: firebase.database.ServerValue.TIMESTAMP
-    }).catch(() => {});
-}
+        const stake = Math.max(
+            0,
+            Math.floor(Number(room?.stakePMC || currentRoomStakePMC || 0) || 0)
+        );
 
         if (!stake) {
             console.error("READY FAIL no_stake", {
@@ -13120,27 +12975,10 @@ async function joinRoomFromInviteDirect(invite) {
     const me = getCurrentPlayerProfile();
     me.levelMeta = getCachedLevelMeta ? getCachedLevelMeta() : (me.levelMeta || {});
 
-    const inviteFallbackStake = Math.max(
-    0,
-    Math.floor(Number(
-        invite.originalStakePMC ||
-        invite.stakePMC ||
-        stakeFromBucket(invite.roomBucket) ||
-        0
-    ) || 0)
-);
-
-const stakePMC = pickRoomStakePMC({
-    ...room,
-    roomBucket: room.roomBucket || invite.roomBucket,
-    originalStakePMC: room.originalStakePMC || invite.originalStakePMC,
-    stakePMC: room.stakePMC || invite.stakePMC
-}, inviteFallbackStake);
-
-if (!stakePMC) {
-    alert("Phòng này bị mất mức cược PMC.");
-    return false;
-}
+    const stakePMC = Math.max(
+        0,
+        Math.floor(Number(room.stakePMC || invite.stakePMC || currentRoomStakePMC || 0) || 0)
+    );
 
     if (room.winner) {
         alert("Phòng này đã kết thúc.");
@@ -13192,13 +13030,11 @@ if (!stakePMC) {
     const joined = await denRef.transaction(current => {
         if (current && current.uid && current.uid !== me.uid) return;
         return {
-    ...me,
-    role: "guest",
-    stakePMC,
-    originalStakePMC: stakePMC,
-    joinedByInvite: true,
-    joinedAt: Date.now()
-};
+            ...me,
+            role: "guest",
+            joinedByInvite: true,
+            joinedAt: Date.now()
+        };
     }, undefined, false);
 
     if (!joined.committed) {
@@ -13211,24 +13047,24 @@ if (!stakePMC) {
 
     const updates = {};
     updates[`matches/${roomId}/ready/den`] = false;
-updates[`matches/${roomId}/stakeLocked/den`] = false;
-updates[`matches/${roomId}/status`] = "waiting";
-updates[`matches/${roomId}/winner`] = null;
-updates[`matches/${roomId}/winReason`] = null;
+    updates[`matches/${roomId}/stakeLocked/den`] = false;
+    updates[`matches/${roomId}/status`] = "waiting";
+    updates[`matches/${roomId}/winner`] = null;
+    updates[`matches/${roomId}/winReason`] = null;
+    updates[`matches/${roomId}/stakePMC`] = stake;
+updates[`matches/${roomId}/originalStakePMC`] = stake;
+updates[`matches/${roomId}/roomBucket`] = finalBucket;
+updates[`matches/${roomId}/inviteCode`] = inviteCode;
 
-// QUAN TRỌNG: nhận lời mời xong phải vá lại mức cược vào room
-updates[`matches/${roomId}/stakePMC`] = stakePMC;
-updates[`matches/${roomId}/originalStakePMC`] = stakePMC;
-updates[`matches/${roomId}/roomBucket`] = bucket;
-
-updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+updates[`matches/${roomId}/quitSide`] = null;
+updates[`matches/${roomId}/quitUid`] = null;
+updates[`matches/${roomId}/quitAt`] = null;
+    updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
 
     // Dọn claim cũ trong waitingRooms nếu có, để phòng không bị kẹt.
     if (bucket) {
         updates[`waitingRooms/${bucket}/${roomId}/claimedBy`] = null;
         updates[`waitingRooms/${bucket}/${roomId}/claimedAt`] = null;
-        updates[`waitingRooms/${bucket}/${roomId}/stakePMC`] = stakePMC;
-updates[`waitingRooms/${bucket}/${roomId}/originalStakePMC`] = stakePMC;
     }
 
     await db.ref().update(updates);
@@ -13319,148 +13155,7 @@ await db.ref().update(updates);
 activeRoomInvite = null;
 renderRoomInviteOverlay();
 }
-let hostReadyWatchRef = null;
-let hostReadyWatchHandler = null;
-let hostReadyWatchTimeout = null;
 
-function stopHostReadyWatch() {
-    if (hostReadyWatchRef && hostReadyWatchHandler) {
-        hostReadyWatchRef.off("value", hostReadyWatchHandler);
-    }
-
-    hostReadyWatchRef = null;
-    hostReadyWatchHandler = null;
-
-    if (hostReadyWatchTimeout) {
-        clearTimeout(hostReadyWatchTimeout);
-        hostReadyWatchTimeout = null;
-    }
-}
-
-function startHostReadyWatch(roomId) {
-    if (!roomId) return;
-
-    stopHostReadyWatch();
-
-    hostReadyWatchRef = db.ref("matches/" + roomId);
-
-    hostReadyWatchHandler = (snap) => {
-        const room = snap.val();
-        if (!room) return;
-
-        // Watcher này chỉ dùng cho B sau khi B gửi lời mời,
-        // nên đừng chặn bằng isSameRoomPlayer nữa.
-        // Vì uid/walletKey có lúc lệch làm B không nhận được SS.
-        currentRoomId = roomId;
-        currentRoomMode = room.mode || currentRoomMode || "co-tuong";
-        currentRoomStatus = room.status || currentRoomStatus || "waiting";
-        currentRoomStakePMC = pickRoomStakePMC(room) || currentRoomStakePMC;
-        currentRoomBucket = room.roomBucket || currentRoomBucket;
-
-        const hasEnoughPlayersWaiting =
-            !!room.players?.do &&
-            !!room.players?.den &&
-            room.status === "waiting" &&
-            !room.winner;
-
-        if (hasEnoughPlayersWaiting) {
-            // B là chủ mới sau khi gửi lời mời, ép B là đỏ/chủ.
-            mySide = "do";
-
-            saveActiveMatchSnapshot({
-                roomId,
-                mode: currentRoomMode,
-                side: "do"
-            });
-
-            prepareRealtimeArenaUI();
-            forceShowReadyOverlayIfWaitingRoom(room, roomId, "do");
-            return;
-        }
-
-        if (room.status === "playing" || room.winner) {
-            stopHostReadyWatch();
-        }
-    };
-
-    hostReadyWatchRef.on("value", hostReadyWatchHandler);
-
-    hostReadyWatchTimeout = setTimeout(() => {
-        stopHostReadyWatch();
-    }, 120000);
-
-    hostReadyWatchRef.once("value")
-        .then(snap => hostReadyWatchHandler(snap))
-        .catch(() => {});
-}
-function forceShowReadyOverlayIfWaitingRoom(room, roomId = currentRoomId, forceSide = null) {
-    if (!roomId || !room) return false;
-
-    const hasEnoughPlayersWaiting =
-        !!room.players?.do &&
-        !!room.players?.den &&
-        room.status === "waiting" &&
-        !room.winner;
-
-    if (!hasEnoughPlayersWaiting) return false;
-
-    const meGame = getCurrentPlayerProfile();
-    const meFriend = getCurrentFriendProfile();
-
-    if (forceSide) {
-        mySide = forceSide;
-    } else if (isSameRoomPlayer(room.players.do, meGame, meFriend)) {
-        mySide = "do";
-    } else if (isSameRoomPlayer(room.players.den, meGame, meFriend)) {
-        mySide = "den";
-    }
-
-    // Nếu watcher của chủ mới gọi vào thì giữ phe hiện tại,
-    // không cho fail vì uid/walletKey lệch.
-    if (!mySide && currentRoomId === roomId) {
-        mySide = "do";
-    }
-
-    if (!mySide) return false;
-
-    currentRoomId = roomId;
-    currentRoomMode = room.mode || currentRoomMode || "co-tuong";
-    currentRoomStatus = "waiting";
-    currentRoomStakePMC = pickRoomStakePMC(room) || currentRoomStakePMC;
-    currentRoomBucket = room.roomBucket || currentRoomBucket;
-
-    isGameOver = false;
-    selectedPiece = null;
-
-    clearMoveHints();
-    hideVictoryPopup(true);
-    renderPlayersFromRoom(room);
-    renderTimerUI();
-
-    readyDo = !!room.ready?.do;
-    readyDen = !!room.ready?.den;
-
-    readyOverlayWaitingShown = true;
-
-    // ÉP hiện bảng SS thật sự, không phụ thuộc biến cũ.
-    showReadyOverlay(currentRoomMode || room.mode || "co-tuong");
-
-    const overlay = document.getElementById("ready-overlay");
-    if (overlay) {
-        overlay.style.display = "flex";
-        overlay.style.zIndex = "15000";
-    }
-
-    updateReadyUI();
-
-    saveActiveMatchSnapshot({
-        roomId,
-        mode: currentRoomMode,
-        side: mySide
-    });
-
-    return true;
-}
 async function inviteFriendToRoom(walletKey, displayName) {
     try {
         if (!currentRoomId) {
@@ -13471,38 +13166,22 @@ async function inviteFriendToRoom(walletKey, displayName) {
         const me = getCurrentFriendProfile();
         const meGame = getCurrentPlayerProfile();
 
-       let room = await ensureInviteHostControl(currentRoomId);
+        const room = await ensureInviteHostControl(currentRoomId);
 
-if (!room) {
-    alert("Phòng này không còn.");
-    return;
-}
+        if (!room || room.winner) {
+            alert("Phòng này không còn.");
+            return;
+        }
 
-// Nếu mình chưa là chủ mà mình còn nằm bên den,
-// ensureInviteHostControl đã tự nhường room cho mình rồi.
-// Giờ đọc lại phòng 1 lần nữa cho chắc.
-if (!isSameRoomPlayer(room?.players?.do, meGame, me)) {
-    room = await ensureInviteHostControl(currentRoomId);
-}
+        if (room.status !== "waiting" || room?.players?.den) {
+            alert("Phòng này không còn ở trạng thái chờ để mời.");
+            return;
+        }
 
-if (!room || !isSameRoomPlayer(room?.players?.do, meGame, me)) {
-    alert("Chỉ chủ phòng mới mời bạn bè vào được.");
-    return;
-}
-
-if (room.winner || room.status !== "waiting") {
-    room = await ensureInviteHostControl(currentRoomId);
-
-    if (!room || room.status !== "waiting") {
-        alert("Phòng này không còn ở trạng thái chờ để mời.");
-        return;
-    }
-}
-
-if (room?.players?.den) {
-    alert("Phòng này đang có người, không mời thêm được.");
-    return;
-}
+        if (room?.players?.do?.uid !== meGame.uid) {
+            alert("Chỉ chủ phòng mới mời bạn bè vào được.");
+            return;
+        }
 
         const reallyBusy = await isPlayerActuallyBusy(walletKey);
 if (reallyBusy) {
@@ -13513,35 +13192,13 @@ if (reallyBusy) {
         const inviteRef = db.ref("social/roomInvitesInbox/" + walletKey).push();
         const inviteId = inviteRef.key;
 
-    const inviteStakePMC = pickRoomStakePMC(room);
-const inviteMode = room.mode || currentRoomMode || "co-tuong";
-const inviteBucket = room.roomBucket || currentRoomBucket || makeStakeBucket(inviteMode, inviteStakePMC);
-
-if (!inviteStakePMC) {
-    alert("Phòng này bị mất mức cược PMC, không thể mời. Hãy thoát tạo phòng mới.");
-    return;
-}
-
-// Vá lại room trước khi gửi lời mời
-await db.ref("matches/" + currentRoomId).update({
-    stakePMC: inviteStakePMC,
-    originalStakePMC: inviteStakePMC,
-    roomBucket: inviteBucket,
-    updatedAt: firebase.database.ServerValue.TIMESTAMP
-}).catch(() => {});
-
-room.stakePMC = inviteStakePMC;
-room.originalStakePMC = inviteStakePMC;
-room.roomBucket = inviteBucket;
-
-const payload = {
-    inviteId,
-    roomId: currentRoomId,
-    roomBucket: inviteBucket,
-    inviteCode: room.inviteCode || makeInviteCodeFromRoomId(currentRoomId),
-    mode: inviteMode,
-    stakePMC: inviteStakePMC,
-    originalStakePMC: inviteStakePMC,
+        const payload = {
+            inviteId,
+            roomId: currentRoomId,
+            roomBucket: room.roomBucket || currentRoomBucket || null,
+            inviteCode: room.inviteCode || makeInviteCodeFromRoomId(currentRoomId),
+            mode: room.mode || currentRoomMode || "co-tuong",
+            stakePMC: Math.max(0, Math.floor(Number(room.stakePMC || currentRoomStakePMC || 0) || 0)),
             fromWalletKey: me.walletKey,
             fromUid: me.uid,
             fromName: me.displayName || me.username || "Người chơi",
@@ -13557,63 +13214,8 @@ const payload = {
         updates[`social/roomInvitesSent/${me.walletKey}/${inviteId}`] = payload;
 
         await db.ref().update(updates);
-
-// Chủ phòng mới B phải bind lại room ngay sau khi gửi lời mời.
-// Nếu không, C vào phòng sẽ có SS nhưng B có thể không tự hiện SS.
-const watchRoomId = currentRoomId;
-
-currentRoomId = watchRoomId;
-mySide = "do";
-currentRoomStatus = "waiting";
-currentRoomMode = inviteMode;
-currentRoomStakePMC = inviteStakePMC;
-currentRoomBucket = inviteBucket;
-
-saveActiveMatchSnapshot({
-    roomId: watchRoomId,
-    mode: inviteMode,
-    side: "do"
-});
-
-await setPlayerPresence("arena").catch(() => {});
-
-prepareRealtimeArenaUI();
-
-// B là chủ mới, ép nhận lại room và chờ C vào.
-mySide = "do";
-readyOverlayWaitingShown = false;
-
-bindRoom(watchRoomId);
-startHostReadyWatch(watchRoomId);
-
-// Poll phụ 6 giây đầu, chống Pi Browser không bắn realtime ngay.
-let ssForceCount = 0;
-const ssForceTimer = setInterval(async () => {
-    ssForceCount++;
-
-    if (!watchRoomId || currentRoomId !== watchRoomId || ssForceCount > 12) {
-        clearInterval(ssForceTimer);
-        return;
-    }
-
-    const snap = await db.ref("matches/" + watchRoomId).once("value").catch(() => null);
-    const freshRoom = snap?.val?.();
-
-    if (
-        freshRoom &&
-        freshRoom.status === "waiting" &&
-        freshRoom.players?.do &&
-        freshRoom.players?.den &&
-        !freshRoom.winner
-    ) {
-        mySide = "do";
-        forceShowReadyOverlayIfWaitingRoom(freshRoom, watchRoomId, "do");
-        clearInterval(ssForceTimer);
-    }
-}, 500);
-
-alert("Đã gửi lời mời vào phòng cho " + (displayName || "bạn bè") + "!");
-closeArenaFriendBox();
+        alert("Đã gửi lời mời vào phòng cho " + (displayName || "bạn bè") + "!");
+        closeArenaFriendBox();
     } catch (err) {
         console.error("Lỗi inviteFriendToRoom:", err);
         alert("Mời vào phòng lỗi.");
