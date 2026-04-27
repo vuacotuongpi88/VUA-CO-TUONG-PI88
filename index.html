@@ -9307,63 +9307,6 @@ if (room.winner && !window.__settledPmcRooms[settleKey]) {
         }
     }, 0);
 }
-// ===== CỘNG/TRỪ EXP SAU KHI CÓ KẾT QUẢ =====
-// Không đụng SS, không đụng phòng, không đụng PMC.
-// Mỗi máy tự cộng/trừ EXP cho ví của chính nó.
-window.__awardedLevelRooms = window.__awardedLevelRooms || {};
-
-if (
-    room.winner &&
-    room.winner !== "hoa" &&
-    room.finishedAt &&
-    !window.__awardedLevelRooms[settleKey]
-) {
-    window.__awardedLevelRooms[settleKey] = true;
-
-    setTimeout(async () => {
-        try {
-            const freshSnap = await db.ref("matches/" + listeningRoomId).once("value");
-            const freshRoom = freshSnap.val() || room;
-
-            if (!freshRoom || !freshRoom.winner || freshRoom.winner === "hoa" || !freshRoom.finishedAt) {
-                delete window.__awardedLevelRooms[settleKey];
-                return;
-            }
-
-            // Hàm awardLevelProgressForFinishedRoom đang dùng tham số đầu làm claim key.
-            // Không truyền roomId trần nữa, để tránh đánh ván 2 cùng phòng bị khóa EXP.
-            const levelAwardKey = [
-                listeningRoomId,
-                "level",
-                "round",
-                freshRoom.roundNo || 1,
-                freshRoom.winner || "",
-                freshRoom.winReason || "",
-                freshRoom.finishedAt || ""
-            ].join("_");
-
-            await awardLevelProgressForFinishedRoom(levelAwardKey, freshRoom);
-
-            const latestMeta = getCachedLevelMeta();
-            renderLevelHud(latestMeta);
-
-            if (typeof pushMyLevelMetaToCurrentRoom === "function") {
-                await pushMyLevelMetaToCurrentRoom(latestMeta).catch(() => {});
-            }
-
-            console.log("AUTO LEVEL AWARD DONE:", {
-                roomId: listeningRoomId,
-                levelAwardKey,
-                roundNo: freshRoom.roundNo || 1,
-                winner: freshRoom.winner,
-                mySide
-            });
-        } catch (err) {
-            console.error("AUTO LEVEL AWARD FAIL:", err);
-            delete window.__awardedLevelRooms[settleKey];
-        }
-    }, 800);
-}
         if (room.winner) {
 const victoryKey = [
     listeningRoomId,
@@ -10648,13 +10591,32 @@ async function maybeSettleStakeRoom(room, roomId) {
         return;
     }
 
-    // ===== CÓ NGƯỜI THẮNG =====
- // ===== CÓ NGƯỜI THẮNG =====
-if (room.winner !== mySide) {
+// ===== CÓ NGƯỜI THẮNG =====
+// Không dùng mySide trực tiếp, vì sau khi bấm TIẾP TỤC mySide có thể đổi.
+// Xác định bên của máy này bằng ví/uid trong snapshot room lúc ván vừa kết thúc.
+const localProfileForSettle = getCurrentPlayerProfile();
+const localUidForSettle = String(localProfileForSettle.uid || "").trim();
+
+const localSideForSettle =
+    (
+        String(doPlayer.walletKey || "").trim() === localWalletKey ||
+        (localUidForSettle && String(doPlayer.uid || "").trim() === localUidForSettle)
+    )
+        ? "do"
+        : (
+            String(denPlayer.walletKey || "").trim() === localWalletKey ||
+            (localUidForSettle && String(denPlayer.uid || "").trim() === localUidForSettle)
+        )
+            ? "den"
+            : mySide;
+
+if (room.winner !== localSideForSettle) {
     return;
 }
 
+const winnerSideForSettle = localSideForSettle;
 const winnerPaidRef = db.ref(`matches/${roomId}/settlements/${roundKey}/winnerPaid`);
+
 const myProfile = {
     name: localStorage.getItem("user-name-display") || "Người chơi",
     photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
@@ -10668,7 +10630,7 @@ return {
     done: true,
     roundNo,
     roundKey,
-    side: mySide,
+    side: winnerSideForSettle,
     winner: room.winner,
     stakePMC: stake,
     at: Date.now(),
@@ -10820,7 +10782,7 @@ writeSettlementField("roundNo", roundNo);
 writeSettlementField("roundKey", roundKey);
 writeSettlementField("paidAt", Date.now());
 writeSettlementField("winner", room.winner);
-writeSettlementField("winnerSide", mySide);
+writeSettlementField("winnerSide", winnerSideForSettle);
 writeSettlementField("winnerWalletKey", myWalletKey);
 writeSettlementField("stakePMC", stake);
 writeSettlementField("winBonusPMC", stake > 0 ? 0 : WIN_BONUS_PMC);
@@ -10832,8 +10794,8 @@ writeSettlementField("paidBalance", paid);
 
 // Quan trọng: cập nhật lại số PMC của người thắng vào room,
 // để UI không còn hiện 0 sau khi thắng.
-settlementUpdates[`matches/${roomId}/players/${mySide}/walletKey`] = myWalletKey;
-settlementUpdates[`matches/${roomId}/players/${mySide}/pmcBalance`] = paid;
+settlementUpdates[`matches/${roomId}/players/${winnerSideForSettle}/walletKey`] = myWalletKey;
+settlementUpdates[`matches/${roomId}/players/${winnerSideForSettle}/pmcBalance`] = paid;
 
 await db.ref().update(settlementUpdates);
 
@@ -10853,6 +10815,20 @@ await loadWalletBalance().catch(() => {});
 // Nếu EXP lỗi thì chỉ log, tuyệt đối không làm hư thưởng PMC.
 try {
     await awardRoomExpAfterPmcSettled(roomId, room, roundNo);
+
+    const latestMeta = await ensureMyLevelMetaLoaded().catch(() => getCachedLevelMeta());
+    const safeMeta = buildLevelMeta(latestMeta);
+
+    renderLevelHud(safeMeta);
+
+    if (typeof pushMyLevelMetaToCurrentRoom === "function") {
+        await pushMyLevelMetaToCurrentRoom(safeMeta).catch(() => {});
+    }
+
+    await settleDebugRef.update({
+        expStage: "done_after_pmc",
+        expDoneAt: Date.now()
+    }).catch(() => {});
 } catch (expErr) {
     console.error("EXP_AFTER_PMC_FAIL:", expErr);
 
