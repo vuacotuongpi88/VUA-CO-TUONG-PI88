@@ -7002,14 +7002,6 @@ const me = getCurrentPlayerProfile();
         const bucket = room.roomBucket || currentRoomBucket || makeStakeBucket(room.mode || currentRoomMode || "co-tuong", room.stakePMC || currentRoomStakePMC || 0);
         const inviteCode = room.inviteCode || makeInviteCodeFromRoomId(roomId);
 
-        // Chốt PMC bằng client trước khi reset phòng.
-// Không dùng settlePmcViaApi ở đây nữa để tránh lệch API/client.
-if (room.winner) {
-    await maybeSettleStakeRoom(room, roomId).catch(err => {
-        console.error("Settle PMC client trước khi tạo lại phòng lỗi:", err);
-    });
-}
-
         const isQuitWin =
             room.winReason === "bochay" ||
             room.quitSide ||
@@ -7097,18 +7089,35 @@ if (room.winner) {
 
             return;
         }
-        // CHỐT PMC TRƯỚC KHI RESET VÁN MỚI
-// Bản file này không có settlePmcMatchOnce, nên dùng maybeSettleStakeRoom.
+        // Khi bấm TIẾP TỤC: chỉ kiểm tra PMC/EXP đã xử lý xong chưa.
+// Tuyệt đối không gọi maybeSettleStakeRoom ở đây nữa,
+// vì bấm tiếp tục không được kích hoạt cộng/trừ EXP trễ.
 if (room.winner) {
-    await maybeSettleStakeRoom(room, roomId).catch(err => {
-        console.error("Chốt PMC trước khi đánh tiếp lỗi:", err);
-    });
+    const oldRoundNo = Math.max(1, Math.floor(Number(room.roundNo || 1) || 1));
+    const oldRoundKey = "round_" + oldRoundNo;
 
-    const settleSnap = await db.ref(`matches/${roomId}/settlement`).once("value");
-    const settle = settleSnap.val() || {};
+    const settleSnap = await db.ref(`matches/${roomId}/settlements/${oldRoundKey}`).once("value").catch(() => null);
+    const settleRound = settleSnap?.val?.() || {};
 
-    if (!settle.pmcDone && !settle.done) {
+    const legacySettleSnap = await db.ref(`matches/${roomId}/settlement`).once("value").catch(() => null);
+    const legacySettle = legacySettleSnap?.val?.() || {};
+
+    const pmcDone =
+        settleRound.pmcDone === true ||
+        settleRound.done === true ||
+        legacySettle.pmcDone === true ||
+        legacySettle.done === true;
+
+    if (!pmcDone) {
         alert("Đang chốt thưởng PMC, bấm TIẾP TỤC lại sau 1-2 giây.");
+        return;
+    }
+
+    const expSnap = await db.ref(`matches/${roomId}/settlements/${oldRoundKey}/exp`).once("value").catch(() => null);
+    const expState = expSnap?.val?.() || {};
+
+    if (room.winner !== "hoa" && !expState.done) {
+        alert("Đang cộng/trừ EXP, bấm TIẾP TỤC lại sau 1-2 giây.");
         return;
     }
 }
@@ -7131,6 +7140,45 @@ window.__lastVictoryKey = "";
 window.__pmcSettleStarted = {};
 window.__finalizedMatchRewards = {};
 window.__rewardRunningByRound = {};
+// Chỉ cho 1 máy reset ván mới.
+// Máy bấm TIẾP TỤC sau sẽ chỉ hiện lại bảng SS, không reset lần 2.
+const oldRoundNoForReset = Math.max(1, Math.floor(Number(room.roundNo || 1) || 1));
+const resetClaimKey = [
+    "round",
+    oldRoundNoForReset,
+    room.winner || "",
+    room.winReason || "",
+    room.finishedAt || ""
+].join("_").replace(/[.#$\[\]\/]/g, "_");
+
+const resetClaimRef = db.ref(`matches/${roomId}/nextRoundResetClaims/${resetClaimKey}`);
+
+const resetClaimTx = await resetClaimRef.transaction(current => {
+    if (current && current.done) return;
+
+    return {
+        done: true,
+        at: Date.now(),
+        uid: me.uid || "",
+        walletKey: makeWalletDbKey(),
+        deviceId: typeof getStableDeviceIdForLevel === "function" ? getStableDeviceIdForLevel() : ""
+    };
+}, undefined, false);
+
+if (!resetClaimTx.committed) {
+    const freshSnap = await db.ref("matches/" + roomId).once("value").catch(() => null);
+    const freshRoom = freshSnap?.val?.();
+
+    if (freshRoom && roomHasTwoRealPlayersWaiting(freshRoom)) {
+        await forceShowReadyOverlayIfWaitingRoom(freshRoom, roomId, null, true);
+    } else {
+        closeReadyOverlay();
+        readyOverlayWaitingShown = false;
+        updateReadyUI();
+    }
+
+    return;
+}
         // Nếu 2 người vẫn còn trong phòng thì đánh lại với đúng người cũ
 await db.ref("matches/" + roomId).update({
     status: "waiting",
@@ -7806,13 +7854,14 @@ function isMeRoomPlayer(player) {
         ? getCurrentFriendProfile()
         : {};
 
-    const pUid = String(player.uid || "").trim();
+    const pDevice = String(player.deviceId || "").trim();
     const pWallet = String(player.walletKey || "").trim();
+    const pUid = String(player.uid || "").trim();
 
-    const myUidList = [
-        meGame.uid,
-        meFriend.uid,
-        auth.currentUser?.uid
+    const myDeviceList = [
+        meGame.deviceId,
+        meFriend.deviceId,
+        typeof getStableDeviceIdForLevel === "function" ? getStableDeviceIdForLevel() : ""
     ].map(v => String(v || "").trim()).filter(Boolean);
 
     const myWalletList = [
@@ -7821,10 +7870,30 @@ function isMeRoomPlayer(player) {
         makeWalletDbKey()
     ].map(v => String(v || "").trim()).filter(Boolean);
 
-    return (
-        (pUid && myUidList.includes(pUid)) ||
-        (pWallet && myWalletList.includes(pWallet))
-    );
+    const myUidList = [
+        meGame.uid,
+        meFriend.uid,
+        auth.currentUser?.uid
+    ].map(v => String(v || "").trim()).filter(Boolean);
+
+    // QUAN TRỌNG:
+    // Nếu player trong room có deviceId thì chỉ nhận diện bằng deviceId.
+    // Không fallback qua uid/wallet nữa, vì 2 giả lập có thể trùng uid/wallet.
+    if (pDevice) {
+        return myDeviceList.includes(pDevice);
+    }
+
+    // Room cũ không có deviceId thì mới fallback wallet.
+    if (pWallet) {
+        return myWalletList.includes(pWallet);
+    }
+
+    // UID để cuối cùng, tránh 2 máy cùng auth UID đều nhận mình là đỏ.
+    if (pUid) {
+        return myUidList.includes(pUid);
+    }
+
+    return false;
 }
   function hasRoomPlayer(player) {
     return !!(
@@ -7871,14 +7940,23 @@ async function roomHasTwoActivePlayersWaiting(room, roomId) {
     return doActive && denActive;
 }
 function sameRoomPerson(a = {}, b = {}) {
+    const aDevice = String(a.deviceId || "").trim();
+    const bDevice = String(b.deviceId || "").trim();
+
+    // Nếu 1 trong 2 bên có deviceId thì bắt buộc so bằng deviceId.
+    // Không cho trùng uid/wallet làm 2 máy bị xem là cùng 1 người.
+    if (aDevice || bDevice) {
+        return !!(aDevice && bDevice && aDevice === bDevice);
+    }
+
     const aUid = String(a.uid || "").trim();
     const bUid = String(b.uid || "").trim();
     const aWallet = String(a.walletKey || "").trim();
     const bWallet = String(b.walletKey || "").trim();
 
     return !!(
-        (aUid && bUid && aUid === bUid) ||
-        (aWallet && bWallet && aWallet === bWallet)
+        (aWallet && bWallet && aWallet === bWallet) ||
+        (aUid && bUid && aUid === bUid)
     );
 }
 
