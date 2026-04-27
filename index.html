@@ -7070,9 +7070,16 @@ if (room.winner) {
         return;
     }
 }
+const nextRoundNo = Math.max(1, Math.floor(Number(room.roundNo || 1) || 1) + 1);
+
+// Xóa khóa local của ván cũ, nếu không ván 2 cùng roomId sẽ không settle PMC.
+window.__settledPmcRooms = {};
+window.__lastVictoryKey = "";
+window.__pmcSettleStarted = {};
         // Nếu 2 người vẫn còn trong phòng thì đánh lại với đúng người cũ
         await db.ref("matches/" + roomId).update({
-            status: "waiting",
+    status: "waiting",
+    roundNo: nextRoundNo,
             ready: {
                 do: false,
                 den: false
@@ -7094,7 +7101,7 @@ if (room.winner) {
             winReason: null,
             drawRequest: null,
             lastSettlement: room.settlement || null,
-settlement: null,
+            settlement: null,
             updatedAt: firebase.database.ServerValue.TIMESTAMP
         });
 
@@ -9000,6 +9007,8 @@ if (room.status === "playing" && !room.winner) {
 
 const settleKey = [
     listeningRoomId,
+    "round",
+    room.roundNo || 1,
     room.winner || "",
     room.winReason || "",
     room.finishedAt || ""
@@ -9021,12 +9030,14 @@ if (room.winner && !window.__settledPmcRooms[settleKey]) {
     }, 0);
 }
         if (room.winner) {
-    const victoryKey = [
-        listeningRoomId,
-        room.winner || "",
-        room.winReason || "",
-        room.finishedAt || ""
-    ].join("_");
+const victoryKey = [
+    listeningRoomId,
+    "round",
+    room.roundNo || 1,
+    room.winner || "",
+    room.winReason || "",
+    room.finishedAt || ""
+].join("_");
 
     const wrap = document.getElementById("victory-wrap");
     const popupHidden = !wrap || String(wrap.style.transform || "").includes("scale(0)");
