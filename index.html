@@ -7110,7 +7110,6 @@ const keepStakePMC = Math.max(
 currentRoomStakePMC = keepStakePMC;
 // Xóa khóa local của ván cũ, nếu không ván 2 cùng roomId sẽ không settle PMC.
 window.__settledPmcRooms = {};
-window.__settledLevelRooms = {};
 window.__lastVictoryKey = "";
 window.__pmcSettleStarted = {};
 window.__finalizedMatchRewards = {};
@@ -8656,139 +8655,99 @@ function getLevelMatchBlockReason(room = {}, pairCount = 1) {
 
 
 async function awardLevelProgressForFinishedRoom(roomId, room) {
-    if (!roomId || !room || !room.winner || room.winner === "hoa") return;
+  if (!roomId || !room || !room.winner || room.winner === "hoa") return;
+  const walletKey = makeWalletDbKey();
 
-    const walletKey = makeWalletDbKey();
+if (!walletKey || isSystemLevelWalletKey(walletKey)) {
+    console.warn("EXP SKIP: ví hệ thống không được cộng EXP", walletKey);
+    return;
+}
+  const mySideNow = mySide;
+  const resultType = room.winner === mySideNow ? "win" : "lose";
+  const doPlayerKey = getRoomPlayerKeyForLevel(room.players?.do || {});
+  const denPlayerKey = getRoomPlayerKeyForLevel(room.players?.den || {});
+  const opponentKey = mySideNow === "do" ? denPlayerKey : doPlayerKey;
 
-    if (!walletKey || (typeof isSystemLevelWalletKey === "function" && isSystemLevelWalletKey(walletKey))) {
-        console.warn("EXP SKIP: ví hệ thống hoặc thiếu walletKey", walletKey);
-        return;
-    }
+  const roundNo = Math.max(1, Math.floor(Number(room.roundNo || 1) || 1));
+const finishedAt = Number(room.finishedAt || room.updatedAt || Date.now()) || Date.now();
 
-    const doPlayer = room.players?.do || {};
-    const denPlayer = room.players?.den || {};
+const matchClaimId = safeLevelKey([
+    roomId,
+    "round",
+    roundNo,
+    room.winner || "",
+    room.winReason || "",
+    finishedAt
+].join("_"));
 
-    let mySideNow = null;
+const claimRef = db.ref(`levelMatchClaimsV3/${walletKey}/${matchClaimId}`);
+  const claimTx = await runRefTransaction(claimRef, current => {
+    if (current && current.done) return;
+    return { done: true, at: Date.now(), resultType, opponentKey };
+  });
+  if (!claimTx.committed) return;
 
-    if (isMeRoomPlayer(doPlayer)) {
-        mySideNow = "do";
-    } else if (isMeRoomPlayer(denPlayer)) {
-        mySideNow = "den";
-    }
+const pair = await reserveLevelPairCount(walletKey, opponentKey, roomId);
 
-    if (!mySideNow) {
-        console.warn("EXP SKIP: không xác định được bên của máy này", {
-            roomId,
-            walletKey,
-            winner: room.winner,
-            doPlayer,
-            denPlayer
-        });
-        return;
-    }
+// BẢN MỚI:
+// Không chặn EXP vì nghèo.
+// Không chặn EXP vì đánh mốc thấp.
+// Không chặn EXP vì ván nhanh.
+// Không chặn EXP vì cùng device.
+// Chỉ giảm dần khi hôm nay gặp lại cùng 1 đối thủ nhiều lần.
+const blockReason = "";
+const absXp = getRepeatAdjustedXpAbs(pair.count);
+const xpDelta = resultType === "win" ? absXp : -absXp;
 
-    const roundNo = Math.max(1, Math.floor(Number(room.roundNo || 1) || 1));
-    const finishedAt = Number(room.finishedAt || room.updatedAt || Date.now()) || Date.now();
+console.log("LEVEL_EXP_DEBUG", {
+  roomId,
+  walletKey,
+  opponentKey,
+  resultType,
+  pairCount: pair.count,
+  absXp,
+  xpDelta,
+  note: pair.count > 1 ? "repeat_opponent_reduced_xp" : "normal_xp"
+});
 
-    const roundKey = [
-        roomId,
-        "round",
-        roundNo,
-        room.winner || "",
-        room.winReason || "",
-        finishedAt
-    ].join("_");
-
-    const matchClaimId = safeLevelKey(roundKey);
-
-    const resultType = room.winner === mySideNow ? "win" : "lose";
-    const oppPlayer = mySideNow === "do" ? denPlayer : doPlayer;
-    const opponentKey = getRoomPlayerKeyForLevel(oppPlayer);
-
-    const claimRef = db.ref(`levelMatchClaimsV3/${walletKey}/${matchClaimId}`);
-
-    const claimTx = await runRefTransaction(claimRef, current => {
-        if (current && current.done) return;
-
-        return {
-            done: true,
-            at: Date.now(),
-            roomId,
-            roundNo,
-            side: mySideNow,
-            winner: room.winner,
-            resultType,
-            opponentKey
-        };
+  let beforeMeta = getDefaultLevelMeta();
+  let afterMeta = getDefaultLevelMeta();
+  const levelRef = getWalletLevelRef(walletKey);
+  await runRefTransaction(levelRef, current => {
+    beforeMeta = buildLevelMeta(current || {});
+    const nextXp = Math.max(0, Math.min(getLevelInfoByLevel(LEVEL_MAX).xp, beforeMeta.xp + xpDelta));
+    afterMeta = buildLevelMeta({
+      ...beforeMeta,
+      xp: nextXp,
+      wins: beforeMeta.wins + (resultType === "win" ? 1 : 0),
+      losses: beforeMeta.losses + (resultType === "lose" ? 1 : 0),
+      matches: beforeMeta.matches + 1,
+      blockedXpMatches: beforeMeta.blockedXpMatches + (blockReason ? 1 : 0),
+      lastResult: resultType,
+      lastXpDelta: xpDelta,
+      lastPairCount: pair.count,
+      lastBlockReason: blockReason,
+      updatedAt: Date.now()
     });
+    return afterMeta;
+  });
 
-    if (!claimTx.committed) {
-        console.log("EXP SKIP: ván này đã cộng/trừ rồi", matchClaimId);
-        return;
+  localStorage.setItem("level-meta-cache", JSON.stringify(afterMeta));
+  renderLevelHud(afterMeta);
+
+  if (blockReason) {
+    console.warn("Trận này không cộng/trừ EXP vì chống farm:", { blockReason, pairCount: pair.count, roomId, opponentKey });
+    return;
+  }
+
+  if (afterMeta.level > beforeMeta.level) {
+    const unlocks = [];
+    for (let lv = beforeMeta.level + 1; lv <= afterMeta.level; lv++) {
+      const reward = getLevelUnlockReward(lv);
+      if (reward) unlocks.push(`Lv.${lv}: ${reward}`);
     }
-
-    const pair = await reserveLevelPairCount(walletKey, opponentKey, matchClaimId);
-
-    const absXp = getRepeatAdjustedXpAbs(pair.count);
-    const xpDelta = resultType === "win" ? absXp : -absXp;
-
-    let beforeMeta = getDefaultLevelMeta();
-    let afterMeta = getDefaultLevelMeta();
-
-    const levelRef = getWalletLevelRef(walletKey);
-
-    await runRefTransaction(levelRef, current => {
-        beforeMeta = buildLevelMeta(current || {});
-
-        const maxXp = getLevelInfoByLevel(LEVEL_MAX).xp;
-
-        const nextXp = Math.max(
-            0,
-            Math.min(maxXp, Number(beforeMeta.xp || 0) + xpDelta)
-        );
-
-        afterMeta = buildLevelMeta({
-            ...beforeMeta,
-            xp: nextXp,
-            wins: Number(beforeMeta.wins || 0) + (resultType === "win" ? 1 : 0),
-            losses: Number(beforeMeta.losses || 0) + (resultType === "lose" ? 1 : 0),
-            matches: Number(beforeMeta.matches || 0) + 1,
-            lastResult: resultType,
-            lastXpDelta: xpDelta,
-            lastPairCount: pair.count,
-            updatedAt: Date.now()
-        });
-
-        return afterMeta;
-    });
-
-    setCachedLevelMeta(afterMeta);
-    renderLevelHud(afterMeta);
-
-    await db.ref(`matches/${roomId}/players/${mySideNow}/levelMeta`)
-        .set(afterMeta)
-        .catch(err => console.warn("Không sync levelMeta vào room:", err));
-
-    await claimRef.update({
-        beforeXp: beforeMeta.xp,
-        afterXp: afterMeta.xp,
-        beforeLevel: beforeMeta.level,
-        afterLevel: afterMeta.level,
-        xpDelta,
-        pairCount: pair.count,
-        doneAt: Date.now()
-    }).catch(() => {});
-
-    console.log("EXP OK:", {
-        roomId,
-        roundNo,
-        walletKey,
-        side: mySideNow,
-        resultType,
-        xpDelta,
-        beforeXp: beforeMeta.xp,
-        afterXp: afterMeta.xp
-    });
+    alert(`🎉 Thăng cấp Lv.${afterMeta.level} - ${afterMeta.title}\nKhông thưởng PMC theo level để chống farm.\n${unlocks.length ? "Mở khóa: " + unlocks.slice(-2).join(" • ") : "Mở khóa danh hiệu mới."}`);
+  }
 }
 
 function getLocalLevelMissionsForBoard() {
@@ -9329,24 +9288,6 @@ const settleKey = [
     room.finishedAt || ""
 ].join("_");
 
-window.__settledLevelRooms = window.__settledLevelRooms || {};
-
-if (room.winner && room.winner !== "hoa" && !window.__settledLevelRooms[settleKey]) {
-    window.__settledLevelRooms[settleKey] = true;
-
-    setTimeout(async () => {
-        try {
-            const freshSnap = await db.ref("matches/" + listeningRoomId).once("value");
-            const freshRoom = freshSnap.val() || room;
-
-            await awardLevelProgressForFinishedRoom(listeningRoomId, freshRoom);
-        } catch (err) {
-            console.error("AUTO EXP SETTLE CLIENT FAIL:", err);
-            delete window.__settledLevelRooms[settleKey];
-        }
-    }, 0);
-}
-
 if (room.winner && !window.__settledPmcRooms[settleKey]) {
     window.__settledPmcRooms[settleKey] = true;
 
@@ -9356,6 +9297,13 @@ if (room.winner && !window.__settledPmcRooms[settleKey]) {
             const freshRoom = freshSnap.val() || room;
 
             await maybeSettleStakeRoom(freshRoom, listeningRoomId);
+
+// EXP đi ké theo settle PMC, không tạo nhánh listener riêng, không đụng SS
+try {
+    await awardLevelProgressForFinishedRoom(listeningRoomId, freshRoom);
+} catch (expErr) {
+    console.error("AUTO EXP SETTLE FAIL:", expErr);
+}
         } catch (err) {
             console.error("AUTO PMC SETTLE CLIENT FAIL:", err);
             delete window.__settledPmcRooms[settleKey];
