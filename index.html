@@ -7076,6 +7076,8 @@ const nextRoundNo = Math.max(1, Math.floor(Number(room.roundNo || 1) || 1) + 1);
 window.__settledPmcRooms = {};
 window.__lastVictoryKey = "";
 window.__pmcSettleStarted = {};
+window.__finalizedMatchRewards = {};
+window.__rewardRunningByRound = {};
         // Nếu 2 người vẫn còn trong phòng thì đánh lại với đúng người cũ
         await db.ref("matches/" + roomId).update({
     status: "waiting",
@@ -8813,10 +8815,13 @@ async function maybeStartRoomFromHost(room, roomId = currentRoomId) {
     const freshBoard = exportBoardState();
 const waitingRoomRef = db.ref("waitingRooms/" + room.roomBucket + "/" + roomId);
 await waitingRoomRef.remove().catch(() => {});
-    await db.ref("matches/" + roomId).update({
-        status: "playing",
-        isCoUp,
-        board: freshBoard,
+await db.ref("matches/" + roomId).update({
+    status: "playing",
+    roundNo: room.roundNo || 1,
+    settlement: null,
+    refunds: null,
+    isCoUp,
+    board: freshBoard,
         moveCount: 0,
         startedAt: firebase.database.ServerValue.TIMESTAMP,
         finishedAt: null,
@@ -9856,6 +9861,9 @@ async function maybeSettleStakeRoom(room, roomId) {
     const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
     if (!roomId || !room?.winner) return;
 
+    const roundNo = Math.max(1, Math.floor(Number(room?.roundNo || 1) || 1));
+    const roundKey = "round_" + roundNo;
+
     const doPlayer = room?.players?.do || {};
     const denPlayer = room?.players?.den || {};
     const localWalletKey = makeWalletDbKey();
@@ -9934,7 +9942,7 @@ if (room.winner !== mySide) {
     return;
 }
 
-const winnerPaidRef = db.ref(`matches/${roomId}/settlement/winnerPaid`);
+const winnerPaidRef = db.ref(`matches/${roomId}/settlements/${roundKey}/winnerPaid`);
 const myProfile = {
     name: localStorage.getItem("user-name-display") || "Người chơi",
     photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
@@ -9944,14 +9952,16 @@ const myWalletKey = localWalletKey;
 const winLock = await Promise.race([
     runRefTransaction(winnerPaidRef, current => {
         if (current && current.done) return;
-        return {
-            done: true,
-            side: mySide,
-            winner: room.winner,
-            stakePMC: stake,
-            at: Date.now(),
-            uid: getCurrentPlayerProfile().uid || ""
-        };
+return {
+    done: true,
+    roundNo,
+    roundKey,
+    side: mySide,
+    winner: room.winner,
+    stakePMC: stake,
+    at: Date.now(),
+    uid: getCurrentPlayerProfile().uid || ""
+};
     }),
     new Promise(resolve => setTimeout(() => resolve({ timeout: true }), 3000))
 ]);
@@ -9968,7 +9978,7 @@ const totalPot = stake * 2;
 const feePMC = Math.max(0, Math.floor(totalPot * MATCH_SYSTEM_FEE_RATE));
 const winnerReceivePMC = totalPot - feePMC;
 const adminWalletKey = "pi_admin_master";
-const settleDebugRef = db.ref(`matches/${roomId}/settlement/debug`);
+const settleDebugRef = db.ref(`matches/${roomId}/settlements/${roundKey}/debug`);
 
 try {
     await settleDebugRef.update({
@@ -10075,18 +10085,29 @@ try {
 
 const settlementUpdates = {};
 
-settlementUpdates[`matches/${roomId}/settlement/done`] = true;
-settlementUpdates[`matches/${roomId}/settlement/pmcDone`] = true;
-settlementUpdates[`matches/${roomId}/settlement/paid`] = true;
-settlementUpdates[`matches/${roomId}/settlement/paidAt`] = Date.now();
-settlementUpdates[`matches/${roomId}/settlement/winner`] = room.winner;
-settlementUpdates[`matches/${roomId}/settlement/winnerSide`] = mySide;
-settlementUpdates[`matches/${roomId}/settlement/winnerWalletKey`] = myWalletKey;
-settlementUpdates[`matches/${roomId}/settlement/stakePMC`] = stake;
-settlementUpdates[`matches/${roomId}/settlement/totalPot`] = totalPot;
-settlementUpdates[`matches/${roomId}/settlement/feePMC`] = feePMC;
-settlementUpdates[`matches/${roomId}/settlement/winnerReceivePMC`] = winnerReceivePMC;
-settlementUpdates[`matches/${roomId}/settlement/adminWalletKey`] = adminWalletKey;
+function writeSettlementField(key, value) {
+    // settlement: dùng cho UI / nút TIẾP TỤC xem nhanh ván mới nhất
+    settlementUpdates[`matches/${roomId}/settlement/${key}`] = value;
+
+    // settlements/round_X: lưu riêng từng ván, không bị ván 1 khóa ván 2
+    settlementUpdates[`matches/${roomId}/settlements/${roundKey}/${key}`] = value;
+}
+
+writeSettlementField("done", true);
+writeSettlementField("pmcDone", true);
+writeSettlementField("paid", true);
+writeSettlementField("roundNo", roundNo);
+writeSettlementField("roundKey", roundKey);
+writeSettlementField("paidAt", Date.now());
+writeSettlementField("winner", room.winner);
+writeSettlementField("winnerSide", mySide);
+writeSettlementField("winnerWalletKey", myWalletKey);
+writeSettlementField("stakePMC", stake);
+writeSettlementField("totalPot", totalPot);
+writeSettlementField("feePMC", feePMC);
+writeSettlementField("winnerReceivePMC", winnerReceivePMC);
+writeSettlementField("adminWalletKey", adminWalletKey);
+writeSettlementField("paidBalance", paid);
 
 // Quan trọng: cập nhật lại số PMC của người thắng vào room,
 // để UI không còn hiện 0 sau khi thắng.
