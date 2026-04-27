@@ -8752,11 +8752,15 @@ if (
         await maybeRefundWaitingStakePMC(roomId, room, "do").catch(() => {});
     }
 
-    const transferred = await transferWaitingRoomHost(roomId, room, roomBucket);
+const transferred = await transferWaitingRoomHost(roomId, room, roomBucket);
 
-    if (transferred) {
-        return;
-    }
+if (transferred) {
+    // QUAN TRỌNG:
+    // Host cũ rời phòng thì phải xóa trạng thái arena/roomId cũ.
+    // Nếu không, ensureInviteHostControl sẽ tưởng host cũ còn giữ phòng.
+    await setPlayerPresence("home").catch(() => {});
+    return;
+}
 }
         // ===== HOST rời mà chưa có ai trong phòng => xóa hẳn phòng =====
         if (side === "do" && !room.players?.den) {
@@ -9904,13 +9908,12 @@ async function ensureInviteHostControl(roomId = currentRoomId) {
         return room;
     }
 
-    // Chỉ người đang ở bên den mới được tự nhận bàn giao
+    // Nếu mình không phải người còn lại trong phòng thì không tự lấy quyền
     if (room?.players?.den?.uid !== me.uid) {
         return room;
     }
 
-    // Chỉ xử lý khi phòng đang chờ hoặc ván đã xong.
-    // Đang playing thì không cướp host.
+    // Chỉ tự bàn giao khi phòng đang chờ / đã xong ván
     const canTakeHost =
         room.status === "waiting" ||
         room.status === "finished" ||
@@ -9925,13 +9928,16 @@ async function ensureInviteHostControl(roomId = currentRoomId) {
         oldHostState = (await db.ref("social/playerState/" + oldHost.walletKey).once("value")).val();
     }
 
-    // SỬA QUAN TRỌNG:
-    // Không dùng oldHostState.state === "arena" nữa.
-    // Vì chủ cũ về lobby vẫn có thể là arena, làm hệ thống tưởng nó còn giữ phòng.
+    const oldUpdatedAt = Number(oldHostState?.updatedAt || 0) || 0;
+    const stateAge = oldUpdatedAt ? Date.now() - oldUpdatedAt : 999999;
+
+    // Chỉ coi host cũ còn giữ phòng nếu nó thật sự đang ở đúng room
+    // VÀ tín hiệu còn mới. Tránh kẹt arena/roomId cũ sau khi thoát.
     const hostStillInThisRoom =
         !!oldHost &&
         oldHostState?.roomId === roomId &&
-        oldHostState?.state !== "home";
+        oldHostState?.state === "arena" &&
+        stateAge < 12000;
 
     if (!hostStillInThisRoom) {
         const transferred = await transferWaitingRoomHost(
@@ -9947,7 +9953,15 @@ async function ensureInviteHostControl(roomId = currentRoomId) {
             mySide = "do";
             currentRoomId = roomId;
             currentRoomMode = room.mode || currentRoomMode || "co-tuong";
-            currentRoomStakePMC = Math.max(0, Math.floor(Number(room.stakePMC || currentRoomStakePMC || 0) || 0));
+            currentRoomStakePMC = Math.max(
+                0,
+                Math.floor(Number(
+                    room.originalStakePMC ||
+                    room.stakePMC ||
+                    currentRoomStakePMC ||
+                    0
+                ) || 0)
+            );
             currentRoomBucket = room.roomBucket || currentRoomBucket;
 
             saveActiveMatchSnapshot({
@@ -13192,11 +13206,23 @@ async function inviteFriendToRoom(walletKey, displayName) {
             alert("Phòng này không còn ở trạng thái chờ để mời.");
             return;
         }
+if (room?.players?.do?.uid !== meGame.uid) {
+    // Nếu mình đang là den nhưng host cũ đã rời/kẹt state,
+    // thử tự bàn giao thêm 1 lần trước khi báo lỗi.
+    if (room?.players?.den?.uid === meGame.uid) {
+        const fixedRoom = await ensureInviteHostControl(currentRoomId);
 
-        if (room?.players?.do?.uid !== meGame.uid) {
-            alert("Chỉ chủ phòng mới mời bạn bè vào được.");
+        if (fixedRoom?.players?.do?.uid === meGame.uid) {
+            Object.assign(room, fixedRoom);
+        } else {
+            alert("Đang nhận quyền chủ phòng, bấm mời lại sau 1 giây.");
             return;
         }
+    } else {
+        alert("Chỉ chủ phòng mới mời bạn bè vào được.");
+        return;
+    }
+}
 
         const reallyBusy = await isPlayerActuallyBusy(walletKey);
 if (reallyBusy) {
