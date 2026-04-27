@@ -7161,20 +7161,23 @@ await db.ref("matches/" + roomId).update({
         renderTimerUI();
         updateReadyUI();
 
-        // Máy bấm TIẾP TỤC tự bật lại bảng SS ngay
-        setTimeout(() => {
-            const overlay = document.getElementById("ready-overlay");
-            if (
-                currentRoomId === roomId &&
-                mySide &&
-                overlay &&
-                overlay.style.display !== "flex"
-            ) {
-                showReadyOverlay(currentRoomMode || room.mode || "co-tuong");
-            } else {
-                updateReadyUI();
-            }
-        }, 150);
+        // Chỉ bật lại SS khi phòng vẫn còn đủ 2 người thật
+setTimeout(async () => {
+    try {
+        const freshSnap = await db.ref("matches/" + roomId).once("value");
+        const freshRoom = freshSnap.val();
+
+        if (roomHasTwoRealPlayersWaiting(freshRoom)) {
+            forceShowReadyOverlayIfWaitingRoom(freshRoom, roomId, mySide);
+        } else {
+            closeReadyOverlay();
+            readyOverlayWaitingShown = false;
+            updateReadyUI();
+        }
+    } catch (err) {
+        console.error("CHECK READY AFTER CONTINUE FAIL:", err);
+    }
+}, 150);
 
         return;
     }
@@ -7815,7 +7818,15 @@ function isMeRoomPlayer(player) {
         )
     );
 }
-
+function roomHasTwoRealPlayersWaiting(room) {
+    return !!(
+        room &&
+        room.status === "waiting" &&
+        !room.winner &&
+        hasRoomPlayer(room.players?.do) &&
+        hasRoomPlayer(room.players?.den)
+    );
+}
 function sameRoomPerson(a = {}, b = {}) {
     const aUid = String(a.uid || "").trim();
     const bUid = String(b.uid || "").trim();
@@ -9169,11 +9180,7 @@ if (typeof applyBoardPerspective === "function") {
         renderPlayersFromRoom(room);
         updateReadyUI();
 
-const hasEnoughPlayersWaiting =
-    hasRoomPlayer(room.players?.do) &&
-    hasRoomPlayer(room.players?.den) &&
-    room.status === "waiting" &&
-    !room.winner;
+const hasEnoughPlayersWaiting = roomHasTwoRealPlayersWaiting(room);
 
 if (hasEnoughPlayersWaiting) {
     isGameOver = false;
@@ -9624,22 +9631,27 @@ for (const waiting of waitingList) {
     );
 
     if (joined) {
-    // Bên mới vào phòng KHÔNG được đóng bảng sẵn sàng.
-    // bindRoom(roomId) sẽ tự nghe Firebase và bật ready overlay khi đủ 2 người.
+    // Không tự bật SS ở đây.
+    // Chỉ bật khi Firebase xác nhận đủ 2 người thật.
     readyOverlayWaitingShown = false;
 
-    setTimeout(() => {
-        updateReadyUI();
+    setTimeout(async () => {
+        try {
+            const roomId = currentRoomId;
+            if (!roomId) return;
 
-        const overlay = document.getElementById("ready-overlay");
-        if (
-            currentRoomId &&
-            mySide &&
-            currentRoomStatus === "waiting" &&
-            overlay &&
-            overlay.style.display !== "flex"
-        ) {
-            showReadyOverlay(currentRoomMode || mode);
+            const freshSnap = await db.ref("matches/" + roomId).once("value");
+            const freshRoom = freshSnap.val();
+
+            if (roomHasTwoRealPlayersWaiting(freshRoom)) {
+                forceShowReadyOverlayIfWaitingRoom(freshRoom, roomId, mySide);
+            } else {
+                closeReadyOverlay();
+                readyOverlayWaitingShown = false;
+                updateReadyUI();
+            }
+        } catch (err) {
+            console.error("CHECK READY AFTER JOIN FAIL:", err);
         }
     }, 250);
 
@@ -11623,10 +11635,27 @@ async function changeMatch() {
 }
 
 function autoResetNextMatch() {
-    setTimeout(() => {
+    setTimeout(async () => {
         document.getElementById("victory-wrap").style.transform = "translate(-50%, -50%) scale(0)";
-        showReadyOverlay(getCurrentMode());
+
+        if (!currentRoomId) return;
+
+        try {
+            const freshSnap = await db.ref("matches/" + currentRoomId).once("value");
+            const freshRoom = freshSnap.val();
+
+            if (roomHasTwoRealPlayersWaiting(freshRoom)) {
+                forceShowReadyOverlayIfWaitingRoom(freshRoom, currentRoomId, mySide);
+            } else {
+                closeReadyOverlay();
+                readyOverlayWaitingShown = false;
+                updateReadyUI();
+            }
+        } catch (err) {
+            console.error("AUTO RESET READY CHECK FAIL:", err);
+        }
     }, 5000);
+
 }
 
 function showReadyOverlay(mode) {
@@ -11651,11 +11680,7 @@ function stopHostReadyOverlayPoll() {
 function forceShowReadyOverlayIfWaitingRoom(room, roomId = currentRoomId, forceSide = null) {
     if (!roomId || !room) return false;
 
-   const hasEnoughPlayersWaiting =
-    hasRoomPlayer(room.players?.do) &&
-    hasRoomPlayer(room.players?.den) &&
-    room.status === "waiting" &&
-    !room.winner;
+   const hasEnoughPlayersWaiting = roomHasTwoRealPlayersWaiting(room);
 
     if (!hasEnoughPlayersWaiting) return false;
 
@@ -13662,20 +13687,22 @@ async function joinRoomFromInviteDirect(invite) {
 
     readyOverlayWaitingShown = false;
 
-    setTimeout(() => {
-        updateReadyUI();
+setTimeout(async () => {
+    try {
+        const freshSnap = await db.ref("matches/" + roomId).once("value");
+        const freshRoom = freshSnap.val();
 
-        const overlay = document.getElementById("ready-overlay");
-        if (
-            currentRoomId === roomId &&
-            mySide === "den" &&
-            currentRoomStatus === "waiting" &&
-            overlay &&
-            overlay.style.display !== "flex"
-        ) {
-            showReadyOverlay(currentRoomMode || mode);
+        if (roomHasTwoRealPlayersWaiting(freshRoom)) {
+            forceShowReadyOverlayIfWaitingRoom(freshRoom, roomId, "den");
+        } else {
+            closeReadyOverlay();
+            readyOverlayWaitingShown = false;
+            updateReadyUI();
         }
-    }, 250);
+    } catch (err) {
+        console.error("CHECK READY AFTER INVITE JOIN FAIL:", err);
+    }
+}, 250);
 
     return true;
 }
