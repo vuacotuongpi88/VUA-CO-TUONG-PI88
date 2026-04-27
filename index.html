@@ -8500,10 +8500,15 @@ function applyTitlePill(el, meta = {}) {
   );
   el.classList.add(`title-pill-${safe.pill}`);
 }
-
 async function ensureMyLevelMetaLoaded() {
   const walletKey = makeWalletDbKey();
-  if (!walletKey) return getDefaultLevelMeta();
+
+  if (!walletKey || isSystemLevelWalletKey(walletKey)) {
+    if (isSystemLevelWalletKey(walletKey)) {
+        console.warn("LEVEL SKIP: không load EXP cho ví hệ thống", walletKey);
+    }
+    return getDefaultLevelMeta();
+  }
   try {
     const snap = await getWalletLevelRef(walletKey).once("value");
     const meta = buildLevelMeta(snap.val() || {});
@@ -8553,7 +8558,13 @@ function pickNewestLevelMeta(a = {}, b = {}) {
 }
 function startMyLevelMetaLiveSync() {
     const walletKey = makeWalletDbKey();
-    if (!walletKey || !db) return;
+
+    if (!walletKey || !db || isSystemLevelWalletKey(walletKey)) {
+        if (isSystemLevelWalletKey(walletKey)) {
+            console.warn("LEVEL LIVE SKIP: không nghe EXP ví hệ thống", walletKey);
+        }
+        return;
+    }
 
     if (myLevelMetaLiveRef) {
         myLevelMetaLiveRef.off();
@@ -8580,7 +8591,10 @@ function getLevelTodayKey(now = new Date()) {
 function safeLevelKey(value) {
   return String(value || "unknown").replace(/[.#$\[\]\/]/g, "_");
 }
-
+function isSystemLevelWalletKey(walletKey) {
+    const k = String(walletKey || "").trim().toLowerCase();
+    return k === "pi_admin_master" || k === "admin_master" || k === "system_wallet";
+}
 function getRoomPlayerKeyForLevel(player = {}) {
   return player.walletKey || player.wallet || player.walletDbKey || player.uid || player.name || "unknown";
 }
@@ -8643,8 +8657,11 @@ function getLevelMatchBlockReason(room = {}, pairCount = 1) {
 async function awardLevelProgressForFinishedRoom(roomId, room) {
   if (!roomId || !room || !room.winner || room.winner === "hoa") return;
   const walletKey = makeWalletDbKey();
-  if (!walletKey || !mySide) return;
 
+if (!walletKey || isSystemLevelWalletKey(walletKey)) {
+    console.warn("EXP SKIP: ví hệ thống không được cộng EXP", walletKey);
+    return;
+}
   const mySideNow = mySide;
   const resultType = room.winner === mySideNow ? "win" : "lose";
   const doPlayerKey = getRoomPlayerKeyForLevel(room.players?.do || {});
