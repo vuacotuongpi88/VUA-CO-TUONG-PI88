@@ -9611,13 +9611,23 @@ async function joinOrCreateRealtimeMatch(mode, stakePMC = 0) {
     currentRoomMode = mode;
     currentRoomStakePMC = safeStake;
     currentRoomBucket = makeStakeBucket(mode, safeStake);
-   const waitingBucketRef = db.ref("waitingRooms/" + currentRoomBucket);
+  const waitingBucketRef = db.ref("waitingRooms/" + currentRoomBucket);
 const waitingSnap = await waitingBucketRef.once("value");
 const waitingMap = waitingSnap.val() || {};
 
+const waitingList = Object.entries(waitingMap)
+    .map(([id, value]) => ({ id, ...(value || {}) }))
+    .filter(item =>
+        item.roomId &&
+        item.uid !== me.uid &&
+        !item.claimedBy
+    )
+    .sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0));
+
 const activeWaitingList = [];
 
-for (const item of waitingList) {
+for (const waiting of activeWaitingList) {
+
     const roomSnap = await db.ref("matches/" + item.roomId).once("value").catch(() => null);
     const room = roomSnap?.val?.();
 
