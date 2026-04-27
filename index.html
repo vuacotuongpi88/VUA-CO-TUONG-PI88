@@ -6980,8 +6980,25 @@ async function playNextMatch() {
 
         const roomSnap = await db.ref("matches/" + roomId).once("value");
         const room = roomSnap.val() || {};
+// Nếu người kia đã bấm TIẾP TỤC trước và phòng đã reset về waiting,
+// máy này KHÔNG được reset thêm lần nữa.
+// Chỉ hiện lại bảng SS cho đúng vai của mình.
+if (
+    room.status === "waiting" &&
+    !room.winner &&
+    !room.finishedAt &&
+    roomHasTwoRealPlayersWaiting(room)
+) {
+    currentRoomStatus = "waiting";
+    readyDo = !!room.ready?.do;
+    readyDen = !!room.ready?.den;
+    readyOverlayWaitingShown = false;
 
-        const me = getCurrentPlayerProfile();
+    await forceShowReadyOverlayIfWaitingRoom(room, roomId, null, true);
+    return;
+}
+
+const me = getCurrentPlayerProfile();
         const bucket = room.roomBucket || currentRoomBucket || makeStakeBucket(room.mode || currentRoomMode || "co-tuong", room.stakePMC || currentRoomStakePMC || 0);
         const inviteCode = room.inviteCode || makeInviteCodeFromRoomId(roomId);
 
@@ -7168,12 +7185,12 @@ setTimeout(async () => {
         const freshRoom = freshSnap.val();
 
         if (roomHasTwoRealPlayersWaiting(freshRoom)) {
-            forceShowReadyOverlayIfWaitingRoom(freshRoom, roomId, mySide);
-        } else {
-            closeReadyOverlay();
-            readyOverlayWaitingShown = false;
-            updateReadyUI();
-        }
+    await forceShowReadyOverlayIfWaitingRoom(freshRoom, roomId, null, true);
+} else {
+    closeReadyOverlay();
+    readyOverlayWaitingShown = false;
+    updateReadyUI();
+}
     } catch (err) {
         console.error("CHECK READY AFTER CONTINUE FAIL:", err);
     }
@@ -9300,12 +9317,40 @@ if (room.winner && !window.__settledPmcRooms[settleKey]) {
             const freshSnap = await db.ref("matches/" + listeningRoomId).once("value");
             const freshRoom = freshSnap.val() || room;
 
-            await maybeSettleStakeRoom(freshRoom, listeningRoomId);
+           await maybeSettleStakeRoom(freshRoom, listeningRoomId);
+await maybeAwardRoomExpIfPmcDone(listeningRoomId, freshRoom);
         } catch (err) {
             console.error("AUTO PMC SETTLE CLIENT FAIL:", err);
             delete window.__settledPmcRooms[settleKey];
         }
     }, 0);
+}
+window.__settledExpRooms = window.__settledExpRooms || {};
+
+if (
+    room.winner &&
+    room.winner !== "hoa" &&
+    room.finishedAt &&
+    !window.__settledExpRooms[settleKey]
+) {
+    window.__settledExpRooms[settleKey] = true;
+
+    setTimeout(async () => {
+        try {
+            const freshSnap = await db.ref("matches/" + listeningRoomId).once("value");
+            const freshRoom = freshSnap.val() || room;
+
+            const done = await maybeAwardRoomExpIfPmcDone(listeningRoomId, freshRoom);
+
+            // PMC chưa done thì mở khóa để Firebase tick sau thử lại
+            if (!done) {
+                delete window.__settledExpRooms[settleKey];
+            }
+        } catch (err) {
+            console.error("AUTO EXP AFTER PMC FAIL:", err);
+            delete window.__settledExpRooms[settleKey];
+        }
+    }, 500);
 }
         if (room.winner) {
 const victoryKey = [
@@ -10458,7 +10503,55 @@ async function applyMatchExpToWalletOnce({ roomId, roundNo, side, resultType, pl
         afterMeta
     };
 }
+async function maybeAwardRoomExpIfPmcDone(roomId, room) {
+    if (!roomId || !room || !room.winner || room.winner === "hoa" || !room.finishedAt) {
+        return false;
+    }
 
+    const roundNo = Math.max(1, Math.floor(Number(room.roundNo || 1) || 1));
+    const roundKey = "round_" + roundNo;
+
+    const expRef = db.ref(`matches/${roomId}/settlements/${roundKey}/exp`);
+    const expSnap = await expRef.once("value").catch(() => null);
+    const expState = expSnap?.val?.() || {};
+
+    if (expState.done) {
+        return true;
+    }
+
+    const settleSnap = await db.ref(`matches/${roomId}/settlements/${roundKey}`).once("value").catch(() => null);
+    const settleRound = settleSnap?.val?.() || {};
+    const settleMain = room.settlement || {};
+
+    const pmcDone =
+        settleRound.pmcDone === true ||
+        settleRound.done === true ||
+        settleMain.pmcDone === true ||
+        settleMain.done === true;
+
+    if (!pmcDone) {
+        return false;
+    }
+
+    await awardRoomExpAfterPmcSettled(roomId, room, roundNo);
+
+    const latestMeta = await ensureMyLevelMetaLoaded().catch(() => getCachedLevelMeta());
+    const safeMeta = buildLevelMeta(latestMeta);
+
+    renderLevelHud(safeMeta);
+
+    if (typeof pushMyLevelMetaToCurrentRoom === "function") {
+        await pushMyLevelMetaToCurrentRoom(safeMeta).catch(() => {});
+    }
+
+    console.log("ROOM_EXP_DONE_AFTER_PMC:", {
+        roomId,
+        roundNo,
+        winner: room.winner
+    });
+
+    return true;
+}
 async function awardRoomExpAfterPmcSettled(roomId, room, roundNo) {
     if (!roomId || !room || !room.winner || room.winner === "hoa") return;
 
@@ -10811,33 +10904,14 @@ updatePmcUI(paid);
 
 await loadWalletBalance().catch(() => {});
 
-// EXP chạy SAU KHI PMC đã cộng xong.
-// Nếu EXP lỗi thì chỉ log, tuyệt đối không làm hư thưởng PMC.
-try {
-    await awardRoomExpAfterPmcSettled(roomId, room, roundNo);
-
-    const latestMeta = await ensureMyLevelMetaLoaded().catch(() => getCachedLevelMeta());
-    const safeMeta = buildLevelMeta(latestMeta);
-
-    renderLevelHud(safeMeta);
-
-    if (typeof pushMyLevelMetaToCurrentRoom === "function") {
-        await pushMyLevelMetaToCurrentRoom(safeMeta).catch(() => {});
-    }
-
-    await settleDebugRef.update({
-        expStage: "done_after_pmc",
-        expDoneAt: Date.now()
-    }).catch(() => {});
-} catch (expErr) {
-    console.error("EXP_AFTER_PMC_FAIL:", expErr);
-
-    await settleDebugRef.update({
-        expStage: "failed_after_pmc_done",
-        expError: expErr?.message || String(expErr),
-        expErrorAt: Date.now()
-    }).catch(() => {});
-}
+// Không cộng/trừ EXP trực tiếp trong maybeSettleStakeRoom nữa.
+// Vì playNextMatch() cũng gọi maybeSettleStakeRoom khi bấm TIẾP TỤC,
+// làm EXP có thể chạy trễ và gây cảm giác "bấm tiếp tục mới bị trừ".
+await settleDebugRef.update({
+    expStage: "skip_inside_settle",
+    expNote: "EXP sẽ xử lý bằng maybeAwardRoomExpIfPmcDone ở bindRoom",
+    expSkippedAt: Date.now()
+}).catch(() => {});
 
 } catch (err) {
     console.error("SETTLE THROW:", err);
@@ -11763,10 +11837,14 @@ function stopHostReadyOverlayPoll() {
     }
 }
 
-async function forceShowReadyOverlayIfWaitingRoom(room, roomId = currentRoomId, forceSide = null) {
+async function forceShowReadyOverlayIfWaitingRoom(room, roomId = currentRoomId, forceSide = null, allowSameRoomNoPresence = false) {
     if (!roomId || !room) return false;
 
-    const hasEnoughPlayersWaiting = await roomHasTwoActivePlayersWaiting(room, roomId);
+    // Khi bấm TIẾP TỤC ván 2, không dùng check playerState 15 giây nữa.
+    // Vì trong lúc đang chơi, playerState.updatedAt có thể cũ làm không hiện SS.
+    const hasEnoughPlayersWaiting = allowSameRoomNoPresence
+        ? roomHasTwoRealPlayersWaiting(room)
+        : await roomHasTwoActivePlayersWaiting(room, roomId);
 
     if (!hasEnoughPlayersWaiting) {
         closeReadyOverlay();
@@ -11775,7 +11853,7 @@ async function forceShowReadyOverlayIfWaitingRoom(room, roomId = currentRoomId, 
         return false;
     }
 
-    if (forceSide) {
+    if (forceSide === "do" || forceSide === "den") {
         mySide = forceSide;
     } else if (isMeRoomPlayer(room.players.do)) {
         mySide = "do";
