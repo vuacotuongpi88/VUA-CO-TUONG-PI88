@@ -1,4 +1,5 @@
 const { getDatabase } = require("firebase-admin/database");
+const { handleAvatarSkinBuy } = require("../../lib/avatar-skin-buy");
 
 let adminBundle;
 try {
@@ -378,9 +379,28 @@ module.exports = async function handler(req, res) {
         ? JSON.parse(req.body || "{}")
         : (req.body || {});
 
-    const roomId = String(body.roomId || "").trim();
+    const body =
+    typeof req.body === "string"
+        ? JSON.parse(req.body || "{}")
+        : (req.body || {});
 
-    if (!roomId) {
+if (body.action === "avatar-skin-buy") {
+    try {
+        const result = await handleAvatarSkinBuy(body, req);
+        return res.status(result.status || 200).json(result.json);
+    } catch (err) {
+        console.error("AVATAR_SKIN_BUY_IN_SETTLE_FAIL", err);
+
+        return res.status(500).json({
+            ok: false,
+            error: err.message || "Lỗi server mua skin."
+        });
+    }
+}
+
+const roomId = String(body.roomId || "").trim();
+
+if (!roomId) {
       return res.status(400).json({
         ok: false,
         error: "missing_roomId"
