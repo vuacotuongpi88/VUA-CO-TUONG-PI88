@@ -4357,6 +4357,53 @@ margin-bottom: 14px;
         transform: translate(-50%, -50%) scale(1.04);
     }
 }
+/* ===== SHOP SKIN TABS / TÚI SKIN ===== */
+.avatar-shop-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 10px 0 12px;
+}
+
+.avatar-shop-tab {
+    padding: 9px 10px !important;
+    border-radius: 12px !important;
+    font-size: 12px !important;
+    font-weight: 900 !important;
+    background: rgba(0, 0, 0, 0.55) !important;
+    color: #b2bec3 !important;
+    border: 1px solid rgba(85, 239, 196, 0.25) !important;
+}
+
+.avatar-shop-tab.active {
+    background: linear-gradient(180deg, #00c38a, #008f67) !important;
+    color: #fff !important;
+    border-color: #7dffb3 !important;
+    box-shadow: 0 0 12px rgba(85,239,196,0.22) !important;
+}
+
+.avatar-shop-empty {
+    padding: 18px 12px;
+    text-align: center;
+    color: #b2bec3;
+    font-size: 13px;
+    line-height: 1.5;
+    border: 1px dashed rgba(85,239,196,0.28);
+    border-radius: 14px;
+    background: rgba(0,0,0,0.32);
+}
+
+.avatar-shop-owned-label {
+    display: inline-block;
+    margin-top: 5px;
+    padding: 3px 7px;
+    border-radius: 999px;
+    background: rgba(125,255,179,0.12);
+    border: 1px solid rgba(125,255,179,0.34);
+    color: #7dffb3;
+    font-size: 10px;
+    font-weight: 900;
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -4394,7 +4441,16 @@ margin-bottom: 14px;
         <h3 style="color:#55efc4; margin:0;">SHOP SKIN AVATAR</h3>
         <div id="avatar-skin-shop-balance" class="avatar-shop-balance">Số dư: 0 PMC</div>
 
-        <div id="avatar-skin-shop-list" class="avatar-shop-list"></div>
+<div class="avatar-shop-tabs">
+    <button id="avatar-shop-tab-shop" class="avatar-shop-tab active" onclick="setAvatarSkinShopTab('shop')">
+        🛒 SHOP
+    </button>
+    <button id="avatar-shop-tab-bag" class="avatar-shop-tab" onclick="setAvatarSkinShopTab('bag')">
+        🎒 TÚI
+    </button>
+</div>
+
+<div id="avatar-skin-shop-list" class="avatar-shop-list"></div>
     </div>
 </div>
 <div id="login-screen">
@@ -7390,30 +7446,63 @@ function avatarShopEscape(text) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#39;");
 }
+let avatarSkinShopTab = "shop";
 
+function setAvatarSkinShopTab(tab) {
+    avatarSkinShopTab = tab === "bag" ? "bag" : "shop";
+    renderAvatarSkinShop();
+}
+
+function refreshAvatarSkinShopTabs() {
+    const shopTab = document.getElementById("avatar-shop-tab-shop");
+    const bagTab = document.getElementById("avatar-shop-tab-bag");
+
+    if (shopTab) shopTab.classList.toggle("active", avatarSkinShopTab === "shop");
+    if (bagTab) bagTab.classList.toggle("active", avatarSkinShopTab === "bag");
+}
 function renderAvatarSkinShop() {
     const list = document.getElementById("avatar-skin-shop-list");
     const balance = document.getElementById("avatar-skin-shop-balance");
     if (!list) return;
 
+    refreshAvatarSkinShopTabs();
+
     const owned = getOwnedAvatarSkins();
     const equipped = getEquippedAvatarSkin();
     const currentPmc = getPmcBalance();
-const rawUserPhoto = (localStorage.getItem("user-photo") || "").trim();
 
-const isDefaultChessAvatar =
-    !rawUserPhoto ||
-    rawUserPhoto.includes("do_tuong") ||
-    rawUserPhoto.includes("den_tuong");
+    const rawUserPhoto = (localStorage.getItem("user-photo") || "").trim();
+    const isDefaultChessAvatar =
+        !rawUserPhoto ||
+        rawUserPhoto.includes("do_tuong") ||
+        rawUserPhoto.includes("den_tuong");
 
-const currentPhoto = isDefaultChessAvatar ? "" : rawUserPhoto;
-const avatarPreviewStyle = currentPhoto ? "" : "display:none;";
+    const currentPhoto = isDefaultChessAvatar ? "" : rawUserPhoto;
+    const avatarPreviewStyle = currentPhoto ? "" : "display:none;";
 
     if (balance) {
         balance.innerText = "Số dư: " + formatPMC(currentPmc) + " PMC";
     }
 
-    list.innerHTML = AVATAR_SKINS.map(skin => {
+    let skinsToRender = [];
+
+    if (avatarSkinShopTab === "bag") {
+        skinsToRender = AVATAR_SKINS.filter(skin => owned[skin.id]);
+    } else {
+        skinsToRender = AVATAR_SKINS.filter(skin => skin.id !== "none");
+    }
+
+    if (skinsToRender.length === 0) {
+        list.innerHTML = `
+            <div class="avatar-shop-empty">
+                Túi skin đang trống.<br>
+                Qua tab SHOP mua skin trước.
+            </div>
+        `;
+        return;
+    }
+
+    list.innerHTML = skinsToRender.map(skin => {
         const isOwned = !!owned[skin.id];
         const isEquipped = equipped === skin.id;
         const canBuy = currentPmc >= skin.price;
@@ -7421,48 +7510,59 @@ const avatarPreviewStyle = currentPhoto ? "" : "display:none;";
         let btnText = "";
         let btnClass = "avatar-shop-btn";
         let btnAttr = "";
+        let extraLabel = "";
 
-        if (isEquipped) {
-            btnText = "ĐANG GẮN";
-            btnClass += " equipped";
-            btnAttr = "disabled";
-        } else if (isOwned) {
-            btnText = "GẮN";
-            btnAttr = `onclick="equipAvatarSkin('${skin.id}')"`;
+        if (avatarSkinShopTab === "bag") {
+            if (isEquipped) {
+                btnText = "ĐANG GẮN";
+                btnClass += " equipped";
+                btnAttr = "disabled";
+            } else {
+                btnText = "GẮN";
+                btnAttr = `onclick="equipAvatarSkin('${skin.id}')"`;
+            }
         } else {
-            btnText = canBuy ? "MUA" : "THIẾU PMC";
-            btnClass += canBuy ? "" : " locked";
-            btnAttr = canBuy ? `onclick="buyAvatarSkin('${skin.id}')"` : "disabled";
+            if (isOwned) {
+                btnText = "ĐÃ CÓ";
+                btnClass += " equipped";
+                btnAttr = "disabled";
+                extraLabel = `<div class="avatar-shop-owned-label">Đã nằm trong túi</div>`;
+            } else {
+                btnText = canBuy ? "MUA" : "THIẾU PMC";
+                btnClass += canBuy ? "" : " locked";
+                btnAttr = canBuy ? `onclick="buyAvatarSkin('${skin.id}')"` : "disabled";
+            }
         }
 
         const priceText = skin.price <= 0 ? "Miễn phí" : formatPMC(skin.price) + " PMC";
 
-       return `
-    <div class="avatar-shop-card">
-        <div class="avatar-frame-shell" data-skin="${skin.id}" style="width:48px;height:48px;">
-            <img
-    class="avatar-core avatar-shop-preview"
-    src="${avatarShopEscape(currentPhoto)}"
-    alt="${avatarShopEscape(skin.name)}"
-    style="${avatarPreviewStyle}"
->
-            <img
-                class="avatar-frame-overlay"
-                src="${avatarShopEscape(skin.frameImage || "")}"
-                alt=""
-                style="${skin.id === "none" ? "display:none;" : ""}"
-            >
-        </div>
+        return `
+            <div class="avatar-shop-card">
+                <div class="avatar-frame-shell" data-skin="${skin.id}" style="width:48px;height:48px;">
+                    <img
+                        class="avatar-core avatar-shop-preview"
+                        src="${avatarShopEscape(currentPhoto)}"
+                        alt="${avatarShopEscape(skin.name)}"
+                        style="${avatarPreviewStyle}"
+                    >
+                    <img
+                        class="avatar-frame-overlay"
+                        src="${avatarShopEscape(skin.frameImage || "")}"
+                        alt=""
+                        style="${skin.id === "none" ? "display:none;" : ""}"
+                    >
+                </div>
 
-        <div>
-            <div class="avatar-shop-name">${avatarShopEscape(skin.name)}</div>
-            <div class="avatar-shop-desc">${avatarShopEscape(skin.desc)}</div>
-            <div class="avatar-shop-price">${priceText}</div>
-        </div>
+                <div>
+                    <div class="avatar-shop-name">${avatarShopEscape(skin.name)}</div>
+                    <div class="avatar-shop-desc">${avatarShopEscape(skin.desc)}</div>
+                    <div class="avatar-shop-price">${priceText}</div>
+                    ${extraLabel}
+                </div>
 
-        <button class="${btnClass}" ${btnAttr}>${btnText}</button>
-    </div>
-`;
+                <button class="${btnClass}" ${btnAttr}>${btnText}</button>
+            </div>
+        `;
     }).join("");
 }
 
@@ -7493,8 +7593,7 @@ async function buyAvatarSkin(skinId) {
     const skin = getAvatarSkinById(skinId);
     const owned = getOwnedAvatarSkins();
 
-    if (skin.id === "none") {
-        await equipAvatarSkin("none");
+    if (!skin || skin.id === "none") {
         return;
     }
 
@@ -7504,7 +7603,9 @@ async function buyAvatarSkin(skinId) {
     }
 
     if (owned[skin.id]) {
-        await equipAvatarSkin(skin.id);
+        avatarSkinShopTab = "bag";
+        renderAvatarSkinShop();
+        alert("Skin này đã có trong túi rồi.");
         return;
     }
 
@@ -7516,29 +7617,32 @@ async function buyAvatarSkin(skinId) {
         return;
     }
 
-    const ok = confirm("Mua skin " + skin.name + " giá " + formatPMC(skin.price) + " PMC?");
+    const ok = confirm("Mua skin " + skin.name + " giá " + formatPMC(skin.price) + " PMC?\n\nMua xong skin sẽ nằm trong TÚI, chưa tự gắn.");
     if (!ok) return;
 
     const newPmc = currentPmc - skin.price;
     owned[skin.id] = true;
 
+    const currentEquipped = getEquippedAvatarSkin();
+
     setPmcBalance(newPmc);
-    saveAvatarSkinLocal(skin.id, owned);
-    refreshOwnAvatarSkinUI();
+    saveAvatarSkinLocal(currentEquipped, owned);
+    updatePmcUI(newPmc);
 
     await walletRef().update({
         pmcBalance: newPmc,
-        avatarSkin: skin.id,
         ownedAvatarSkins: owned,
+        avatarSkin: currentEquipped,
         updatedAt: firebase.database.ServerValue.TIMESTAMP,
         name: localStorage.getItem("user-name-display") || "Người chơi",
         photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
     }).catch(err => console.error("Lỗi mua skin avatar:", err));
 
+    avatarSkinShopTab = "bag";
     renderAvatarSkinShop();
-    alert("Mua và gắn skin " + skin.name + " thành công!");
-}
 
+    alert("Đã mua skin " + skin.name + " và lưu vào TÚI. Vào TÚI bấm GẮN để thay skin.");
+}
 function walletRefByKey(walletKey) {
     return db.ref("wallets/" + String(walletKey || makeWalletDbKey()).replace(/[.#$\[\]\/]/g, "_"));
 }
