@@ -8009,8 +8009,12 @@ async function refreshAdminFeeTreasury() {
     try {
       data = raw ? JSON.parse(raw) : {};
     } catch (_) {
-      throw new Error("API trả dữ liệu không hợp lệ.");
-    }
+    console.error("exchange-pmc-to-pi raw response =", rawText);
+    throw new Error(
+        "API không trả JSON. Response thật: " +
+        String(rawText || "").slice(0, 200)
+    );
+}
 
     if (!res.ok || !data.ok) {
       throw new Error(data.error || "Không tải được ví phí hệ thống.");
