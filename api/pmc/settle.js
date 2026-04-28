@@ -379,11 +379,6 @@ module.exports = async function handler(req, res) {
         ? JSON.parse(req.body || "{}")
         : (req.body || {});
 
-    const body =
-    typeof req.body === "string"
-        ? JSON.parse(req.body || "{}")
-        : (req.body || {});
-
 if (body.action === "avatar-skin-buy") {
     try {
         const result = await handleAvatarSkinBuy(body, req);
