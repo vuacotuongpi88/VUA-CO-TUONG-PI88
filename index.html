@@ -582,51 +582,31 @@ font-size: 1rem;
 }
 /* ===== NÚT SHOP SKIN NGOÀI SẢNH ===== */
 #arena-skin-btn {
-    position: fixed;
-    width: 52px;
-    height: 52px;
-    border-radius: 50%;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(180deg, #ff3bd4, #7b2ff7);
-    color: #fff8d6;
-    font-size: 24px;
-    cursor: pointer;
-    z-index: 12018;
+    position: fixed !important;
+    top: 16px !important;
+    right: 132px !important;
+    bottom: auto !important;
+    width: 52px !important;
+    height: 52px !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: linear-gradient(180deg, #ff3bd4, #7b2ff7) !important;
+    color: #fff8d6 !important;
+    font-size: 24px !important;
+    cursor: pointer !important;
+    z-index: 13050 !important;
     box-shadow:
         0 0 14px rgba(255, 59, 212, 0.36),
-        0 0 16px rgba(244, 197, 66, 0.12);
-    border: 1px solid rgba(244, 197, 66, 0.42);
+        0 0 16px rgba(244, 197, 66, 0.12) !important;
+    border: 1px solid rgba(244, 197, 66, 0.42) !important;
 }
 
 #arena-skin-btn:active {
     transform: scale(0.94);
 }
 
-/* Mobile: 3 icon nằm ngang góc phải
-   bạn bè: right 12
-   nhiệm vụ: right 72
-   shop skin: right 132
-*/
-@media (max-width: 600px) {
-    #arena-skin-btn {
-        top: 16px;
-        right: 132px;
-        bottom: auto;
-        display: flex;
-    }
-}
-
-/* Desktop: nằm ngang cùng hàng dưới góc phải như bạn bè + nhiệm vụ */
-@media (min-width: 601px) {
-    #arena-skin-btn {
-        right: 150px;
-        bottom: 24px;
-        top: auto;
-        display: flex;
-    }
-}
 #arena-friend-box {
     position: fixed;
     right: 18px;
@@ -11223,6 +11203,27 @@ async function refreshMissionLobbyBadgeSilently() {
     updateMissionLobbyBadge(data);
   } catch (_) {}
 }
+function ensureArenaSkinButton() {
+    let btn = document.getElementById("arena-skin-btn");
+
+    if (!btn) {
+        btn = document.createElement("div");
+        btn.id = "arena-skin-btn";
+        btn.innerHTML = "🎭";
+        btn.onclick = openAvatarSkinShop;
+    }
+
+    // Đẩy ra thẳng body để khỏi bị div cha ẩn mất
+    if (btn.parentElement !== document.body) {
+        document.body.appendChild(btn);
+    }
+
+    btn.style.display = "flex";
+}
+
+document.addEventListener("DOMContentLoaded", ensureArenaSkinButton);
+setTimeout(ensureArenaSkinButton, 500);
+setTimeout(ensureArenaSkinButton, 1500);
 </script>
 </body>
 
