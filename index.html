@@ -4434,6 +4434,65 @@ margin-bottom: 14px;
     font-size: 10px;
     font-weight: 900;
 }
+/* ===== FIX SKIN BÁM CHẶT AVATAR TRONG TRẬN ===== */
+.player-chip-row > .avatar-frame-shell.avatar-match-shell {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    flex: 0 0 34px !important;
+    margin: 0 5px 0 0 !important;
+    padding: 0 !important;
+    position: relative !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    overflow: visible !important;
+    transform: none !important;
+}
+
+/* Ảnh thật nằm đúng giữa shell */
+.avatar-frame-shell.avatar-match-shell > .avatar-core,
+.avatar-frame-shell.avatar-match-shell > .player-avatar-outside.avatar-core {
+    position: absolute !important;
+    left: 50% !important;
+    top: 50% !important;
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px !important;
+    max-width: 24px !important;
+    max-height: 24px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    transform: translate(-50%, -50%) !important;
+    object-fit: cover !important;
+    border-radius: 50% !important;
+    z-index: 2 !important;
+    box-sizing: border-box !important;
+}
+
+/* Skin/frame bám đúng giữa avatar */
+.avatar-frame-shell.avatar-match-shell > .avatar-frame-overlay {
+    position: absolute !important;
+    left: 50% !important;
+    top: 50% !important;
+    width: 46px !important;
+    height: 46px !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    transform: translate(-50%, -50%) !important;
+    object-fit: contain !important;
+    z-index: 6 !important;
+    pointer-events: none !important;
+}
+
+/* Rồng / phượng to hơn chút nhưng vẫn cùng tâm */
+.avatar-frame-shell.avatar-match-shell[data-skin="dragon"] > .avatar-frame-overlay,
+.avatar-frame-shell.avatar-match-shell[data-skin="phoenix"] > .avatar-frame-overlay {
+    width: 52px !important;
+    height: 52px !important;
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -7380,23 +7439,37 @@ function saveAvatarSkinLocal(equippedId, ownedMap) {
 function ensureAvatarFrameShell(imgEl) {
     if (!imgEl) return null;
 
+    const isMatchAvatar =
+        imgEl.id === "player-do-avatar" ||
+        imgEl.id === "player-den-avatar" ||
+        imgEl.classList.contains("player-avatar-outside");
+
+    const isShopAvatar = imgEl.classList.contains("avatar-shop-preview");
+    const isMenuAvatar = imgEl.id === "user-photo" || imgEl.id === "edit-user-photo";
+
     let shell = imgEl.parentElement;
 
     if (!shell || !shell.classList.contains("avatar-frame-shell")) {
         const computed = getComputedStyle(imgEl);
-        const width = computed.width || "42px";
-        const height = computed.height || "42px";
 
         shell = document.createElement("div");
         shell.className = "avatar-frame-shell";
-        shell.style.width = width;
-        shell.style.height = height;
+
+        if (isMatchAvatar) shell.classList.add("avatar-match-shell");
+        if (isShopAvatar) shell.classList.add("avatar-shop-shell");
+        if (isMenuAvatar) shell.classList.add("avatar-menu-shell");
+
+        shell.style.width = isMatchAvatar ? "34px" : (computed.width || "42px");
+        shell.style.height = isMatchAvatar ? "34px" : (computed.height || "42px");
         shell.style.display = "inline-flex";
+        shell.style.position = "relative";
+        shell.style.overflow = "visible";
 
         imgEl.parentNode.insertBefore(shell, imgEl);
         shell.appendChild(imgEl);
 
         imgEl.classList.add("avatar-core");
+        if (isMatchAvatar) imgEl.classList.add("avatar-match-core");
 
         const frame = document.createElement("img");
         frame.className = "avatar-frame-overlay";
@@ -7404,6 +7477,11 @@ function ensureAvatarFrameShell(imgEl) {
         shell.appendChild(frame);
     } else {
         imgEl.classList.add("avatar-core");
+
+        if (isMatchAvatar) {
+            shell.classList.add("avatar-match-shell");
+            imgEl.classList.add("avatar-match-core");
+        }
 
         if (!shell.querySelector(".avatar-frame-overlay")) {
             const frame = document.createElement("img");
