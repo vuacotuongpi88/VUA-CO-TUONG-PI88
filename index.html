@@ -8966,11 +8966,19 @@ if (
     (room.status !== "playing" || room.winner)
 ) {
     // Nếu ván đã kết thúc thì cố chốt PMC trước khi bàn giao
-    if (room.winner) {
-        await maybeSettleStakeRoom(room, roomId).catch(err => {
-            console.error("Settle trước khi bàn giao host lỗi:", err);
-        });
+   if (room.winner) {
+    let settleData = null;
+
+    try {
+        settleData = await maybeSettleStakeRoom(room, roomId);
+    } catch (err) {
+        console.error("Settle PMC trước khi tạo lại phòng lỗi:", err);
     }
+
+    await ensureExpAwardedAfterSettle(roomId, room, settleData).catch(err => {
+        console.error("EXP fallback trước khi tạo lại phòng lỗi:", err);
+    });
+}
 
     // Chỉ refund host nếu đang phòng chờ, chưa có winner
     if (room.status === "waiting" && !room.winner) {
@@ -9267,7 +9275,8 @@ if (room.winner && !window.__settledPmcRooms[settleKey]) {
             const freshSnap = await db.ref("matches/" + listeningRoomId).once("value");
             const freshRoom = freshSnap.val() || room;
 
-            await maybeSettleStakeRoom(freshRoom, listeningRoomId);
+            const settleData = await maybeSettleStakeRoom(freshRoom, listeningRoomId);
+await ensureExpAwardedAfterSettle(listeningRoomId, freshRoom, settleData);
         } catch (err) {
             console.error("AUTO PMC SETTLE CLIENT FAIL:", err);
             delete window.__settledPmcRooms[settleKey];
@@ -10063,6 +10072,62 @@ return data;
         console.error("Lỗi gọi API settle PMC:", err);
         return null;
     }
+}
+function getMySideFromFinishedRoomForExp(room = {}) {
+    if (mySide && room?.players?.[mySide] && isMeRoomPlayer(room.players[mySide])) {
+        return mySide;
+    }
+
+    if (room?.players?.do && isMeRoomPlayer(room.players.do)) return "do";
+    if (room?.players?.den && isMeRoomPlayer(room.players.den)) return "den";
+
+    return "";
+}
+
+function getServerExpMetaForSide(settleData, side) {
+    const exp = settleData?.expResult || null;
+    if (!exp || !side) return null;
+
+    const meta = exp?.[side]?.levelMeta || null;
+    return meta ? buildLevelMeta(meta) : null;
+}
+
+async function ensureExpAwardedAfterSettle(roomId, room, settleData) {
+    if (!roomId || !room?.winner) return;
+    if (room.winner === "hoa" || room.winner === "draw") return;
+
+    const side = getMySideFromFinishedRoomForExp(room);
+    if (!side) {
+        console.warn("EXP FALLBACK: không xác định được phe của mình", { roomId, room });
+        return;
+    }
+
+    // Nếu server đã trả EXP rồi thì cập nhật HUD/cache ngay.
+    const serverMeta = getServerExpMetaForSide(settleData, side);
+    if (serverMeta) {
+        setCachedLevelMeta(serverMeta);
+
+        await db.ref("matches/" + roomId + "/players/" + side + "/levelMeta")
+            .set(buildLevelMeta(serverMeta))
+            .catch(() => {});
+
+        await ensureMyLevelMetaLoaded().catch(() => {});
+        return;
+    }
+
+    // Nếu API settle không trả expResult, dùng hàm local có sẵn để cộng/trừ EXP cho máy hiện tại.
+    console.warn("EXP FALLBACK: API settle không trả EXP, chạy awardLevelProgressForFinishedRoom", {
+        roomId,
+        side,
+        winner: room.winner,
+        settleData
+    });
+
+    await awardLevelProgressForFinishedRoom(roomId, room).catch(err => {
+        console.error("EXP FALLBACK FAIL:", err);
+    });
+
+    await ensureMyLevelMetaLoaded().catch(() => {});
 }
 async function maybeRefundWaitingStakePMC(roomId, room, side) {
     const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
