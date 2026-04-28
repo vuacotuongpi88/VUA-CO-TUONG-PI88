@@ -3702,6 +3702,110 @@ margin-bottom: 14px;
         font-size: 10px;
     }
 }
+/* KHÓA UI AVATAR + ĐỒNG HỒ THEO 2 GÓC BÀN CỜ */
+.board-side {
+    width: min(92vw, 460px) !important;
+    margin: 0 auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+}
+
+.player-timer-row {
+    width: min(90vw, 450px) !important;
+    max-width: 450px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    box-sizing: border-box !important;
+}
+
+/* HÀNG TRÊN: đồng hồ bên trái, avatar bên phải */
+.top-row {
+    flex-direction: row-reverse !important;
+    margin-bottom: 6px !important;
+}
+
+/* HÀNG DƯỚI: đồng hồ bên trái, avatar bên phải */
+.bottom-row {
+    flex-direction: row !important;
+    margin-top: 6px !important;
+}
+
+.timer-inline {
+    width: 92px !important;
+    min-width: 92px !important;
+    height: 38px !important;
+    padding: 0 8px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-sizing: border-box !important;
+}
+
+.player-slot {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-end !important;
+    max-width: 170px !important;
+}
+
+.player-chip-row {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 5px !important;
+}
+
+.player-avatar-outside {
+    width: 31px !important;
+    height: 31px !important;
+    min-width: 31px !important;
+    border-radius: 50% !important;
+    object-fit: cover !important;
+}
+
+/* mobile cho gọn lại */
+@media (max-width: 600px) {
+    .board-side {
+        width: min(96vw, 430px) !important;
+    }
+
+    .player-timer-row {
+        width: min(90vw, 390px) !important;
+        max-width: 390px !important;
+        gap: 6px !important;
+    }
+
+    .timer-inline {
+        width: 82px !important;
+        min-width: 82px !important;
+        height: 34px !important;
+        font-size: 0.95rem !important;
+    }
+
+    .player-slot {
+        max-width: 150px !important;
+    }
+
+    .player-avatar-outside {
+        width: 28px !important;
+        height: 28px !important;
+        min-width: 28px !important;
+    }
+
+    .player-chip-inline {
+        min-width: 96px !important;
+        padding: 4px 6px !important;
+    }
+
+    .player-chip-meta {
+        font-size: 9px !important;
+    }
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
