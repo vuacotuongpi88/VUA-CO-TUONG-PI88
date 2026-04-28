@@ -580,6 +580,53 @@ font-size: 1rem;
         display: flex;
     }
 }
+/* ===== NÚT SHOP SKIN NGOÀI SẢNH ===== */
+#arena-skin-btn {
+    position: fixed;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, #ff3bd4, #7b2ff7);
+    color: #fff8d6;
+    font-size: 24px;
+    cursor: pointer;
+    z-index: 12018;
+    box-shadow:
+        0 0 14px rgba(255, 59, 212, 0.36),
+        0 0 16px rgba(244, 197, 66, 0.12);
+    border: 1px solid rgba(244, 197, 66, 0.42);
+}
+
+#arena-skin-btn:active {
+    transform: scale(0.94);
+}
+
+/* Mobile: 3 icon nằm ngang góc phải
+   bạn bè: right 12
+   nhiệm vụ: right 72
+   shop skin: right 132
+*/
+@media (max-width: 600px) {
+    #arena-skin-btn {
+        top: 16px;
+        right: 132px;
+        bottom: auto;
+        display: flex;
+    }
+}
+
+/* Desktop: nằm ngang cùng hàng dưới góc phải như bạn bè + nhiệm vụ */
+@media (min-width: 601px) {
+    #arena-skin-btn {
+        right: 150px;
+        bottom: 24px;
+        top: auto;
+        display: flex;
+    }
+}
 #arena-friend-box {
     position: fixed;
     right: 18px;
@@ -4195,10 +4242,6 @@ margin-bottom: 14px;
 </div>
     <hr style="border: 0.5px solid #444; margin: 5px 0;">
 
-    <div class="menu-item" onclick="openAvatarSkinShop()">
-    <span class="menu-icon">🎭</span>
-    <span>SHOP SKIN AVATAR</span>
-</div>
 <div class="menu-item" onclick="openEditProfile()">
     <span class="menu-icon">⚙️</span>
     <span>HỒ SƠ</span>
@@ -4564,6 +4607,7 @@ margin-bottom: 14px;
 <div id="match-chat-btn" onclick="toggleMatchChat()">💬</div>
 
 <div id="arena-friend-btn" onclick="toggleArenaFriendBox(event)">👥</div>
+<div id="arena-skin-btn" onclick="openAvatarSkinShop()">🎭</div>
 
 <div id="arena-friend-box">
     <div class="arena-friend-header">
