@@ -10022,10 +10022,9 @@ try {
 }
 
         if (!res.ok || data.ok === false) {
-            console.error("Lỗi settle PMC qua API:", data);
-            return;
-        }
-
+    console.error("Lỗi settle PMC qua API:", data);
+    return null;
+}
         console.log("Settle PMC qua API OK:", data);
 
 // Cập nhật cache EXP sau khi server settle xong.
@@ -10059,8 +10058,10 @@ try {
 }
 
 await loadWalletBalance().catch(() => {});
+return data;
     } catch (err) {
         console.error("Lỗi gọi API settle PMC:", err);
+        return null;
     }
 }
 async function maybeRefundWaitingStakePMC(roomId, room, side) {
@@ -10278,6 +10279,25 @@ async function ensureInviteHostControl(roomId = currentRoomId) {
     return room;
 }
 async function maybeSettleStakeRoom(room, roomId) {
+        // BẮT BUỘC settle qua API server để cộng PMC + cộng/trừ EXP cho cả 2 bên.
+    // Không cho client tự ghi settlement.done nữa, vì client settle không cộng EXP.
+    if (!roomId || !room?.winner) return null;
+
+    const apiData = await settlePmcViaApi(roomId).catch(err => {
+        console.error("SETTLE API FAIL:", err);
+        return null;
+    });
+
+    if (apiData && apiData.ok !== false) {
+        return apiData;
+    }
+
+    console.warn("Không chạy client fallback để tránh chốt PMC mà thiếu EXP.", {
+        roomId,
+        winner: room?.winner
+    });
+
+    return null;
     const stake = Math.max(
         0,
         Math.floor(Number(
