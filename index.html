@@ -8651,14 +8651,17 @@ async function awardLevelProgressForFinishedRoom(roomId, room) {
   const denPlayerKey = getRoomPlayerKeyForLevel(room.players?.den || {});
   const opponentKey = mySideNow === "do" ? denPlayerKey : doPlayerKey;
 
-  const claimRef = db.ref(`levelMatchClaimsV2/${walletKey}/${roomId}`);
+  const roundNo = Math.max(1, Math.floor(Number(room?.roundNo || 1) || 1));
+const matchKey = safeLevelKey(`${roomId}_round_${roundNo}`);
+
+const claimRef = db.ref(`levelMatchClaimsV2/${walletKey}/${matchKey}`);
   const claimTx = await runRefTransaction(claimRef, current => {
     if (current && current.done) return;
     return { done: true, at: Date.now(), resultType, opponentKey };
   });
   if (!claimTx.committed) return;
 
-const pair = await reserveLevelPairCount(walletKey, opponentKey, roomId);
+const pair = await reserveLevelPairCount(walletKey, opponentKey, matchKey);
 
 // BẢN MỚI:
 // Không chặn EXP vì nghèo.
