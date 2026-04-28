@@ -394,25 +394,51 @@ module.exports = async function handler(req, res) {
     const denWalletKey = String(denPlayer.walletKey || denPlayer.uid || "").trim();
 
     if (!winnerRaw) {
-      return res.status(400).json({
-        ok: false,
-        error: "missing_winner"
-      });
-    }
+  return res.status(400).json({
+    ok: false,
+    error: "missing_winner"
+  });
+}
 
-    if (!stake) {
-      return res.status(400).json({
-        ok: false,
-        error: "invalid_stakePMC"
-      });
-    }
+if (!doWalletKey || !denWalletKey) {
+  return res.status(400).json({
+    ok: false,
+    error: "missing_player_walletKey"
+  });
+}
 
-    if (!doWalletKey || !denWalletKey) {
-      return res.status(400).json({
-        ok: false,
-        error: "missing_player_walletKey"
-      });
-    }
+// CHỐT LỖI: EXP không được phụ thuộc stakePMC.
+// Nếu stake bị thiếu / 0 / lỗi thì vẫn cộng-trừ EXP, chỉ bỏ qua chia PMC.
+if (!stake) {
+  let expResult = null;
+
+  try {
+    expResult = await awardMatchExpServer(db, roomId, room);
+    console.log("MATCH EXP ONLY OK =", expResult);
+  } catch (expErr) {
+    console.error("MATCH EXP ONLY ERROR =", expErr);
+    expResult = {
+      ok: false,
+      error: expErr?.message || "exp_error"
+    };
+  }
+
+  await settlementRef.update({
+    done: true,
+    route: "exp-only-invalid-stake",
+    type: "exp_only",
+    stakePMC: stake,
+    expResult,
+    at: Date.now()
+  });
+
+  return res.status(200).json({
+    ok: true,
+    type: "exp_only",
+    warning: "invalid_stakePMC_but_exp_awarded",
+    expResult
+  });
+}
 
     // Khóa settle để không chia tiền / cộng EXP 2 lần.
     const lockResult = await settlementRef.transaction(current => {
@@ -426,11 +452,34 @@ module.exports = async function handler(req, res) {
     });
 
     if (!lockResult.committed) {
-      return res.status(200).json({
-        ok: true,
-        alreadySettled: true
+  const existedSnap = await settlementRef.once("value");
+  const existed = existedSnap.val() || {};
+  let expResult = existed.expResult || null;
+
+  // Nếu trước đó PMC đã chốt nhưng thiếu EXP, bù EXP lại.
+  if (!expResult && winnerRaw !== "hoa" && winnerRaw !== "draw") {
+    try {
+      expResult = await awardMatchExpServer(db, roomId, room);
+
+      await settlementRef.update({
+        expResult,
+        expFixedAt: Date.now(),
+        route: "exp-fixed-after-already-settled"
       });
+    } catch (expErr) {
+      expResult = {
+        ok: false,
+        error: expErr?.message || "exp_error"
+      };
     }
+  }
+
+  return res.status(200).json({
+    ok: true,
+    alreadySettled: true,
+    expResult
+  });
+}
 
     // HÒA => hoàn đủ, không ăn phí, không cộng/trừ EXP.
     if (winnerRaw === "hoa" || winnerRaw === "draw") {
