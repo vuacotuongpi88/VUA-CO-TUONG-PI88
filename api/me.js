@@ -5074,82 +5074,6 @@ body.in-match #arena-shop-btn{ display:none !important; }
         transform: translateX(-50%) translateY(24px) scale(0.94);
     }
 }
-/* ===== TẮT VIỀN HIỆU ỨNG KHUNG AVATAR - GIỮ ICON SKIN PHÁT SÁNG ===== */
-
-/* Tắt cái viền khung chạy sáng */
-.avatar-frame-skin_bamboo_gold::after,
-.avatar-frame-skin_dragon_purple::after,
-.avatar-frame-skin_phoenix_red::after,
-.avatar-frame-skin_diamond_blue::after,
-.avatar-frame-skin_king_rainbow::after,
-.avatar-frame-skin_god_neon::after {
-    display: none !important;
-    opacity: 0 !important;
-    animation: none !important;
-    box-shadow: none !important;
-    border: none !important;
-    background: transparent !important;
-}
-
-/* Không cho khung avatar tự vẽ viền nữa */
-.avatar-skin-frame-target {
-    border-color: transparent !important;
-}
-
-/* Nếu ảnh avatar còn bị viền màu thì bỏ viền ảnh, nhưng giữ ánh sáng */
-.cosmetic-avatar-skin-bamboo_gold,
-.cosmetic-avatar-skin-dragon_purple,
-.cosmetic-avatar-skin-phoenix_red,
-.cosmetic-avatar-skin-diamond_blue,
-.cosmetic-avatar-skin-king_rainbow,
-.cosmetic-avatar-skin-god_neon {
-    border-color: transparent !important;
-}
-
-/* Giữ icon skin phía trên vẫn hiện và vẫn sáng */
-.avatar-frame-skin_bamboo_gold::before,
-.avatar-frame-skin_dragon_purple::before,
-.avatar-frame-skin_phoenix_red::before,
-.avatar-frame-skin_diamond_blue::before,
-.avatar-frame-skin_king_rainbow::before,
-.avatar-frame-skin_god_neon::before {
-    display: block !important;
-    opacity: 1 !important;
-}
-/* ===== SHOP ICON - TONE XANH TÍM DỄ NHÌN ===== */
-#arena-shop-btn {
-    background: linear-gradient(180deg, #15e6c7, #087f8f) !important;
-    color: #ffffff !important;
-    border: 1px solid rgba(255, 255, 255, 0.45) !important;
-    box-shadow:
-        0 0 14px rgba(21, 230, 199, 0.42),
-        0 0 22px rgba(123, 47, 247, 0.22),
-        inset 0 0 10px rgba(255, 255, 255, 0.12) !important;
-}
-
-#arena-shop-btn .shop-icon-clean {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #ffffff;
-    filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.35));
-}
-
-#arena-shop-btn:hover {
-    transform: scale(1.05);
-    background: linear-gradient(180deg, #28ffd9, #6d28d9) !important;
-    box-shadow:
-        0 0 18px rgba(40, 255, 217, 0.55),
-        0 0 28px rgba(109, 40, 217, 0.32) !important;
-}
-
-/* badge thông báo shop */
-#arena-shop-badge.shop-badge-dot {
-    background: #ff2d55 !important;
-    color: #ffffff !important;
-    border: 2px solid rgba(0, 0, 0, 0.75) !important;
-    box-shadow: 0 0 10px rgba(255, 45, 85, 0.55) !important;
-}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -6414,7 +6338,6 @@ function refreshTimerRings() {
 
 function endGame(main, sub) {
     isGameOver = true;
-    window.__victoryLocked = true;
     clearInterval(interval);
     clearInterval(readyInterval);
 
@@ -6454,23 +6377,11 @@ function endGame(main, sub) {
     }
 
     if (wrap) {
-    wrap.style.display = "block";
-    wrap.style.visibility = "visible";
-    wrap.style.opacity = "1";
-    wrap.style.zIndex = "50000";
-    wrap.style.transform = "translate(-50%, -50%) scale(1)";
-    wrap.style.pointerEvents = "auto";
-}
-}
-function hideVictoryPopup(force = false) {
-    // Khi popup thắng/thua đã khóa, không cho Firebase sync tự giấu nữa
-    if (window.__victoryLocked && !force) return;
-
-    if (force) {
-        window.__victoryLocked = false;
-        window.__lastVictoryKey = "";
+        wrap.style.transform = "translate(-50%, -50%) scale(1)";
+        wrap.style.pointerEvents = "auto";
     }
-
+}
+function hideVictoryPopup() {
     const wrap = document.getElementById("victory-wrap");
     if (!wrap) return;
 
@@ -6484,10 +6395,7 @@ function hideVictoryPopup(force = false) {
 }
 
 async function playNextMatch() {
-    hideVictoryPopup(true);
-    window.__victoryLocked = false;
-    window.__lastVictoryKey = "";
-
+    hideVictoryPopup();
     clearInterval(interval);
     clearInterval(readyInterval);
 
@@ -6640,38 +6548,9 @@ async function playNextMatch() {
             updatedAt: firebase.database.ServerValue.TIMESTAMP
         });
 
-                hideVictoryPopup(true);
-
-        readyDo = false;
-        readyDen = false;
-        readyTime = 30;
+        closeReadyOverlay();
         readyOverlayWaitingShown = false;
-        currentRoomStatus = "waiting";
-        isGameOver = false;
-        selectedPiece = null;
-
-        clearMoveHints();
-        clearLastMoveMarks();
-        document.querySelectorAll(".piece").forEach(p => p.remove());
-
-        renderTimerUI();
-        updateReadyUI();
-
-        // Máy bấm TIẾP TỤC tự bật lại bảng SS ngay
-        setTimeout(() => {
-            const overlay = document.getElementById("ready-overlay");
-            if (
-                currentRoomId === roomId &&
-                mySide &&
-                overlay &&
-                overlay.style.display !== "flex"
-            ) {
-                showReadyOverlay(currentRoomMode || room.mode || "co-tuong");
-            } else {
-                updateReadyUI();
-            }
-        }, 150);
-
+        hideVictoryPopup();
         return;
     }
 
@@ -6708,7 +6587,7 @@ async function playNextMatch() {
     startTimer();
 }
 function exitAfterMatch() {
-    hideVictoryPopup(true);
+    hideVictoryPopup();
     backToMenu();
 }
 function getViewSide() {
@@ -6823,37 +6702,6 @@ if (x1 === x2) { for (let y = Math.min(y1, y2) + 1; y < Math.max(y1, y2); y++) i
 else { for (let x = Math.min(x1, x2) + 1; x < Math.max(x1, x2); x++) if (mt[y1][x]) count++; }
 return count;
 }
-function isTuongSoai(type) {
-    return type === '帥' || type === '將';
-}
-
-function getTuongPos(side, mt) {
-    for (let r = 0; r < 10; r++) {
-        for (let c = 0; c < 9; c++) {
-            if (mt[r][c] && mt[r][c].side === side && isTuongSoai(mt[r][c].type)) {
-                return { c, r };
-            }
-        }
-    }
-    return null;
-}
-
-function haiTuongDoiMat(mt) {
-    const doTuong = getTuongPos("do", mt);
-    const denTuong = getTuongPos("den", mt);
-
-    if (!doTuong || !denTuong) return false;
-    if (doTuong.c !== denTuong.c) return false;
-
-    const minR = Math.min(doTuong.r, denTuong.r);
-    const maxR = Math.max(doTuong.r, denTuong.r);
-
-    for (let r = minR + 1; r < maxR; r++) {
-        if (mt[r][doTuong.c]) return false;
-    }
-
-    return true;
-}
 function clearMoveHints() {
     document.querySelectorAll(".move-hint, .move-hint-capture").forEach(el => el.remove());
 }
@@ -6891,13 +6739,14 @@ function isMoveSafe(pieceType, pieceSide, c1, r1, c2, r2, mt) {
     mt[r2][c2] = { side: pieceSide, type: pieceType };
     mt[r1][c1] = null;
 
-    const safe = !laBiChieu(pieceSide, mt) && !haiTuongDoiMat(mt);
+    const safe = !laBiChieu(pieceSide, mt);
 
     mt[r1][c1] = { side: pieceSide, type: pieceType };
     mt[r2][c2] = tempTarget;
 
     return safe;
 }
+
 function showMoveHints(pieceEl) {
     clearMoveHints();
     if (!pieceEl) return;
@@ -6914,8 +6763,8 @@ function showMoveHints(pieceEl) {
 
     for (let tr = 0; tr < 10; tr++) {
         for (let tc = 0; tc < 9; tc++) {
-           if (!checkLuat(pieceEl.dataset.type, pieceEl.dataset.side, c1, r1, tc, tr, mt)) continue;
-if (!isMoveSafe(pieceEl.dataset.type, pieceEl.dataset.side, c1, r1, tc, tr, mt)) continue;
+            if (!checkLuat(pieceEl.dataset.type, pieceEl.dataset.side, c1, r1, tc, tr, mt)) continue;
+           // if (!isMoveSafe(pieceEl.dataset.type, pieceEl.dataset.side, c1, r1, tc, tr, mt)) continue;
 
             const viewPos = mapBoardToView(tc, tr);
 
@@ -7025,23 +6874,24 @@ return false;
 }
 
 function laBiChieu(side, mt) {
-    const tPos = getTuongPos(side, mt);
-    if (!tPos) return false;
-
-    // Luật cờ tướng: 2 Tướng / Soái không được nhìn thẳng nhau
-    if (haiTuongDoiMat(mt)) return true;
-
-    for (let r = 0; r < 10; r++) {
-        for (let c = 0; c < 9; c++) {
-            if (mt[r][c] && mt[r][c].side !== side) {
-                if (checkLuat(mt[r][c].type, mt[r][c].side, c, r, tPos.c, tPos.r, mt)) {
-                    return true;
-                }
-            }
-        }
-    }
-
-    return false;
+let tPos = null;
+for (let r = 0; r < 10; r++) {
+for (let c = 0; c < 9; c++) {
+if (mt[r][c] && mt[r][c].side === side && (mt[r][c].type === '帥' || mt[r][c].type === '將')) {
+tPos = { c, r }; break;
+}
+}
+if (tPos) break;
+}
+if (!tPos) return false;
+for (let r = 0; r < 10; r++) {
+for (let c = 0; c < 9; c++) {
+if (mt[r][c] && mt[r][c].side !== side) {
+if (checkLuat(mt[r][c].type, mt[r][c].side, c, r, tPos.c, tPos.r, mt)) return true;
+}
+}
+}
+return false;
 }
 
 function checkMate(side) {
@@ -7136,15 +6986,11 @@ if (isOwnTurnPiece) {
     mt[r2][c2] = { side: selectedPiece.dataset.side, type: selectedPiece.dataset.type };
     mt[r1][c1] = null;
 
-    if (haiTuongDoiMat(mt)) {
-    alert("Cấm để 2 Tướng đối mặt!");
-    return;
-}
-
-if (laBiChieu(luotDi, mt)) {
+    if (laBiChieu(luotDi, mt)) {
     alert("Không được để Tướng bị chiếu!");
     return;
 }
+
     if (target) {
     target.remove();
     try {
@@ -7320,23 +7166,15 @@ function exportBoardState() {
     });
 }
 
-function applyBoardStateFromRoom(pieces, options = {}) {
-    const keepVictory = !!options.keepVictory || !!window.__victoryLocked || isGameOver;
-
-    // Khi trận đã có winner thì KHÔNG được hạ isGameOver và KHÔNG được giấu bảng thắng/thua
-    if (!keepVictory) {
-        isGameOver = false;
-        hideVictoryPopup();
-    }
-
+function applyBoardStateFromRoom(pieces) {
+    isGameOver = false;
+    hideVictoryPopup();
     document.querySelectorAll(".piece").forEach(p => p.remove());
     clearMoveHints();
     clearLastMoveMarks();
     selectedPiece = null;
 
-    if (!keepVictory && sounds.heartbeat) {
-        sounds.heartbeat.pause();
-    }
+    if (sounds.heartbeat) sounds.heartbeat.pause();
 
     (pieces || []).forEach(item => {
         const img = document.createElement("img");
@@ -8451,10 +8289,7 @@ if (hasEnoughPlayersWaiting) {
     isGameOver = false;
     selectedPiece = null;
     clearMoveHints();
-
-    // Phòng đã reset về chờ SS thì phải ép tắt popup thắng/thua ở cả 2 máy
-    hideVictoryPopup(true);
-
+    hideVictoryPopup();
     renderTimerUI();
 
     const overlay = document.getElementById("ready-overlay");
@@ -8484,7 +8319,7 @@ if (room.status === "playing" && !room.winner) {
         if (newBoardHash && newBoardHash !== lastRoomBoardHash) {
             lastRoomBoardHash = newBoardHash;
 
-            applyBoardStateFromRoom(room.board || [], { keepVictory: !!room.winner });
+            applyBoardStateFromRoom(room.board || []);
             isCoUp = !!room.isCoUp;
             luotDi = room.turn || "do";
             timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
@@ -8520,48 +8355,23 @@ if (room.status === "playing" && !room.winner) {
                 await db.ref("matches/" + roomId + "/drawRequest").remove();
             }
         }
-       window.__settledPmcRooms = window.__settledPmcRooms || {};
-
-const settleKey = [
-    listeningRoomId,
-    room.winner || "",
-    room.winReason || "",
-    room.finishedAt || ""
-].join("_");
-
-if (room.winner && !window.__settledPmcRooms[settleKey]) {
-    window.__settledPmcRooms[settleKey] = true;
-
+        if (room.winner) {
     setTimeout(() => {
         settlePmcViaApi(listeningRoomId);
     }, 0);
 }
-        if (room.winner) {
-    const victoryKey = [
-        listeningRoomId,
-        room.winner || "",
-        room.winReason || "",
-        room.finishedAt || ""
-    ].join("_");
+        if (room.winner && !isGameOver) {
+    if (room.winner === "hoa") {
+        endGame("HÒA CỜ", "2 BÊN HÒA");
+    } else {
+        let title = "CHIẾU BÍ";
+        if (room.winReason === "dauhang") title = "ĐẦU HÀNG";
+        if (room.winReason === "bochay") title = "ĐỐI THỦ THOÁT";
 
-    const wrap = document.getElementById("victory-wrap");
-    const popupHidden = !wrap || String(wrap.style.transform || "").includes("scale(0)");
-
-    if (window.__lastVictoryKey !== victoryKey || popupHidden) {
-        window.__lastVictoryKey = victoryKey;
-
-        if (room.winner === "hoa") {
-            endGame("HÒA CỜ", "2 BÊN HÒA");
-        } else {
-            let title = "CHIẾU BÍ";
-            if (room.winReason === "dauhang") title = "ĐẦU HÀNG";
-            if (room.winReason === "bochay") title = "ĐỐI THỦ THOÁT";
-
-            endGame(
-                title,
-                `BÊN ${room.winner === "do" ? "ĐỎ" : "ĐEN"} THẮNG`
-            );
-        }
+        endGame(
+            title,
+            `BÊN ${room.winner === "do" ? "ĐỎ" : "ĐEN"} THẮNG`
+        );
     }
 }
 
@@ -8972,16 +8782,14 @@ async function loadWalletBalance() {
         const data = snap.val() || {};
 
         let piAmount = 0;
+        if (data.balance != null) {
+            piAmount = Number(data.balance) || 0;
+        } else {
+            const scopedCache = localStorage.getItem(getBalanceCacheKey());
+            const legacy = localStorage.getItem(PI_BALANCE_KEY);
+            piAmount = Number(scopedCache ?? legacy ?? 0) || 0;
+        }
 
-// Ưu tiên piBalance vì đổi PMC -> Pi thường trả về newPiBalance.
-// Nếu ví cũ chỉ có balance thì vẫn dùng balance.
-if (data.piBalance != null || data.balance != null) {
-    piAmount = Number(data.piBalance ?? data.balance ?? 0) || 0;
-} else {
-    const scopedCache = localStorage.getItem(getBalanceCacheKey());
-    const legacy = localStorage.getItem(PI_BALANCE_KEY);
-    piAmount = Number(scopedCache ?? legacy ?? 0) || 0;
-}
         let pmcAmount = 0;
         if (data.pmcBalance != null) {
             pmcAmount = Math.floor(Number(data.pmcBalance) || 0);
@@ -8996,13 +8804,12 @@ if (data.piBalance != null || data.balance != null) {
         localStorage.setItem(getPmcCacheKey(), String(currentPmcBalance));
 
         await walletRef().update({
-    balance: currentWalletBalance,
-    piBalance: currentWalletBalance,
-    pmcBalance: currentPmcBalance,
-    updatedAt: firebase.database.ServerValue.TIMESTAMP,
-    name: localStorage.getItem("user-name-display") || "Người chơi",
-    photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-});
+            balance: currentWalletBalance,
+            pmcBalance: currentPmcBalance,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP,
+            name: localStorage.getItem("user-name-display") || "Người chơi",
+            photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+        });
 
         updateBalanceUI(currentWalletBalance);
         updatePmcUI(currentPmcBalance);
@@ -9037,13 +8844,12 @@ function setPiBalance(amount) {
     updateBalanceUI(safeAmount);
 
     walletRef().update({
-    balance: safeAmount,
-    piBalance: safeAmount,
-    pmcBalance: getPmcBalance(),
-    updatedAt: firebase.database.ServerValue.TIMESTAMP,
-    name: localStorage.getItem("user-name-display") || "Người chơi",
-    photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-}).catch(err => {
+        balance: safeAmount,
+        pmcBalance: getPmcBalance(),
+        updatedAt: firebase.database.ServerValue.TIMESTAMP,
+        name: localStorage.getItem("user-name-display") || "Người chơi",
+        photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+    }).catch(err => {
         console.error("Lỗi sync số dư Pi:", err);
     });
 }
@@ -9055,16 +8861,14 @@ function setPmcBalance(amount) {
     localStorage.setItem(getPmcCacheKey(), String(safeAmount));
     updatePmcUI(safeAmount);
 
-    const livePi = getPiBalance();
-
-walletRef().update({
-    balance: livePi,
-    piBalance: livePi,
-    pmcBalance: safeAmount,
-    updatedAt: firebase.database.ServerValue.TIMESTAMP,
-    name: localStorage.getItem("user-name-display") || "Người chơi",
-    photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-}).catch(err => {
+    walletRef().update({
+        balance: getPiBalance(),
+        pmcBalance: safeAmount,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP,
+        name: localStorage.getItem("user-name-display") || "Người chơi",
+        photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+    }).catch(err => {
+        console.error("Lỗi sync số dư PMC:", err);
     });
 }
 function walletRefByKey(walletKey) {
@@ -9975,7 +9779,7 @@ async function syncPiPendingBeforeWithdraw() {
 async function processWithdraw() {
     const state = getWithdrawState();
     if (state.count >= MAX_WITHDRAW_PER_DAY) {
-        alert("Hôm nay đã rút đủ 50 lần rồi. Mai quay lại nhé!");
+        alert("Hôm nay đã rút đủ 5 lần rồi. Mai quay lại nhé!");
         return;
     }
 
@@ -9987,54 +9791,32 @@ async function processWithdraw() {
         return;
     }
 
-   const linkState = await getPiLinkState().catch(() => ({ ok: false }));
+    if (amount > MAX_WITHDRAW_PER_TX) {
+        alert(`Mỗi lần chỉ được rút tối đa ${MAX_WITHDRAW_PER_TX} Pi.`);
+        return;
+    }
 
-const walletKey = getMoneyWalletKey(linkState);
+    const currentBalance = Number(getPiBalance() || 0);
+    if (amount > currentBalance) {
+        alert(`Số dư không đủ. Hiện còn ${currentBalance.toFixed(2)} Pi.`);
+        return;
+    }
+
+    const linkState = await getPiLinkState().catch(() => ({ ok: false }));
+
+const walletKey = String(
+    linkState?.walletKey ||
+    (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "") ||
+    ""
+).trim();
+
+const piUid = String(linkState?.piUid || "").trim();
+const piUsername = String(linkState?.piUsername || "").trim();
 
 if (!walletKey) {
     alert("Thiếu walletKey nội bộ.");
     return;
 }
-
-// Đọc số dư Pi thật trực tiếp từ Firebase, không lấy cache trên màn hình
-// Đọc số dư Pi thật trực tiếp từ Firebase, không lấy cache trên màn hình
-const liveSnap = await walletRefByKey(walletKey).once("value");
-const liveWallet = liveSnap.val() && typeof liveSnap.val() === "object" ? liveSnap.val() : {};
-
-// Lấy số lớn nhất giữa piBalance / balance / pi
-// để tránh 1 cột cũ kéo số dư về 13 hoặc 0
-const piBalanceValue = Number(liveWallet.piBalance);
-const balanceValue = Number(liveWallet.balance);
-const piValue = Number(liveWallet.pi);
-
-const currentBalance = Math.max(
-    Number.isFinite(piBalanceValue) ? piBalanceValue : 0,
-    Number.isFinite(balanceValue) ? balanceValue : 0,
-    Number.isFinite(piValue) ? piValue : 0
-);
-
-// Chỉ cập nhật UI/cache, KHÔNG gọi setPiBalance() ở đây
-// vì setPiBalance() có thể ghi nhầm ví mặc định.
-currentWalletBalance = currentBalance;
-localStorage.setItem(getBalanceCacheKey(), String(currentWalletBalance));
-localStorage.setItem(PI_BALANCE_KEY, String(currentWalletBalance));
-updateBalanceUI(currentWalletBalance);
-
-// Đồng bộ lại đúng node ví đang rút
-await walletRefByKey(walletKey).update({
-    balance: currentBalance,
-    piBalance: currentBalance,
-    updatedAt: firebase.database.ServerValue.TIMESTAMP
-}).catch(() => {});
-
-if (amount > currentBalance) {
-    alert(`Số dư không đủ. Ví ${walletKey} hiện còn ${currentBalance.toFixed(2)} Pi.`);
-    return;
-}
-
-const piUid = String(linkState?.piUid || "").trim();
-const piUsername = String(linkState?.piUsername || "").trim();
-
 
 const withdrawUrl = "/api/pi/withdraw-auto-v2?v=" + Date.now();
 
@@ -10578,38 +10360,6 @@ function previewPmcToPiExchange() {
 function pmcDebugLog() {}
 function clearPmcDebugLog() {}
 
-function getMoneyWalletKey(linkState = null) {
-    const clean = v => String(v || "").trim().replace(/[.#$\[\]\/]/g, "_");
-
-    // Quan trọng: ví tiền phải đi theo đúng walletRef() đang dùng để nạp/load/set số dư.
-    // walletRef() = wallets/makeWalletDbKey()
-    const mainWalletKey = clean(
-        typeof makeWalletDbKey === "function" ? makeWalletDbKey() : ""
-    );
-
-    if (mainWalletKey) return mainWalletKey;
-
-    const cachedWalletKey = clean(localStorage.getItem("walletKey"));
-    if (cachedWalletKey) return cachedWalletKey;
-
-    const linkedWalletKey = clean(linkState?.walletKey);
-    if (linkedWalletKey) return linkedWalletKey;
-
-    const piName = clean(
-        linkState?.piUsername ||
-        localStorage.getItem("pi-verified-username") ||
-        localStorage.getItem("pi-user-name")
-    );
-
-    if (piName) return clean("pi_" + piName.toLowerCase());
-
-    return clean(
-        localStorage.getItem("uid") ||
-        localStorage.getItem("currentUserUid") ||
-        firebase.auth().currentUser?.uid ||
-        ""
-    );
-}
 async function confirmPmcToPiExchange() {
     const input = document.getElementById("pmc-to-pi-input");
     const pmcAmount = Math.max(0, Math.floor(Number(input?.value || 0) || 0));
@@ -10619,7 +10369,13 @@ async function confirmPmcToPiExchange() {
         return;
     }
 
-    const walletKey = getMoneyWalletKey();
+    const currentUser = firebase.auth().currentUser;
+    const walletKey =
+        currentUser?.uid ||
+        localStorage.getItem("uid") ||
+        localStorage.getItem("walletKey") ||
+        localStorage.getItem("currentUserUid") ||
+        (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "");
 
     if (!walletKey) {
         alert("Không lấy được mã ví để đổi PMC sang Pi.");
@@ -11393,115 +11149,10 @@ function renderLobbyRoomList(roomList) {
     syncLobbyRoomTabs(latestLobbyRoomList);
 }
 
-function getRoomLastActiveMs(room = {}) {
-    return Number(
-        room.updatedAt ||
-        room.startedAt ||
-        room.createdAt ||
-        room.created ||
-        0
-    ) || 0;
-}
-
-function getRoomAgeMs(room = {}) {
-    const last = getRoomLastActiveMs(room);
-    if (!last) return Infinity;
-    return Date.now() - last;
-}
-
-function isGhostLobbyRoom(room = {}) {
-    const status = String(room.status || "");
-    const hasDo = !!room?.players?.do;
-    const hasDen = !!room?.players?.den;
-    const age = getRoomAgeMs(room);
-
-    // Không có chủ bàn thì là rác
-    if (!hasDo) return true;
-
-    // Đã xong trận thì không hiện nữa
-    if (room.winner || status === "finished") return true;
-
-    // Phòng chờ quá 15 phút chưa có người vào thì xóa
-    if (status === "waiting" && !hasDen && age > 15 * 60 * 1000) {
-        return true;
-    }
-
-    // Phòng đang chơi mà quá 30 phút không update thì coi là treo
-    if (status === "playing" && age > 30 * 60 * 1000) {
-        return true;
-    }
-
-    return false;
-}
-
-function shouldShowLobbyRoom(room = {}) {
-    const status = String(room.status || "");
-    const hasDo = !!room?.players?.do;
-    const hasDen = !!room?.players?.den;
-
-    if (isGhostLobbyRoom(room)) return false;
-
-    // Chỉ hiện bàn còn thiếu người.
-    // Bàn đang trong trận thì không hiện trong danh sách nữa.
-    return hasDo && !hasDen && status === "waiting";
-}
-
-function getRoomBucketSafe(room = {}) {
-    if (room.roomBucket) return room.roomBucket;
-
-    const mode = room.mode || "co-tuong";
-    const stake = Math.max(0, Math.floor(Number(room.stakePMC || 0) || 0));
-
-    if (typeof makeStakeBucket === "function") {
-        return makeStakeBucket(mode, stake);
-    }
-
-    return `${mode}_${stake}`;
-}
-
-async function cleanupGhostLobbyRoom(roomId, room = {}) {
-    if (!roomId || !isGhostLobbyRoom(room)) return;
-
-    const bucket = getRoomBucketSafe(room);
-    const updates = {};
-
-    updates[`matches/${roomId}`] = null;
-
-    if (bucket) {
-        updates[`waitingRooms/${bucket}/${roomId}`] = null;
-    }
-
-    try {
-        await db.ref().update(updates);
-        console.log("Đã xóa bàn ảo:", roomId);
-    } catch (err) {
-        console.warn("Lỗi xóa bàn ảo:", roomId, err);
-    }
-}
-
-async function cleanupGhostLobbyRoomsOnce() {
-    const snap = await db.ref("matches").orderByChild("createdAt").limitToLast(100).once("value");
-    const jobs = [];
-
-    snap.forEach(child => {
-        const room = child.val() || {};
-        if (isGhostLobbyRoom(room)) {
-            jobs.push(cleanupGhostLobbyRoom(child.key, room));
-        }
-    });
-
-    await Promise.all(jobs);
-    console.log("Dọn bàn ảo xong:", jobs.length);
-}
-
 function bindLobbyRoomList() {
     if (lobbyRoomListRef) {
         lobbyRoomListRef.off();
     }
-
-    cleanupGhostLobbyRoomsOnce().catch(err => {
-        console.warn("cleanupGhostLobbyRoomsOnce lỗi:", err);
-    });
 
     lobbyRoomListRef = db.ref("matches").orderByChild("createdAt").limitToLast(50);
 
@@ -11510,13 +11161,15 @@ function bindLobbyRoomList() {
 
         snap.forEach(child => {
             const room = child.val() || {};
+            const hasDo = !!room?.players?.do;
+            const hasDen = !!room?.players?.den;
 
-            if (isGhostLobbyRoom(room)) {
-                cleanupGhostLobbyRoom(child.key, room);
-                return;
-            }
+            const shouldShow =
+                !room?.winner &&
+                hasDo &&
+                (room?.status === "waiting" || room?.status === "playing");
 
-            if (!shouldShowLobbyRoom(room)) return;
+            if (!shouldShow) return;
 
             roomList.push({
                 id: child.key,
@@ -11528,7 +11181,6 @@ function bindLobbyRoomList() {
         renderLobbyRoomList(roomList);
     });
 }
-
 let friendListRef = null;
 let friendRequestRef = null;
 let friendSentRef = null;
@@ -12616,15 +12268,15 @@ async function onIncompletePaymentFound(payment) {
       data
     });
 
-    if (!res.ok || !data?.ok) {
-  window.__PI_PENDING_PAYMENT_BLOCKED__ = true;
-  window.__PI_PENDING_PAYMENT_MSG__ =
-    data?.error ||
-    data?.note ||
-    "Payment Pi cũ chưa được xử lý sạch ở server.";
-  alert(window.__PI_PENDING_PAYMENT_MSG__);
-  return true;
-}
+    if (!res.ok || !data?.ok || data?.note) {
+      window.__PI_PENDING_PAYMENT_BLOCKED__ = true;
+      window.__PI_PENDING_PAYMENT_MSG__ =
+        data?.note ||
+        data?.error ||
+        "Payment Pi cũ chưa được xử lý sạch ở server.";
+      alert(window.__PI_PENDING_PAYMENT_MSG__);
+      return true;
+    }
 
     window.__PI_PENDING_PAYMENT_BLOCKED__ = false;
     window.__PI_PENDING_PAYMENT_MSG__ = "";
@@ -13558,18 +13210,7 @@ window.applyCosmeticSkinToAvatar = function(imgEl, skinId){
     btn = document.createElement('div');
     btn.id = 'arena-shop-btn';
     btn.setAttribute('onclick','openSkinShop()');
-    btn.innerHTML = `
-  <span class="shop-icon-clean">
-    <svg viewBox="0 0 24 24" width="25" height="25" aria-hidden="true">
-      <path d="M6 7h14l-1.4 8.2a2 2 0 0 1-2 1.7H9.1a2 2 0 0 1-2-1.6L5.2 4.8H3"
-            fill="none" stroke="currentColor" stroke-width="2.2"
-            stroke-linecap="round" stroke-linejoin="round"/>
-      <circle cx="9.5" cy="20" r="1.4" fill="currentColor"/>
-      <circle cx="17" cy="20" r="1.4" fill="currentColor"/>
-    </svg>
-  </span>
-  <span id="arena-shop-badge" class="shop-badge-dot">0</span>
-`;
+    btn.innerHTML = '🛒<span id="arena-shop-badge" class="shop-badge-dot">0</span>';
     document.body.appendChild(btn);
     return btn;
   }
