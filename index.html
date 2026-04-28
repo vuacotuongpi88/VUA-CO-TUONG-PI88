@@ -3644,6 +3644,64 @@ margin-bottom: 14px;
     border-color: rgba(44, 17, 71, 0.88) !important;
     box-shadow: 0 0 10px rgba(244, 197, 66, 0.28) !important;
 }
+/* TÁCH AVATAR RA KHỎI Ô THÔNG TIN */
+.player-chip-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+.player-avatar-outside {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #e704c9;
+    background: rgba(0, 0, 0, 0.75);
+    box-shadow:
+        0 0 8px rgba(231, 4, 201, 0.45),
+        0 0 10px rgba(0, 0, 0, 0.55);
+}
+
+.player-chip-inline {
+    display: flex !important;
+    align-items: center !important;
+    min-width: 112px !important;
+    padding: 6px 9px !important;
+    gap: 0 !important;
+    background: rgba(0, 0, 0, 0.78);
+    border: 1px solid #55efc4;
+    border-radius: 10px;
+    box-shadow: 0 0 12px rgba(85, 239, 196, 0.18);
+    box-sizing: border-box;
+}
+
+.player-chip-meta {
+    width: 100%;
+}
+
+@media (max-width: 600px) {
+    .player-chip-row {
+        gap: 5px;
+    }
+
+    .player-avatar-outside {
+        width: 30px;
+        height: 30px;
+        min-width: 30px;
+    }
+
+    .player-chip-inline {
+        min-width: 104px !important;
+        padding: 5px 7px !important;
+    }
+
+    .player-chip-meta {
+        font-size: 10px;
+    }
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -4046,14 +4104,18 @@ margin-bottom: 14px;
 </div>
 <div class="board-side">
     <div class="player-timer-row top-row">
-        <div class="player-slot">
-    <div class="player-chip-inline" onclick="openPlayerStats('den')">
-        <img id="player-den-avatar" src="images/do_tuong.png" alt="Đen">
-        <div class="player-chip-meta">
-            <span id="player-den-name" class="player-chip-name">BÊN ĐEN</span>
-            <span id="player-den-rank" class="player-chip-rank">0 / 4500</span>
+       <div class="player-slot">
+    <div class="player-chip-row" onclick="openPlayerStats('den')">
+        <img id="player-den-avatar" class="player-avatar-outside" src="images/do_tuong.png" alt="Đen">
+
+        <div class="player-chip-inline">
+            <div class="player-chip-meta">
+                <span id="player-den-name" class="player-chip-name">BÊN ĐEN</span>
+                <span id="player-den-rank" class="player-chip-rank">0 / 4500</span>
+            </div>
         </div>
     </div>
+
     <div id="player-den-invite" class="player-invite-code"></div>
 </div>
 
@@ -4081,17 +4143,19 @@ margin-bottom: 14px;
     <div class="player-timer-row bottom-row">
         <div id="timer-do" class="timer-box active-do timer-inline">09:00</div>
 
-        <div class="player-slot">
-    <div class="player-chip-inline" onclick="openPlayerStats('do')">
-        <img id="player-do-avatar" src="images/do_tuong.png" alt="Đỏ">
-        <div class="player-chip-meta">
-            <span id="player-do-name" class="player-chip-name">BÊN ĐỎ</span>
-            <span id="player-do-rank" class="player-chip-rank">0 / 4500</span>
+       <div class="player-slot">
+    <div class="player-chip-row" onclick="openPlayerStats('do')">
+        <img id="player-do-avatar" class="player-avatar-outside" src="images/do_tuong.png" alt="Đỏ">
+
+        <div class="player-chip-inline">
+            <div class="player-chip-meta">
+                <span id="player-do-name" class="player-chip-name">BÊN ĐỎ</span>
+                <span id="player-do-rank" class="player-chip-rank">0 / 4500</span>
+            </div>
         </div>
     </div>
+
     <div id="player-do-invite" class="player-invite-code"></div>
-</div>
-    </div>
 </div>
 
 <div class="chat-side">
