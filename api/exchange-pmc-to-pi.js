@@ -3,6 +3,8 @@ const PMC_PER_PI = 500;
 module.exports = async function handler(req, res) {
   let stage = "start";
 
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+
   if (req.method !== "POST") {
     return res.status(405).json({
       ok: false,
@@ -16,48 +18,62 @@ module.exports = async function handler(req, res) {
   try {
     const adminBundle = require("./_firebaseAdmin.js");
     ({ getDatabase } = require("firebase-admin/database"));
-    adminApp = adminBundle.app;
+
+    adminApp = adminBundle.app || adminBundle;
   } catch (e) {
     return res.status(500).json({
       ok: false,
+      stage: "load-firebase-admin",
       error: "load _firebaseAdmin failed: " + (e?.message || String(e))
     });
   }
 
   try {
     stage = "read-body";
-    const { pmcAmount, walletKey: bodyWalletKey } = req.body || {};
+
+    const body = req.body || {};
+    const pmcAmount = body.pmcAmount;
+    const bodyWalletKey = body.walletKey;
+
     const safePmc = Math.max(0, Math.floor(Number(pmcAmount || 0) || 0));
 
     if (!safePmc || safePmc <= 0) {
       return res.status(400).json({
         ok: false,
+        stage,
         error: "Nhập số PMC muốn đổi trước đã."
       });
     }
 
     stage = "read-wallet-key";
+
     const walletKey = req.headers["x-wallet-key"] || bodyWalletKey;
+
     if (!walletKey) {
       return res.status(401).json({
         ok: false,
+        stage,
         error: "Thiếu định danh ví."
       });
     }
 
     stage = "get-db";
+
     const db = getDatabase(adminApp);
 
     stage = "build-wallet-path";
+
     const safeWalletKey = String(walletKey || "").replace(/[.#$\[\]\/]/g, "_");
     const walletPath = "wallets/" + safeWalletKey;
     const walletRef = db.ref(walletPath);
 
     stage = "pre-read-wallet";
+
     const preSnap = await walletRef.once("value");
     const preRead = preSnap.val();
 
     stage = "transaction";
+
     let exchangeResult = null;
 
     const txResult = await walletRef.transaction(current => {
@@ -94,11 +110,13 @@ module.exports = async function handler(req, res) {
     if (!exchangeResult || !txResult?.committed) {
       return res.status(400).json({
         ok: false,
+        stage,
         error: "PMC không đủ hoặc giao dịch không hợp lệ."
       });
     }
 
     stage = "write-history";
+
     await db.ref("walletTransactions").push({
       type: "pmc_to_pi",
       walletKey: safeWalletKey,
@@ -110,6 +128,7 @@ module.exports = async function handler(req, res) {
     });
 
     stage = "done";
+
     return res.status(200).json({
       ok: true,
       pmcAmount: safePmc,
@@ -122,6 +141,7 @@ module.exports = async function handler(req, res) {
 
     return res.status(500).json({
       ok: false,
+      stage,
       error: err?.message || "Server error"
     });
   }
