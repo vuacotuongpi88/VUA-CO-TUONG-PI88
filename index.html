@@ -7399,7 +7399,15 @@ function renderAvatarSkinShop() {
     const owned = getOwnedAvatarSkins();
     const equipped = getEquippedAvatarSkin();
     const currentPmc = getPmcBalance();
-    const currentPhoto = localStorage.getItem("user-photo") || "images/do_tuong.png";
+const rawUserPhoto = (localStorage.getItem("user-photo") || "").trim();
+
+const isDefaultChessAvatar =
+    !rawUserPhoto ||
+    rawUserPhoto.includes("do_tuong") ||
+    rawUserPhoto.includes("den_tuong");
+
+const currentPhoto = isDefaultChessAvatar ? "" : rawUserPhoto;
+const avatarPreviewStyle = currentPhoto ? "" : "display:none;";
 
     if (balance) {
         balance.innerText = "Số dư: " + formatPMC(currentPmc) + " PMC";
@@ -7433,10 +7441,11 @@ function renderAvatarSkinShop() {
     <div class="avatar-shop-card">
         <div class="avatar-frame-shell" data-skin="${skin.id}" style="width:48px;height:48px;">
             <img
-                class="avatar-core avatar-shop-preview"
-                src="${avatarShopEscape(currentPhoto)}"
-                alt="${avatarShopEscape(skin.name)}"
-            >
+    class="avatar-core avatar-shop-preview"
+    src="${avatarShopEscape(currentPhoto)}"
+    alt="${avatarShopEscape(skin.name)}"
+    style="${avatarPreviewStyle}"
+>
             <img
                 class="avatar-frame-overlay"
                 src="${avatarShopEscape(skin.frameImage || "")}"
