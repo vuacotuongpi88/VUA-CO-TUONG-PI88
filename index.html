@@ -6264,11 +6264,18 @@ startTimer();
 }
 function getCurrentPlayerProfile() {
     const user = auth.currentUser;
+
     return {
         uid: user?.uid || ("guest_" + (localStorage.getItem("user-name-display") || "guest")),
         walletKey: makeWalletDbKey(),
         name: localStorage.getItem("user-name-display") || user?.displayName || "Người chơi",
         photo: localStorage.getItem("user-photo") || user?.photoURL || "images/do_tuong.png",
+
+        // GIỮ LẠI SỐ DƯ ĐỂ TẠO PHÒNG / VÀO PHÒNG KHÔNG BỊ BÁO THIẾU PMC
+        balance: getPiBalance(),
+        pmcBalance: getPmcBalance(),
+
+        // SKIN AVATAR
         avatarSkin: getEquippedAvatarSkin()
     };
 }
