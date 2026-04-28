@@ -6266,14 +6266,12 @@ function getCurrentPlayerProfile() {
     const user = auth.currentUser;
     return {
         uid: user?.uid || ("guest_" + (localStorage.getItem("user-name-display") || "guest")),
+        walletKey: makeWalletDbKey(),
         name: localStorage.getItem("user-name-display") || user?.displayName || "Người chơi",
         photo: localStorage.getItem("user-photo") || user?.photoURL || "images/do_tuong.png",
-        balance: getPiBalance(),
-        pmcBalance: getPmcBalance(),
-        walletKey: makeWalletDbKey()
+        avatarSkin: getEquippedAvatarSkin()
     };
 }
-
 function updateTurnUIOnly() {
     turnBox.innerText = `Lượt: ${luotDi === 'do' ? 'ĐỎ' : 'ĐEN'}`;
     timerDoEl.className = "timer-box timer-inline";
@@ -6390,8 +6388,15 @@ function renderPlayersFromRoom(room) {
     if (topName) topName.innerText = oppPlayer.name || "ĐỐI THỦ";
     if (bottomName) bottomName.innerText = myPlayer.name || "TAO";
 
-    if (topAvatar) topAvatar.src = oppPlayer.photo || "images/do_tuong.png";
-    if (bottomAvatar) bottomAvatar.src = myPlayer.photo || "images/do_tuong.png";
+    if (topAvatar) {
+    topAvatar.src = oppPlayer.photo || "images/do_tuong.png";
+    applyAvatarSkinToElement(topAvatar, oppPlayer.avatarSkin || "none");
+}
+
+if (bottomAvatar) {
+    bottomAvatar.src = myPlayer.photo || "images/do_tuong.png";
+    applyAvatarSkinToElement(bottomAvatar, myPlayer.avatarSkin || getEquippedAvatarSkin());
+}
 
     const roomStake = Number(room?.stakePMC || 0);
     const oppPmc = Number(oppPlayer.pmcBalance || 0);
