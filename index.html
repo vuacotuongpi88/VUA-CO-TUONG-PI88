@@ -5150,343 +5150,6 @@ body.in-match #arena-shop-btn{ display:none !important; }
     border: 2px solid rgba(0, 0, 0, 0.75) !important;
     box-shadow: 0 0 10px rgba(255, 45, 85, 0.55) !important;
 }
-/* --- SÁCH QUẢNG CÁO / SỰ KIỆN --- */
-.ad-book-zone {
-    position: relative;
-    overflow: hidden;
-    min-height: 198px;
-    padding: 0 !important;
-    display: flex;
-    align-items: stretch;
-    justify-content: center;
-    perspective: 900px;
-    background:
-        radial-gradient(circle at top left, rgba(85,239,196,0.16), transparent 42%),
-        linear-gradient(180deg, rgba(0,0,0,0.74), rgba(0,0,0,0.56)) !important;
-}
-
-.ad-book-page {
-    position: absolute;
-    inset: 0;
-    padding: 22px 18px 30px;
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 9px;
-    opacity: 0;
-    transform: rotateY(88deg) scale(0.94);
-    transform-origin: left center;
-    transition: opacity 0.65s ease, transform 0.75s ease;
-    backface-visibility: hidden;
-    text-align: center;
-}
-
-.ad-book-page.active {
-    opacity: 1;
-    transform: rotateY(0deg) scale(1);
-}
-
-.ad-book-page.leaving {
-    opacity: 0;
-    transform: rotateY(-88deg) scale(0.94);
-    transform-origin: right center;
-}
-
-.ad-book-kicker {
-    color: #ffd166;
-    font-size: 13px;
-    font-weight: 900;
-    letter-spacing: 1px;
-    text-shadow: 0 0 10px rgba(255,209,102,0.35);
-}
-
-.ad-book-title {
-    color: #55efc4;
-    font-size: 21px;
-    font-weight: 900;
-    line-height: 1.18;
-    letter-spacing: 1px;
-    text-shadow: 0 0 14px rgba(85,239,196,0.35);
-}
-
-.ad-book-text {
-    color: #f5f6fa;
-    font-size: 13px;
-    line-height: 1.45;
-    font-weight: 700;
-    opacity: 0.96;
-}
-
-.ad-book-reward {
-    width: fit-content;
-    max-width: 100%;
-    margin: 4px auto 0;
-    padding: 7px 11px;
-    border-radius: 999px;
-    background: rgba(244,197,66,0.14);
-    border: 1px solid rgba(244,197,66,0.38);
-    color: #ffeaa7;
-    font-size: 11px;
-    font-weight: 900;
-    box-shadow: 0 0 12px rgba(244,197,66,0.12);
-}
-
-.ad-book-dots {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 9px;
-    display: flex;
-    justify-content: center;
-    gap: 6px;
-    z-index: 3;
-}
-
-.ad-book-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 999px;
-    background: rgba(255,255,255,0.28);
-    border: 1px solid rgba(255,255,255,0.2);
-    transition: 0.25s ease;
-}
-
-.ad-book-dot.active {
-    width: 20px;
-    background: #55efc4;
-    box-shadow: 0 0 10px rgba(85,239,196,0.55);
-}
-
-/* mobile chỉnh thấp lại cho vừa khu hiện tại */
-.mobile-ad-banner.ad-book-zone {
-    min-height: 198px;
-    border-radius: 18px;
-    border: 2px dashed rgba(85,239,196,0.78);
-}
-
-.mobile-ad-banner .ad-book-title {
-    font-size: 18px;
-}
-
-.mobile-ad-banner .ad-book-text {
-    font-size: 12px;
-}
-
-@media (max-width: 600px) {
-    .ad-book-page {
-        padding: 18px 14px 28px;
-    }
-
-    .ad-book-title {
-        font-size: 18px;
-    }
-
-    .ad-book-text {
-        font-size: 12px;
-    }
-
-    .ad-book-reward {
-        font-size: 10px;
-        padding: 6px 9px;
-    }
-}
-/* ===== ICON TOP / BẢNG VINH DANH ===== */
-#arena-top-btn {
-    position: fixed;
-    top: 16px;
-    right: 192px;
-    width: 52px;
-    height: 52px;
-    border-radius: 50%;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(180deg, #f4c542, #8e5a00);
-    color: #2a1147;
-    font-size: 24px;
-    cursor: pointer;
-    z-index: 12018;
-    box-shadow:
-        0 0 14px rgba(244,197,66,0.42),
-        0 0 18px rgba(123,47,247,0.18);
-    border: 1px solid rgba(255,255,255,0.42);
-}
-
-#arena-top-btn:hover {
-    transform: scale(1.05);
-}
-
-body.in-match #arena-top-btn {
-    display: none !important;
-}
-
-/* xếp hàng icon mobile: bạn bè | nhiệm vụ | shop | top */
-@media (max-width: 600px) {
-    #arena-friend-btn {
-        top: 16px !important;
-        right: 12px !important;
-        bottom: auto !important;
-    }
-
-    #arena-mission-btn {
-        top: 16px !important;
-        right: 72px !important;
-        bottom: auto !important;
-    }
-
-    #arena-shop-btn {
-        top: 16px !important;
-        right: 132px !important;
-        bottom: auto !important;
-    }
-
-    #arena-top-btn {
-        top: 16px !important;
-        right: 192px !important;
-        bottom: auto !important;
-    }
-}
-
-/* desktop cũng nằm ngang hàng trên góc phải */
-@media (min-width: 601px) {
-    #arena-friend-btn {
-        top: 20px !important;
-        right: 24px !important;
-        bottom: auto !important;
-    }
-
-    #arena-mission-btn {
-        top: 20px !important;
-        right: 88px !important;
-        bottom: auto !important;
-    }
-
-    #arena-shop-btn {
-        top: 20px !important;
-        right: 152px !important;
-        bottom: auto !important;
-    }
-
-    #arena-top-btn {
-        top: 20px !important;
-        right: 216px !important;
-        bottom: auto !important;
-    }
-}
-
-/* ===== MODAL BẢNG VINH DANH ===== */
-#top-leaderboard-modal {
-    position: fixed;
-    inset: 0;
-    z-index: 26080;
-    background: rgba(0,0,0,0.76);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    padding: 16px;
-    box-sizing: border-box;
-}
-
-#top-leaderboard-modal.show {
-    display: flex;
-}
-
-.top-leaderboard-box {
-    width: min(94vw, 440px);
-    max-height: 84vh;
-    overflow: hidden;
-    background: rgba(18, 8, 34, 0.98);
-    border: 2px solid #f4c542;
-    border-radius: 18px;
-    box-shadow:
-        0 0 18px rgba(244,197,66,0.22),
-        0 0 22px rgba(123,47,247,0.26);
-}
-
-.top-leaderboard-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 13px 14px;
-    background: linear-gradient(180deg, #f4c542, #9b5c00);
-    color: #2a1147;
-    font-size: 15px;
-    font-weight: 900;
-}
-
-.top-leaderboard-close {
-    cursor: pointer;
-    color: #fff;
-    font-size: 18px;
-    text-shadow: 0 0 5px rgba(0,0,0,0.5);
-}
-
-.top-tabs {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-    padding: 10px;
-    background: rgba(0,0,0,0.22);
-}
-
-.top-tab-btn {
-    padding: 8px 6px !important;
-    border-radius: 10px !important;
-    font-size: 10px !important;
-    font-weight: 900 !important;
-    background: linear-gradient(180deg, #2d3436, #111) !important;
-    color: #dfe6e9 !important;
-    border: 1px solid rgba(85,239,196,0.25) !important;
-}
-
-.top-tab-btn.active {
-    background: linear-gradient(180deg, #7b2ff7, #4d1d95) !important;
-    color: #fff8d6 !important;
-    border-color: #f4c542 !important;
-}
-
-#top-leaderboard-list {
-    max-height: 58vh;
-    overflow-y: auto;
-    padding: 8px 10px 12px;
-}
-
-.top-row {
-    display: grid;
-    grid-template-columns: 42px 1fr auto;
-    gap: 8px;
-    align-items: center;
-    padding: 9px 8px;
-    border-bottom: 1px solid rgba(85,239,196,0.14);
-    color: #fff;
-    font-size: 12px;
-}
-
-.top-row strong {
-    color: #55efc4;
-}
-
-.top-name {
-    font-weight: 900;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-}
-
-.top-value {
-    color: #ffeaa7;
-    font-weight: 900;
-    white-space: nowrap;
-}
-
-.top-empty {
-    padding: 18px 10px;
-    text-align: center;
-    color: #dfe6e9;
-    font-size: 12px;
-    line-height: 1.5;
-}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -5690,54 +5353,12 @@ body.in-match #arena-top-btn {
     <div class="desktop-home-wrap">
     <div id="desktop-home-layout">
         <div class="desktop-side-stack">
-            <div class="desktop-panel desktop-ad-panel ad-book-zone">
-    <div class="ad-book-page active">
-        <div class="ad-book-kicker">🎁 TÂN THỦ</div>
-        <div class="ad-book-title">VÀO GAME LÀ CÓ QUÀ</div>
-        <div class="ad-book-text">
-            Tạo tài khoản, vào sảnh chờ, chọn Cờ Tướng hoặc Cờ Úp để nhận nhiệm vụ đầu tiên.
-        </div>
-        <div class="ad-book-reward">Nhận PMC khởi đầu • Lên EXP • Mở cấp</div>
-    </div>
-
-    <div class="ad-book-page">
-        <div class="ad-book-kicker">🔥 NHIỆM VỤ NGÀY</div>
-        <div class="ad-book-title">ĐÁNH CỜ MỖI NGÀY, NHẬN THƯỞNG MỖI NGÀY</div>
-        <div class="ad-book-text">
-            Hoàn thành điểm danh, chơi trận, thắng trận, mời bạn để mở thưởng nhiệm vụ.
-        </div>
-        <div class="ad-book-reward">Quỹ thưởng lấy từ hệ thống nhiệm vụ</div>
-    </div>
-
-    <div class="ad-book-page">
-        <div class="ad-book-kicker">👥 MỜI BẠN</div>
-        <div class="ad-book-title">RỦ HUYNH ĐỆ VÀO BÀN</div>
-        <div class="ad-book-text">
-            Kết bạn, gửi lời mời vào phòng, đủ 2 người là sẵn sàng chiến ngay.
-        </div>
-        <div class="ad-book-reward">Có bạn càng đông, sảnh càng vui</div>
-    </div>
-
-    <div class="ad-book-page">
-        <div class="ad-book-kicker">🏆 GIẢI ĐẤU</div>
-        <div class="ad-book-title">CUỐI TUẦN TRANH TOP</div>
-        <div class="ad-book-text">
-            Top thắng nhiều, top EXP, top nhiệm vụ sẽ được vinh danh trên sảnh chờ.
-        </div>
-        <div class="ad-book-reward">Chuẩn bị mở giải Trúc Lâm Tiên Cảnh</div>
-    </div>
-
-    <div class="ad-book-page">
-        <div class="ad-book-kicker">💎 SHOP / PMC</div>
-        <div class="ad-book-title">NÂNG CẤP AVATAR, KHUNG, DANH HIỆU</div>
-        <div class="ad-book-text">
-            Dùng PMC để tham gia hệ sinh thái: nhiệm vụ, cấp bậc, danh hiệu và vật phẩm.
-        </div>
-        <div class="ad-book-reward">Pi ⇄ PMC • Sự kiện • Ưu đãi</div>
-    </div>
-
-    <div class="ad-book-dots"></div>
-</div>
+            <div class="desktop-panel desktop-ad-panel">
+                <div class="desktop-panel-title">KHU QUẢNG CÁO / SỰ KIỆN</div>
+                <div class="desktop-panel-sub">
+                    Chỗ này mầy thay bằng banner giải đấu, nhà tài trợ, thông báo hệ thống hoặc lịch sự kiện.
+                </div>
+            </div>
 
            <div class="desktop-panel desktop-ranking-panel" onclick="openRankingModal(event)">
                 <div class="desktop-panel-title">DANH SÁCH BÀN CỜ TƯỚNG</div>
@@ -5845,54 +5466,10 @@ body.in-match #arena-top-btn {
     <div class="lobby-sub-title">TRÚC LÂM TIÊN CẢNH</div>
 </div>
         <div id="mobile-ad-zone">
-            <div class="mobile-ad-banner ad-book-zone">
-    <div class="ad-book-page active">
-        <div class="ad-book-kicker">🎁 TÂN THỦ</div>
-        <div class="ad-book-title">VÀO GAME LÀ CÓ QUÀ</div>
-        <div class="ad-book-text">
-            Tạo tài khoản, vào sảnh chờ, chọn Cờ Tướng hoặc Cờ Úp để nhận nhiệm vụ đầu tiên.
-        </div>
-        <div class="ad-book-reward">Nhận PMC khởi đầu • Lên EXP • Mở cấp</div>
-    </div>
-
-    <div class="ad-book-page">
-        <div class="ad-book-kicker">🔥 NHIỆM VỤ NGÀY</div>
-        <div class="ad-book-title">ĐÁNH CỜ MỖI NGÀY, NHẬN THƯỞNG MỖI NGÀY</div>
-        <div class="ad-book-text">
-            Hoàn thành điểm danh, chơi trận, thắng trận, mời bạn để mở thưởng nhiệm vụ.
-        </div>
-        <div class="ad-book-reward">Quỹ thưởng lấy từ hệ thống nhiệm vụ</div>
-    </div>
-
-    <div class="ad-book-page">
-        <div class="ad-book-kicker">👥 MỜI BẠN</div>
-        <div class="ad-book-title">RỦ HUYNH ĐỆ VÀO BÀN</div>
-        <div class="ad-book-text">
-            Kết bạn, gửi lời mời vào phòng, đủ 2 người là sẵn sàng chiến ngay.
-        </div>
-        <div class="ad-book-reward">Có bạn càng đông, sảnh càng vui</div>
-    </div>
-
-    <div class="ad-book-page">
-        <div class="ad-book-kicker">🏆 GIẢI ĐẤU</div>
-        <div class="ad-book-title">CUỐI TUẦN TRANH TOP</div>
-        <div class="ad-book-text">
-            Top thắng nhiều, top EXP, top nhiệm vụ sẽ được vinh danh trên sảnh chờ.
-        </div>
-        <div class="ad-book-reward">Chuẩn bị mở giải Trúc Lâm Tiên Cảnh</div>
-    </div>
-
-    <div class="ad-book-page">
-        <div class="ad-book-kicker">💎 SHOP / PMC</div>
-        <div class="ad-book-title">NÂNG CẤP AVATAR, KHUNG, DANH HIỆU</div>
-        <div class="ad-book-text">
-            Dùng PMC để tham gia hệ sinh thái: nhiệm vụ, cấp bậc, danh hiệu và vật phẩm.
-        </div>
-        <div class="ad-book-reward">Pi ⇄ PMC • Sự kiện • Ưu đãi</div>
-    </div>
-
-    <div class="ad-book-dots"></div>
-</div>
+            <div class="mobile-ad-banner">
+                <div class="ad-title">KHU QUẢNG CÁO / SỰ KIỆN</div>
+                <div class="ad-sub">Mầy có thể thay bằng banner giải đấu, tài trợ, thông báo hệ thống...</div>
+            </div>
 
            <div class="mobile-rank-card" onclick="openRankingModal(event)">
                 <div class="rank-board-icon">♟</div>
@@ -6280,8 +5857,6 @@ appId: "1:818801429743:web:27ed0c854b8be5c8a95f1a"
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.database();
-window.db = db;
-window.auth = auth;
 const provider = new firebase.auth.GoogleAuthProvider();
 
 let currentRoomId = null;
@@ -6293,32 +5868,7 @@ let lastRoomBoardHash = "";
 let lastDrawRequestAt = 0;
 let myLevelMetaLiveRef = null;
 const ACTIVE_MATCH_KEY = "co_tuong_active_match_v1";
-let lastPushedRoomLevelMetaKey = "";
 
-async function pushMyLevelMetaToCurrentRoom(meta = null) {
-    if (!currentRoomId || !mySide) return;
-
-    const cleanMeta = buildLevelMeta(meta || getCachedLevelMeta());
-    const pushKey = [
-        currentRoomId,
-        mySide,
-        cleanMeta.level,
-        cleanMeta.exp,
-        cleanMeta.nextExp,
-        cleanMeta.title,
-        cleanMeta.titleKey
-    ].join("|");
-
-    // Chặn ghi y chang nhau gây Firebase nháy liên tục
-    if (pushKey === lastPushedRoomLevelMetaKey) return;
-    lastPushedRoomLevelMetaKey = pushKey;
-
-    await db.ref("matches/" + currentRoomId + "/players/" + mySide + "/levelMeta")
-        .set(cleanMeta)
-        .catch(() => {
-            lastPushedRoomLevelMetaKey = "";
-        });
-}
 function readActiveMatchSnapshot() {
     try {
         return JSON.parse(localStorage.getItem(ACTIVE_MATCH_KEY) || "null");
@@ -6436,20 +5986,10 @@ function applyLoggedInUI(displayName, photoURL) {
     localStorage.setItem("user-name-display", safeName);
 localStorage.setItem("user-photo", safePhoto);
 
-// KHÔNG RESET SỐ DƯ VỀ 0 KHI VỪA LOGIN / RESTORE APP
-// Giữ cache cũ để tránh màn hình trong trận nhảy về 0.
-currentWalletBalance = Math.max(
-    0,
-    Number(localStorage.getItem(getBalanceCacheKey()) || currentWalletBalance || 0) || 0
-);
-
-currentPmcBalance = Math.max(
-    0,
-    Math.floor(Number(localStorage.getItem(getPmcCacheKey()) || currentPmcBalance || 0) || 0)
-);
-
-updateBalanceUI(currentWalletBalance);
-updatePmcUI(currentPmcBalance);
+currentWalletBalance = 0;
+currentPmcBalance = 0;
+updateBalanceUI(0);
+updatePmcUI(0);
 
 loadWalletBalance().catch(err => console.error("Lỗi tải ví:", err));
 
@@ -6684,11 +6224,6 @@ if (missionBtn) missionBtn.style.display = "none";
 
 const shopBtn = document.getElementById("arena-shop-btn");
 if (shopBtn) shopBtn.style.display = "none";
-const topBtn = document.getElementById("arena-top-btn");
-if (topBtn) topBtn.style.display = "none";
-
-const topModal = document.getElementById("top-leaderboard-modal");
-if (topModal) topModal.classList.remove("show");
 
 const shopBadge = document.getElementById("arena-shop-badge");
 if (shopBadge) {
@@ -6714,9 +6249,6 @@ function showHomeUI() {
 
     const shopBtn = document.getElementById("arena-shop-btn");
     if (shopBtn) shopBtn.style.display = "flex";
-
-    const topBtn = document.getElementById("arena-top-btn");
-if (topBtn) topBtn.style.display = "flex";
 
     if (typeof refreshShopBadgeSilently === "function") {
         refreshShopBadgeSilently();
@@ -6882,7 +6414,6 @@ function refreshTimerRings() {
 
 function endGame(main, sub) {
     isGameOver = true;
-    window.__victoryLocked = true;
     clearInterval(interval);
     clearInterval(readyInterval);
 
@@ -6922,23 +6453,11 @@ function endGame(main, sub) {
     }
 
     if (wrap) {
-    wrap.style.display = "block";
-    wrap.style.visibility = "visible";
-    wrap.style.opacity = "1";
-    wrap.style.zIndex = "50000";
-    wrap.style.transform = "translate(-50%, -50%) scale(1)";
-    wrap.style.pointerEvents = "auto";
-}
-}
-function hideVictoryPopup(force = false) {
-    // Khi popup thắng/thua đã khóa, không cho Firebase sync tự giấu nữa
-    if (window.__victoryLocked && !force) return;
-
-    if (force) {
-        window.__victoryLocked = false;
-        window.__lastVictoryKey = "";
+        wrap.style.transform = "translate(-50%, -50%) scale(1)";
+        wrap.style.pointerEvents = "auto";
     }
-
+}
+function hideVictoryPopup() {
     const wrap = document.getElementById("victory-wrap");
     if (!wrap) return;
 
@@ -6952,10 +6471,7 @@ function hideVictoryPopup(force = false) {
 }
 
 async function playNextMatch() {
-    hideVictoryPopup(true);
-    window.__victoryLocked = false;
-    window.__lastVictoryKey = "";
-
+    hideVictoryPopup();
     clearInterval(interval);
     clearInterval(readyInterval);
 
@@ -6985,13 +6501,12 @@ async function playNextMatch() {
         const bucket = room.roomBucket || currentRoomBucket || makeStakeBucket(room.mode || currentRoomMode || "co-tuong", room.stakePMC || currentRoomStakePMC || 0);
         const inviteCode = room.inviteCode || makeInviteCodeFromRoomId(roomId);
 
-        // Chốt PMC bằng client trước khi reset phòng.
-// Không dùng settlePmcViaApi ở đây nữa để tránh lệch API/client.
-if (room.winner) {
-    await maybeSettleStakeRoom(room, roomId).catch(err => {
-        console.error("Settle PMC client trước khi tạo lại phòng lỗi:", err);
-    });
-}
+        // Chạy settle trước khi reset phòng, để tiền + EXP xử lý xong
+        if (room.winner) {
+            await settlePmcViaApi(roomId).catch(err => {
+                console.error("Settle trước khi tạo lại phòng lỗi:", err);
+            });
+        }
 
         const isQuitWin =
             room.winReason === "bochay" ||
@@ -7080,45 +6595,10 @@ if (room.winner) {
 
             return;
         }
-        // CHỐT PMC TRƯỚC KHI RESET VÁN MỚI
-// Bản file này không có settlePmcMatchOnce, nên dùng maybeSettleStakeRoom.
-if (room.winner) {
-    await maybeSettleStakeRoom(room, roomId).catch(err => {
-        console.error("Chốt PMC trước khi đánh tiếp lỗi:", err);
-    });
 
-    const settleSnap = await db.ref(`matches/${roomId}/settlement`).once("value");
-    const settle = settleSnap.val() || {};
-
-    if (!settle.pmcDone && !settle.done) {
-        alert("Đang chốt thưởng PMC, bấm TIẾP TỤC lại sau 1-2 giây.");
-        return;
-    }
-}
-const nextRoundNo = Math.max(1, Math.floor(Number(room.roundNo || 1) || 1) + 1);
-const keepStakePMC = Math.max(
-    0,
-    Math.floor(Number(
-        room.stakePMC ||
-        room.lastSettlement?.stakePMC ||
-        room.settlement?.stakePMC ||
-        currentRoomStakePMC ||
-        0
-    ) || 0)
-);
-
-currentRoomStakePMC = keepStakePMC;
-// Xóa khóa local của ván cũ, nếu không ván 2 cùng roomId sẽ không settle PMC.
-window.__settledPmcRooms = {};
-window.__lastVictoryKey = "";
-window.__pmcSettleStarted = {};
-window.__finalizedMatchRewards = {};
-window.__rewardRunningByRound = {};
         // Nếu 2 người vẫn còn trong phòng thì đánh lại với đúng người cũ
-await db.ref("matches/" + roomId).update({
-    status: "waiting",
-    roundNo: nextRoundNo,
-    stakePMC: keepStakePMC,
+        await db.ref("matches/" + roomId).update({
+            status: "waiting",
             ready: {
                 do: false,
                 den: false
@@ -7139,43 +6619,14 @@ await db.ref("matches/" + roomId).update({
             winner: null,
             winReason: null,
             drawRequest: null,
-            lastSettlement: room.settlement || null,
             settlement: null,
+            refunds: null,
             updatedAt: firebase.database.ServerValue.TIMESTAMP
         });
 
-                hideVictoryPopup(true);
-
-        readyDo = false;
-        readyDen = false;
-        readyTime = 30;
+        closeReadyOverlay();
         readyOverlayWaitingShown = false;
-        currentRoomStatus = "waiting";
-        isGameOver = false;
-        selectedPiece = null;
-
-        clearMoveHints();
-        clearLastMoveMarks();
-        document.querySelectorAll(".piece").forEach(p => p.remove());
-
-        renderTimerUI();
-        updateReadyUI();
-
-        // Máy bấm TIẾP TỤC tự bật lại bảng SS ngay
-        setTimeout(() => {
-            const overlay = document.getElementById("ready-overlay");
-            if (
-                currentRoomId === roomId &&
-                mySide &&
-                overlay &&
-                overlay.style.display !== "flex"
-            ) {
-                showReadyOverlay(currentRoomMode || room.mode || "co-tuong");
-            } else {
-                updateReadyUI();
-            }
-        }, 150);
-
+        hideVictoryPopup();
         return;
     }
 
@@ -7212,7 +6663,7 @@ await db.ref("matches/" + roomId).update({
     startTimer();
 }
 function exitAfterMatch() {
-    hideVictoryPopup(true);
+    hideVictoryPopup();
     backToMenu();
 }
 function getViewSide() {
@@ -7327,37 +6778,6 @@ if (x1 === x2) { for (let y = Math.min(y1, y2) + 1; y < Math.max(y1, y2); y++) i
 else { for (let x = Math.min(x1, x2) + 1; x < Math.max(x1, x2); x++) if (mt[y1][x]) count++; }
 return count;
 }
-function isTuongSoai(type) {
-    return type === '帥' || type === '將';
-}
-
-function getTuongPos(side, mt) {
-    for (let r = 0; r < 10; r++) {
-        for (let c = 0; c < 9; c++) {
-            if (mt[r][c] && mt[r][c].side === side && isTuongSoai(mt[r][c].type)) {
-                return { c, r };
-            }
-        }
-    }
-    return null;
-}
-
-function haiTuongDoiMat(mt) {
-    const doTuong = getTuongPos("do", mt);
-    const denTuong = getTuongPos("den", mt);
-
-    if (!doTuong || !denTuong) return false;
-    if (doTuong.c !== denTuong.c) return false;
-
-    const minR = Math.min(doTuong.r, denTuong.r);
-    const maxR = Math.max(doTuong.r, denTuong.r);
-
-    for (let r = minR + 1; r < maxR; r++) {
-        if (mt[r][doTuong.c]) return false;
-    }
-
-    return true;
-}
 function clearMoveHints() {
     document.querySelectorAll(".move-hint, .move-hint-capture").forEach(el => el.remove());
 }
@@ -7395,13 +6815,14 @@ function isMoveSafe(pieceType, pieceSide, c1, r1, c2, r2, mt) {
     mt[r2][c2] = { side: pieceSide, type: pieceType };
     mt[r1][c1] = null;
 
-    const safe = !laBiChieu(pieceSide, mt) && !haiTuongDoiMat(mt);
+    const safe = !laBiChieu(pieceSide, mt);
 
     mt[r1][c1] = { side: pieceSide, type: pieceType };
     mt[r2][c2] = tempTarget;
 
     return safe;
 }
+
 function showMoveHints(pieceEl) {
     clearMoveHints();
     if (!pieceEl) return;
@@ -7418,8 +6839,8 @@ function showMoveHints(pieceEl) {
 
     for (let tr = 0; tr < 10; tr++) {
         for (let tc = 0; tc < 9; tc++) {
-           if (!checkLuat(pieceEl.dataset.type, pieceEl.dataset.side, c1, r1, tc, tr, mt)) continue;
-if (!isMoveSafe(pieceEl.dataset.type, pieceEl.dataset.side, c1, r1, tc, tr, mt)) continue;
+            if (!checkLuat(pieceEl.dataset.type, pieceEl.dataset.side, c1, r1, tc, tr, mt)) continue;
+           // if (!isMoveSafe(pieceEl.dataset.type, pieceEl.dataset.side, c1, r1, tc, tr, mt)) continue;
 
             const viewPos = mapBoardToView(tc, tr);
 
@@ -7529,23 +6950,24 @@ return false;
 }
 
 function laBiChieu(side, mt) {
-    const tPos = getTuongPos(side, mt);
-    if (!tPos) return false;
-
-    // Luật cờ tướng: 2 Tướng / Soái không được nhìn thẳng nhau
-    if (haiTuongDoiMat(mt)) return true;
-
-    for (let r = 0; r < 10; r++) {
-        for (let c = 0; c < 9; c++) {
-            if (mt[r][c] && mt[r][c].side !== side) {
-                if (checkLuat(mt[r][c].type, mt[r][c].side, c, r, tPos.c, tPos.r, mt)) {
-                    return true;
-                }
-            }
-        }
-    }
-
-    return false;
+let tPos = null;
+for (let r = 0; r < 10; r++) {
+for (let c = 0; c < 9; c++) {
+if (mt[r][c] && mt[r][c].side === side && (mt[r][c].type === '帥' || mt[r][c].type === '將')) {
+tPos = { c, r }; break;
+}
+}
+if (tPos) break;
+}
+if (!tPos) return false;
+for (let r = 0; r < 10; r++) {
+for (let c = 0; c < 9; c++) {
+if (mt[r][c] && mt[r][c].side !== side) {
+if (checkLuat(mt[r][c].type, mt[r][c].side, c, r, tPos.c, tPos.r, mt)) return true;
+}
+}
+}
+return false;
 }
 
 function checkMate(side) {
@@ -7640,15 +7062,11 @@ if (isOwnTurnPiece) {
     mt[r2][c2] = { side: selectedPiece.dataset.side, type: selectedPiece.dataset.type };
     mt[r1][c1] = null;
 
-    if (haiTuongDoiMat(mt)) {
-    alert("Cấm để 2 Tướng đối mặt!");
-    return;
-}
-
-if (laBiChieu(luotDi, mt)) {
+    if (laBiChieu(luotDi, mt)) {
     alert("Không được để Tướng bị chiếu!");
     return;
 }
+
     if (target) {
     target.remove();
     try {
@@ -7778,211 +7196,7 @@ function getCurrentPlayerProfile() {
         equippedAvatarSkin: (typeof getEquippedAvatarSkin === "function" ? getEquippedAvatarSkin() : (localStorage.getItem("equipped-avatar-skin") || "skin_default")),
     };
 }
-function isMeRoomPlayer(player) {
-    if (!player) return false;
 
-    const meGame = getCurrentPlayerProfile();
-    const meFriend = typeof getCurrentFriendProfile === "function"
-        ? getCurrentFriendProfile()
-        : {};
-
-    const pUid = String(player.uid || "").trim();
-    const pWallet = String(player.walletKey || "").trim();
-
-    const myUidList = [
-        meGame.uid,
-        meFriend.uid,
-        auth.currentUser?.uid
-    ].map(v => String(v || "").trim()).filter(Boolean);
-
-    const myWalletList = [
-        meGame.walletKey,
-        meFriend.walletKey,
-        makeWalletDbKey()
-    ].map(v => String(v || "").trim()).filter(Boolean);
-
-    return (
-        (pUid && myUidList.includes(pUid)) ||
-        (pWallet && myWalletList.includes(pWallet))
-    );
-}
-  function hasRoomPlayer(player) {
-    return !!(
-        player &&
-        (
-            String(player.uid || "").trim() ||
-            String(player.walletKey || "").trim()
-        )
-    );
-}
-
-function sameRoomPerson(a = {}, b = {}) {
-    const aUid = String(a.uid || "").trim();
-    const bUid = String(b.uid || "").trim();
-    const aWallet = String(a.walletKey || "").trim();
-    const bWallet = String(b.walletKey || "").trim();
-
-    return !!(
-        (aUid && bUid && aUid === bUid) ||
-        (aWallet && bWallet && aWallet === bWallet)
-    );
-}
-
-function pickRoomStakePMC(room = {}, fallback = 0) {
-    return Math.max(
-        0,
-        Math.floor(Number(
-            room?.stakePMC ||
-            room?.originalStakePMC ||
-            room?.players?.do?.stakePMC ||
-            room?.players?.do?.originalStakePMC ||
-            room?.lastSettlement?.stakePMC ||
-            room?.settlement?.stakePMC ||
-            fallback ||
-            currentRoomStakePMC ||
-            0
-        ) || 0)
-    );
-}
-
-async function normalizeInvitedRoomBeforeJoin(invite) {
-    if (!invite || !invite.roomId) {
-        return {
-            ok: false,
-            reason: "room_missing",
-            message: "Phòng này không còn.",
-            room: null
-        };
-    }
-
-    const roomId = invite.roomId;
-    const roomRef = db.ref("matches/" + roomId);
-
-    let snap = await roomRef.once("value");
-    let room = snap.val();
-
-    if (!room) {
-        return {
-            ok: false,
-            reason: "room_missing",
-            message: "Phòng này không còn.",
-            room: null
-        };
-    }
-
-    if (!hasRoomPlayer(room.players?.do)) {
-        return {
-            ok: false,
-            reason: "room_busy",
-            message: "Phòng này chưa có chủ bàn.",
-            room
-        };
-    }
-
-    const denHasOther =
-        hasRoomPlayer(room.players?.den) &&
-        !isMeRoomPlayer(room.players?.den);
-
-    if (denHasOther) {
-        return {
-            ok: false,
-            reason: "room_busy",
-            message: "Phòng này vừa đủ người.",
-            room
-        };
-    }
-
-    const hostWallet = String(room.players?.do?.walletKey || "").trim();
-    const inviteHostWallet = String(invite.fromWalletKey || "").trim();
-
-    // Lời mời phải do chủ hiện tại của room gửi.
-    // Nếu không khớp là lời mời cũ/stale.
-    if (hostWallet && inviteHostWallet && hostWallet !== inviteHostWallet) {
-        return {
-            ok: false,
-            reason: "room_busy",
-            message: "Phòng này không còn ở trạng thái chờ.",
-            room
-        };
-    }
-
-    const denEmpty = !hasRoomPlayer(room.players?.den);
-
-    // Cứ còn 1 mình chủ phòng mà status bị kẹt playing/finished thì ép sạch về waiting.
-    // Đây là lỗi mày đang gặp: B là chủ, den trống, nhưng status không phải waiting.
-    if (
-        denEmpty &&
-        (
-            room.status !== "waiting" ||
-            room.winner ||
-            room.winReason ||
-            room.ready?.do ||
-            room.ready?.den ||
-            room.stakeLocked?.do ||
-            room.stakeLocked?.den
-        )
-    ) {
-        const stake = pickRoomStakePMC(room, invite.stakePMC);
-        const mode = room.mode || invite.mode || "co-tuong";
-        const bucket = room.roomBucket || invite.roomBucket || makeStakeBucket(mode, stake);
-        const inviteCode = String(room.inviteCode || invite.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
-
-        const updates = {};
-
-        updates[`matches/${roomId}/status`] = "waiting";
-        updates[`matches/${roomId}/winner`] = null;
-        updates[`matches/${roomId}/winReason`] = null;
-        updates[`matches/${roomId}/quitSide`] = null;
-        updates[`matches/${roomId}/quitUid`] = null;
-        updates[`matches/${roomId}/quitAt`] = null;
-
-        updates[`matches/${roomId}/ready/do`] = false;
-        updates[`matches/${roomId}/ready/den`] = false;
-        updates[`matches/${roomId}/stakeLocked/do`] = false;
-        updates[`matches/${roomId}/stakeLocked/den`] = false;
-
-        updates[`matches/${roomId}/board`] = null;
-        updates[`matches/${roomId}/moveCount`] = 0;
-        updates[`matches/${roomId}/startedAt`] = null;
-        updates[`matches/${roomId}/finishedAt`] = null;
-        updates[`matches/${roomId}/lastMoveFrom`] = null;
-        updates[`matches/${roomId}/lastMoveTo`] = null;
-
-        updates[`matches/${roomId}/stakePMC`] = stake;
-        updates[`matches/${roomId}/originalStakePMC`] = stake;
-        updates[`matches/${roomId}/roomBucket`] = bucket;
-        updates[`matches/${roomId}/inviteCode`] = inviteCode;
-        updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
-
-        if (bucket) {
-            updates[`waitingRooms/${bucket}/${roomId}/claimedBy`] = null;
-            updates[`waitingRooms/${bucket}/${roomId}/claimedAt`] = null;
-            updates[`waitingRooms/${bucket}/${roomId}/stakePMC`] = stake;
-            updates[`waitingRooms/${bucket}/${roomId}/inviteCode`] = inviteCode;
-        }
-
-        await db.ref().update(updates);
-
-        snap = await roomRef.once("value");
-        room = snap.val();
-    }
-
-    if (!room || room.status !== "waiting" || room.winner) {
-        return {
-            ok: false,
-            reason: "room_busy",
-            message: "Phòng này không còn ở trạng thái chờ.",
-            room
-        };
-    }
-
-    return {
-        ok: true,
-        reason: "",
-        message: "",
-        room
-    };
-}
 function updateTurnUIOnly() {
     turnBox.innerText = `Lượt: ${luotDi === 'do' ? 'ĐỎ' : 'ĐEN'}`;
     timerDoEl.className = "timer-box timer-inline";
@@ -8028,23 +7242,15 @@ function exportBoardState() {
     });
 }
 
-function applyBoardStateFromRoom(pieces, options = {}) {
-    const keepVictory = !!options.keepVictory || !!window.__victoryLocked || isGameOver;
-
-    // Khi trận đã có winner thì KHÔNG được hạ isGameOver và KHÔNG được giấu bảng thắng/thua
-    if (!keepVictory) {
-        isGameOver = false;
-        hideVictoryPopup();
-    }
-
+function applyBoardStateFromRoom(pieces) {
+    isGameOver = false;
+    hideVictoryPopup();
     document.querySelectorAll(".piece").forEach(p => p.remove());
     clearMoveHints();
     clearLastMoveMarks();
     selectedPiece = null;
 
-    if (!keepVictory && sounds.heartbeat) {
-        sounds.heartbeat.pause();
-    }
+    if (sounds.heartbeat) sounds.heartbeat.pause();
 
     (pieces || []).forEach(item => {
         const img = document.createElement("img");
@@ -8566,8 +7772,12 @@ function startMyLevelMetaLiveSync() {
         const meta = buildLevelMeta(snap.val() || {});
         setCachedLevelMeta(meta);
 
-                // Chỉ đẩy khi EXP thật đổi, không đẩy trong listener room để tránh loop
-        pushMyLevelMetaToCurrentRoom(meta);
+        // Nếu đang trong phòng thì đẩy level mới vô room luôn để avatar chip cập nhật ngay
+        if (currentRoomId && mySide) {
+            db.ref("matches/" + currentRoomId + "/players/" + mySide + "/levelMeta")
+                .set(meta)
+                .catch(() => {});
+        }
     }, err => {
         console.warn("Không nghe được levelMeta live:", err);
     });
@@ -8788,34 +7998,16 @@ const bottomPmcBox = document.getElementById("player-do-pmc");
 
     const roomStake = Number(room?.stakePMC || 0);
 
-const localPmcNow = Math.max(
-    0,
-    Math.floor(Number(
-        typeof getPmcBalance === "function" ? getPmcBalance() : currentPmcBalance || 0
-    ) || 0)
-);
-
-const localPiNow = Math.max(
-    0,
-    Number(typeof getPiBalance === "function" ? getPiBalance() : currentWalletBalance || 0) || 0
-);
-
-const oppPmc = Math.max(0, Math.floor(Number(oppPlayer.pmcBalance || 0) || 0));
-const myRoomPmc = Math.max(0, Math.floor(Number(myPlayer.pmcBalance || 0) || 0));
-
-// BOTTOM luôn là máy mình.
-// Không cho matches/players/.../pmcBalance = 0 đè số dư thật/cache của mình.
-const myPmc = Math.max(myRoomPmc, localPmcNow);
+const oppPmc = Number(oppPlayer.pmcBalance || 0);
+const myPmc = Number(myPlayer.pmcBalance || 0);
 
 const oppPi = Number(
     oppPlayer.balance != null ? oppPlayer.balance : (oppPlayer.piBalance || 0)
 ) || 0;
 
-const myRoomPi = Number(
+const myPi = Number(
     myPlayer.balance != null ? myPlayer.balance : (myPlayer.piBalance || 0)
 ) || 0;
-
-const myPi = Math.max(myRoomPi, localPiNow);
 
  const oppLevelMeta = buildLevelMeta(oppPlayer?.levelMeta || {});
 
@@ -8957,32 +8149,24 @@ if (stillPlaying && otherPlayerExists && !room.winner) {
     return;
 }
 
-// ===== HOST (do) rời, còn người kia ở lại => bàn giao chủ phòng =====
-// Áp dụng cả khi phòng đang chờ lẫn khi ván đã kết thúc.
-// Nếu không làm đoạn này thì người còn lại vẫn là den, không được mời ai.
-if (
-    side === "do" &&
-    room.players?.den &&
-    (room.status !== "playing" || room.winner)
-) {
-    // Nếu ván đã kết thúc thì cố chốt PMC trước khi bàn giao
-    if (room.winner) {
-        await maybeSettleStakeRoom(room, roomId).catch(err => {
-            console.error("Settle trước khi bàn giao host lỗi:", err);
-        });
-    }
+        // ===== HOST (do) rời khi phòng đang chờ và đã có người được mời =====
+        if (
+            side === "do" &&
+            room.status === "waiting" &&
+            room.players?.den &&
+            !room.winner
+        ) {
+            // hoàn lại stake cho host nếu host đã SS/lock
+            await maybeRefundWaitingStakePMC(roomId, room, "do").catch(() => {});
 
-    // Chỉ refund host nếu đang phòng chờ, chưa có winner
-    if (room.status === "waiting" && !room.winner) {
-        await maybeRefundWaitingStakePMC(roomId, room, "do").catch(() => {});
-    }
+            // bàn giao phòng cho người den thành chủ mới
+            const transferred = await transferWaitingRoomHost(roomId, room, roomBucket);
 
-    const transferred = await transferWaitingRoomHost(roomId, room, roomBucket);
+            if (transferred) {
+                return;
+            }
+        }
 
-    if (transferred) {
-        return;
-    }
-}
         // ===== HOST rời mà chưa có ai trong phòng => xóa hẳn phòng =====
         if (side === "do" && !room.players?.den) {
             if (roomBucket) {
@@ -9060,13 +8244,10 @@ async function maybeStartRoomFromHost(room, roomId = currentRoomId) {
     const freshBoard = exportBoardState();
 const waitingRoomRef = db.ref("waitingRooms/" + room.roomBucket + "/" + roomId);
 await waitingRoomRef.remove().catch(() => {});
-await db.ref("matches/" + roomId).update({
-    status: "playing",
-    roundNo: room.roundNo || 1,
-    settlement: null,
-    refunds: null,
-    isCoUp,
-    board: freshBoard,
+    await db.ref("matches/" + roomId).update({
+        status: "playing",
+        isCoUp,
+        board: freshBoard,
         moveCount: 0,
         startedAt: firebase.database.ServerValue.TIMESTAMP,
         finishedAt: null,
@@ -9133,9 +8314,11 @@ function bindRoom(roomId) {
         if (currentRoomId !== listeningRoomId) return;
         const room = snap.val();
         if (!room) return;
-if (isMeRoomPlayer(room.players?.do)) {
+const me = getCurrentPlayerProfile();
+
+if (room.players?.do?.uid === me.uid) {
     mySide = "do";
-} else if (isMeRoomPlayer(room.players?.den)) {
+} else if (room.players?.den?.uid === me.uid) {
     mySide = "den";
 }
 
@@ -9145,7 +8328,10 @@ viewSide = mySide || "do";
 if (mySide) {
     const latestMeta = getCachedLevelMeta();
     renderLevelHud(latestMeta);
-    // Không set levelMeta ở đây nữa, nếu set trong room listener sẽ gây Firebase chớp liên tục
+
+    db.ref("matches/" + listeningRoomId + "/players/" + mySide + "/levelMeta")
+        .set(buildLevelMeta(latestMeta))
+        .catch(() => {});
 }
 if (typeof applyBoardPerspective === "function") {
     applyBoardPerspective();
@@ -9170,8 +8356,8 @@ if (typeof applyBoardPerspective === "function") {
         updateReadyUI();
 
 const hasEnoughPlayersWaiting =
-    hasRoomPlayer(room.players?.do) &&
-    hasRoomPlayer(room.players?.den) &&
+    !!room.players?.do &&
+    !!room.players?.den &&
     room.status === "waiting" &&
     !room.winner;
 
@@ -9179,10 +8365,7 @@ if (hasEnoughPlayersWaiting) {
     isGameOver = false;
     selectedPiece = null;
     clearMoveHints();
-
-    // Phòng đã reset về chờ SS thì phải ép tắt popup thắng/thua ở cả 2 máy
-    hideVictoryPopup(true);
-
+    hideVictoryPopup();
     renderTimerUI();
 
     const overlay = document.getElementById("ready-overlay");
@@ -9212,7 +8395,7 @@ if (room.status === "playing" && !room.winner) {
         if (newBoardHash && newBoardHash !== lastRoomBoardHash) {
             lastRoomBoardHash = newBoardHash;
 
-            applyBoardStateFromRoom(room.board || [], { keepVictory: !!room.winner });
+            applyBoardStateFromRoom(room.board || []);
             isCoUp = !!room.isCoUp;
             luotDi = room.turn || "do";
             timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
@@ -9248,60 +8431,23 @@ if (room.status === "playing" && !room.winner) {
                 await db.ref("matches/" + roomId + "/drawRequest").remove();
             }
         }
-       window.__settledPmcRooms = window.__settledPmcRooms || {};
-
-const settleKey = [
-    listeningRoomId,
-    "round",
-    room.roundNo || 1,
-    room.winner || "",
-    room.winReason || "",
-    room.finishedAt || ""
-].join("_");
-
-if (room.winner && !window.__settledPmcRooms[settleKey]) {
-    window.__settledPmcRooms[settleKey] = true;
-
-    setTimeout(async () => {
-        try {
-            const freshSnap = await db.ref("matches/" + listeningRoomId).once("value");
-            const freshRoom = freshSnap.val() || room;
-
-            await maybeSettleStakeRoom(freshRoom, listeningRoomId);
-        } catch (err) {
-            console.error("AUTO PMC SETTLE CLIENT FAIL:", err);
-            delete window.__settledPmcRooms[settleKey];
-        }
+        if (room.winner) {
+    setTimeout(() => {
+        settlePmcViaApi(listeningRoomId);
     }, 0);
 }
-        if (room.winner) {
-const victoryKey = [
-    listeningRoomId,
-    "round",
-    room.roundNo || 1,
-    room.winner || "",
-    room.winReason || "",
-    room.finishedAt || ""
-].join("_");
+        if (room.winner && !isGameOver) {
+    if (room.winner === "hoa") {
+        endGame("HÒA CỜ", "2 BÊN HÒA");
+    } else {
+        let title = "CHIẾU BÍ";
+        if (room.winReason === "dauhang") title = "ĐẦU HÀNG";
+        if (room.winReason === "bochay") title = "ĐỐI THỦ THOÁT";
 
-    const wrap = document.getElementById("victory-wrap");
-    const popupHidden = !wrap || String(wrap.style.transform || "").includes("scale(0)");
-
-    if (window.__lastVictoryKey !== victoryKey || popupHidden) {
-        window.__lastVictoryKey = victoryKey;
-
-        if (room.winner === "hoa") {
-            endGame("HÒA CỜ", "2 BÊN HÒA");
-        } else {
-            let title = "CHIẾU BÍ";
-            if (room.winReason === "dauhang") title = "ĐẦU HÀNG";
-            if (room.winReason === "bochay") title = "ĐỐI THỦ THOÁT";
-
-            endGame(
-                title,
-                `BÊN ${room.winner === "do" ? "ĐỎ" : "ĐEN"} THẮNG`
-            );
-        }
+        endGame(
+            title,
+            `BÊN ${room.winner === "do" ? "ĐỎ" : "ĐEN"} THẮNG`
+        );
     }
 }
 
@@ -9341,137 +8487,47 @@ async function joinExistingWaitingRoom(waitingRoomRef, roomId, me, mode, stakePM
     const roomSnap = await roomRef.once("value");
     const room = roomSnap.val();
 
-    if (!room || (room.mode || "co-tuong") !== mode || !hasRoomPlayer(room.players?.do)) {
+    if (!room || room.mode !== mode || !room.players?.do) {
+        const currentWaiting = (await waitingRoomRef.once("value")).val();
+        if (currentWaiting && currentWaiting.roomId === roomId && currentWaiting.claimedBy === me.uid) {
+            await waitingRoomRef.remove().catch(() => {});
+        }
         return false;
     }
 
-    // Nếu chính mình là chủ phòng thì chỉ bind lại, không tự nhảy xuống den
-    if (sameRoomPerson(room.players?.do, me)) {
-        mySide = "do";
-        viewSide = "do";
-        currentRoomId = roomId;
-        currentRoomMode = mode;
-        currentRoomStakePMC = pickRoomStakePMC(room, stakePMC);
-        currentRoomBucket = room.roomBucket || makeStakeBucket(mode, currentRoomStakePMC);
-        currentRoomStatus = room.status || "waiting";
-
-        saveActiveMatchSnapshot({
-            roomId,
-            mode,
-            side: "do"
-        });
-
-        bindRoom(roomId);
-        return true;
-    }
-
-    // Nếu room đang chơi thật sự thì không cho chen vào
-    if (room.status === "playing" && !room.winner) {
-        return false;
-    }
-
-    const actualStake = pickRoomStakePMC(room, stakePMC);
-    const bucket = room.roomBucket || makeStakeBucket(mode, actualStake);
-    const inviteCode = String(room.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
-
-    const playersRef = db.ref("matches/" + roomId + "/players");
-
-    const joinResult = await playersRef.transaction(players => {
-        players = players || {};
-
-        // Không có chủ thì phòng lỗi
-        if (!hasRoomPlayer(players.do)) return;
-
-        // Chủ click lại phòng của mình
-        if (sameRoomPerson(players.do, me)) {
-            return players;
-        }
-
-        // Nếu den đã có người khác thì báo đủ người
-        if (hasRoomPlayer(players.den) && !sameRoomPerson(players.den, me)) {
-            return;
-        }
-
-        // Den trống hoặc chính mình đang là den thì cho vào
-        players.den = {
-            ...me,
-            role: "guest",
-            joinedAt: Date.now()
-        };
-
-        return players;
+    const denRef = db.ref("matches/" + roomId + "/players/den");
+    const denJoinResult = await denRef.transaction((current) => {
+        if (current && current.uid && current.uid !== me.uid) return;
+        return me;
     }, undefined, false);
 
-    if (!joinResult.committed) {
+    if (!denJoinResult.committed) {
+        const currentWaiting = (await waitingRoomRef.once("value")).val();
+        if (currentWaiting && currentWaiting.roomId === roomId && currentWaiting.claimedBy === me.uid) {
+            await waitingRoomRef.remove().catch(() => {});
+        }
         return false;
     }
 
-    const finalPlayers = joinResult.snapshot.val() || {};
+    await db.ref("matches/" + roomId + "/ready/den").set(false);
+    await db.ref("matches/" + roomId + "/stakeLocked/den").set(false);
 
-    if (sameRoomPerson(finalPlayers.do, me)) {
-        mySide = "do";
-    } else if (sameRoomPerson(finalPlayers.den, me)) {
-        mySide = "den";
-    } else {
-        return false;
+    const currentWaiting = (await waitingRoomRef.once("value")).val();
+    if (currentWaiting && currentWaiting.roomId === roomId && currentWaiting.claimedBy === me.uid) {
+        await waitingRoomRef.remove().catch(() => {});
     }
 
-    viewSide = mySide;
+    mySide = "den";
     currentRoomId = roomId;
     currentRoomMode = mode;
-    currentRoomStakePMC = actualStake;
-    currentRoomBucket = bucket;
-    currentRoomStatus = "waiting";
-    isGameOver = false;
+    currentRoomStakePMC = stakePMC;
+    currentRoomBucket = room?.roomBucket || makeStakeBucket(mode, stakePMC);
 
-    const updates = {};
-    updates[`matches/${roomId}/status`] = "waiting";
-    updates[`matches/${roomId}/winner`] = null;
-    updates[`matches/${roomId}/winReason`] = null;
-    updates[`matches/${roomId}/quitSide`] = null;
-    updates[`matches/${roomId}/quitUid`] = null;
-    updates[`matches/${roomId}/quitAt`] = null;
-
-    updates[`matches/${roomId}/ready/do`] = false;
-    updates[`matches/${roomId}/ready/den`] = false;
-    updates[`matches/${roomId}/stakeLocked/den`] = false;
-
-    updates[`matches/${roomId}/stakePMC`] = actualStake;
-    updates[`matches/${roomId}/originalStakePMC`] = actualStake;
-    updates[`matches/${roomId}/roomBucket`] = bucket;
-    updates[`matches/${roomId}/inviteCode`] = inviteCode;
-    updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
-
-    if (bucket) {
-        updates[`waitingRooms/${bucket}/${roomId}/claimedBy`] = null;
-        updates[`waitingRooms/${bucket}/${roomId}/claimedAt`] = null;
-    }
-
-    await db.ref().update(updates);
-
-    saveActiveMatchSnapshot({
-        roomId,
-        mode,
-        side: mySide
-    });
-
-    await setPlayerPresence("arena").catch(() => {});
-
-    prepareRealtimeArenaUI();
-    clearInterval(interval);
+    saveActiveMatchSnapshot({ roomId, mode, side: "den" });
     bindRoom(roomId);
-
-    setTimeout(async () => {
-        const freshSnap = await db.ref("matches/" + roomId).once("value").catch(() => null);
-        const freshRoom = freshSnap?.val?.();
-
-        if (freshRoom) {
-            forceShowReadyOverlayIfWaitingRoom(freshRoom, roomId, mySide);
-        }
-    }, 250);
-
     return true;
 }
+
 async function createAndPublishWaitingRoom(me, mode, stakePMC, bucket) {
     const newRoomRef = db.ref("matches").push();
     const newRoomId = newRoomRef.key;
@@ -9799,59 +8855,24 @@ function saveWithdrawState(state) {
 async function loadWalletBalance() {
     try {
         const snap = await walletRef().once("value");
-        const data = snap.val();
+        const data = snap.val() || {};
 
-        const cachedPi = Math.max(
-            0,
-            Number(localStorage.getItem(getBalanceCacheKey()) || currentWalletBalance || 0) || 0
-        );
+        let piAmount = 0;
 
-        const cachedPmc = Math.max(
-            0,
-            Math.floor(Number(localStorage.getItem(getPmcCacheKey()) || currentPmcBalance || 0) || 0)
-        );
-
-        // Nếu Firebase chưa có ví / đọc sai key / rỗng:
-        // KHÔNG ghi 0 ngược lên Firebase, chỉ giữ cache cũ.
-        if (!data || typeof data !== "object") {
-            currentWalletBalance = cachedPi;
-            currentPmcBalance = cachedPmc;
-
-            updateBalanceUI(currentWalletBalance);
-            updatePmcUI(currentPmcBalance);
-
-            console.warn("LOAD WALLET EMPTY - giữ cache, không ghi 0", {
-                walletKey: makeWalletDbKey(),
-                pi: currentWalletBalance,
-                pmc: currentPmcBalance
-            });
-
-            return { pi: currentWalletBalance, pmc: currentPmcBalance };
-        }
-
-        let piAmount = cachedPi;
-        if (data.piBalance != null) {
-            piAmount = Number(data.piBalance) || 0;
-        } else if (data.balance != null) {
-            piAmount = Number(data.balance) || 0;
-        }
-
-        let pmcAmount = cachedPmc;
+// Ưu tiên piBalance vì đổi PMC -> Pi thường trả về newPiBalance.
+// Nếu ví cũ chỉ có balance thì vẫn dùng balance.
+if (data.piBalance != null || data.balance != null) {
+    piAmount = Number(data.piBalance ?? data.balance ?? 0) || 0;
+} else {
+    const scopedCache = localStorage.getItem(getBalanceCacheKey());
+    const legacy = localStorage.getItem(PI_BALANCE_KEY);
+    piAmount = Number(scopedCache ?? legacy ?? 0) || 0;
+}
+        let pmcAmount = 0;
         if (data.pmcBalance != null) {
-            const firebasePmc = Math.floor(Number(data.pmcBalance) || 0);
-
-            // Chặn trường hợp Firebase đang 0 tạm thời đè cache đang có PMC.
-            // Ví dụ: vừa vào trận / room chưa sync / app restore chậm.
-            if (firebasePmc === 0 && cachedPmc > 0) {
-                pmcAmount = cachedPmc;
-                console.warn("PMC FIREBASE = 0, giữ cache PMC để tránh reset sai", {
-                    walletKey: makeWalletDbKey(),
-                    firebasePmc,
-                    cachedPmc
-                });
-            } else {
-                pmcAmount = firebasePmc;
-            }
+            pmcAmount = Math.floor(Number(data.pmcBalance) || 0);
+        } else {
+            pmcAmount = Math.floor(Number(localStorage.getItem(getPmcCacheKey()) || 0) || 0);
         }
 
         currentWalletBalance = Math.max(0, piAmount);
@@ -9860,36 +8881,26 @@ async function loadWalletBalance() {
         localStorage.setItem(getBalanceCacheKey(), String(currentWalletBalance));
         localStorage.setItem(getPmcCacheKey(), String(currentPmcBalance));
 
-        // Chỉ sync lên Firebase khi không phải tình huống kéo PMC về 0 sai.
         await walletRef().update({
-            balance: currentWalletBalance,
-            piBalance: currentWalletBalance,
-            pmcBalance: currentPmcBalance,
-            updatedAt: firebase.database.ServerValue.TIMESTAMP,
-            name: localStorage.getItem("user-name-display") || "Người chơi",
-            photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-        });
+    balance: currentWalletBalance,
+    piBalance: currentWalletBalance,
+    pmcBalance: currentPmcBalance,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP,
+    name: localStorage.getItem("user-name-display") || "Người chơi",
+    photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+});
 
         updateBalanceUI(currentWalletBalance);
         updatePmcUI(currentPmcBalance);
-
         return { pi: currentWalletBalance, pmc: currentPmcBalance };
     } catch (err) {
         console.error("Lỗi load ví:", err);
 
-        currentWalletBalance = Math.max(
-            0,
-            Number(localStorage.getItem(getBalanceCacheKey()) || currentWalletBalance || 0) || 0
-        );
-
-        currentPmcBalance = Math.max(
-            0,
-            Math.floor(Number(localStorage.getItem(getPmcCacheKey()) || currentPmcBalance || 0) || 0)
-        );
+        currentWalletBalance = Math.max(0, Number(localStorage.getItem(getBalanceCacheKey()) || 0) || 0);
+        currentPmcBalance = Math.max(0, Math.floor(Number(localStorage.getItem(getPmcCacheKey()) || 0) || 0));
 
         updateBalanceUI(currentWalletBalance);
         updatePmcUI(currentPmcBalance);
-
         return { pi: currentWalletBalance, pmc: currentPmcBalance };
     }
 }
@@ -10090,83 +9101,46 @@ async function transferWaitingRoomHost(roomId, room, roomBucket) {
     if (!roomId || !room) return false;
 
     const newHost = room?.players?.den;
-if (!newHost || (!newHost.uid && !newHost.walletKey)) return false;
+    if (!newHost?.uid) return false;
 
-    const stake = Math.max(
-        0,
-        Math.floor(Number(
-            room?.stakePMC ||
-            room?.settlement?.stakePMC ||
-            room?.lastSettlement?.stakePMC ||
-            currentRoomStakePMC ||
-            0
-        ) || 0)
-    );
-
+    const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
     const inviteCode = String(room?.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
-    const isCleanWaiting = room.status === "waiting" && !room.winner;
 
-    // Chỉ hoàn stake den nếu đang phòng chờ.
-    // Nếu ván đã kết thúc thì không refund ở đây, tránh cộng dư PMC.
-    if (isCleanWaiting && room?.stakeLocked?.den && newHost.walletKey) {
+    // Nếu người được mời đã từng bị lock stake khi SS rồi, hoàn lại để họ làm chủ mới từ đầu cho sạch state
+    if (room?.stakeLocked?.den && newHost.walletKey) {
         await adjustPmcWalletByKey(newHost.walletKey, stake, {
             name: newHost.name || "Người chơi",
             photo: newHost.photo || "images/do_tuong.png"
         }).catch(err => console.error("Refund new host lỗi:", err));
     }
 
-    const nextRoundNo = Math.max(
-        1,
-        Math.floor(Number(room.roundNo || 1) || 1) + (room.winner ? 1 : 0)
-    );
-
     const updates = {};
 
-    // Chuyển người còn lại lên làm chủ phòng
-    updates[`matches/${roomId}/players/do`] = {
-    ...newHost,
-    role: "host",
-    stakePMC: stake,
-    originalStakePMC: stake,
-    becameHostAt: firebase.database.ServerValue.TIMESTAMP
-};
+    // Chuyển người bên den thành chủ mới
+    updates[`matches/${roomId}/players/do`] = newHost;
     updates[`matches/${roomId}/players/den`] = null;
 
-    // Reset phòng về trạng thái chờ để chủ mới mời người khác
-    updates[`matches/${roomId}/status`] = "waiting";
-    updates[`matches/${roomId}/roundNo`] = nextRoundNo;
-    updates[`matches/${roomId}/turn`] = "do";
+    // Reset trạng thái chờ cho sạch
     updates[`matches/${roomId}/ready/do`] = false;
     updates[`matches/${roomId}/ready/den`] = false;
     updates[`matches/${roomId}/stakeLocked/do`] = false;
     updates[`matches/${roomId}/stakeLocked/den`] = false;
-
+    updates[`matches/${roomId}/status`] = "waiting";
+    updates[`matches/${roomId}/turn`] = "do";
     updates[`matches/${roomId}/board`] = null;
-    updates[`matches/${roomId}/moveCount`] = 0;
-    updates[`matches/${roomId}/startedAt`] = null;
-    updates[`matches/${roomId}/finishedAt`] = null;
     updates[`matches/${roomId}/lastMoveFrom`] = null;
     updates[`matches/${roomId}/lastMoveTo`] = null;
-
     updates[`matches/${roomId}/winner`] = null;
     updates[`matches/${roomId}/winReason`] = null;
     updates[`matches/${roomId}/drawRequest`] = null;
-
-    // Giữ dấu vết ván cũ, nhưng mở phòng mới sạch
-    updates[`matches/${roomId}/lastSettlement`] = room.settlement || room.lastSettlement || null;
-    updates[`matches/${roomId}/settlement`] = null;
-    updates[`matches/${roomId}/refunds`] = null;
-
     updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
 
-    // Đưa phòng lên lại danh sách phòng chờ với chủ mới
-    const finalBucket = roomBucket || room.roomBucket || makeStakeBucket(room.mode || "co-tuong", stake);
-
-    if (finalBucket) {
-        updates[`waitingRooms/${finalBucket}/${roomId}`] = {
+    // Bàn giao luôn room chờ trong waitingRooms cho chủ mới
+    if (roomBucket) {
+        updates[`waitingRooms/${roomBucket}/${roomId}`] = {
             roomId,
             uid: newHost.uid,
-            name: newHost.name || newHost.displayName || "Người chơi",
+            name: newHost.name || "Người chơi",
             mode: room.mode || "co-tuong",
             stakePMC: stake,
             inviteCode,
@@ -10177,50 +9151,27 @@ if (!newHost || (!newHost.uid && !newHost.walletKey)) return false;
     }
 
     await db.ref().update(updates);
-
-    // Nếu chính máy này là người được bàn giao thì cập nhật local luôn
-    if (isMeRoomPlayer(newHost)) {
-        mySide = "do";
-        currentRoomId = roomId;
-        currentRoomMode = room.mode || currentRoomMode || "co-tuong";
-        currentRoomStakePMC = stake;
-        currentRoomBucket = finalBucket;
-
-        saveActiveMatchSnapshot({
-            roomId,
-            mode: currentRoomMode,
-            side: "do"
-        });
-
-        await setPlayerPresence("arena").catch(() => {});
-    }
-
     return true;
 }
 async function ensureInviteHostControl(roomId = currentRoomId) {
     if (!roomId) return null;
 
+    const me = getCurrentPlayerProfile();
     let roomSnap = await db.ref("matches/" + roomId).once("value");
     let room = roomSnap.val() || {};
 
-    if (!room) return null;
+    if (!room || room.winner) return null;
 
-    // Nếu mình đã là chủ phòng rồi
-    if (isMeRoomPlayer(room?.players?.do)) {
-    return room;
-}
+    // Nếu đã là host rồi thì khỏi làm gì
+    if (room?.players?.do?.uid === me.uid) {
+        return room;
+    }
 
-    // Chỉ người đang ở bên đen/người ở lại mới được tự nhận chủ
-    if (!isMeRoomPlayer(room?.players?.den)) {
-    return room;
-}
-
-    const canTakeHost =
-        room.status === "waiting" ||
-        room.status === "finished" ||
-        !!room.winner;
-
-    if (!canTakeHost) return room;
+    // Chỉ xét cướp quyền host khi:
+    // - mình đang là người được mời (den)
+    // - phòng vẫn đang chờ
+    if (room.status !== "waiting") return room;
+    if (room?.players?.den?.uid !== me.uid) return room;
 
     const oldHost = room?.players?.do || null;
     let oldHostState = null;
@@ -10229,69 +9180,27 @@ async function ensureInviteHostControl(roomId = currentRoomId) {
         oldHostState = (await db.ref("social/playerState/" + oldHost.walletKey).once("value")).val();
     }
 
-    const stateAge = oldHostState?.updatedAt ? (Date.now() - Number(oldHostState.updatedAt || 0)) : 999999;
-
-    // CHỐT LỖI FILE 77:
-    // Nếu chủ cũ đã quitSide do / quitUid là chủ cũ thì coi như đã rời, chuyển host liền.
-    const oldHostQuit =
-        room.quitSide === "do" ||
-        (room.quitUid && oldHost?.uid && room.quitUid === oldHost.uid);
-
-    // Chỉ coi chủ cũ còn giữ phòng khi state thật sự mới và vẫn ở đúng room.
-    // Không dùng mỗi state !== "home" nữa vì Pi Browser hay kẹt arena.
     const hostStillInThisRoom =
-        !oldHostQuit &&
         !!oldHost &&
-        oldHostState?.roomId === roomId &&
-        oldHostState?.state === "arena" &&
-        stateAge < 8000;
-
-    if (!hostStillInThisRoom) {
-        const transferred = await transferWaitingRoomHost(
-            roomId,
-            room,
-            room.roomBucket || currentRoomBucket
+        (
+            oldHostState?.roomId === roomId ||
+            oldHostState?.state === "arena"
         );
 
+    // Host cũ không còn ở room này nữa thì bàn giao
+    if (!hostStillInThisRoom) {
+        const transferred = await transferWaitingRoomHost(roomId, room, room.roomBucket || currentRoomBucket);
         if (transferred) {
             roomSnap = await db.ref("matches/" + roomId).once("value");
             room = roomSnap.val() || {};
-
-            mySide = "do";
-            viewSide = "do";
-            currentRoomId = roomId;
-            currentRoomMode = room.mode || currentRoomMode || "co-tuong";
-            currentRoomStakePMC = pickRoomStakePMC(room) || currentRoomStakePMC;
-            currentRoomBucket = room.roomBucket || currentRoomBucket;
-            currentRoomStatus = "waiting";
-
-            saveActiveMatchSnapshot({
-                roomId,
-                mode: currentRoomMode,
-                side: "do"
-            });
-
-            await setPlayerPresence("arena").catch(() => {});
         }
     }
 
     return room;
 }
 async function maybeSettleStakeRoom(room, roomId) {
-    const stake = Math.max(
-        0,
-        Math.floor(Number(
-            room?.stakePMC ||
-            room?.lastSettlement?.stakePMC ||
-            room?.settlement?.stakePMC ||
-            currentRoomStakePMC ||
-            0
-        ) || 0)
-    );
-    if (!roomId || !room?.winner) return;
-
-    const roundNo = Math.max(1, Math.floor(Number(room?.roundNo || 1) || 1));
-    const roundKey = "round_" + roundNo;
+    const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
+    if (!roomId || !stake || !room?.winner) return;
 
     const doPlayer = room?.players?.do || {};
     const denPlayer = room?.players?.den || {};
@@ -10371,7 +9280,7 @@ if (room.winner !== mySide) {
     return;
 }
 
-const winnerPaidRef = db.ref(`matches/${roomId}/settlements/${roundKey}/winnerPaid`);
+const winnerPaidRef = db.ref(`matches/${roomId}/settlement/winnerPaid`);
 const myProfile = {
     name: localStorage.getItem("user-name-display") || "Người chơi",
     photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
@@ -10381,16 +9290,14 @@ const myWalletKey = localWalletKey;
 const winLock = await Promise.race([
     runRefTransaction(winnerPaidRef, current => {
         if (current && current.done) return;
-return {
-    done: true,
-    roundNo,
-    roundKey,
-    side: mySide,
-    winner: room.winner,
-    stakePMC: stake,
-    at: Date.now(),
-    uid: getCurrentPlayerProfile().uid || ""
-};
+        return {
+            done: true,
+            side: mySide,
+            winner: room.winner,
+            stakePMC: stake,
+            at: Date.now(),
+            uid: getCurrentPlayerProfile().uid || ""
+        };
     }),
     new Promise(resolve => setTimeout(() => resolve({ timeout: true }), 3000))
 ]);
@@ -10403,19 +9310,11 @@ if (!winLock.committed) {
     return;
 }
 
-// Nếu phòng có cược thì ăn pot.
-// Nếu vì lý do nào đó stake = 0, vẫn thưởng thắng để không bị "done nhưng +0".
-const WIN_BONUS_PMC = 20;
-
-const totalPot = stake > 0 ? stake * 2 : WIN_BONUS_PMC;
-
-const feePMC = stake > 0
-    ? Math.max(0, Math.floor(totalPot * MATCH_SYSTEM_FEE_RATE))
-    : 0;
-
+const totalPot = stake * 2;
+const feePMC = Math.max(0, Math.floor(totalPot * MATCH_SYSTEM_FEE_RATE));
 const winnerReceivePMC = totalPot - feePMC;
 const adminWalletKey = "pi_admin_master";
-const settleDebugRef = db.ref(`matches/${roomId}/settlements/${roundKey}/debug`);
+const settleDebugRef = db.ref(`matches/${roomId}/settlement/debug`);
 
 try {
     await settleDebugRef.update({
@@ -10520,51 +9419,23 @@ try {
         at: Date.now()
     });
 
-const settlementUpdates = {};
+    await db.ref(`matches/${roomId}/settlement`).update({
+        paid: true,
+        paidAt: Date.now(),
+        winner: room.winner,
+        stakePMC: stake,
+        totalPot,
+        feePMC,
+        winnerReceivePMC,
+        adminWalletKey
+    });
 
-function writeSettlementField(key, value) {
-    // settlement: dùng cho UI / nút TIẾP TỤC xem nhanh ván mới nhất
-    settlementUpdates[`matches/${roomId}/settlement/${key}`] = value;
+    await settleDebugRef.update({
+        stage: "done",
+        at: Date.now()
+    });
 
-    // settlements/round_X: lưu riêng từng ván, không bị ván 1 khóa ván 2
-    settlementUpdates[`matches/${roomId}/settlements/${roundKey}/${key}`] = value;
-}
-
-writeSettlementField("done", true);
-writeSettlementField("pmcDone", true);
-writeSettlementField("paid", true);
-writeSettlementField("roundNo", roundNo);
-writeSettlementField("roundKey", roundKey);
-writeSettlementField("paidAt", Date.now());
-writeSettlementField("winner", room.winner);
-writeSettlementField("winnerSide", mySide);
-writeSettlementField("winnerWalletKey", myWalletKey);
-writeSettlementField("stakePMC", stake);
-writeSettlementField("winBonusPMC", stake > 0 ? 0 : WIN_BONUS_PMC);
-writeSettlementField("totalPot", totalPot);
-writeSettlementField("feePMC", feePMC);
-writeSettlementField("winnerReceivePMC", winnerReceivePMC);
-writeSettlementField("adminWalletKey", adminWalletKey);
-writeSettlementField("paidBalance", paid);
-
-// Quan trọng: cập nhật lại số PMC của người thắng vào room,
-// để UI không còn hiện 0 sau khi thắng.
-settlementUpdates[`matches/${roomId}/players/${mySide}/walletKey`] = myWalletKey;
-settlementUpdates[`matches/${roomId}/players/${mySide}/pmcBalance`] = paid;
-
-await db.ref().update(settlementUpdates);
-
-await settleDebugRef.update({
-    stage: "done",
-    at: Date.now(),
-    paid
-});
-
-currentPmcBalance = paid;
-localStorage.setItem(getPmcCacheKey(), String(paid));
-updatePmcUI(paid);
-
-await loadWalletBalance().catch(() => {});
+    await loadWalletBalance().catch(() => {});
 } catch (err) {
     console.error("SETTLE THROW:", err);
 
@@ -11463,97 +10334,7 @@ function showReadyOverlay(mode) {
     updateReadyUI();
     startReadyCountdown();
 }
-let hostReadyOverlayPollTimer = null;
 
-function stopHostReadyOverlayPoll() {
-    if (hostReadyOverlayPollTimer) {
-        clearInterval(hostReadyOverlayPollTimer);
-        hostReadyOverlayPollTimer = null;
-    }
-}
-
-function forceShowReadyOverlayIfWaitingRoom(room, roomId = currentRoomId, forceSide = null) {
-    if (!roomId || !room) return false;
-
-   const hasEnoughPlayersWaiting =
-    hasRoomPlayer(room.players?.do) &&
-    hasRoomPlayer(room.players?.den) &&
-    room.status === "waiting" &&
-    !room.winner;
-
-    if (!hasEnoughPlayersWaiting) return false;
-
-    if (forceSide) {
-        mySide = forceSide;
-    } else if (isMeRoomPlayer(room.players.do)) {
-        mySide = "do";
-    } else if (isMeRoomPlayer(room.players.den)) {
-        mySide = "den";
-    }
-
-    if (!mySide) return false;
-
-    viewSide = mySide;
-    currentRoomId = roomId;
-    currentRoomMode = room.mode || currentRoomMode || "co-tuong";
-    currentRoomStatus = "waiting";
-    currentRoomStakePMC = pickRoomStakePMC(room) || currentRoomStakePMC;
-    currentRoomBucket = room.roomBucket || currentRoomBucket;
-
-    readyDo = !!room.ready?.do;
-    readyDen = !!room.ready?.den;
-    readyOverlayWaitingShown = true;
-    isGameOver = false;
-    selectedPiece = null;
-
-    clearMoveHints();
-    clearLastMoveMarks();
-    hideVictoryPopup(true);
-
-    prepareRealtimeArenaUI();
-    renderPlayersFromRoom(room);
-    renderTimerUI();
-
-    saveActiveMatchSnapshot({
-        roomId,
-        mode: currentRoomMode,
-        side: mySide
-    });
-
-    const overlay = document.getElementById("ready-overlay");
-
-    if (!overlay || overlay.style.display !== "flex") {
-        showReadyOverlay(currentRoomMode);
-    } else {
-        updateReadyUI();
-    }
-
-    return true;
-}
-
-function startHostReadyOverlayPoll(roomId = currentRoomId) {
-    stopHostReadyOverlayPoll();
-
-    if (!roomId) return;
-
-    let tick = 0;
-
-    hostReadyOverlayPollTimer = setInterval(async () => {
-        tick++;
-
-        if (!roomId || currentRoomId !== roomId || tick > 60) {
-            stopHostReadyOverlayPoll();
-            return;
-        }
-
-        const snap = await db.ref("matches/" + roomId).once("value").catch(() => null);
-        const room = snap?.val?.();
-
-        if (forceShowReadyOverlayIfWaitingRoom(room, roomId, "do")) {
-            stopHostReadyOverlayPoll();
-        }
-    }, 500);
-}
 async function setReady() {
     if (!currentRoomId || !mySide) return;
 
@@ -12240,8 +11021,8 @@ function formatRoomStakePMC(stake) {
 }
 
 function getRoomLobbyState(room) {
-    const hasDo = hasRoomPlayer(room?.players?.do);
-const hasDen = hasRoomPlayer(room?.players?.den);
+    const hasDo = !!room?.players?.do;
+    const hasDen = !!room?.players?.den;
 
     if (room?.winner) return { text: "Đã xong", cls: "done" };
     if (room?.status === "playing" && hasDo && hasDen) return { text: "Đang trong trận", cls: "playing" };
@@ -12498,115 +11279,10 @@ function renderLobbyRoomList(roomList) {
     syncLobbyRoomTabs(latestLobbyRoomList);
 }
 
-function getRoomLastActiveMs(room = {}) {
-    return Number(
-        room.updatedAt ||
-        room.startedAt ||
-        room.createdAt ||
-        room.created ||
-        0
-    ) || 0;
-}
-
-function getRoomAgeMs(room = {}) {
-    const last = getRoomLastActiveMs(room);
-    if (!last) return Infinity;
-    return Date.now() - last;
-}
-
-function isGhostLobbyRoom(room = {}) {
-    const status = String(room.status || "");
-    const hasDo = !!room?.players?.do;
-    const hasDen = !!room?.players?.den;
-    const age = getRoomAgeMs(room);
-
-    // Không có chủ bàn thì là rác
-    if (!hasDo) return true;
-
-    // Đã xong trận thì không hiện nữa
-    if (room.winner || status === "finished") return true;
-
-    // Phòng chờ quá 15 phút chưa có người vào thì xóa
-    if (status === "waiting" && !hasDen && age > 15 * 60 * 1000) {
-        return true;
-    }
-
-    // Phòng đang chơi mà quá 30 phút không update thì coi là treo
-    if (status === "playing" && age > 30 * 60 * 1000) {
-        return true;
-    }
-
-    return false;
-}
-
-function shouldShowLobbyRoom(room = {}) {
-    const status = String(room.status || "");
-    const hasDo = !!room?.players?.do;
-    const hasDen = !!room?.players?.den;
-
-    if (isGhostLobbyRoom(room)) return false;
-
-    // Chỉ hiện bàn còn thiếu người.
-    // Bàn đang trong trận thì không hiện trong danh sách nữa.
-    return hasDo && !hasDen && status === "waiting";
-}
-
-function getRoomBucketSafe(room = {}) {
-    if (room.roomBucket) return room.roomBucket;
-
-    const mode = room.mode || "co-tuong";
-    const stake = Math.max(0, Math.floor(Number(room.stakePMC || 0) || 0));
-
-    if (typeof makeStakeBucket === "function") {
-        return makeStakeBucket(mode, stake);
-    }
-
-    return `${mode}_${stake}`;
-}
-
-async function cleanupGhostLobbyRoom(roomId, room = {}) {
-    if (!roomId || !isGhostLobbyRoom(room)) return;
-
-    const bucket = getRoomBucketSafe(room);
-    const updates = {};
-
-    updates[`matches/${roomId}`] = null;
-
-    if (bucket) {
-        updates[`waitingRooms/${bucket}/${roomId}`] = null;
-    }
-
-    try {
-        await db.ref().update(updates);
-        console.log("Đã xóa bàn ảo:", roomId);
-    } catch (err) {
-        console.warn("Lỗi xóa bàn ảo:", roomId, err);
-    }
-}
-
-async function cleanupGhostLobbyRoomsOnce() {
-    const snap = await db.ref("matches").orderByChild("createdAt").limitToLast(100).once("value");
-    const jobs = [];
-
-    snap.forEach(child => {
-        const room = child.val() || {};
-        if (isGhostLobbyRoom(room)) {
-            jobs.push(cleanupGhostLobbyRoom(child.key, room));
-        }
-    });
-
-    await Promise.all(jobs);
-    console.log("Dọn bàn ảo xong:", jobs.length);
-}
-
 function bindLobbyRoomList() {
     if (lobbyRoomListRef) {
         lobbyRoomListRef.off();
     }
-
-    cleanupGhostLobbyRoomsOnce().catch(err => {
-        console.warn("cleanupGhostLobbyRoomsOnce lỗi:", err);
-    });
 
     lobbyRoomListRef = db.ref("matches").orderByChild("createdAt").limitToLast(50);
 
@@ -12615,13 +11291,15 @@ function bindLobbyRoomList() {
 
         snap.forEach(child => {
             const room = child.val() || {};
+            const hasDo = !!room?.players?.do;
+            const hasDen = !!room?.players?.den;
 
-            if (isGhostLobbyRoom(room)) {
-                cleanupGhostLobbyRoom(child.key, room);
-                return;
-            }
+            const shouldShow =
+                !room?.winner &&
+                hasDo &&
+                (room?.status === "waiting" || room?.status === "playing");
 
-            if (!shouldShowLobbyRoom(room)) return;
+            if (!shouldShow) return;
 
             roomList.push({
                 id: child.key,
@@ -12633,7 +11311,6 @@ function bindLobbyRoomList() {
         renderLobbyRoomList(roomList);
     });
 }
-
 let friendListRef = null;
 let friendRequestRef = null;
 let friendSentRef = null;
@@ -12819,9 +11496,9 @@ function renderFriendList() {
 
             <div class="friend-accepted-actions">
                 <button class="friend-mini-btn friend-invite-btn"
-        onclick="inviteFriendToRoom('${item.walletKey}', '${escapeFriendHtml(item.displayName || item.username || "Bạn bè")}')">
-    THÁCH ĐẤU
-</button>
+                        onclick="inviteFriendToRoom('${item.walletKey}', '${escapeFriendHtml(item.displayName || item.username || "Bạn bè")}')">
+                    MỜI
+                </button>
 
                 <button class="friend-trash-btn"
                         onclick="removeFriend('${item.walletKey}')"
@@ -13181,9 +11858,9 @@ function renderArenaFriendInviteList() {
                     <div class="arena-friend-sub">Bấm mời để vào đúng phòng đang chờ</div>
                 </div>
                 <button class="arena-friend-invite-btn"
-        onclick="inviteFriendToRoom('${item.walletKey}', '${escapeFriendHtml(item.displayName || item.username || "Bạn bè")}')">
-    THÁCH ĐẤU
-</button>
+                        onclick="inviteFriendToRoom('${item.walletKey}', '${escapeFriendHtml(item.displayName || item.username || "Bạn bè")}')">
+                    MỜI
+                </button>
             </div>
         `).join("");
 
@@ -13356,153 +12033,6 @@ async function declineRoomInvite(reason = "declined") {
     activeRoomInvite = null;
     renderRoomInviteOverlay();
 }
-async function joinRoomFromInviteDirect(invite) {
-    const checked = await normalizeInvitedRoomBeforeJoin(invite);
-
-    if (!checked.ok) {
-        alert(checked.message || "Không vào được phòng.");
-        return false;
-    }
-
-    const roomId = invite.roomId;
-    const room = checked.room;
-
-    const me = getCurrentPlayerProfile();
-    me.levelMeta = typeof getCachedLevelMeta === "function"
-        ? getCachedLevelMeta()
-        : (me.levelMeta || {});
-
-    const stakePMC = pickRoomStakePMC(room, invite.stakePMC);
-    const mode = room.mode || invite.mode || "co-tuong";
-    const bucket = room.roomBucket || invite.roomBucket || makeStakeBucket(mode, stakePMC);
-    const inviteCode = String(room.inviteCode || invite.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
-
-    if (!hasRoomPlayer(room.players?.do)) {
-        alert("Phòng này chưa có chủ bàn.");
-        return false;
-    }
-
-    // Nếu mình đã nằm trong phòng rồi thì chỉ bind lại.
-    if (isMeRoomPlayer(room.players?.do) || isMeRoomPlayer(room.players?.den)) {
-        currentRoomId = roomId;
-        currentRoomMode = mode;
-        currentRoomStakePMC = stakePMC;
-        currentRoomBucket = bucket;
-        currentRoomStatus = "waiting";
-        mySide = isMeRoomPlayer(room.players?.do) ? "do" : "den";
-        viewSide = mySide || "do";
-
-        saveActiveMatchSnapshot({
-            roomId,
-            mode,
-            side: mySide
-        });
-
-        prepareRealtimeArenaUI();
-        clearInterval(interval);
-        bindRoom(roomId);
-        return true;
-    }
-
-    if (hasRoomPlayer(room.players?.den)) {
-        alert("Phòng này vừa đủ người.");
-        return false;
-    }
-
-    if ((me.pmcBalance || 0) < stakePMC) {
-        alert("PMC không đủ để nhận thách đấu này.");
-        return false;
-    }
-
-    const denRef = db.ref("matches/" + roomId + "/players/den");
-
-    const joined = await denRef.transaction(current => {
-        const currentHasPlayer = hasRoomPlayer(current);
-
-        if (currentHasPlayer) {
-            const sameUid = current.uid && me.uid && String(current.uid) === String(me.uid);
-            const sameWallet = current.walletKey && me.walletKey && String(current.walletKey) === String(me.walletKey);
-
-            if (sameUid || sameWallet) return current;
-            return;
-        }
-
-        return {
-            ...me,
-            role: "guest",
-            joinedByInvite: true,
-            joinedAt: Date.now()
-        };
-    }, undefined, false);
-
-    if (!joined.committed) {
-        alert("Không vào được bàn này, có thể vừa đủ người.");
-        return false;
-    }
-
-    const updates = {};
-    updates[`matches/${roomId}/ready/do`] = false;
-    updates[`matches/${roomId}/ready/den`] = false;
-    updates[`matches/${roomId}/stakeLocked/den`] = false;
-    updates[`matches/${roomId}/status`] = "waiting";
-    updates[`matches/${roomId}/winner`] = null;
-    updates[`matches/${roomId}/winReason`] = null;
-    updates[`matches/${roomId}/stakePMC`] = stakePMC;
-    updates[`matches/${roomId}/originalStakePMC`] = stakePMC;
-    updates[`matches/${roomId}/roomBucket`] = bucket;
-    updates[`matches/${roomId}/inviteCode`] = inviteCode;
-    updates[`matches/${roomId}/quitSide`] = null;
-    updates[`matches/${roomId}/quitUid`] = null;
-    updates[`matches/${roomId}/quitAt`] = null;
-    updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
-
-    if (bucket) {
-        updates[`waitingRooms/${bucket}/${roomId}/claimedBy`] = null;
-        updates[`waitingRooms/${bucket}/${roomId}/claimedAt`] = null;
-    }
-
-    await db.ref().update(updates);
-
-    mySide = "den";
-    viewSide = "den";
-    currentRoomId = roomId;
-    currentRoomMode = mode;
-    currentRoomStakePMC = stakePMC;
-    currentRoomBucket = bucket;
-    currentRoomStatus = "waiting";
-    isGameOver = false;
-
-    saveActiveMatchSnapshot({
-        roomId,
-        mode,
-        side: "den"
-    });
-
-    await setPlayerPresence("arena").catch(() => {});
-
-    prepareRealtimeArenaUI();
-    clearInterval(interval);
-    bindRoom(roomId);
-
-    readyOverlayWaitingShown = false;
-
-    setTimeout(() => {
-        updateReadyUI();
-
-        const overlay = document.getElementById("ready-overlay");
-        if (
-            currentRoomId === roomId &&
-            mySide === "den" &&
-            currentRoomStatus === "waiting" &&
-            overlay &&
-            overlay.style.display !== "flex"
-        ) {
-            showReadyOverlay(currentRoomMode || mode);
-        }
-    }, 250);
-
-    return true;
-}
 async function acceptRoomInvite() {
     if (!activeRoomInvite) return;
 
@@ -13514,34 +12044,34 @@ async function acceptRoomInvite() {
         return;
     }
 
-    const checked = await normalizeInvitedRoomBeforeJoin(invite);
+    const roomSnap = await db.ref("matches/" + invite.roomId).once("value");
+    const room = roomSnap.val();
 
-    if (!checked.ok) {
-        await declineRoomInvite(checked.reason || "room_busy");
-        alert(checked.message || "Phòng này không còn ở trạng thái chờ.");
+    if (!room) {
+        await declineRoomInvite("room_missing");
+        alert("Phòng này không còn.");
         return;
     }
 
-    const joined = await joinRoomFromInviteDirect(invite);
-
-    if (!joined) {
+    if (room.winner || room.status !== "waiting" || room?.players?.den) {
+        await declineRoomInvite("room_busy");
+        alert("Phòng này không còn ở trạng thái chờ.");
         return;
     }
 
     const meFriend = getCurrentFriendProfile();
     const updates = {};
-
     updates[`social/roomInvitesInbox/${meFriend.walletKey}/${invite.inviteId}`] = null;
     updates[`social/roomInvitesSent/${invite.fromWalletKey}/${invite.inviteId}`] = {
         ...invite,
         status: "accepted",
         acceptedAt: Date.now()
     };
-
     await db.ref().update(updates);
-
+    
     activeRoomInvite = null;
     renderRoomInviteOverlay();
+    await joinRoomFromLobby(invite.roomId);
 }
 
 async function inviteFriendToRoom(walletKey, displayName) {
@@ -13566,10 +12096,10 @@ async function inviteFriendToRoom(walletKey, displayName) {
             return;
         }
 
-        if (!isMeRoomPlayer(room?.players?.do)) {
-    alert("Chỉ chủ phòng mới mời bạn bè vào được.");
-    return;
-}
+        if (room?.players?.do?.uid !== meGame.uid) {
+            alert("Chỉ chủ phòng mới mời bạn bè vào được.");
+            return;
+        }
 
         const reallyBusy = await isPlayerActuallyBusy(walletKey);
 if (reallyBusy) {
@@ -13602,36 +12132,8 @@ if (reallyBusy) {
         updates[`social/roomInvitesSent/${me.walletKey}/${inviteId}`] = payload;
 
         await db.ref().update(updates);
-
-// Giữ B ở đúng room, đúng vai chủ phòng sau khi gửi lời mời.
-// Tránh Pi Browser bị mất local state rồi tưởng B không còn là chủ.
-mySide = "do";
-viewSide = "do";
-currentRoomId = currentRoomId || room.roomId;
-currentRoomMode = room.mode || currentRoomMode || "co-tuong";
-currentRoomStakePMC = Math.max(0, Math.floor(Number(room.stakePMC || currentRoomStakePMC || 0) || 0));
-currentRoomBucket = room.roomBucket || currentRoomBucket;
-currentRoomStatus = "waiting";
-
-saveActiveMatchSnapshot({
-    roomId: currentRoomId,
-    mode: currentRoomMode,
-    side: "do"
-});
-
-await setPlayerPresence("arena").catch(() => {});
-
-// Bảo đảm listener phòng vẫn còn sống.
-prepareRealtimeArenaUI();
-bindRoom(currentRoomId);
-
-// CHỐT LỖI B KHÔNG NỔI BẢNG SS:
-// Sau khi B mời A/C, nếu Pi Browser không tự bắn realtime,
-// poll thẳng Firebase tới khi players/den xuất hiện thì ép B bật bảng SS.
-startHostReadyOverlayPoll(currentRoomId);
-
-alert("Đã gửi lời mời vào phòng cho " + (displayName || "bạn bè") + "!");
-closeArenaFriendBox();
+        alert("Đã gửi lời mời vào phòng cho " + (displayName || "bạn bè") + "!");
+        closeArenaFriendBox();
     } catch (err) {
         console.error("Lỗi inviteFriendToRoom:", err);
         alert("Mời vào phòng lỗi.");
@@ -14368,58 +12870,6 @@ document.addEventListener("click", function(e) {
     font-size: 12px;
     color: #f7e7b1;
 }
-/* --- CLICK TRANG QUẢNG CÁO ĐỂ ĐI TỚI KHU TƯƠNG ỨNG --- */
-.ad-book-page {
-    cursor: pointer;
-}
-
-.ad-book-page.active {
-    z-index: 2;
-}
-
-.ad-book-cta {
-    width: fit-content;
-    max-width: 100%;
-    margin: 3px auto 0;
-    padding: 7px 12px;
-    border-radius: 999px;
-    background: linear-gradient(180deg, #6d28d9, #3b0764);
-    border: 1px solid rgba(85,239,196,0.45);
-    color: #fff8d6;
-    font-size: 10px;
-    font-weight: 900;
-    letter-spacing: 0.5px;
-    transition: 0.18s ease;
-    box-shadow: 0 0 10px rgba(109,40,217,0.28);
-}
-
-.ad-book-page:hover .ad-book-cta {
-    transform: scale(1.05);
-    box-shadow: 0 0 14px rgba(85,239,196,0.36);
-}
-
-.ad-book-dot {
-    cursor: pointer;
-}
-
-.ad-target-flash {
-    animation: adTargetFlash 0.7s ease-in-out 2;
-}
-
-@keyframes adTargetFlash {
-    0% {
-        box-shadow: 0 0 0 rgba(85,239,196,0);
-        transform: scale(1);
-    }
-    50% {
-        box-shadow: 0 0 28px rgba(85,239,196,0.65);
-        transform: scale(1.02);
-    }
-    100% {
-        box-shadow: 0 0 0 rgba(85,239,196,0);
-        transform: scale(1);
-    }
-}
 @media (max-width: 768px) {
     .mission-summary-grid,
     .mission-top-tabs,
@@ -15117,509 +13567,8 @@ window.applyCosmeticSkinToAvatar = function(imgEl, skinId){
     }, 30000);
   });
 })();
-function openAdBookTarget(target) {
-    if (!target) return;
-
-    if (typeof closeActionMenu === "function") {
-        closeActionMenu();
-    }
-
-    if (target === "games") {
-        const el =
-            document.querySelector(".desktop-game-grid") ||
-            document.getElementById("mobile-game-row");
-
-        if (el) {
-            el.classList.add("ad-target-flash");
-            setTimeout(() => el.classList.remove("ad-target-flash"), 1500);
-
-            if (typeof el.scrollIntoView === "function") {
-                el.scrollIntoView({ behavior: "smooth", block: "center" });
-            }
-        }
-        return;
-    }
-
-    if (target === "mission-day") {
-        if (typeof openMissionHub === "function") {
-            openMissionHub();
-            setTimeout(() => {
-                if (typeof switchMissionTab === "function") {
-                    switchMissionTab("day");
-                }
-            }, 300);
-        }
-        return;
-    }
-
-    if (target === "mission-referral") {
-        if (typeof openMissionHub === "function") {
-            openMissionHub();
-            setTimeout(() => {
-                if (typeof switchMissionTab === "function") {
-                    switchMissionTab("referral");
-                }
-            }, 300);
-        }
-        return;
-    }
-
-    if (target === "ranking") {
-        if (typeof openRankingModal === "function") {
-            openRankingModal({
-                stopPropagation: function () {},
-                preventDefault: function () {}
-            });
-        } else {
-            const rankCard =
-                document.querySelector(".desktop-ranking-panel") ||
-                document.querySelector(".mobile-rank-card");
-
-            if (rankCard) {
-                rankCard.classList.add("ad-target-flash");
-                setTimeout(() => rankCard.classList.remove("ad-target-flash"), 1500);
-            }
-        }
-        return;
-    }
-
-    if (target === "shop") {
-        if (typeof openSkinShop === "function") {
-            openSkinShop();
-        } else {
-            const shopBtn = document.getElementById("arena-shop-btn");
-            if (shopBtn) shopBtn.click();
-        }
-    }
-}
-
-function initAdBookSlider() {
-    const books = document.querySelectorAll(".ad-book-zone");
-    if (!books.length) return;
-
-    const targets = [
-        "games",
-        "mission-day",
-        "mission-referral",
-        "ranking",
-        "shop"
-    ];
-
-    const ctaTexts = [
-        "BẤM ĐỂ CHỌN GAME ➜",
-        "BẤM ĐỂ MỞ NHIỆM VỤ ➜",
-        "BẤM ĐỂ XEM MỜI BẠN ➜",
-        "BẤM ĐỂ XEM BÀN / TOP ➜",
-        "BẤM ĐỂ MỞ SHOP ➜"
-    ];
-
-    books.forEach((book) => {
-        if (book.dataset.adBookReady === "1") return;
-        book.dataset.adBookReady = "1";
-
-        const pages = Array.from(book.querySelectorAll(".ad-book-page"));
-        const dotsBox = book.querySelector(".ad-book-dots");
-        if (!pages.length || !dotsBox) return;
-
-        let current = Math.max(0, pages.findIndex(p => p.classList.contains("active")));
-        if (current < 0) current = 0;
-
-        pages.forEach((page, index) => {
-            page.dataset.target = targets[index] || "";
-
-            if (!page.querySelector(".ad-book-cta")) {
-                const cta = document.createElement("div");
-                cta.className = "ad-book-cta";
-                cta.textContent = ctaTexts[index] || "BẤM ĐỂ ĐI TỚI ➜";
-                page.appendChild(cta);
-            }
-
-            page.onclick = function () {
-                openAdBookTarget(page.dataset.target);
-            };
-        });
-
-        dotsBox.innerHTML = pages.map((_, i) => {
-            return `<span class="ad-book-dot ${i === current ? "active" : ""}"></span>`;
-        }).join("");
-
-        const dots = Array.from(dotsBox.querySelectorAll(".ad-book-dot"));
-
-        function showPage(next) {
-            if (next === current) return;
-
-            const oldIndex = current;
-
-            pages[oldIndex].classList.remove("active");
-            pages[oldIndex].classList.add("leaving");
-            dots[oldIndex]?.classList.remove("active");
-
-            pages[next].classList.remove("leaving");
-            pages[next].classList.add("active");
-            dots[next]?.classList.add("active");
-
-            current = next;
-
-            setTimeout(() => {
-                pages[oldIndex]?.classList.remove("leaving");
-            }, 780);
-        }
-
-        dots.forEach((dot, i) => {
-            dot.onclick = (e) => {
-                e.stopPropagation();
-                showPage(i);
-            };
-        });
-
-        setInterval(() => {
-            const next = (current + 1) % pages.length;
-            showPage(next);
-        }, 10000);
-    });
-}
-
-document.addEventListener("DOMContentLoaded", initAdBookSlider);
-(function () {
-    const TOP_TABS = {
-        wins: {
-            label: "🏆 THẮNG NGÀY",
-            field: "todayWins",
-            suffix: " trận"
-        },
-        exp: {
-            label: "⚡ EXP",
-            field: "exp",
-            suffix: " EXP"
-        },
-        asset: {
-            label: "💰 TÀI SẢN",
-            field: "asset",
-            suffix: " PMC"
-        },
-        skin: {
-            label: "💎 SKIN",
-            field: "skin",
-            suffix: " skin"
-        },
-        online: {
-            label: "🟢 ONLINE",
-            field: "online",
-            suffix: " phút"
-        }
-    };
-
-    function safeTopKey() {
-        try {
-            if (typeof makeWalletDbKey === "function") return makeWalletDbKey();
-        } catch (_) {}
-
-        return String(
-            localStorage.getItem("walletKey") ||
-            localStorage.getItem("pi-username") ||
-            localStorage.getItem("user-name-display") ||
-            "guest"
-        ).replace(/[.#$\[\]\/]/g, "_");
-    }
-
-    function topTodayKey() {
-        const d = new Date();
-        return [
-            d.getFullYear(),
-            String(d.getMonth() + 1).padStart(2, "0"),
-            String(d.getDate()).padStart(2, "0")
-        ].join("-");
-    }
-
-    function topName() {
-        return (
-            localStorage.getItem("user-name-display") ||
-            localStorage.getItem("pi-username") ||
-            "Người chơi"
-        );
-    }
-
-    function topNumber(v) {
-        return Math.max(0, Math.floor(Number(v) || 0));
-    }
-
-    function ensureTopButton() {
-        if (!document.getElementById("arena-top-btn")) {
-            const btn = document.createElement("div");
-            btn.id = "arena-top-btn";
-            btn.title = "Bảng vinh danh";
-            btn.innerHTML = "🏆";
-            btn.onclick = openTopLeaderboardModal;
-            document.body.appendChild(btn);
-        }
-
-        refreshTopButtonVisible();
-    }
-
-    function ensureTopModal() {
-        if (document.getElementById("top-leaderboard-modal")) return;
-
-        const modal = document.createElement("div");
-        modal.id = "top-leaderboard-modal";
-        modal.onclick = function (e) {
-            if (e.target === modal) closeTopLeaderboardModal();
-        };
-
-        modal.innerHTML = `
-            <div class="top-leaderboard-box">
-                <div class="top-leaderboard-header">
-                    <span>🏆 BẢNG VINH DANH</span>
-                    <span class="top-leaderboard-close" onclick="closeTopLeaderboardModal()">✖</span>
-                </div>
-
-                <div class="top-tabs">
-                    ${Object.keys(TOP_TABS).map((key, index) => `
-                        <button class="top-tab-btn ${index === 0 ? "active" : ""}"
-                                onclick="renderTopLeaderboard('${key}', this)">
-                            ${TOP_TABS[key].label}
-                        </button>
-                    `).join("")}
-                </div>
-
-                <div id="top-leaderboard-list">
-                    <div class="top-empty">Đang tải bảng vinh danh...</div>
-                </div>
-            </div>
-        `;
-
-        document.body.appendChild(modal);
-    }
-
-    function refreshTopButtonVisible() {
-        const btn = document.getElementById("arena-top-btn");
-        if (!btn) return;
-
-        const home = document.getElementById("home-menu");
-        const login = document.getElementById("login-screen");
-        const inMatch = document.body.classList.contains("in-match");
-
-        const loginVisible = login && getComputedStyle(login).display !== "none";
-        const homeVisible = home && getComputedStyle(home).display !== "none";
-
-        btn.style.display = (!inMatch && !loginVisible && homeVisible) ? "flex" : "none";
-    }
-
-    async function syncMyTopProfile() {
-        if (!window.db) return;
-
-        const walletKey = safeTopKey();
-        const pi = typeof getPiBalance === "function" ? Number(getPiBalance() || 0) : 0;
-        const pmc = typeof getPmcBalance === "function" ? Number(getPmcBalance() || 0) : 0;
-        const rate = typeof PMC_RATE === "number" ? PMC_RATE : 500;
-
-        let exp = 0;
-        try {
-            if (typeof getCachedLevelMeta === "function") {
-                const meta = getCachedLevelMeta() || {};
-                exp = topNumber(meta.xp || meta.exp || 0);
-            }
-        } catch (_) {}
-
-        await db.ref("leaderboards/topPlayers/" + walletKey).update({
-            walletKey,
-            name: topName(),
-            exp,
-            asset: topNumber(pmc + pi * rate),
-            updatedAt: Date.now()
-        });
-    }
-
-    function getTopDb() {
-    if (window.db) return window.db;
-
-    try {
-        if (typeof db !== "undefined") return db;
-    } catch (_) {}
-
-    return null;
-}
-
-function escapeTopHtml(text) {
-    return String(text || "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#39;");
-}
-
-function getTopSkinCount() {
-    // Tạm lấy từ biến nếu shop có cập nhật. Chưa có thì = 0 để không lỗi.
-    return topNumber(
-        window.__rankSkinCount ||
-        localStorage.getItem("rankSkinCount") ||
-        0
-    );
-}
-
-function getTopOnlineMinutes() {
-    const key = "topOnlineMinutes_" + topTodayKey();
-    return topNumber(localStorage.getItem(key) || 0);
-}
-
-async function syncMyTopProfile() {
-    const dbx = getTopDb();
-    if (!dbx) return;
-
-    const walletKey = safeTopKey();
-
-    const pi = typeof getPiBalance === "function" ? Number(getPiBalance() || 0) : 0;
-    const pmc = typeof getPmcBalance === "function" ? Number(getPmcBalance() || 0) : 0;
-    const rate = typeof PMC_RATE === "number" ? PMC_RATE : 500;
-
-    let exp = 0;
-
-    try {
-        if (typeof getCachedLevelMeta === "function") {
-            const meta = getCachedLevelMeta() || {};
-            exp = topNumber(meta.xp || meta.exp || 0);
-        }
-    } catch (_) {}
-
-    const profile = {
-        walletKey,
-        name: topName(),
-        exp: topNumber(exp),
-        asset: topNumber(pmc + pi * rate),
-        skin: getTopSkinCount(),
-        online: getTopOnlineMinutes(),
-        todayWins: topNumber(localStorage.getItem("topTodayWins_" + topTodayKey()) || 0),
-        onlineDate: topTodayKey(),
-        updatedAt: Date.now()
-    };
-
-    // Không để lỗi ghi dữ liệu làm sập bảng top
-    try {
-        await dbx.ref("leaderboards/topPlayers/" + walletKey).update(profile);
-    } catch (err) {
-        console.warn("SYNC_TOP_PROFILE_FAIL:", err && err.message ? err.message : err);
-    }
-}
-
-async function renderTopLeaderboard(type = "wins", clickedBtn) {
-    ensureTopModal();
-
-    document.querySelectorAll(".top-tab-btn").forEach(btn => btn.classList.remove("active"));
-    if (clickedBtn) clickedBtn.classList.add("active");
-
-    const box = document.getElementById("top-leaderboard-list");
-    if (!box) return;
-
-    const tab = TOP_TABS[type] || TOP_TABS.wins;
-    box.innerHTML = `<div class="top-empty">Đang tải ${tab.label}...</div>`;
-
-    try {
-        const dbx = getTopDb();
-
-        if (!dbx) {
-            box.innerHTML = `<div class="top-empty">Chưa lấy được Firebase db.</div>`;
-            return;
-        }
-
-        await syncMyTopProfile();
-
-        let rows = [];
-
-        if (type === "wins") {
-            // Đọc thắng ngày trước
-            const snap = await dbx.ref("leaderboards/dailyWins/" + topTodayKey()).once("value");
-
-            snap.forEach(child => {
-                const v = child.val() || {};
-                rows.push({
-                    key: child.key,
-                    name: v.name || "Người chơi",
-                    value: topNumber(v.wins || v.todayWins || 0)
-                });
-            });
-
-            // Nếu chưa có nhánh dailyWins thì lấy tạm todayWins trong topPlayers
-            if (!rows.length) {
-                const snap2 = await dbx.ref("leaderboards/topPlayers").once("value");
-                snap2.forEach(child => {
-                    const v = child.val() || {};
-                    rows.push({
-                        key: child.key,
-                        name: v.name || "Người chơi",
-                        value: topNumber(v.todayWins || 0)
-                    });
-                });
-            }
-        } else {
-            // Không dùng orderByChild nữa để tránh lỗi index/rules
-            const snap = await dbx.ref("leaderboards/topPlayers").once("value");
-
-            snap.forEach(child => {
-                const v = child.val() || {};
-                rows.push({
-                    key: child.key,
-                    name: v.name || "Người chơi",
-                    value: topNumber(v[tab.field] || 0)
-                });
-            });
-        }
-
-        rows.sort((a, b) => b.value - a.value);
-
-        if (!rows.length) {
-            box.innerHTML = `<div class="top-empty">Chưa có dữ liệu. Chơi vài trận là lên bảng.</div>`;
-            return;
-        }
-
-        box.innerHTML = rows.slice(0, 50).map((row, index) => `
-            <div class="top-row">
-                <strong>#${index + 1}</strong>
-                <div class="top-name">${escapeTopHtml(row.name)}</div>
-                <div class="top-value">${topNumber(row.value).toLocaleString("vi-VN")}${tab.suffix}</div>
-            </div>
-        `).join("");
-    } catch (err) {
-        console.error("LOAD_TOP_FAIL", err);
-
-        const msg = err && err.message ? err.message : "Không rõ lỗi";
-        box.innerHTML = `
-            <div class="top-empty">
-                Lỗi tải bảng top:<br>
-                ${escapeTopHtml(msg)}
-            </div>
-        `;
-    }
-}
-    function openTopLeaderboardModal(event) {
-        if (event && event.stopPropagation) event.stopPropagation();
-
-        ensureTopModal();
-
-        const modal = document.getElementById("top-leaderboard-modal");
-        if (modal) modal.classList.add("show");
-
-        renderTopLeaderboard("wins");
-    }
-
-    function closeTopLeaderboardModal() {
-        const modal = document.getElementById("top-leaderboard-modal");
-        if (modal) modal.classList.remove("show");
-    }
-
-    window.openTopLeaderboardModal = openTopLeaderboardModal;
-    window.closeTopLeaderboardModal = closeTopLeaderboardModal;
-    window.renderTopLeaderboard = renderTopLeaderboard;
-    window.refreshTopButtonVisible = refreshTopButtonVisible;
-
-    document.addEventListener("DOMContentLoaded", function () {
-        ensureTopButton();
-        ensureTopModal();
-
-        setTimeout(refreshTopButtonVisible, 800);
-        setInterval(refreshTopButtonVisible, 1500);
-    });
-})();
 </script>
+
 </body>
 
 </html>
