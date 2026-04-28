@@ -3914,51 +3914,284 @@ margin-bottom: 14px;
     }
 }
 /* ===== SHOP SKIN VIỀN AVATAR ===== */
-.avatar-skin-img {
-    border-radius: 50% !important;
-    object-fit: cover !important;
-    border-style: solid !important;
-    border-width: 2px !important;
-    transition: 0.18s ease;
-}
-
 .avatar-skin-none {
     border-color: #55efc4 !important;
     box-shadow: 0 0 8px rgba(85,239,196,0.35) !important;
 }
-
-.avatar-skin-bronze {
-    border-color: #cd7f32 !important;
-    box-shadow:
-        0 0 8px rgba(205,127,50,0.9),
-        0 0 16px rgba(255,179,71,0.35) !important;
+/* ===== AVATAR FRAME SHELL ===== */
+.avatar-frame-shell {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    flex-shrink: 0;
 }
 
-.avatar-skin-jade {
-    border-color: #00ff9d !important;
-    box-shadow:
-        0 0 9px rgba(0,255,157,0.95),
-        0 0 20px rgba(0,255,157,0.45) !important;
+.avatar-core {
+    width: 100%;
+    height: 100%;
+    object-fit: cover !important;
+    border-radius: 50% !important;
+    position: relative;
+    z-index: 2;
+    background: #111;
+    border: 2px solid rgba(255,255,255,0.92);
+    box-sizing: border-box;
 }
 
-.avatar-skin-dragon {
-    border-color: #f4c542 !important;
-    box-shadow:
-        0 0 10px rgba(244,197,66,0.95),
-        0 0 24px rgba(255,72,0,0.5),
-        0 0 34px rgba(255,0,0,0.28) !important;
-    animation: avatarDragonPulse 1.2s infinite alternate;
+.avatar-frame-shell::before {
+    content: "";
+    position: absolute;
+    inset: -7px;
+    border-radius: 50%;
+    z-index: 1;
+    pointer-events: none;
 }
 
-.avatar-skin-phoenix {
-    border-color: #ff3bd4 !important;
-    box-shadow:
-        0 0 10px rgba(255,59,212,0.95),
-        0 0 24px rgba(168,85,247,0.55),
-        0 0 34px rgba(255,209,102,0.35) !important;
-    animation: avatarPhoenixPulse 1.15s infinite alternate;
+.frame-ornament {
+    position: absolute;
+    z-index: 4;
+    pointer-events: none;
 }
 
+.frame-ornament::before {
+    display: block;
+    line-height: 1;
+    text-align: center;
+    filter: drop-shadow(0 0 6px rgba(255,255,255,0.25));
+}
+
+.frame-top {
+    top: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.frame-left {
+    left: -10px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.frame-right {
+    right: -10px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.frame-bottom {
+    bottom: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+/* ===== MẶC ĐỊNH ===== */
+.frame-none::before {
+    background:
+        radial-gradient(circle, rgba(85,239,196,0.18), rgba(85,239,196,0.04) 68%, transparent 72%);
+    border: 2px solid #55efc4;
+    box-shadow: 0 0 10px rgba(85,239,196,0.32);
+}
+
+.frame-none .frame-ornament::before {
+    content: "";
+}
+
+/* ===== ĐỒNG - vương miện nhỏ + hoa văn ===== */
+.frame-bronze::before {
+    background:
+        repeating-conic-gradient(
+            from 0deg,
+            rgba(255,214,153,0.25) 0deg 12deg,
+            rgba(120,60,20,0.05) 12deg 24deg
+        ),
+        radial-gradient(circle, rgba(255,220,170,0.10), transparent 70%);
+    border: 3px solid #cd7f32;
+    box-shadow:
+        0 0 10px rgba(205,127,50,0.7),
+        0 0 18px rgba(255,179,71,0.25);
+}
+
+.frame-bronze .frame-top::before {
+    content: "♛";
+    font-size: 16px;
+    color: #ffd48a;
+}
+
+.frame-bronze .frame-left::before,
+.frame-bronze .frame-right::before {
+    content: "❖";
+    font-size: 12px;
+    color: #e9b36f;
+}
+
+.frame-bronze .frame-bottom::before {
+    content: "◈";
+    font-size: 12px;
+    color: #f8c27b;
+}
+
+/* ===== NGỌC - hoa văn lá/ngọc ===== */
+.frame-jade::before {
+    background:
+        radial-gradient(circle at 50% 50%, rgba(0,255,157,0.10), transparent 68%),
+        repeating-conic-gradient(
+            from 0deg,
+            rgba(0,255,157,0.20) 0deg 14deg,
+            rgba(0,70,40,0.05) 14deg 28deg
+        );
+    border: 3px solid #00ff9d;
+    box-shadow:
+        0 0 12px rgba(0,255,157,0.95),
+        0 0 22px rgba(0,255,157,0.35);
+}
+
+.frame-jade .frame-top::before {
+    content: "❀";
+    font-size: 16px;
+    color: #b7ffe0;
+}
+
+.frame-jade .frame-left::before,
+.frame-jade .frame-right::before {
+    content: "❧";
+    font-size: 16px;
+    color: #8effcf;
+}
+
+.frame-jade .frame-right::before {
+    transform: scaleX(-1);
+}
+
+.frame-jade .frame-bottom::before {
+    content: "◉";
+    font-size: 12px;
+    color: #c4ffe8;
+}
+
+/* ===== LONG VƯƠNG - đầu rồng + móng ôm + ngọc ===== */
+.frame-dragon::before {
+    background:
+        radial-gradient(circle at 50% 15%, rgba(255,225,120,0.18), transparent 35%),
+        radial-gradient(circle at 16% 50%, rgba(255,120,0,0.12), transparent 28%),
+        radial-gradient(circle at 84% 50%, rgba(255,120,0,0.12), transparent 28%),
+        repeating-conic-gradient(
+            from 0deg,
+            rgba(255,210,90,0.26) 0deg 12deg,
+            rgba(140,50,0,0.06) 12deg 24deg
+        );
+    border: 3px solid #f4c542;
+    box-shadow:
+        0 0 14px rgba(244,197,66,0.95),
+        0 0 26px rgba(255,72,0,0.42),
+        0 0 34px rgba(255,0,0,0.20);
+    animation: dragonFramePulse 1.15s infinite alternate;
+}
+
+.frame-dragon .frame-top::before {
+    content: "龍";
+    font-size: 18px;
+    color: #ffe18a;
+    background: radial-gradient(circle, rgba(140,50,0,0.85), rgba(60,20,0,0.2));
+    border-radius: 999px;
+    padding: 2px 7px;
+    border: 1px solid rgba(255,220,120,0.65);
+}
+
+.frame-dragon .frame-left::before,
+.frame-dragon .frame-right::before {
+    content: "❧";
+    font-size: 20px;
+    color: #ffcf66;
+}
+
+.frame-dragon .frame-left::before {
+    transform: rotate(-35deg);
+}
+
+.frame-dragon .frame-right::before {
+    transform: scaleX(-1) rotate(-35deg);
+}
+
+.frame-dragon .frame-bottom::before {
+    content: "◉";
+    font-size: 14px;
+    color: #ffd85b;
+    text-shadow: 0 0 10px rgba(255,216,91,0.65);
+}
+
+/* ===== PHƯỢNG HOÀNG - mão + cánh lửa ===== */
+.frame-phoenix::before {
+    background:
+        radial-gradient(circle at 50% 18%, rgba(255,230,120,0.16), transparent 34%),
+        radial-gradient(circle at 18% 50%, rgba(255,60,190,0.14), transparent 26%),
+        radial-gradient(circle at 82% 50%, rgba(255,60,190,0.14), transparent 26%),
+        repeating-conic-gradient(
+            from 0deg,
+            rgba(255,100,220,0.24) 0deg 13deg,
+            rgba(100,30,120,0.06) 13deg 26deg
+        );
+    border: 3px solid #ff3bd4;
+    box-shadow:
+        0 0 14px rgba(255,59,212,0.95),
+        0 0 26px rgba(168,85,247,0.45),
+        0 0 34px rgba(255,180,80,0.16);
+    animation: phoenixFramePulse 1.1s infinite alternate;
+}
+
+.frame-phoenix .frame-top::before {
+    content: "鳳";
+    font-size: 18px;
+    color: #ffe9a0;
+    background: radial-gradient(circle, rgba(130,20,110,0.82), rgba(60,10,50,0.22));
+    border-radius: 999px;
+    padding: 2px 7px;
+    border: 1px solid rgba(255,220,150,0.65);
+}
+
+.frame-phoenix .frame-left::before,
+.frame-phoenix .frame-right::before {
+    content: "✦";
+    font-size: 18px;
+    color: #ffb7f0;
+}
+
+.frame-phoenix .frame-left::before {
+    transform: rotate(-18deg) scale(1.2, 1);
+}
+
+.frame-phoenix .frame-right::before {
+    transform: rotate(18deg) scale(1.2, 1);
+}
+
+.frame-phoenix .frame-bottom::before {
+    content: "❂";
+    font-size: 13px;
+    color: #ffd66b;
+}
+
+@keyframes dragonFramePulse {
+    from {
+        transform: scale(1);
+        filter: brightness(1);
+    }
+    to {
+        transform: scale(1.03);
+        filter: brightness(1.16);
+    }
+}
+
+@keyframes phoenixFramePulse {
+    from {
+        transform: scale(1);
+        filter: brightness(1);
+    }
+    to {
+        transform: scale(1.035);
+        filter: brightness(1.2) saturate(1.15);
+    }
+}
 @keyframes avatarDragonPulse {
     from { filter: brightness(1); }
     to { filter: brightness(1.18) saturate(1.2); }
@@ -6983,17 +7216,62 @@ function saveAvatarSkinLocal(equippedId, ownedMap) {
     return { equipped, owned };
 }
 
-function applyAvatarSkinToElement(el, skinId) {
-    if (!el) return;
+function ensureAvatarFrameShell(imgEl) {
+    if (!imgEl) return null;
 
-    el.classList.add("avatar-skin-img");
+    let shell = imgEl.parentElement;
 
-    AVATAR_SKINS.forEach(skin => {
-        el.classList.remove(skin.className);
-    });
+    if (!shell || !shell.classList.contains("avatar-frame-shell")) {
+        const computed = getComputedStyle(imgEl);
+        const width = computed.width || "42px";
+        const height = computed.height || "42px";
 
-    const skin = getAvatarSkinById(skinId || "none");
-    el.classList.add(skin.className || "avatar-skin-none");
+        shell = document.createElement("div");
+        shell.className = "avatar-frame-shell frame-none";
+        shell.style.width = width;
+        shell.style.height = height;
+        shell.style.display = computed.display === "block" ? "block" : "inline-flex";
+
+        imgEl.parentNode.insertBefore(shell, imgEl);
+        shell.appendChild(imgEl);
+
+        imgEl.classList.add("avatar-core");
+
+        ["top", "left", "right", "bottom"].forEach(pos => {
+            const span = document.createElement("span");
+            span.className = `frame-ornament frame-${pos}`;
+            shell.appendChild(span);
+        });
+    } else {
+        imgEl.classList.add("avatar-core");
+    }
+
+    return shell;
+}
+
+function applyAvatarSkinToElement(imgEl, skinId) {
+    if (!imgEl) return;
+
+    const shell = ensureAvatarFrameShell(imgEl);
+    if (!shell) return;
+
+    shell.classList.remove(
+        "frame-none",
+        "frame-bronze",
+        "frame-jade",
+        "frame-dragon",
+        "frame-phoenix"
+    );
+
+    const map = {
+        none: "frame-none",
+        bronze: "frame-bronze",
+        jade: "frame-jade",
+        dragon: "frame-dragon",
+        phoenix: "frame-phoenix"
+    };
+
+    shell.classList.add(map[skinId] || "frame-none");
 }
 
 function refreshOwnAvatarSkinUI() {
@@ -7092,22 +7370,28 @@ function renderAvatarSkinShop() {
         const priceText = skin.price <= 0 ? "Miễn phí" : formatPMC(skin.price) + " PMC";
 
         return `
-            <div class="avatar-shop-card">
-                <img
-                    class="avatar-shop-preview avatar-skin-img ${skin.className}"
-                    src="${avatarShopEscape(currentPhoto)}"
-                    alt="${avatarShopEscape(skin.name)}"
-                >
+    <div class="avatar-shop-card">
+        <div class="avatar-frame-shell frame-${skin.id}" style="width:48px;height:48px;">
+            <img
+                class="avatar-core avatar-shop-preview"
+                src="${avatarShopEscape(currentPhoto)}"
+                alt="${avatarShopEscape(skin.name)}"
+            >
+            <span class="frame-ornament frame-top"></span>
+            <span class="frame-ornament frame-left"></span>
+            <span class="frame-ornament frame-right"></span>
+            <span class="frame-ornament frame-bottom"></span>
+        </div>
 
-                <div>
-                    <div class="avatar-shop-name">${avatarShopEscape(skin.name)}</div>
-                    <div class="avatar-shop-desc">${avatarShopEscape(skin.desc)}</div>
-                    <div class="avatar-shop-price">${priceText}</div>
-                </div>
+        <div>
+            <div class="avatar-shop-name">${avatarShopEscape(skin.name)}</div>
+            <div class="avatar-shop-desc">${avatarShopEscape(skin.desc)}</div>
+            <div class="avatar-shop-price">${priceText}</div>
+        </div>
 
-                <button class="${btnClass}" ${btnAttr}>${btnText}</button>
-            </div>
-        `;
+        <button class="${btnClass}" ${btnAttr}>${btnText}</button>
+    </div>
+`;
     }).join("");
 }
 
