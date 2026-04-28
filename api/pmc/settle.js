@@ -1,5 +1,13 @@
 const { getDatabase } = require("firebase-admin/database");
-const adminBundle = require("../_firebaseAdmin");
+
+let adminBundle;
+try {
+  // settle.js đang nằm trong api/pmc nên ưu tiên lấy _firebaseAdmin cùng thư mục
+  adminBundle = require("./_firebaseAdmin.js");
+} catch (e1) {
+  // fallback nếu sau này mày dời _firebaseAdmin ra api/
+  adminBundle = require("../_firebaseAdmin.js");
+}
 
 const LEVEL_MAX = 160;
 
