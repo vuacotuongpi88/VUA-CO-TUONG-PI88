@@ -3886,6 +3886,155 @@ margin-bottom: 14px;
         padding: 4px 6px !important;
     }
 }
+/* ===== SHOP SKIN VIỀN AVATAR ===== */
+.avatar-skin-img {
+    border-radius: 50% !important;
+    object-fit: cover !important;
+    border-style: solid !important;
+    border-width: 2px !important;
+    transition: 0.18s ease;
+}
+
+.avatar-skin-none {
+    border-color: #55efc4 !important;
+    box-shadow: 0 0 8px rgba(85,239,196,0.35) !important;
+}
+
+.avatar-skin-bronze {
+    border-color: #cd7f32 !important;
+    box-shadow:
+        0 0 8px rgba(205,127,50,0.9),
+        0 0 16px rgba(255,179,71,0.35) !important;
+}
+
+.avatar-skin-jade {
+    border-color: #00ff9d !important;
+    box-shadow:
+        0 0 9px rgba(0,255,157,0.95),
+        0 0 20px rgba(0,255,157,0.45) !important;
+}
+
+.avatar-skin-dragon {
+    border-color: #f4c542 !important;
+    box-shadow:
+        0 0 10px rgba(244,197,66,0.95),
+        0 0 24px rgba(255,72,0,0.5),
+        0 0 34px rgba(255,0,0,0.28) !important;
+    animation: avatarDragonPulse 1.2s infinite alternate;
+}
+
+.avatar-skin-phoenix {
+    border-color: #ff3bd4 !important;
+    box-shadow:
+        0 0 10px rgba(255,59,212,0.95),
+        0 0 24px rgba(168,85,247,0.55),
+        0 0 34px rgba(255,209,102,0.35) !important;
+    animation: avatarPhoenixPulse 1.15s infinite alternate;
+}
+
+@keyframes avatarDragonPulse {
+    from { filter: brightness(1); }
+    to { filter: brightness(1.18) saturate(1.2); }
+}
+
+@keyframes avatarPhoenixPulse {
+    from { filter: brightness(1); }
+    to { filter: brightness(1.22) saturate(1.35); }
+}
+
+.avatar-shop-box {
+    width: min(92vw, 440px) !important;
+    max-height: 86vh;
+    overflow: hidden;
+    padding: 22px 16px 18px !important;
+}
+
+.avatar-shop-balance {
+    margin: 6px 0 12px;
+    color: #7dffb3;
+    font-size: 13px;
+    font-weight: 900;
+}
+
+.avatar-shop-list {
+    max-height: 66vh;
+    overflow-y: auto;
+    display: grid;
+    gap: 10px;
+    padding-right: 4px;
+}
+
+.avatar-shop-card {
+    display: grid;
+    grid-template-columns: 58px 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 14px;
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(85,239,196,0.22);
+    text-align: left;
+}
+
+.avatar-shop-preview {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #111;
+}
+
+.avatar-shop-name {
+    color: #fff;
+    font-size: 13px;
+    font-weight: 900;
+}
+
+.avatar-shop-desc {
+    margin-top: 3px;
+    color: #b2bec3;
+    font-size: 11px;
+    line-height: 1.35;
+}
+
+.avatar-shop-price {
+    margin-top: 4px;
+    color: #f4c542;
+    font-size: 11px;
+    font-weight: 900;
+}
+
+.avatar-shop-btn {
+    min-width: 76px;
+    padding: 8px 9px !important;
+    border-radius: 10px !important;
+    font-size: 11px !important;
+    font-weight: 900 !important;
+    background: linear-gradient(180deg, #7b2ff7, #4d1d95) !important;
+    color: #fff8d6 !important;
+}
+
+.avatar-shop-btn.equipped {
+    background: linear-gradient(180deg, #00c38a, #008f67) !important;
+    color: #fff !important;
+}
+
+.avatar-shop-btn.locked {
+    background: linear-gradient(180deg, #636e72, #2d3436) !important;
+    color: #dfe6e9 !important;
+    opacity: 0.82;
+}
+
+@media (max-width: 600px) {
+    .avatar-shop-card {
+        grid-template-columns: 52px 1fr;
+    }
+
+    .avatar-shop-card button {
+        grid-column: 1 / -1;
+        width: 100%;
+    }
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -3916,7 +4065,16 @@ margin-bottom: 14px;
         <button onclick="saveProfile()" style="width:100%;">LƯU HỒ SƠ</button>
     </div>
 </div>
+<div id="avatar-skin-shop-modal" class="modal" style="display:none;">
+    <div class="modal-content avatar-shop-box">
+        <span class="close" onclick="closeAvatarSkinShop()">&times;</span>
 
+        <h3 style="color:#55efc4; margin:0;">SHOP SKIN AVATAR</h3>
+        <div id="avatar-skin-shop-balance" class="avatar-shop-balance">Số dư: 0 PMC</div>
+
+        <div id="avatar-skin-shop-list" class="avatar-shop-list"></div>
+    </div>
+</div>
 <div id="login-screen">
     <div class="welcome-login-corner">
     <button id="welcome-google-btn" onclick="loginGoogle()" style="display:none;">ĐĂNG NHẬP GG</button>
@@ -4036,6 +4194,11 @@ margin-bottom: 14px;
     <span id="user-name" style="color:white; font-size:13px; font-weight:700;">core team</span>
 </div>
     <hr style="border: 0.5px solid #444; margin: 5px 0;">
+
+    <div class="menu-item" onclick="openAvatarSkinShop()">
+    <span class="menu-icon">🎭</span>
+    <span>SHOP SKIN AVATAR</span>
+</div>
 <div class="menu-item" onclick="openEditProfile()">
     <span class="menu-icon">⚙️</span>
     <span>HỒ SƠ</span>
@@ -4716,7 +4879,9 @@ currentPmcBalance = 0;
 updateBalanceUI(0);
 updatePmcUI(0);
 
-loadWalletBalance().catch(err => console.error("Lỗi tải ví:", err));
+loadWalletBalance()
+    .then(() => loadAvatarSkinState())
+    .catch(err => console.error("Lỗi tải ví/skin:", err));
 
 showHomeUI();
 setPlayerPresence("home");
@@ -6685,6 +6850,316 @@ function setPmcBalance(amount) {
         console.error("Lỗi sync số dư PMC:", err);
     });
 }
+/* ===== SHOP SKIN VIỀN AVATAR - CHỈ GẮN AVATAR MENU/HỒ SƠ ===== */
+const AVATAR_SKIN_MIN_PRICE = 5000;
+
+const AVATAR_SKINS = [
+    {
+        id: "none",
+        name: "Mặc định",
+        price: 0,
+        className: "avatar-skin-none",
+        desc: "Viền avatar mặc định."
+    },
+    {
+        id: "bronze",
+        name: "Hào Quang Đồng",
+        price: 5000,
+        className: "avatar-skin-bronze",
+        desc: "Skin cơ bản, giá thấp nhất 5.000 PMC."
+    },
+    {
+        id: "jade",
+        name: "Ngọc Lục Bảo",
+        price: 10000,
+        className: "avatar-skin-jade",
+        desc: "Viền xanh phát sáng."
+    },
+    {
+        id: "dragon",
+        name: "Long Vương",
+        price: 20000,
+        className: "avatar-skin-dragon",
+        desc: "Viền vàng đỏ có hiệu ứng."
+    },
+    {
+        id: "phoenix",
+        name: "Phượng Hoàng",
+        price: 50000,
+        className: "avatar-skin-phoenix",
+        desc: "Skin cao cấp tím hồng phát sáng."
+    }
+];
+
+function getAvatarSkinCacheKey() {
+    return scopedKey("avatar_skin_equipped");
+}
+
+function getOwnedAvatarSkinsCacheKey() {
+    return scopedKey("avatar_skin_owned");
+}
+
+function getAvatarSkinById(id) {
+    return AVATAR_SKINS.find(s => s.id === id) || AVATAR_SKINS[0];
+}
+
+function normalizeOwnedAvatarSkins(raw) {
+    const owned = { none: true };
+
+    if (!raw) return owned;
+
+    if (typeof raw === "string") {
+        try {
+            raw = JSON.parse(raw);
+        } catch (_) {
+            return owned;
+        }
+    }
+
+    if (Array.isArray(raw)) {
+        raw.forEach(id => {
+            if (getAvatarSkinById(id)) owned[id] = true;
+        });
+        return owned;
+    }
+
+    if (typeof raw === "object") {
+        Object.keys(raw).forEach(id => {
+            if (raw[id] !== false && getAvatarSkinById(id)) {
+                owned[id] = true;
+            }
+        });
+    }
+
+    owned.none = true;
+    return owned;
+}
+
+function getOwnedAvatarSkins() {
+    return normalizeOwnedAvatarSkins(localStorage.getItem(getOwnedAvatarSkinsCacheKey()));
+}
+
+function getEquippedAvatarSkin() {
+    const owned = getOwnedAvatarSkins();
+    const saved = localStorage.getItem(getAvatarSkinCacheKey()) || "none";
+
+    if (!owned[saved]) return "none";
+    return getAvatarSkinById(saved).id;
+}
+
+function saveAvatarSkinLocal(equippedId, ownedMap) {
+    const owned = normalizeOwnedAvatarSkins(ownedMap);
+    let equipped = getAvatarSkinById(equippedId).id;
+
+    if (!owned[equipped]) equipped = "none";
+
+    localStorage.setItem(getAvatarSkinCacheKey(), equipped);
+    localStorage.setItem(getOwnedAvatarSkinsCacheKey(), JSON.stringify(owned));
+
+    return { equipped, owned };
+}
+
+function applyAvatarSkinToElement(el, skinId) {
+    if (!el) return;
+
+    el.classList.add("avatar-skin-img");
+
+    AVATAR_SKINS.forEach(skin => {
+        el.classList.remove(skin.className);
+    });
+
+    const skin = getAvatarSkinById(skinId || "none");
+    el.classList.add(skin.className || "avatar-skin-none");
+}
+
+function refreshOwnAvatarSkinUI() {
+    const skinId = getEquippedAvatarSkin();
+
+    applyAvatarSkinToElement(document.getElementById("user-photo"), skinId);
+    applyAvatarSkinToElement(document.getElementById("edit-user-photo"), skinId);
+
+    renderAvatarSkinShop();
+}
+
+async function loadAvatarSkinState() {
+    try {
+        const snap = await walletRef().once("value");
+        const data = snap.val() || {};
+
+        const localOwned = getOwnedAvatarSkins();
+        const owned = normalizeOwnedAvatarSkins(data.ownedAvatarSkins || localOwned);
+        let equipped = data.avatarSkin || localStorage.getItem(getAvatarSkinCacheKey()) || "none";
+
+        if (!owned[equipped]) equipped = "none";
+
+        saveAvatarSkinLocal(equipped, owned);
+        refreshOwnAvatarSkinUI();
+    } catch (err) {
+        console.error("Lỗi tải skin avatar:", err);
+        refreshOwnAvatarSkinUI();
+    }
+}
+
+function openAvatarSkinShop() {
+    document.querySelectorAll(".profile-menu").forEach(m => m.classList.remove("show"));
+
+    const modal = document.getElementById("avatar-skin-shop-modal");
+    if (modal) modal.style.display = "flex";
+
+    loadWalletBalance()
+        .then(() => loadAvatarSkinState())
+        .then(() => renderAvatarSkinShop())
+        .catch(err => {
+            console.error("Lỗi mở shop skin:", err);
+            renderAvatarSkinShop();
+        });
+}
+
+function closeAvatarSkinShop() {
+    const modal = document.getElementById("avatar-skin-shop-modal");
+    if (modal) modal.style.display = "none";
+}
+
+function avatarShopEscape(text) {
+    return String(text || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function renderAvatarSkinShop() {
+    const list = document.getElementById("avatar-skin-shop-list");
+    const balance = document.getElementById("avatar-skin-shop-balance");
+    if (!list) return;
+
+    const owned = getOwnedAvatarSkins();
+    const equipped = getEquippedAvatarSkin();
+    const currentPmc = getPmcBalance();
+    const currentPhoto = localStorage.getItem("user-photo") || "images/do_tuong.png";
+
+    if (balance) {
+        balance.innerText = "Số dư: " + formatPMC(currentPmc) + " PMC";
+    }
+
+    list.innerHTML = AVATAR_SKINS.map(skin => {
+        const isOwned = !!owned[skin.id];
+        const isEquipped = equipped === skin.id;
+        const canBuy = currentPmc >= skin.price;
+
+        let btnText = "";
+        let btnClass = "avatar-shop-btn";
+        let btnAttr = "";
+
+        if (isEquipped) {
+            btnText = "ĐANG GẮN";
+            btnClass += " equipped";
+            btnAttr = "disabled";
+        } else if (isOwned) {
+            btnText = "GẮN";
+            btnAttr = `onclick="equipAvatarSkin('${skin.id}')"`;
+        } else {
+            btnText = canBuy ? "MUA" : "THIẾU PMC";
+            btnClass += canBuy ? "" : " locked";
+            btnAttr = canBuy ? `onclick="buyAvatarSkin('${skin.id}')"` : "disabled";
+        }
+
+        const priceText = skin.price <= 0 ? "Miễn phí" : formatPMC(skin.price) + " PMC";
+
+        return `
+            <div class="avatar-shop-card">
+                <img
+                    class="avatar-shop-preview avatar-skin-img ${skin.className}"
+                    src="${avatarShopEscape(currentPhoto)}"
+                    alt="${avatarShopEscape(skin.name)}"
+                >
+
+                <div>
+                    <div class="avatar-shop-name">${avatarShopEscape(skin.name)}</div>
+                    <div class="avatar-shop-desc">${avatarShopEscape(skin.desc)}</div>
+                    <div class="avatar-shop-price">${priceText}</div>
+                </div>
+
+                <button class="${btnClass}" ${btnAttr}>${btnText}</button>
+            </div>
+        `;
+    }).join("");
+}
+
+async function equipAvatarSkin(skinId) {
+    const skin = getAvatarSkinById(skinId);
+    const owned = getOwnedAvatarSkins();
+
+    if (!owned[skin.id]) {
+        alert("Mầy chưa mua skin này.");
+        return;
+    }
+
+    saveAvatarSkinLocal(skin.id, owned);
+    refreshOwnAvatarSkinUI();
+
+    await walletRef().update({
+        avatarSkin: skin.id,
+        ownedAvatarSkins: owned,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP,
+        name: localStorage.getItem("user-name-display") || "Người chơi",
+        photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+    }).catch(err => console.error("Lỗi lưu skin avatar:", err));
+
+    renderAvatarSkinShop();
+}
+
+async function buyAvatarSkin(skinId) {
+    const skin = getAvatarSkinById(skinId);
+    const owned = getOwnedAvatarSkins();
+
+    if (skin.id === "none") {
+        await equipAvatarSkin("none");
+        return;
+    }
+
+    if (skin.price < AVATAR_SKIN_MIN_PRICE) {
+        alert("Skin trả phí thấp nhất phải từ " + formatPMC(AVATAR_SKIN_MIN_PRICE) + " PMC.");
+        return;
+    }
+
+    if (owned[skin.id]) {
+        await equipAvatarSkin(skin.id);
+        return;
+    }
+
+    const currentPmc = getPmcBalance();
+
+    if (currentPmc < skin.price) {
+        alert("Không đủ PMC. Cần " + formatPMC(skin.price) + " PMC.");
+        renderAvatarSkinShop();
+        return;
+    }
+
+    const ok = confirm("Mua skin " + skin.name + " giá " + formatPMC(skin.price) + " PMC?");
+    if (!ok) return;
+
+    const newPmc = currentPmc - skin.price;
+    owned[skin.id] = true;
+
+    setPmcBalance(newPmc);
+    saveAvatarSkinLocal(skin.id, owned);
+    refreshOwnAvatarSkinUI();
+
+    await walletRef().update({
+        pmcBalance: newPmc,
+        avatarSkin: skin.id,
+        ownedAvatarSkins: owned,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP,
+        name: localStorage.getItem("user-name-display") || "Người chơi",
+        photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+    }).catch(err => console.error("Lỗi mua skin avatar:", err));
+
+    renderAvatarSkinShop();
+    alert("Mua và gắn skin " + skin.name + " thành công!");
+}
+
 function walletRefByKey(walletKey) {
     return db.ref("wallets/" + String(walletKey || makeWalletDbKey()).replace(/[.#$\[\]\/]/g, "_"));
 }
@@ -7624,6 +8099,7 @@ function openEditProfile() {
 document.getElementById("edit-profile-modal").style.display = "flex";
 document.getElementById("new-username").value = document.getElementById("user-name-display").innerText;
 document.getElementById("edit-user-photo").src = document.getElementById("user-photo").src;
+applyAvatarSkinToElement(document.getElementById("edit-user-photo"), getEquippedAvatarSkin());
 
 const lastRename = localStorage.getItem("lastRenameDate");
 if (lastRename) {
@@ -7660,6 +8136,7 @@ const newPhoto = document.getElementById("edit-user-photo").src;
 document.getElementById("user-name-display").innerText = newName;
 document.getElementById("user-name").innerText = newName;
 document.getElementById("user-photo").src = newPhoto;
+refreshOwnAvatarSkinUI();
 
 const oldName = localStorage.getItem("currentUsername") || "ĐẦU TIÊN TV";
 if (newName !== oldName) {
