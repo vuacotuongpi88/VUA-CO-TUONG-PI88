@@ -127,14 +127,14 @@ function getRepeatAdjustedXpAbs(pairCount) {
   return 1;
 }
 
-async function reserveServerLevelPairCount(db, walletKey, opponentKey, roomId) {
+async function reserveServerLevelPairCount(db, walletKey, opponentKey, matchKey) {
   const todayKey = getTodayKeyVN();
   const safeMe = safeWalletKey(walletKey);
   const safeOpp = safeWalletKey(opponentKey);
-  const safeRoom = safeWalletKey(roomId);
+  const safeMatch = safeWalletKey(matchKey);
 
   const roomClaimRef = db.ref(
-    `levelPairRoomClaimsV3/${safeMe}/${todayKey}/${safeOpp}/${safeRoom}`
+    `levelPairRoomClaimsV3/${safeMe}/${todayKey}/${safeOpp}/${safeMatch}`
   );
 
   const roomClaimTx = await roomClaimRef.transaction(current => {
@@ -142,6 +142,7 @@ async function reserveServerLevelPairCount(db, walletKey, opponentKey, roomId) {
 
     return {
       done: true,
+      matchKey: safeMatch,
       at: Date.now()
     };
   });
@@ -182,9 +183,9 @@ async function reserveServerLevelPairCount(db, walletKey, opponentKey, roomId) {
   };
 }
 
-async function awardOnePlayerExp(db, roomId, walletKey, opponentKey, resultType) {
+async function awardOnePlayerExp(db, roomId, matchKey, walletKey, opponentKey, resultType) {
   const safeKey = safeWalletKey(walletKey);
-  const safeRoom = safeWalletKey(roomId);
+  const safeRoom = safeWalletKey(matchKey || roomId);
 
   const claimRef = db.ref(`levelMatchClaimsV3/${safeKey}/${safeRoom}`);
 
@@ -210,7 +211,7 @@ async function awardOnePlayerExp(db, roomId, walletKey, opponentKey, resultType)
     };
   }
 
-  const pair = await reserveServerLevelPairCount(db, walletKey, opponentKey, roomId);
+  const pair = await reserveServerLevelPairCount(db, walletKey, opponentKey, matchKey || roomId);
   const absXp = getRepeatAdjustedXpAbs(pair.count);
   const xpDelta = resultType === "win" ? absXp : -absXp;
 
@@ -238,8 +239,9 @@ async function awardOnePlayerExp(db, roomId, walletKey, opponentKey, resultType)
     return afterMeta;
   });
 
-  await db.ref("levelExpLogsV3").push({
+await db.ref("levelExpLogsV3").push({
     roomId,
+    matchKey: safeRoom,
     walletKey: safeKey,
     opponentKey: safeWalletKey(opponentKey),
     resultType,
@@ -249,7 +251,7 @@ async function awardOnePlayerExp(db, roomId, walletKey, opponentKey, resultType)
     afterLevel: afterMeta?.level ?? null,
     createdAt: Date.now(),
     status: "done"
-  });
+});
 
   return {
     ok: true,
@@ -263,7 +265,8 @@ async function awardOnePlayerExp(db, roomId, walletKey, opponentKey, resultType)
 
 async function awardMatchExpServer(db, roomId, room) {
   const winnerRaw = String(room?.winner || "").trim().toLowerCase();
-
+const roundNo = Math.max(1, Math.floor(Number(room?.roundNo || 1) || 1));
+const matchKey = `${roomId}_round_${roundNo}`;
   if (!roomId || !winnerRaw || winnerRaw === "hoa" || winnerRaw === "draw") {
     return null;
   }
@@ -302,10 +305,9 @@ async function awardMatchExpServer(db, roomId, room) {
   const denResult = winnerSide === "den" ? "win" : "lose";
 
   const [doExp, denExp] = await Promise.all([
-    awardOnePlayerExp(db, roomId, doWalletKey, denWalletKey, doResult),
-    awardOnePlayerExp(db, roomId, denWalletKey, doWalletKey, denResult)
-  ]);
-
+    awardOnePlayerExp(db, roomId, matchKey, doWalletKey, denWalletKey, doResult),
+    awardOnePlayerExp(db, roomId, matchKey, denWalletKey, doWalletKey, denResult)
+]);
   // Ghi luôn vào room để UI trong trận thấy levelMeta mới khi renderPlayersFromRoom chạy lại.
   const roomUpdate = {};
 
