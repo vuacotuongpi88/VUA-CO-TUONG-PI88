@@ -3723,17 +3723,7 @@ margin-bottom: 14px;
     box-sizing: border-box !important;
 }
 
-/* HÀNG TRÊN: đồng hồ bên trái, avatar bên phải */
-.top-row {
-    flex-direction: row-reverse !important;
-    margin-bottom: 6px !important;
-}
 
-/* HÀNG DƯỚI: đồng hồ bên trái, avatar bên phải */
-.bottom-row {
-    flex-direction: row !important;
-    margin-top: 6px !important;
-}
 
 .timer-inline {
     width: 92px !important;
@@ -3804,6 +3794,96 @@ margin-bottom: 14px;
 
     .player-chip-meta {
         font-size: 9px !important;
+    }
+}
+/* ÉP HÀNG DƯỚI: đồng hồ trái, avatar phải */
+.bottom-row {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+}
+/* ĐỔI NGƯỢC: AVATAR BÊN TRÁI - ĐỒNG HỒ BÊN PHẢI */
+.player-timer-row {
+    width: min(90vw, 450px) !important;
+    max-width: 450px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    box-sizing: border-box !important;
+}
+
+/* HÀNG TRÊN: avatar trái, đồng hồ phải */
+.top-row {
+    flex-direction: row !important;
+    margin-bottom: 6px !important;
+}
+
+/* HÀNG DƯỚI: avatar trái, đồng hồ phải */
+.bottom-row {
+    flex-direction: row-reverse !important;
+    margin-top: 6px !important;
+}
+
+/* Avatar/info luôn bám bên trái */
+.top-row .player-slot,
+.bottom-row .player-slot {
+    margin-left: 0 !important;
+    margin-right: auto !important;
+    align-items: flex-start !important;
+}
+
+/* Đồng hồ luôn bám bên phải */
+.top-row .timer-inline,
+.bottom-row .timer-inline {
+    margin-left: auto !important;
+    margin-right: 0 !important;
+}
+
+/* Avatar nằm trước ô thông tin */
+.player-chip-row {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 5px !important;
+}
+
+.player-chip-inline {
+    min-width: 96px !important;
+}
+
+/* mobile */
+@media (max-width: 600px) {
+    .player-timer-row {
+        width: min(90vw, 390px) !important;
+        max-width: 390px !important;
+        gap: 6px !important;
+    }
+
+    .timer-inline {
+        width: 82px !important;
+        min-width: 82px !important;
+        height: 34px !important;
+        font-size: 0.95rem !important;
+    }
+
+    .player-slot {
+        max-width: 160px !important;
+    }
+
+    .player-avatar-outside {
+        width: 28px !important;
+        height: 28px !important;
+        min-width: 28px !important;
+    }
+
+    .player-chip-inline {
+        min-width: 96px !important;
+        padding: 4px 6px !important;
     }
 }
 </style>
@@ -4259,7 +4339,9 @@ margin-bottom: 14px;
         </div>
     </div>
 
-    <div id="player-do-invite" class="player-invite-code"></div>
+     <div id="player-do-invite" class="player-invite-code"></div>
+</div>
+    </div>
 </div>
 
 <div class="chat-side">
