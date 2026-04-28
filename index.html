@@ -4337,15 +4337,6 @@ margin-bottom: 14px;
     filter: drop-shadow(0 0 7px rgba(0,0,0,0.75));
 }
 
-/* Avatar trong trận: phóng shell lớn hơn ảnh gốc để frame không bị lọt vô trong */
-.player-chip-row > .avatar-frame-shell,
-.player-slot > .avatar-frame-shell {
-    width: 42px !important;
-    height: 42px !important;
-    min-width: 42px !important;
-    margin: -6px 0 -6px -3px !important;
-}
-
 /* Avatar menu góc trái */
 .hamburger-menu-container .avatar-frame-shell {
     width: 44px !important;
@@ -7494,6 +7485,11 @@ function ensureAvatarFrameShell(imgEl) {
     return shell;
 }
 
+function forceImportantStyle(el, prop, value) {
+    if (!el) return;
+    el.style.setProperty(prop, value, "important");
+}
+
 function applyAvatarSkinToElement(imgEl, skinId) {
     if (!imgEl) return;
 
@@ -7503,11 +7499,71 @@ function applyAvatarSkinToElement(imgEl, skinId) {
     const skin = getAvatarSkinById(skinId || "none");
     const frame = shell.querySelector(".avatar-frame-overlay");
 
+    const isMatchAvatar =
+        imgEl.id === "player-do-avatar" ||
+        imgEl.id === "player-den-avatar" ||
+        imgEl.classList.contains("player-avatar-outside") ||
+        shell.classList.contains("avatar-match-shell");
+
     shell.setAttribute("data-skin", skin.id);
+
+    if (isMatchAvatar) {
+        shell.classList.add("avatar-match-shell");
+        imgEl.classList.add("avatar-core", "avatar-match-core");
+
+        // ÉP LẠI NGAY, KHÔNG CẦN LOAD APP
+        forceImportantStyle(shell, "width", "34px");
+        forceImportantStyle(shell, "height", "34px");
+        forceImportantStyle(shell, "min-width", "34px");
+        forceImportantStyle(shell, "flex", "0 0 34px");
+        forceImportantStyle(shell, "margin", "0 5px 0 0");
+        forceImportantStyle(shell, "padding", "0");
+        forceImportantStyle(shell, "position", "relative");
+        forceImportantStyle(shell, "display", "inline-flex");
+        forceImportantStyle(shell, "align-items", "center");
+        forceImportantStyle(shell, "justify-content", "center");
+        forceImportantStyle(shell, "overflow", "visible");
+        forceImportantStyle(shell, "transform", "none");
+
+        forceImportantStyle(imgEl, "position", "absolute");
+        forceImportantStyle(imgEl, "left", "50%");
+        forceImportantStyle(imgEl, "top", "50%");
+        forceImportantStyle(imgEl, "width", "24px");
+        forceImportantStyle(imgEl, "height", "24px");
+        forceImportantStyle(imgEl, "min-width", "24px");
+        forceImportantStyle(imgEl, "max-width", "24px");
+        forceImportantStyle(imgEl, "max-height", "24px");
+        forceImportantStyle(imgEl, "margin", "0");
+        forceImportantStyle(imgEl, "padding", "0");
+        forceImportantStyle(imgEl, "transform", "translate(-50%, -50%)");
+        forceImportantStyle(imgEl, "object-fit", "cover");
+        forceImportantStyle(imgEl, "border-radius", "50%");
+        forceImportantStyle(imgEl, "z-index", "2");
+        forceImportantStyle(imgEl, "box-sizing", "border-box");
+    }
 
     if (frame) {
         frame.src = skin.frameImage || "";
         frame.style.display = skin.id === "none" ? "none" : "block";
+
+        if (isMatchAvatar) {
+            const bigSkin = skin.id === "dragon" || skin.id === "phoenix";
+            const frameSize = bigSkin ? "52px" : "46px";
+
+            forceImportantStyle(frame, "position", "absolute");
+            forceImportantStyle(frame, "left", "50%");
+            forceImportantStyle(frame, "top", "50%");
+            forceImportantStyle(frame, "width", frameSize);
+            forceImportantStyle(frame, "height", frameSize);
+            forceImportantStyle(frame, "max-width", "none");
+            forceImportantStyle(frame, "max-height", "none");
+            forceImportantStyle(frame, "margin", "0");
+            forceImportantStyle(frame, "padding", "0");
+            forceImportantStyle(frame, "transform", "translate(-50%, -50%)");
+            forceImportantStyle(frame, "object-fit", "contain");
+            forceImportantStyle(frame, "z-index", "6");
+            forceImportantStyle(frame, "pointer-events", "none");
+        }
     }
 }
 
@@ -7518,6 +7574,15 @@ function refreshOwnAvatarSkinUI() {
     applyAvatarSkinToElement(document.getElementById("edit-user-photo"), skinId);
 
     renderAvatarSkinShop();
+    requestAnimationFrame(() => {
+    refreshOwnAvatarSkinUI();
+    refreshRoomAvatarSkinUI();
+
+    setTimeout(() => {
+        refreshOwnAvatarSkinUI();
+        refreshRoomAvatarSkinUI();
+    }, 80);
+});
 }
 
 async function loadAvatarSkinState() {
