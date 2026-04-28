@@ -7674,8 +7674,17 @@ async function buyAvatarSkin(skinId) {
         }
 
         if (!res.ok || !data.ok) {
-            throw new Error(data.error || "Mua skin thất bại.");
-        }
+    console.error("BUY SKIN API ERROR:", data);
+
+    throw new Error(
+        data.error ||
+        (
+            "Mua skin thất bại. Ví server đọc được: " +
+            formatPMC(data.currentPmc || 0) +
+            " PMC"
+        )
+    );
+}
 
         const newPmc = Math.max(0, Math.floor(Number(data.newPmcBalance || 0) || 0));
         const newOwned = normalizeOwnedAvatarSkins(data.ownedAvatarSkins || owned);
