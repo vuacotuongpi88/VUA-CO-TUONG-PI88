@@ -1,8 +1,5 @@
 const PMC_PER_PI = 500;
 
-const safePmc = Math.max(0, Math.floor(Number(pmcAmount || 0) || 0));
-const piAmount = safePmc / PMC_PER_PI;
-
 module.exports = async function handler(req, res) {
   let stage = "start";
 
