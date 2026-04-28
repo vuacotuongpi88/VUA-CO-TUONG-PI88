@@ -7227,6 +7227,7 @@ function setPmcBalance(amount) {
 }
 /* ===== SHOP SKIN VIỀN AVATAR - CHỈ GẮN AVATAR MENU/HỒ SƠ ===== */
 const AVATAR_SKIN_MIN_PRICE = 5000;
+const SYSTEM_FEE_WALLET_KEY = "406"; // ví phí hệ thống nhận PMC từ shop skin
 
 const AVATAR_SKINS = [
     {
@@ -7588,60 +7589,140 @@ async function equipAvatarSkin(skinId) {
 
     renderAvatarSkinShop();
 }
+function safeWalletKeyForPath(walletKey) {
+    return String(walletKey || makeWalletDbKey()).replace(/[.#$\[\]\/]/g, "_");
+}
+
+function getSkinBuyerWalletKey() {
+    const currentUser = firebase.auth().currentUser;
+
+    return (
+        currentUser?.uid ||
+        localStorage.getItem("uid") ||
+        localStorage.getItem("walletKey") ||
+        localStorage.getItem("currentUserUid") ||
+        makeWalletDbKey()
+    );
+}
+let isBuyingAvatarSkin = false;
 
 async function buyAvatarSkin(skinId) {
+    if (isBuyingAvatarSkin) return;
+    isBuyingAvatarSkin = true;
+
     const skin = getAvatarSkinById(skinId);
-    const owned = getOwnedAvatarSkins();
+    const ownedLocal = getOwnedAvatarSkins();
 
-    if (!skin || skin.id === "none") {
-        return;
-    }
+    try {
+        if (!skin || skin.id === "none") {
+            return;
+        }
 
-    if (skin.price < AVATAR_SKIN_MIN_PRICE) {
-        alert("Skin trả phí thấp nhất phải từ " + formatPMC(AVATAR_SKIN_MIN_PRICE) + " PMC.");
-        return;
-    }
+        if (skin.price < AVATAR_SKIN_MIN_PRICE) {
+            alert("Skin trả phí thấp nhất phải từ " + formatPMC(AVATAR_SKIN_MIN_PRICE) + " PMC.");
+            return;
+        }
 
-    if (owned[skin.id]) {
+        if (ownedLocal[skin.id]) {
+            avatarSkinShopTab = "bag";
+            renderAvatarSkinShop();
+            alert("Skin này đã có trong túi rồi.");
+            return;
+        }
+
+        const buyerWalletKeyRaw = getSkinBuyerWalletKey();
+        const buyerWalletKey = safeWalletKeyForPath(buyerWalletKeyRaw);
+        const systemFeeWalletKey = safeWalletKeyForPath(SYSTEM_FEE_WALLET_KEY);
+
+        const buyerRef = db.ref("wallets/" + buyerWalletKey);
+        const buyerSnap = await buyerRef.once("value");
+        const buyerData = buyerSnap.val() && typeof buyerSnap.val() === "object" ? buyerSnap.val() : {};
+
+        const livePmc = Math.max(0, Math.floor(Number(buyerData.pmcBalance ?? getPmcBalance()) || 0));
+        const owned = normalizeOwnedAvatarSkins(buyerData.ownedAvatarSkins || ownedLocal);
+
+        if (owned[skin.id]) {
+            saveAvatarSkinLocal(buyerData.avatarSkin || getEquippedAvatarSkin(), owned);
+            avatarSkinShopTab = "bag";
+            renderAvatarSkinShop();
+            alert("Skin này đã có trong túi rồi.");
+            return;
+        }
+
+        if (livePmc < skin.price) {
+            alert("Không đủ PMC. Cần " + formatPMC(skin.price) + " PMC.");
+            await loadWalletBalance().catch(() => {});
+            renderAvatarSkinShop();
+            return;
+        }
+
+        const ok = confirm(
+            "Mua skin " + skin.name + " giá " + formatPMC(skin.price) + " PMC?\n\n" +
+            "PMC sẽ chảy thẳng vào ví phí hệ thống.\n" +
+            "Skin sẽ nằm trong TÚI, chưa tự gắn."
+        );
+        if (!ok) return;
+
+        const newPmc = livePmc - skin.price;
+        const currentEquipped = buyerData.avatarSkin || getEquippedAvatarSkin();
+        const saleId = db.ref("skinShopSales").push().key;
+
+        owned[skin.id] = true;
+        owned.none = true;
+
+        const updates = {};
+        const now = firebase.database.ServerValue.TIMESTAMP;
+
+        // Trừ PMC người mua + lưu skin vào túi
+        updates["wallets/" + buyerWalletKey + "/pmcBalance"] = newPmc;
+        updates["wallets/" + buyerWalletKey + "/ownedAvatarSkins"] = owned;
+        updates["wallets/" + buyerWalletKey + "/avatarSkin"] = currentEquipped;
+        updates["wallets/" + buyerWalletKey + "/updatedAt"] = now;
+        updates["wallets/" + buyerWalletKey + "/name"] =
+            localStorage.getItem("user-name-display") || buyerData.name || "Người chơi";
+        updates["wallets/" + buyerWalletKey + "/photo"] =
+            localStorage.getItem("user-photo") || buyerData.photo || "images/do_tuong.png";
+
+        // Cộng toàn bộ tiền mua skin vào ví phí hệ thống
+        updates["wallets/" + systemFeeWalletKey + "/pmcBalance"] =
+            firebase.database.ServerValue.increment(skin.price);
+        updates["wallets/" + systemFeeWalletKey + "/walletKey"] = SYSTEM_FEE_WALLET_KEY;
+        updates["wallets/" + systemFeeWalletKey + "/name"] = "Ví phí hệ thống";
+        updates["wallets/" + systemFeeWalletKey + "/updatedAt"] = now;
+
+        // Log lịch sử mua skin để sau này kiểm tra
+        updates["skinShopSales/" + saleId] = {
+            buyerWalletKey: buyerWalletKeyRaw,
+            systemFeeWalletKey: SYSTEM_FEE_WALLET_KEY,
+            skinId: skin.id,
+            skinName: skin.name,
+            pricePMC: skin.price,
+            at: now
+        };
+
+        await db.ref().update(updates);
+
+        currentPmcBalance = newPmc;
+        localStorage.setItem(getPmcCacheKey(), String(newPmc));
+        updatePmcUI(newPmc);
+
+        saveAvatarSkinLocal(currentEquipped, owned);
+
         avatarSkinShopTab = "bag";
         renderAvatarSkinShop();
-        alert("Skin này đã có trong túi rồi.");
-        return;
+
+        alert(
+            "Đã mua skin " + skin.name + " thành công!\n" +
+            "-" + formatPMC(skin.price) + " PMC từ ví mầy\n" +
+            "+" + formatPMC(skin.price) + " PMC vào ví phí hệ thống\n\n" +
+            "Skin đã nằm trong TÚI. Vào TÚI bấm GẮN để thay skin."
+        );
+    } catch (err) {
+        console.error("Lỗi mua skin avatar:", err);
+        alert("Lỗi mua skin: " + (err.message || "Không rõ lỗi"));
+    } finally {
+        isBuyingAvatarSkin = false;
     }
-
-    const currentPmc = getPmcBalance();
-
-    if (currentPmc < skin.price) {
-        alert("Không đủ PMC. Cần " + formatPMC(skin.price) + " PMC.");
-        renderAvatarSkinShop();
-        return;
-    }
-
-    const ok = confirm("Mua skin " + skin.name + " giá " + formatPMC(skin.price) + " PMC?\n\nMua xong skin sẽ nằm trong TÚI, chưa tự gắn.");
-    if (!ok) return;
-
-    const newPmc = currentPmc - skin.price;
-    owned[skin.id] = true;
-
-    const currentEquipped = getEquippedAvatarSkin();
-
-    setPmcBalance(newPmc);
-    saveAvatarSkinLocal(currentEquipped, owned);
-    updatePmcUI(newPmc);
-
-    await walletRef().update({
-        pmcBalance: newPmc,
-        ownedAvatarSkins: owned,
-        avatarSkin: currentEquipped,
-        updatedAt: firebase.database.ServerValue.TIMESTAMP,
-        name: localStorage.getItem("user-name-display") || "Người chơi",
-        photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-    }).catch(err => console.error("Lỗi mua skin avatar:", err));
-
-    avatarSkinShopTab = "bag";
-    renderAvatarSkinShop();
-
-    alert("Đã mua skin " + skin.name + " và lưu vào TÚI. Vào TÚI bấm GẮN để thay skin.");
 }
 function walletRefByKey(walletKey) {
     return db.ref("wallets/" + String(walletKey || makeWalletDbKey()).replace(/[.#$\[\]\/]/g, "_"));
