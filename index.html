@@ -5945,11 +5945,15 @@ readyTime = 30;
         readyDen = false;
         isGameOver = false;
         selectedPiece = null;
-        lastMoveFrom = null;
-        lastMoveTo = null;
-        lastRoomBoardHash = "";
+lastMoveFrom = null;
+lastMoveTo = null;
+lastRoomBoardHash = "";
 
-        await db.ref("matches/" + currentRoomId).update({
+// Xóa quân ván cũ ngay tại máy đang bấm TIẾP TỤC.
+// Không chờ Firebase trả snapshot về nữa.
+clearRealtimeBoardVisualOnly();
+
+await db.ref("matches/" + currentRoomId).update({
     status: "waiting",
     ready: {
         do: false,
@@ -5972,7 +5976,25 @@ readyTime = 30;
     refunds: null,
     updatedAt: firebase.database.ServerValue.TIMESTAMP
 });
+const freshSnap = await db.ref("matches/" + currentRoomId).once("value").catch(() => null);
+const freshRoom = freshSnap?.val?.();
 
+if (
+    freshRoom &&
+    freshRoom.status === "waiting" &&
+    !freshRoom.winner &&
+    freshRoom.players?.do &&
+    freshRoom.players?.den
+) {
+    readyDo = false;
+    readyDen = false;
+    isGameOver = false;
+    selectedPiece = null;
+
+    renderPlayersFromRoom(freshRoom);
+    renderTimerUI();
+    ensureReadyOverlayForWaitingRoom(freshRoom, currentRoomId);
+}
         // bindRoom() sẽ tự show lại bản SS cho cả 2 bên
         return;
     }
@@ -7270,7 +7292,7 @@ if (room.winner) {
 // Không phụ thuộc popup thắng, tránh lỗi popup không gọi thì B không được nhường phòng.
 if (
     room.winner === mySide &&
-    (room.winReason === "bochay" || room.winReason === "dauhang")
+    room.winReason === "bochay"
 ) {
     scheduleResetWinnerRoomAfterPaid(room, listeningRoomId);
 }
@@ -7434,7 +7456,7 @@ if (!canRenderLiveBoard) {
     `BÊN ${room.winner === "do" ? "ĐỎ" : "ĐEN"} THẮNG`
 );
 
-if (room.winReason === "bochay" || room.winReason === "dauhang") {
+if (room.winReason === "bochay") {
     scheduleResetWinnerRoomAfterPaid(room, listeningRoomId);
 }
         }
@@ -9981,9 +10003,11 @@ function closeReadyOverlay() {
     const overlay = document.getElementById("ready-overlay");
     if (overlay) overlay.style.display = "none";
 
-    // Quan trọng: tắt overlay thì phải reset cờ này,
-    // tránh bị kẹt true khiến lần sau không hiện bảng SS.
+    // Reset sạch trạng thái bảng SS.
+    // Nếu không reset 2 biến này, Firebase bắn snapshot đúng lúc sẽ làm A bị chớp rồi mất bảng.
     readyOverlayWaitingShown = false;
+    readyOverlayRoomKey = "";
+    readyOverlayOpeningLock = false;
 
     clearInterval(readyInterval);
 }
@@ -10077,14 +10101,12 @@ function showReadyOverlay(mode, forceResetTime = false) {
 function ensureReadyOverlayForWaitingRoom(room = {}, roomId = currentRoomId) {
     const overlay = document.getElementById("ready-overlay");
     if (!overlay) return;
-
-    const key = [
-        roomId || "",
-        room.players?.do?.uid || room.players?.do?.walletKey || "",
-        room.players?.den?.uid || room.players?.den?.walletKey || "",
-        room.status || "",
-        room.updatedAt || ""
-    ].join("|");
+const key = [
+    roomId || "",
+    room.players?.do?.uid || room.players?.do?.walletKey || "",
+    room.players?.den?.uid || room.players?.den?.walletKey || "",
+    room.status || ""
+].join("|");
 
     // Chống Firebase bắn nhiều snapshot làm bảng SS chớp tắt
     if (readyOverlayOpeningLock) {
