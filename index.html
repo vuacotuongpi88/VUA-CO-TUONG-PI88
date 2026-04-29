@@ -6577,6 +6577,104 @@ function applyBoardStateFromRoom(pieces) {
 
     updateCheckEffectFromBoard();
 }
+function clearRealtimeBoardVisualOnly() {
+    document.querySelectorAll(".piece").forEach(p => p.remove());
+    clearMoveHints();
+    clearLastMoveMarks();
+
+    selectedPiece = null;
+    lastMoveFrom = null;
+    lastMoveTo = null;
+    lastRoomBoardHash = "";
+
+    clearInterval(interval);
+
+    if (sounds?.heartbeat) {
+        sounds.heartbeat.pause();
+        sounds.heartbeat.currentTime = 0;
+    }
+}
+function scheduleCleanRoomAfterBocHay(room, roomId) {
+    if (!roomId || !room?.winner || room.winReason !== "bochay") return;
+    if (room.winner !== mySide) return;
+
+    window.__cleanBocHayKey = window.__cleanBocHayKey || "";
+    const cleanKey = roomId + "|" + (room.finishedAt || room.updatedAt || "");
+
+    if (window.__cleanBocHayKey === cleanKey) return;
+    window.__cleanBocHayKey = cleanKey;
+
+    setTimeout(async () => {
+        try {
+            const snap = await db.ref("matches/" + roomId).once("value");
+            const fresh = snap.val() || {};
+
+            if (!fresh.winner || fresh.winReason !== "bochay") return;
+
+            const winnerSide = fresh.winner;
+            const winnerPlayer = fresh.players?.[winnerSide];
+
+            if (!winnerPlayer?.uid) return;
+
+            const cleanMode = fresh.mode || currentRoomMode || "co-tuong";
+            const cleanStake = Math.max(0, Math.floor(Number(fresh.stakePMC || currentRoomStakePMC || 0) || 0));
+            const cleanBucket = fresh.roomBucket || currentRoomBucket || makeStakeBucket(cleanMode, cleanStake);
+            const cleanInviteCode = String(fresh.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
+
+            const updates = {};
+
+            // Người thắng giữ phòng, chuyển về phe đỏ/chủ phòng cho ván mới
+            updates[`matches/${roomId}/players/do`] = {
+                ...winnerPlayer,
+                side: "do"
+            };
+            updates[`matches/${roomId}/players/den`] = null;
+
+            updates[`matches/${roomId}/status`] = "waiting";
+            updates[`matches/${roomId}/turn`] = "do";
+            updates[`matches/${roomId}/board`] = null;
+            updates[`matches/${roomId}/lastMoveFrom`] = null;
+            updates[`matches/${roomId}/lastMoveTo`] = null;
+            updates[`matches/${roomId}/winner`] = null;
+            updates[`matches/${roomId}/winReason`] = null;
+            updates[`matches/${roomId}/finishedAt`] = null;
+            updates[`matches/${roomId}/drawRequest`] = null;
+
+            updates[`matches/${roomId}/ready/do`] = false;
+            updates[`matches/${roomId}/ready/den`] = false;
+            updates[`matches/${roomId}/stakeLocked/do`] = false;
+            updates[`matches/${roomId}/stakeLocked/den`] = false;
+
+            updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+            updates[`waitingRooms/${cleanBucket}/${roomId}`] = {
+                roomId,
+                uid: winnerPlayer.uid,
+                name: winnerPlayer.name || "Người chơi",
+                mode: cleanMode,
+                stakePMC: cleanStake,
+                inviteCode: cleanInviteCode,
+                createdAt: Date.now(),
+                claimedBy: null,
+                claimedAt: null
+            };
+
+            await db.ref().update(updates);
+
+            mySide = "do";
+            viewSide = "do";
+            currentRoomStatus = "waiting";
+
+            clearRealtimeBoardVisualOnly();
+            hideVictoryPopup();
+            closeReadyOverlay();
+            renderTimerUI();
+            updateReadyUI();
+        } catch (err) {
+            console.error("Dọn phòng sau bỏ chạy lỗi:", err);
+        }
+    }, 1800);
+}
 function updateCheckEffectFromBoard() {
     document.querySelectorAll('.piece').forEach(p => {
         p.classList.remove('is-chieu', 'lightning-chieu');
@@ -7109,30 +7207,42 @@ if (room.status === "playing" && !room.winner) {
     const overlay = document.getElementById("ready-overlay");
     if (overlay) overlay.style.display = "none";
 }
-        const newBoardHash = JSON.stringify(room.board || []);
-        if (newBoardHash && newBoardHash !== lastRoomBoardHash) {
-            lastRoomBoardHash = newBoardHash;
+const hasBothPlayersInRoom = !!room.players?.do && !!room.players?.den;
+const canRenderLiveBoard =
+    room.status === "playing" &&
+    hasBothPlayersInRoom &&
+    Array.isArray(room.board) &&
+    room.board.length > 0;
 
-            applyBoardStateFromRoom(room.board || []);
-            isCoUp = !!room.isCoUp;
-            luotDi = room.turn || "do";
-            timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
-            timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
+if (!canRenderLiveBoard) {
+    clearRealtimeBoardVisualOnly();
+} else {
+    const newBoardHash = JSON.stringify(room.board || []);
 
-            timerDoEl.innerText = formatTime(timeDo);
-            timerDenEl.innerText = formatTime(timeDen);
+    if (newBoardHash !== lastRoomBoardHash) {
+        lastRoomBoardHash = newBoardHash;
 
-            lastMoveFrom = room.lastMoveFrom || null;
-            lastMoveTo = room.lastMoveTo || null;
+        applyBoardStateFromRoom(room.board || []);
+        isCoUp = !!room.isCoUp;
+        luotDi = room.turn || "do";
+        timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
+        timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
 
-            updateTurnUIOnly();
+        timerDoEl.innerText = formatTime(timeDo);
+        timerDenEl.innerText = formatTime(timeDen);
 
-            if (lastMoveFrom && lastMoveTo) {
-                drawLastMoveMarks();
-            }
+        lastMoveFrom = room.lastMoveFrom || null;
+        lastMoveTo = room.lastMoveTo || null;
 
-            startTimer();
+        updateTurnUIOnly();
+
+        if (lastMoveFrom && lastMoveTo) {
+            drawLastMoveMarks();
         }
+
+        startTimer();
+    }
+}
 
         if (room.drawRequest && room.drawRequest.from !== mySide && room.drawRequest.at !== lastDrawRequestAt) {
             lastDrawRequestAt = room.drawRequest.at;
@@ -7174,9 +7284,13 @@ if (room.status === "playing" && !room.winner) {
             if (room.winReason === "bochay") title = "ĐỐI THỦ THOÁT";
 
             endGame(
-                title,
-                `BÊN ${room.winner === "do" ? "ĐỎ" : "ĐEN"} THẮNG`
-            );
+    title,
+    `BÊN ${room.winner === "do" ? "ĐỎ" : "ĐEN"} THẮNG`
+);
+
+if (room.winReason === "bochay") {
+    scheduleCleanRoomAfterBocHay(room, listeningRoomId);
+}
         }
     }
 }
