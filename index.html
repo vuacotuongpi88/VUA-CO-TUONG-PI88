@@ -8872,31 +8872,53 @@ async function handoffFinishedRoomToRemainingPlayer(roomId, room, leavingSide, r
     if (!roomId || !room || !leavingSide) return false;
 
     const keepSide = leavingSide === "do" ? "den" : "do";
-    const newHost = room?.players?.[keepSide];
+    let freshRoom = room;
+    let newHost = freshRoom?.players?.[keepSide];
 
     if (!newHost?.uid) return false;
 
-    const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
+    const stake = Math.max(0, Math.floor(Number(freshRoom?.stakePMC || 0) || 0));
 
-    // Có tiền cược thì chỉ dọn phòng sau khi đã paid, tránh mất cộng PMC.
+    // Nếu ván có tiền cược, chờ settlement.paid xong rồi mới bàn giao.
+    // Không xóa phòng, không reset winner sớm, tránh hư cộng PMC.
     if (
-        room?.winner &&
-        room.winner !== "hoa" &&
+        freshRoom?.winner &&
+        freshRoom.winner !== "hoa" &&
         stake > 0 &&
-        room?.settlement?.paid !== true
+        freshRoom?.settlement?.paid !== true
     ) {
-        console.warn("Chưa paid xong, chưa bàn giao phòng:", roomId);
-        return false;
+        for (let i = 0; i < 20; i++) {
+            await new Promise(resolve => setTimeout(resolve, 250));
+
+            const snap = await db.ref("matches/" + roomId).once("value").catch(() => null);
+            const latest = snap?.val?.();
+
+            if (!latest) return false;
+
+            freshRoom = latest;
+            newHost = freshRoom?.players?.[keepSide] || newHost;
+
+            if (freshRoom?.settlement?.paid === true) break;
+        }
+
+        if (freshRoom?.settlement?.paid !== true) {
+            console.warn("Chưa paid xong, chưa bàn giao phòng:", roomId);
+            return false;
+        }
     }
 
-    const cleanMode = room.mode || currentRoomMode || "co-tuong";
-    const cleanStake = Math.max(0, Math.floor(Number(room.stakePMC || currentRoomStakePMC || 0) || 0));
-    const cleanBucket = room.roomBucket || roomBucket || makeStakeBucket(cleanMode, cleanStake);
-    const inviteCode = String(room.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
+    if (!newHost?.uid) return false;
+
+    const cleanMode = freshRoom.mode || room.mode || currentRoomMode || "co-tuong";
+    const cleanStake = Math.max(0, Math.floor(Number(freshRoom.stakePMC || room.stakePMC || currentRoomStakePMC || 0) || 0));
+    const cleanBucket = freshRoom.roomBucket || room.roomBucket || roomBucket || makeStakeBucket(cleanMode, cleanStake);
+    const inviteCode = String(freshRoom.inviteCode || room.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
 
     const updates = {};
 
-    // Người còn lại thành chủ phòng mới
+    // Người còn lại luôn thành chủ phòng mới.
+    // A rời thì B thành do.
+    // B rời thì A thành do.
     updates[`matches/${roomId}/players/do`] = {
         ...newHost,
         side: "do",
@@ -8907,14 +8929,14 @@ async function handoffFinishedRoomToRemainingPlayer(roomId, room, leavingSide, r
     updates[`matches/${roomId}/hostUid`] = newHost.uid || "";
     updates[`matches/${roomId}/hostWalletKey`] = newHost.walletKey || "";
 
-    // Mở lại phòng ra danh sách bàn
+    updates[`matches/${roomId}/roomBucket`] = cleanBucket;
+    updates[`matches/${roomId}/status`] = "waiting";
     updates[`matches/${roomId}/lobbyOpen`] = true;
     updates[`matches/${roomId}/lobbyOwnerUid`] = newHost.uid || "";
     updates[`matches/${roomId}/lobbyOwnerWalletKey`] = newHost.walletKey || "";
     updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
 
-    // Reset ván cũ, nhưng KHÔNG cộng/trừ PMC gì ở đây
-    updates[`matches/${roomId}/status`] = "waiting";
+    // Dọn ván cũ, nhưng không đụng ví PMC.
     updates[`matches/${roomId}/turn`] = "do";
     updates[`matches/${roomId}/board`] = null;
     updates[`matches/${roomId}/moveCount`] = 0;
@@ -8938,12 +8960,12 @@ async function handoffFinishedRoomToRemainingPlayer(roomId, room, leavingSide, r
     updates[`matches/${roomId}/refunds`] = null;
     updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
 
-    // Dọn waitingRooms cũ nếu lệch bucket
+    // Nếu bucket cũ khác bucket mới thì xóa waitingRooms cũ, nhưng KHÔNG xóa matches.
     if (roomBucket && roomBucket !== cleanBucket) {
         updates[`waitingRooms/${roomBucket}/${roomId}`] = null;
     }
 
-    // Ghi phòng chờ mới cho người còn lại
+    // Mở lại đúng phòng đó ngoài danh sách bàn.
     updates[`waitingRooms/${cleanBucket}/${roomId}`] = {
         roomId,
         uid: newHost.uid || "",
@@ -10109,10 +10131,16 @@ const key = [
 ].join("|");
 
     // Chống Firebase bắn nhiều snapshot làm bảng SS chớp tắt
-    if (readyOverlayOpeningLock) {
-        updateReadyUI();
-        return;
-    }
+    if (readyOverlayOpeningLock && overlay.style.display === "flex") {
+    updateReadyUI();
+    return;
+}
+
+// Nếu lock bị kẹt trong lúc overlay đang ẩn,
+// mở khóa lại để bảng SS hiện ra, khỏi cần reset app.
+if (readyOverlayOpeningLock && overlay.style.display !== "flex") {
+    readyOverlayOpeningLock = false;
+}
 
     const alreadyVisible = overlay.style.display === "flex";
 
