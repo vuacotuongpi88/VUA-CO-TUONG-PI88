@@ -6771,35 +6771,49 @@ async function leaveRealtimeMatch() {
             }
         }
 
-        // ===== HOST rời mà chưa có ai trong phòng => xóa hẳn phòng =====
-        if (side === "do" && !room.players?.den) {
-            if (roomBucket) {
-                await db.ref("waitingRooms/" + roomBucket + "/" + roomId).remove().catch(() => {});
-            }
-            await db.ref("matches/" + roomId).remove().catch(() => {});
-            return;
-        }
+        // ===== HOST rời mà chưa có ai trong phòng => hoàn PMC rồi xóa hẳn phòng =====
+if (side === "do" && !room.players?.den) {
+    await maybeRefundWaitingStakePMC(roomId, room, "do").catch(() => {});
 
-        // ===== Người được mời (den) rời khi đang chờ => giữ host cũ, chỉ xóa den =====
-        if (side === "den" && room.status !== "playing") {
-            await maybeRefundWaitingStakePMC(roomId, room, "den").catch(() => {});
+    if (roomBucket) {
+        await db.ref("waitingRooms/" + roomBucket + "/" + roomId).remove().catch(() => {});
+    }
+    await db.ref("matches/" + roomId).remove().catch(() => {});
+    return;
+}
+// ===== Người được mời (den) rời khi đang chờ => hoàn tiền cả 2 bên nếu đã SS =====
+if (side === "den" && room.status !== "playing") {
+    // Nếu B đã SS thì hoàn B
+    await maybeRefundWaitingStakePMC(roomId, room, "den").catch(err => {
+        console.error("Hoàn PMC cho den lỗi:", err);
+    });
 
-            const updates = {};
-            updates[`matches/${roomId}/players/den`] = null;
-            updates[`matches/${roomId}/ready/den`] = false;
-            updates[`matches/${roomId}/stakeLocked/den`] = false;
-            updates[`matches/${roomId}/status`] = "waiting";
-            updates[`matches/${roomId}/drawRequest`] = null;
-            updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+    // Nếu A đã SS trước mà B chưa SS rồi thoát, phải hoàn A
+    await maybeRefundWaitingStakePMC(roomId, room, "do").catch(err => {
+        console.error("Hoàn PMC cho do lỗi:", err);
+    });
 
-            if (roomBucket) {
-                updates[`waitingRooms/${roomBucket}/${roomId}/claimedBy`] = null;
-                updates[`waitingRooms/${roomBucket}/${roomId}/claimedAt`] = null;
-            }
+    const updates = {};
+    updates[`matches/${roomId}/players/den`] = null;
 
-            await db.ref().update(updates);
-            return;
-        }
+    // Reset SS cả 2 bên để A muốn chơi tiếp thì SS lại từ đầu
+    updates[`matches/${roomId}/ready/do`] = false;
+    updates[`matches/${roomId}/ready/den`] = false;
+    updates[`matches/${roomId}/stakeLocked/do`] = false;
+    updates[`matches/${roomId}/stakeLocked/den`] = false;
+
+    updates[`matches/${roomId}/status`] = "waiting";
+    updates[`matches/${roomId}/drawRequest`] = null;
+    updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+    if (roomBucket) {
+        updates[`waitingRooms/${roomBucket}/${roomId}/claimedBy`] = null;
+        updates[`waitingRooms/${roomBucket}/${roomId}/claimedAt`] = null;
+    }
+
+    await db.ref().update(updates);
+    return;
+}
 
         // ===== fallback an toàn =====
         await maybeRefundWaitingStakePMC(roomId, room, side).catch(() => {});
@@ -8216,27 +8230,73 @@ await syncMyMatchBalanceToRoomNow();
     }
 }
 async function maybeRefundWaitingStakePMC(roomId, room, side) {
-    const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
-    if (!roomId || !side || !stake) return;
-    if (!room?.stakeLocked?.[side]) return;
-    if (room?.status === "playing" || room?.winner) return;
+    const stake = Math.max(0, Math.floor(Number(room?.stakePMC || currentRoomStakePMC || 0) || 0));
+    if (!roomId || !side || !stake) return null;
+    if (room?.status === "playing" || room?.winner) return null;
+
+    const lock = room?.stakeLocked?.[side];
+    if (!lock) return null;
+
+    const player = room?.players?.[side] || {};
+
+    // Ưu tiên ví đã lưu trong lock, nếu lock cũ chỉ là true thì lấy ví trong player
+    const walletKey =
+        (typeof lock === "object" && lock.walletKey)
+            ? lock.walletKey
+            : player.walletKey;
+
+    if (!walletKey) {
+        console.warn("Không hoàn PMC được vì thiếu walletKey:", { roomId, side, lock, player });
+        return null;
+    }
 
     const refundRef = db.ref(`matches/${roomId}/refunds/${side}`);
+
     const result = await runRefTransaction(refundRef, current => {
         if (current && current.done) return;
+
         return {
             done: true,
+            side,
+            walletKey,
+            stake,
             at: Date.now(),
-            uid: getCurrentPlayerProfile().uid || ""
+            uid: player.uid || ""
         };
     });
 
-    if (!result.committed) return;
+    if (!result.committed) return null;
 
-    await adjustPmcWalletByKey(makeWalletDbKey(), stake, {
-        name: localStorage.getItem("user-name-display") || "Người chơi",
-        photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+    const nextPmc = await adjustPmcWalletByKey(walletKey, stake, {
+        name: player.name || "Người chơi",
+        photo: player.photo || "images/do_tuong.png"
     });
+
+    if (nextPmc == null) {
+        console.error("Hoàn PMC thất bại:", { roomId, side, walletKey, stake });
+        return null;
+    }
+
+    await db.ref(`matches/${roomId}/players/${side}`).update({
+        pmcBalance: nextPmc,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+    }).catch(() => {});
+
+    await db.ref(`matches/${roomId}/ready/${side}`).set(false).catch(() => {});
+    await db.ref(`matches/${roomId}/stakeLocked/${side}`).set(false).catch(() => {});
+
+    if (walletKey === makeWalletDbKey()) {
+        currentPmcBalance = nextPmc;
+        localStorage.setItem(getPmcCacheKey(), String(nextPmc));
+        updatePmcUI(nextPmc);
+
+        if (typeof refreshMyMatchBalanceBoxesNow === "function") {
+            refreshMyMatchBalanceBoxesNow(getPiBalance(), nextPmc);
+        }
+    }
+
+    console.log("Đã hoàn PMC phòng chờ:", { roomId, side, walletKey, stake, nextPmc });
+    return nextPmc;
 }
 async function transferWaitingRoomHost(roomId, room, roomBucket) {
     if (!roomId || !room) return false;
@@ -8655,7 +8715,13 @@ await db.ref("matches/" + roomId + "/players/" + side).update({
     updatedAt: firebase.database.ServerValue.TIMESTAMP
 }).catch(err => console.error("Lỗi cập nhật PMC trong room sau SS:", err));
 
-await db.ref("matches/" + roomId + "/stakeLocked/" + side).set(true);
+await db.ref("matches/" + roomId + "/stakeLocked/" + side).set({
+    done: true,
+    walletKey: targetWalletKey,
+    stake,
+    at: firebase.database.ServerValue.TIMESTAMP,
+    uid: sidePlayer.uid || localProfile.uid || ""
+});
 
         return { ok: true, stage: "done", walletKey: targetWalletKey, paid };
     } catch (err) {
