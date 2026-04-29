@@ -8917,6 +8917,7 @@ updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIME
     updates[`matches/${roomId}/ready/den`] = false;
     updates[`matches/${roomId}/stakeLocked/do`] = false;
     updates[`matches/${roomId}/stakeLocked/den`] = false;
+    updates[`matches/${roomId}/readyDeadlineAt`] = null;
     updates[`matches/${roomId}/status`] = "waiting";
     updates[`matches/${roomId}/turn`] = "do";
     updates[`matches/${roomId}/board`] = null;
@@ -10112,10 +10113,41 @@ function closeReadyOverlay() {
 
     clearInterval(readyInterval);
 }
-function failReadyAndBackHome() {
+async function failReadyAndBackHome() {
+    const oldRoomId = currentRoomId;
+
+    // reset sạch đồng hồ SS cũ để tạo phòng mới không dính deadline cũ
+    readyDeadlineAt = 0;
+    readyTime = 30;
+
     closeReadyOverlay();
+
+    if (oldRoomId) {
+        await leaveRealtimeMatch().catch(err => {
+            console.error("Rời phòng khi hết giờ SS lỗi:", err);
+        });
+    } else {
+        clearActiveMatchSnapshot();
+        cleanupRoomListeners();
+
+        currentRoomId = null;
+        mySide = null;
+        currentRoomMode = null;
+        currentRoomStakePMC = 0;
+        currentRoomBucket = null;
+        currentRoomStatus = null;
+    }
+
+    readyDo = false;
+    readyDen = false;
+    readyOverlayWaitingShown = false;
+    readyOverlayRoomKey = "";
+    readyOverlayOpeningLock = false;
+
     showHomeUI();
-    document.getElementById("game-arena").style.display = "none";
+
+    const arena = document.getElementById("game-arena");
+    if (arena) arena.style.display = "none";
 }
 
 function startReadyCountdown() {
@@ -10143,15 +10175,26 @@ if (readyDeadlineAt) {
 
         updateReadyUI();
 
-        if (readyTime <= 0) {
-            clearInterval(readyInterval);
-            readyInterval = null;
+       if (readyTime <= 0) {
+    clearInterval(readyInterval);
+    readyInterval = null;
 
-            if (!overlay || overlay.style.display === "none") return;
+    if (!overlay || overlay.style.display === "none") return;
 
-            alert("Hết thời gian sẵn sàng!");
-            failReadyAndBackHome();
-        }
+    const iAmReady =
+        (mySide === "do" && readyDo) ||
+        (mySide === "den" && readyDen);
+
+    // Ai đã SS rồi thì không tự văng.
+    // Chỉ thằng chưa SS mới bị đá khỏi phòng.
+    if (iAmReady) {
+        updateReadyUI();
+        return;
+    }
+
+    alert("Hết thời gian sẵn sàng!");
+    failReadyAndBackHome();
+}
     };
 
     updateReadyUI();
