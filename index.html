@@ -7492,6 +7492,8 @@ function forceImportantStyle(el, prop, value) {
 
 function applyAvatarSkinToElement(imgEl, skinId) {
     if (!imgEl) return;
+    // Không bao giờ bọc chính ảnh frame/skin, nếu không skin sẽ tự chui vào trong avatar
+if (imgEl.classList.contains("avatar-frame-overlay")) return;
 
     const shell = ensureAvatarFrameShell(imgEl);
     if (!shell) return;
@@ -7754,19 +7756,24 @@ async function syncEquippedAvatarSkinToRoom(skinId) {
 function refreshRoomAvatarSkinUI() {
     const skinId = getEquippedAvatarSkin();
 
-    document.querySelectorAll(
-        ".player-avatar-outside, .player-chip-inline img, .player-slot img"
-    ).forEach(img => {
-        const src = String(img.getAttribute("src") || "");
-        const isPieceImg =
-            src.includes("do_") ||
-            src.includes("den_") ||
-            src.includes("co_tuong") ||
-            src.includes("co_up");
+    // Chỉ lấy avatar thật của mình, tuyệt đối không quét tất cả img trong player-chip
+    let myAvatar = null;
 
-        if (!isPieceImg) {
-            applyAvatarSkinToElement(img, skinId);
-        }
+    if (mySide === "do") {
+        myAvatar = document.getElementById("player-do-avatar");
+    } else if (mySide === "den") {
+        myAvatar = document.getElementById("player-den-avatar");
+    }
+
+    if (myAvatar && !myAvatar.classList.contains("avatar-frame-overlay")) {
+        applyAvatarSkinToElement(myAvatar, skinId);
+        return;
+    }
+
+    // Fallback nếu bản UI nào đó không có id do/den
+    document.querySelectorAll(".player-avatar-outside").forEach(img => {
+        if (img.classList.contains("avatar-frame-overlay")) return;
+        applyAvatarSkinToElement(img, skinId);
     });
 }
 
@@ -7908,11 +7915,10 @@ async function buyAvatarSkin(skinId) {
         renderAvatarSkinShop();
 
         alert(
-            "Đã mua skin " + skin.name + " thành công!\n" +
-            "-" + formatPMC(skin.price) + " PMC từ ví người chơi\n" +
-            "+" + formatPMC(skin.price) + " PMC vào ví phí hệ thống\n\n" +
-            "Skin đã nằm trong TÚI. Vào TÚI bấm GẮN để thay skin."
-        );
+    "Đã mua skin " + skin.name + " thành công!\n" +
+    "Đã trừ " + formatPMC(skin.price) + " PMC.\n\n" +
+    "Skin đã nằm trong TÚI. Vào TÚI bấm GẮN để thay skin."
+);
     } catch (err) {
         console.error("Lỗi mua skin avatar:", err);
         alert("Lỗi mua skin: " + (err.message || "Không rõ lỗi"));
