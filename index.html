@@ -6361,7 +6361,51 @@ function getArenaTopRankIcon(index) {
     if (index === 2) return "🥉";
     return "#" + (index + 1);
 }
+function isHiddenArenaTopWallet(row = {}) {
+    const walletKeyRaw = String(row.walletKey || "").trim();
+    const walletKey = walletKeyRaw.toLowerCase();
+    const wallet = row.wallet || {};
 
+    const walletName = String(
+        wallet.name ||
+        wallet.displayName ||
+        wallet.username ||
+        ""
+    ).toLowerCase();
+
+    const normalizeKey = (value) => {
+        return String(value || "")
+            .replace(/[.#$\[\]\/]/g, "_")
+            .toLowerCase();
+    };
+
+    const hiddenKeys = [
+        "406",
+        "pi_admin_master",
+        typeof SYSTEM_FEE_WALLET_KEY !== "undefined" ? SYSTEM_FEE_WALLET_KEY : "",
+        typeof AI_SYSTEM_WALLET_KEY !== "undefined" ? AI_SYSTEM_WALLET_KEY : "",
+        typeof ADMIN_TREASURY_WALLET_KEY !== "undefined" ? ADMIN_TREASURY_WALLET_KEY : ""
+    ].map(normalizeKey).filter(Boolean);
+
+    if (hiddenKeys.includes(normalizeKey(walletKeyRaw))) return true;
+
+    if (
+        walletName.includes("ví phí hệ thống") ||
+        walletName.includes("ví quỹ hệ thống") ||
+        walletName.includes("phi he thong") ||
+        walletName.includes("quy he thong") ||
+        walletName.includes("system fee") ||
+        walletName.includes("system wallet")
+    ) {
+        return true;
+    }
+
+    if (wallet.isSystem === true || wallet.systemWallet === true || wallet.isAI === true) {
+        return true;
+    }
+
+    return false;
+}
 function getArenaTopMeWalletKey() {
     try {
         if (typeof makeWalletDbKey === "function") return makeWalletDbKey();
@@ -6526,18 +6570,20 @@ async function loadArenaTopList(force = false) {
                 playerState: states[walletKey] || {},
                 ...roomInfo
             };
-        }).filter(row => {
-            const w = row.wallet || {};
-            return (
-                w.name ||
-                w.displayName ||
-                w.username ||
-                w.balance != null ||
-                w.pmcBalance != null ||
-                w.levelMeta ||
-                row.roomId
-            );
-        });
+}).filter(row => {
+    if (isHiddenArenaTopWallet(row)) return false;
+
+    const w = row.wallet || {};
+    return (
+        w.name ||
+        w.displayName ||
+        w.username ||
+        w.balance != null ||
+        w.pmcBalance != null ||
+        w.levelMeta ||
+        row.roomId
+    );
+});
 
         arenaTopCache = sortArenaTopRows(rows);
         renderArenaTopRows(arenaTopCache);
