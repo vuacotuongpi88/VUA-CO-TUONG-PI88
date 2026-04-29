@@ -4649,6 +4649,131 @@ margin-bottom: 14px;
     width: 52px !important;
     height: 52px !important;
 }
+/* ===== BẢNG THÔNG TIN ĐỐI THỦ TRONG TRẬN ===== */
+#match-opponent-profile-modal {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.72);
+    z-index: 26050;
+    padding: 14px;
+    box-sizing: border-box;
+}
+
+#match-opponent-profile-modal.show {
+    display: flex;
+}
+
+.match-opponent-card {
+    width: min(92vw, 360px);
+    background: rgba(10, 14, 12, 0.98);
+    border: 2px solid #55efc4;
+    border-radius: 18px;
+    box-shadow:
+        0 0 18px rgba(85, 239, 196, 0.28),
+        0 10px 28px rgba(0, 0, 0, 0.72);
+    overflow: hidden;
+}
+
+.match-opponent-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    background: linear-gradient(180deg, #00c38a, #008f67);
+    color: #fff;
+    font-weight: 900;
+    font-size: 14px;
+}
+
+.match-opponent-close {
+    cursor: pointer;
+    font-size: 18px;
+    font-weight: 900;
+}
+
+.match-opponent-body {
+    padding: 14px;
+}
+
+.match-opponent-top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.match-opponent-avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #f4c542;
+    background: #111;
+    box-shadow: 0 0 12px rgba(244, 197, 66, 0.24);
+}
+
+.match-opponent-name {
+    color: #fff6db;
+    font-size: 15px;
+    font-weight: 900;
+    line-height: 1.25;
+    word-break: break-word;
+}
+
+.match-opponent-sub {
+    margin-top: 4px;
+    color: #55efc4;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.match-opponent-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.match-opponent-stat {
+    background: rgba(85, 239, 196, 0.08);
+    border: 1px solid rgba(85, 239, 196, 0.24);
+    border-radius: 12px;
+    padding: 10px 8px;
+    text-align: center;
+}
+
+.match-opponent-stat strong {
+    display: block;
+    color: #f4c542;
+    font-size: 18px;
+    margin-bottom: 3px;
+}
+
+.match-opponent-stat span {
+    display: block;
+    color: #dfe6e9;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.match-opponent-friend-btn {
+    width: 100%;
+    margin-top: 14px;
+    padding: 11px 12px !important;
+    border-radius: 12px !important;
+    background: linear-gradient(180deg, #7b2ff7, #4d1d95) !important;
+    color: #fff8d6 !important;
+    font-size: 13px !important;
+    font-weight: 900 !important;
+}
+
+.match-opponent-friend-btn[disabled] {
+    opacity: 0.55;
+    filter: grayscale(0.4);
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -5196,7 +5321,10 @@ margin-bottom: 14px;
 
 <div id="match-chat-btn" onclick="toggleMatchChat()">💬</div>
 
-<div id="arena-friend-btn" onclick="toggleArenaFriendBox(event)">👥</div>
+<div id="arena-friend-btn" onclick="toggleArenaFriendBox(event)">
+    👥
+    <span id="arena-friend-badge" class="friend-badge-dot">0</span>
+</div>
 <div id="arena-skin-btn" onclick="openAvatarSkinShop()">🎭</div>
 
 <div id="arena-friend-box">
@@ -7020,9 +7148,24 @@ const oppReady = safeMySide === "den" ? doReadyNow : denReadyNow;
     applyAvatarSkinToElement(topAvatar, oppPlayer.avatarSkin || "none");
 }
 
-if (bottomAvatar) {
-    bottomAvatar.src = myPlayer.photo || "images/do_tuong.png";
-    applyAvatarSkinToElement(bottomAvatar, myPlayer.avatarSkin || getEquippedAvatarSkin());
+const topChipRow = topAvatar?.closest(".player-chip-row");
+const bottomChipRow = bottomAvatar?.closest(".player-chip-row");
+
+// Hàng trên luôn là đối thủ theo góc nhìn hiện tại => bấm để xem info/kết bạn
+if (topChipRow) {
+    topChipRow.onclick = function (e) {
+        e.stopPropagation();
+        openOpponentMatchProfile();
+    };
+    topChipRow.style.cursor = "pointer";
+    topChipRow.title = "Xem thông tin đối thủ";
+}
+
+// Hàng dưới là mình => không mở bảng kết bạn
+if (bottomChipRow) {
+    bottomChipRow.onclick = null;
+    bottomChipRow.style.cursor = "default";
+    bottomChipRow.title = "";
 }
 
 const roomStake = Number(room?.stakePMC || 0);
@@ -11865,18 +12008,299 @@ async function findFriendUserByUsername(name = "") {
 
     return found;
 }
-function refreshMobileFriendBadge() {
-    const badge = document.getElementById("mobile-friend-badge");
-    if (!badge) return;
+let currentMatchOpponentProfile = null;
 
-    const count = liveFriendRequestCache.length;
-    badge.textContent = count > 99 ? "99+" : String(count);
+function getVNMonthKeyForProfile() {
+    const now = new Date(Date.now() + 7 * 60 * 60 * 1000);
+    const y = now.getUTCFullYear();
+    const m = String(now.getUTCMonth() + 1).padStart(2, "0");
+    return `${y}-${m}`;
+}
 
-    if (count > 0) {
-        badge.classList.add("show");
-    } else {
-        badge.classList.remove("show");
+function getSimpleLevelTitle(level) {
+    level = Math.max(1, Math.floor(Number(level || 1) || 1));
+    if (level >= 140) return "Thiên Vương";
+    if (level >= 130) return "Tông Sư";
+    if (level >= 120) return "Đại Cao Thủ";
+    if (level >= 100) return "Tinh Nhuệ";
+    if (level >= 90) return "Kim Cương";
+    if (level >= 75) return "Tinh Anh";
+    if (level >= 60) return "Bạch Kim";
+    if (level >= 40) return "Kỳ Thủ Vàng";
+    if (level >= 25) return "Kỳ Thủ Bạc";
+    if (level >= 10) return "Kỳ Thủ Đồng";
+    return "Tân Binh";
+}
+
+function ensureMatchOpponentProfileModal() {
+    let modal = document.getElementById("match-opponent-profile-modal");
+    if (modal) return modal;
+
+    modal = document.createElement("div");
+    modal.id = "match-opponent-profile-modal";
+    modal.innerHTML = `
+        <div class="match-opponent-card">
+            <div class="match-opponent-head">
+                <span>THÔNG TIN ĐỐI THỦ</span>
+                <span class="match-opponent-close" onclick="closeMatchOpponentProfile()">✖</span>
+            </div>
+
+            <div class="match-opponent-body" id="match-opponent-profile-body">
+                Đang tải...
+            </div>
+        </div>
+    `;
+
+    modal.addEventListener("click", function (e) {
+        if (e.target === modal) closeMatchOpponentProfile();
+    });
+
+    document.body.appendChild(modal);
+    return modal;
+}
+
+function closeMatchOpponentProfile() {
+    const modal = document.getElementById("match-opponent-profile-modal");
+    if (modal) modal.classList.remove("show");
+}
+
+async function openOpponentMatchProfile() {
+    try {
+        if (!document.body.classList.contains("in-match") || !currentRoomId) {
+            return;
+        }
+
+        const roomSnap = await db.ref("matches/" + currentRoomId).once("value");
+        const room = roomSnap.val();
+
+        if (!room?.players?.do || !room?.players?.den) {
+            alert("Chưa có đủ 2 người trong phòng.");
+            return;
+        }
+
+        const sideNow = getMySideFromRoomSafe(room) || mySide;
+        const oppSide = sideNow === "den" ? "do" : "den";
+        const opp = room.players?.[oppSide];
+
+        if (!opp?.walletKey) {
+            alert("Chưa đọc được ví đối thủ.");
+            return;
+        }
+
+        const walletSnap = await db.ref("wallets/" + opp.walletKey).once("value");
+        const wallet = walletSnap.val() || {};
+
+        const levelMeta = wallet.levelMeta || opp.levelMeta || {};
+        const level = Math.max(1, Math.floor(Number(
+            levelMeta.level ||
+            wallet.level ||
+            opp.level ||
+            1
+        ) || 1));
+
+        const title = levelMeta.title || wallet.levelTitle || opp.levelTitle || getSimpleLevelTitle(level);
+
+        const monthKey = getVNMonthKeyForProfile();
+        const monthly =
+            wallet.statsByMonth?.[monthKey] ||
+            wallet.monthlyStats?.[monthKey] ||
+            wallet.matchStatsByMonth?.[monthKey] ||
+            wallet.matchStatsMonth?.[monthKey] ||
+            wallet.stats?.month ||
+            {};
+
+        const monthWins = Math.max(0, Math.floor(Number(
+            monthly.wins ??
+            monthly.win ??
+            wallet.monthWins ??
+            levelMeta.monthWins ??
+            0
+        ) || 0));
+
+        const monthLosses = Math.max(0, Math.floor(Number(
+            monthly.losses ??
+            monthly.lose ??
+            monthly.loses ??
+            wallet.monthLosses ??
+            levelMeta.monthLosses ??
+            0
+        ) || 0));
+
+        const totalWins = Math.max(0, Math.floor(Number(
+            levelMeta.wins ??
+            wallet.wins ??
+            wallet.totalWins ??
+            0
+        ) || 0));
+
+        const totalLosses = Math.max(0, Math.floor(Number(
+            levelMeta.losses ??
+            wallet.losses ??
+            wallet.totalLosses ??
+            0
+        ) || 0));
+
+        currentMatchOpponentProfile = {
+            walletKey: opp.walletKey,
+            uid: opp.uid || wallet.uid || opp.walletKey,
+            username: wallet.username || opp.username || opp.name || "Người chơi",
+            displayName: wallet.name || wallet.displayName || opp.name || "Người chơi",
+            photo: wallet.photo || opp.photo || "images/do_tuong.png",
+            level,
+            title,
+            monthWins,
+            monthLosses,
+            totalWins,
+            totalLosses
+        };
+
+        const alreadyFriend = liveFriendCache.some(f => f.walletKey === opp.walletKey);
+        const alreadySent = liveFriendSentCache.some(f => f.walletKey === opp.walletKey);
+        const alreadyIncoming = liveFriendRequestCache.some(f => f.walletKey === opp.walletKey);
+
+        let btnText = "GỬI LỜI MỜI KẾT BẠN";
+        let disabled = "";
+
+        if (alreadyFriend) {
+            btnText = "ĐÃ LÀ BẠN BÈ";
+            disabled = "disabled";
+        } else if (alreadySent) {
+            btnText = "ĐÃ GỬI LỜI MỜI";
+            disabled = "disabled";
+        } else if (alreadyIncoming) {
+            btnText = "NGƯỜI NÀY ĐÃ MỜI MÀY";
+            disabled = "disabled";
+        }
+
+        const modal = ensureMatchOpponentProfileModal();
+        const body = document.getElementById("match-opponent-profile-body");
+
+        body.innerHTML = `
+            <div class="match-opponent-top">
+                <img class="match-opponent-avatar" src="${escapeFriendHtml(currentMatchOpponentProfile.photo)}" alt="avatar">
+                <div>
+                    <div class="match-opponent-name">${escapeFriendHtml(currentMatchOpponentProfile.displayName)}</div>
+                    <div class="match-opponent-sub">Lever ${level} • ${escapeFriendHtml(title)}</div>
+                </div>
+            </div>
+
+            <div class="match-opponent-grid">
+                <div class="match-opponent-stat">
+                    <strong>${monthWins}</strong>
+                    <span>Thắng tháng này</span>
+                </div>
+                <div class="match-opponent-stat">
+                    <strong>${monthLosses}</strong>
+                    <span>Thua tháng này</span>
+                </div>
+                <div class="match-opponent-stat">
+                    <strong>${totalWins}</strong>
+                    <span>Tổng thắng</span>
+                </div>
+                <div class="match-opponent-stat">
+                    <strong>${totalLosses}</strong>
+                    <span>Tổng thua</span>
+                </div>
+            </div>
+
+            <button class="match-opponent-friend-btn"
+                    ${disabled}
+                    onclick="sendFriendRequestToMatchOpponent()">
+                ${btnText}
+            </button>
+        `;
+
+        modal.classList.add("show");
+    } catch (err) {
+        console.error("openOpponentMatchProfile lỗi:", err);
+        alert("Không mở được thông tin đối thủ.");
     }
+}
+
+async function sendFriendRequestToMatchOpponent() {
+    try {
+        const target = currentMatchOpponentProfile;
+        if (!target?.walletKey) {
+            alert("Chưa có thông tin đối thủ.");
+            return;
+        }
+
+        const me = await ensureFriendProfileSynced();
+
+        if (target.walletKey === me.walletKey) {
+            alert("Không thể tự kết bạn với chính mình!");
+            return;
+        }
+
+        const [friendSnap, incomingSnap, outgoingSnap] = await Promise.all([
+            db.ref(`social/friends/${me.walletKey}/${target.walletKey}`).once("value"),
+            db.ref(`social/friendRequests/${me.walletKey}/${target.walletKey}`).once("value"),
+            db.ref(`social/friendRequests/${target.walletKey}/${me.walletKey}`).once("value")
+        ]);
+
+        if (friendSnap.exists()) {
+            alert("Hai người đã là bạn bè rồi!");
+            return;
+        }
+
+        if (incomingSnap.exists()) {
+            alert("Người này đã gửi lời mời cho mày rồi. Bấm icon kết bạn để nhận.");
+            return;
+        }
+
+        if (outgoingSnap.exists()) {
+            alert("Mày đã gửi lời mời trước đó rồi.");
+            return;
+        }
+
+        const updates = {};
+
+        updates[`social/friendRequests/${target.walletKey}/${me.walletKey}`] = {
+            fromWalletKey: me.walletKey,
+            fromUid: me.uid,
+            fromUsername: me.username,
+            fromDisplayName: me.displayName,
+            fromPhoto: me.photo,
+            createdAt: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        updates[`social/friendRequestSent/${me.walletKey}/${target.walletKey}`] = {
+            targetWalletKey: target.walletKey,
+            username: target.username || "",
+            displayName: target.displayName || target.username || "Người chơi",
+            photo: target.photo || "images/do_tuong.png",
+            createdAt: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        await db.ref().update(updates);
+
+        alert("Đã gửi lời mời kết bạn!");
+        closeMatchOpponentProfile();
+    } catch (err) {
+        console.error("sendFriendRequestToMatchOpponent lỗi:", err);
+        alert("Gửi lời mời kết bạn lỗi.");
+    }
+}
+function refreshMobileFriendBadge() {
+    const count = liveFriendRequestCache.length;
+    const text = count > 99 ? "99+" : String(count);
+
+    const badges = [
+        document.getElementById("mobile-friend-badge"),
+        document.getElementById("arena-friend-badge")
+    ];
+
+    badges.forEach(badge => {
+        if (!badge) return;
+
+        badge.textContent = text;
+
+        if (count > 0) {
+            badge.classList.add("show");
+        } else {
+            badge.classList.remove("show");
+        }
+    });
 }
 function switchFriendTab(tab) {
     activeFriendTab = (tab === "requests") ? "requests" : "friends";
