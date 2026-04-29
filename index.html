@@ -6974,12 +6974,20 @@ if (typeof applyBoardPerspective === "function") {
             });
         }
 
-        if (room.winner) {
-    await maybeSettleStakeRoom(room, listeningRoomId);
+        let didSettleWinnerNow = false;
+
+if (room.winner) {
+    didSettleWinnerNow = await maybeSettleStakeRoom(room, listeningRoomId) === true;
 }
 
-// Nếu B thoát làm A được hoàn PMC, cập nhật ví A liền, khỏi cần reset app
-syncMyWalletCacheFromRoomPlayer(room);
+// Khi đã có winner, room.players vẫn có thể là số dư cũ trước khi settle.
+// Không cho số dư cũ trong room đè lại ví vừa cộng thưởng.
+if (!room.winner) {
+    syncMyWalletCacheFromRoomPlayer(room);
+} else if (mySide === room.winner || didSettleWinnerNow) {
+    await loadWalletBalance().catch(() => {});
+    await syncMyMatchBalanceToRoomNow().catch(() => {});
+}
 // Trường hợp B thoát/phòng rớt mạng, A đang chờ mà đã bị trừ SS:
 // A tự kiểm tra và tự hoàn lại cho chính mình, tránh kẹt tiền tới khi reset.
 if (
@@ -8565,7 +8573,9 @@ if (winLock && winLock.timeout) {
 }
 
 if (!winLock.committed) {
-    return;
+    await loadWalletBalance().catch(() => {});
+    await syncMyMatchBalanceToRoomNow().catch(() => {});
+    return false;
 }
 
 const totalPot = stake * 2;
@@ -8613,7 +8623,17 @@ try {
         at: Date.now(),
         paid
     });
+currentPmcBalance = paid;
+localStorage.setItem(getPmcCacheKey(), String(paid));
+updatePmcUI(paid);
+refreshMyMatchBalanceBoxesNow(getPiBalance(), paid);
 
+await db.ref(`matches/${roomId}/players/${mySide}`).update({
+    balance: getPiBalance(),
+    piBalance: getPiBalance(),
+    pmcBalance: paid,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP
+}).catch(err => console.error("Lỗi cập nhật số dư winner vào room:", err));
     // 2) cộng phí vào ví admin nội bộ
     let adminPaid = null;
 
@@ -8689,11 +8709,14 @@ try {
     });
 
     await settleDebugRef.update({
-        stage: "done",
-        at: Date.now()
-    });
+    stage: "done",
+    at: Date.now()
+});
 
-    await loadWalletBalance().catch(() => {});
+await loadWalletBalance().catch(() => {});
+await syncMyMatchBalanceToRoomNow().catch(() => {});
+
+return true;
 } catch (err) {
     console.error("SETTLE THROW:", err);
 
