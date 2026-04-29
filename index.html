@@ -7148,6 +7148,11 @@ const oppReady = safeMySide === "den" ? doReadyNow : denReadyNow;
     applyAvatarSkinToElement(topAvatar, oppPlayer.avatarSkin || "none");
 }
 
+if (bottomAvatar) {
+    bottomAvatar.src = myPlayer.photo || "images/do_tuong.png";
+    applyAvatarSkinToElement(bottomAvatar, myPlayer.avatarSkin || getEquippedAvatarSkin());
+}
+
 const topChipRow = topAvatar?.closest(".player-chip-row");
 const bottomChipRow = bottomAvatar?.closest(".player-chip-row");
 
