@@ -3729,6 +3729,92 @@ margin-bottom: 14px;
         font-size: 10px;
     }
 }
+.player-chip-stack {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 4px !important;
+    min-width: 104px !important;
+    flex: 1 1 auto !important;
+}
+
+.player-chip-inline {
+    width: 100% !important;
+}
+
+.player-balance-row {
+    width: 100% !important;
+    display: flex !important;
+    gap: 4px !important;
+    align-items: center !important;
+}
+
+.player-balance-box {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    height: 22px !important;
+    padding: 0 6px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 8px !important;
+    font-size: 10px !important;
+    font-weight: 800 !important;
+    line-height: 1 !important;
+    box-sizing: border-box !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    text-shadow: 0 0 6px rgba(0,0,0,0.45) !important;
+}
+
+.player-balance-pi {
+    color: #fff7d6 !important;
+    border: 1px solid rgba(244, 197, 66, 0.9) !important;
+    background: linear-gradient(180deg, rgba(70, 52, 6, 0.95), rgba(34, 24, 4, 0.95)) !important;
+    box-shadow: 0 0 10px rgba(244, 197, 66, 0.16) !important;
+}
+
+.player-balance-pmc {
+    color: #d8fff6 !important;
+    border: 1px solid rgba(85, 239, 196, 0.85) !important;
+    background: linear-gradient(180deg, rgba(7, 54, 43, 0.95), rgba(4, 29, 24, 0.95)) !important;
+    box-shadow: 0 0 10px rgba(85, 239, 196, 0.14) !important;
+}
+
+.player-invite-code {
+    min-height: 13px !important;
+    margin-left: 0 !important;
+    font-size: 10px !important;
+    font-weight: 900 !important;
+    color: #ffeaa7 !important;
+    line-height: 1.1 !important;
+    letter-spacing: 0.3px !important;
+    text-shadow: 0 0 6px rgba(0,0,0,0.72) !important;
+    white-space: nowrap !important;
+}
+
+@media (max-width: 600px) {
+    .player-chip-stack {
+        min-width: 96px !important;
+        gap: 3px !important;
+    }
+
+    .player-balance-row {
+        gap: 3px !important;
+    }
+
+    .player-balance-box {
+        height: 20px !important;
+        font-size: 9px !important;
+        padding: 0 5px !important;
+        border-radius: 7px !important;
+    }
+
+    .player-invite-code {
+        font-size: 9px !important;
+    }
+}
 /* KHÓA UI AVATAR + ĐỒNG HỒ THEO 2 GÓC BÀN CỜ */
 .board-side {
     width: min(92vw, 460px) !important;
@@ -4909,15 +4995,22 @@ margin-bottom: 14px;
     <div class="player-chip-row" onclick="openPlayerStats('den')">
         <img id="player-den-avatar" class="player-avatar-outside" src="images/do_tuong.png" alt="Đen">
 
-        <div class="player-chip-inline">
-            <div class="player-chip-meta">
-                <span id="player-den-name" class="player-chip-name">BÊN ĐEN</span>
-                <span id="player-den-rank" class="player-chip-rank">0 / 4500</span>
+        <div class="player-chip-stack">
+            <div class="player-chip-inline">
+                <div class="player-chip-meta">
+                    <span id="player-den-name" class="player-chip-name">BÊN ĐEN</span>
+                    <span id="player-den-rank" class="player-chip-rank">0 / 4500</span>
+                </div>
             </div>
+
+            <div class="player-balance-row">
+                <div id="player-den-pi-balance" class="player-balance-box player-balance-pi">0.00 π</div>
+                <div id="player-den-pmc-balance" class="player-balance-box player-balance-pmc">0 PMC</div>
+            </div>
+
+            <div id="player-den-invite" class="player-invite-code"></div>
         </div>
     </div>
-
-    <div id="player-den-invite" class="player-invite-code"></div>
 </div>
 
         <div id="timer-den" class="timer-box timer-inline">09:00</div>
@@ -4948,15 +5041,22 @@ margin-bottom: 14px;
     <div class="player-chip-row" onclick="openPlayerStats('do')">
         <img id="player-do-avatar" class="player-avatar-outside" src="images/do_tuong.png" alt="Đỏ">
 
-        <div class="player-chip-inline">
-            <div class="player-chip-meta">
-                <span id="player-do-name" class="player-chip-name">BÊN ĐỎ</span>
-                <span id="player-do-rank" class="player-chip-rank">0 / 4500</span>
+        <div class="player-chip-stack">
+            <div class="player-chip-inline">
+                <div class="player-chip-meta">
+                    <span id="player-do-name" class="player-chip-name">BÊN ĐỎ</span>
+                    <span id="player-do-rank" class="player-chip-rank">0 / 4500</span>
+                </div>
             </div>
+
+            <div class="player-balance-row">
+                <div id="player-do-pi-balance" class="player-balance-box player-balance-pi">0.00 π</div>
+                <div id="player-do-pmc-balance" class="player-balance-box player-balance-pmc">0 PMC</div>
+            </div>
+
+            <div id="player-do-invite" class="player-invite-code"></div>
         </div>
     </div>
-
-     <div id="player-do-invite" class="player-invite-code"></div>
 </div>
     </div>
 </div>
@@ -6453,14 +6553,19 @@ function renderPlayersFromRoom(room) {
     const doPlayer = room?.players?.do || {};
     const denPlayer = room?.players?.den || {};
 
-    const topName = document.getElementById("player-den-name");
-    const bottomName = document.getElementById("player-do-name");
-    const topRank = document.getElementById("player-den-rank");
-    const bottomRank = document.getElementById("player-do-rank");
-    const topAvatar = document.getElementById("player-den-avatar");
-    const bottomAvatar = document.getElementById("player-do-avatar");
-    const topInvite = document.getElementById("player-den-invite");
-    const bottomInvite = document.getElementById("player-do-invite");
+const topName = document.getElementById("player-den-name");
+const bottomName = document.getElementById("player-do-name");
+const topRank = document.getElementById("player-den-rank");
+const bottomRank = document.getElementById("player-do-rank");
+const topAvatar = document.getElementById("player-den-avatar");
+const bottomAvatar = document.getElementById("player-do-avatar");
+const topInvite = document.getElementById("player-den-invite");
+const bottomInvite = document.getElementById("player-do-invite");
+
+const topPiBox = document.getElementById("player-den-pi-balance");
+const topPmcBox = document.getElementById("player-den-pmc-balance");
+const bottomPiBox = document.getElementById("player-do-pi-balance");
+const bottomPmcBox = document.getElementById("player-do-pmc-balance");
 
     const doReadyNow = !!room?.ready?.do;
     const denReadyNow = !!room?.ready?.den;
@@ -6485,9 +6590,16 @@ if (bottomAvatar) {
     applyAvatarSkinToElement(bottomAvatar, myPlayer.avatarSkin || getEquippedAvatarSkin());
 }
 
-    const roomStake = Number(room?.stakePMC || 0);
-    const oppPmc = Number(oppPlayer.pmcBalance || 0);
-    const myPmc = Number(myPlayer.pmcBalance || 0);
+const roomStake = Number(room?.stakePMC || 0);
+const oppPmc = Math.max(0, Math.floor(Number(oppPlayer.pmcBalance || 0) || 0));
+const myPmc = Math.max(0, Math.floor(Number(myPlayer.pmcBalance || 0) || 0));
+const oppPi = Math.max(0, Number(oppPlayer.piBalance || 0) || 0);
+const myPi = Math.max(0, Number(myPlayer.piBalance || 0) || 0);
+
+if (topPiBox) topPiBox.innerText = oppPi.toFixed(2) + " π";
+if (topPmcBox) topPmcBox.innerText = formatPMC(oppPmc) + " PMC";
+if (bottomPiBox) bottomPiBox.innerText = myPi.toFixed(2) + " π";
+if (bottomPmcBox) bottomPmcBox.innerText = formatPMC(myPmc) + " PMC";
 
     if (topRank) {
         topRank.classList.remove("player-ready-on", "player-ready-off");
