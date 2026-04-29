@@ -4783,7 +4783,7 @@ margin-bottom: 14px;
     width: 52px !important;
     height: 52px !important;
     border-radius: 50% !important;
-    display: flex;
+    display: flex !important;
     align-items: center;
     justify-content: center;
     background: linear-gradient(180deg, #f4c542, #b7791f) !important;
@@ -6781,8 +6781,14 @@ function showHomeUI() {
 
     const skinBtn = document.getElementById("arena-skin-btn");
     if (skinBtn) skinBtn.style.display = "flex";
-    const topBtn = document.getElementById("arena-top-btn");
-if (topBtn) topBtn.style.display = "flex";
+const topBtn = document.getElementById("arena-top-btn");
+if (topBtn) {
+    topBtn.style.setProperty("display", "flex", "important");
+    topBtn.style.setProperty("position", "fixed", "important");
+    topBtn.style.setProperty("top", "16px", "important");
+    topBtn.style.setProperty("right", "192px", "important");
+    topBtn.style.setProperty("z-index", "13055", "important");
+}
 
     if (typeof refreshMissionLobbyBadgeSilently === "function") {
         refreshMissionLobbyBadgeSilently();
