@@ -6594,6 +6594,33 @@ function updateCheckEffectFromBoard() {
         });
     });
 }
+function syncMyWalletCacheFromRoomPlayer(room = {}) {
+    if (!mySide) return;
+
+    const p = room?.players?.[mySide] || {};
+    const hasPmc = p.pmcBalance !== undefined && p.pmcBalance !== null && p.pmcBalance !== "";
+    const hasPi = (p.piBalance ?? p.balance) !== undefined && (p.piBalance ?? p.balance) !== null && (p.piBalance ?? p.balance) !== "";
+
+    if (hasPmc) {
+        const roomPmc = Math.max(0, Math.floor(Number(p.pmcBalance) || 0));
+
+        if (roomPmc !== getPmcBalance()) {
+            currentPmcBalance = roomPmc;
+            localStorage.setItem(getPmcCacheKey(), String(roomPmc));
+            updatePmcUI(roomPmc);
+        }
+    }
+
+    if (hasPi) {
+        const roomPi = Math.max(0, Number(p.piBalance ?? p.balance) || 0);
+
+        if (roomPi !== getPiBalance()) {
+            currentWalletBalance = roomPi;
+            localStorage.setItem(getBalanceCacheKey(), String(roomPi));
+            updateBalanceUI(roomPi);
+        }
+    }
+}
 function renderPlayersFromRoom(room) {
     const doPlayer = room?.players?.do || {};
     const denPlayer = room?.players?.den || {};
@@ -6648,8 +6675,11 @@ const readPlayerPi = (p) =>
 const oppPmc = readPlayerPmc(oppPlayer);
 const oppPi = readPlayerPi(oppPlayer);
 
-const myPmc = getPmcBalance();
-const myPi = getPiBalance();
+const hasMyRoomPmc = myPlayer.pmcBalance !== undefined && myPlayer.pmcBalance !== null && myPlayer.pmcBalance !== "";
+const hasMyRoomPi = (myPlayer.piBalance ?? myPlayer.balance) !== undefined && (myPlayer.piBalance ?? myPlayer.balance) !== null && (myPlayer.piBalance ?? myPlayer.balance) !== "";
+
+const myPmc = hasMyRoomPmc ? readPlayerPmc(myPlayer) : getPmcBalance();
+const myPi = hasMyRoomPi ? readPlayerPi(myPlayer) : getPiBalance();
 
 if (topPiBox) topPiBox.innerText = oppPi.toFixed(2) + " π";
 if (topPmcBox) topPmcBox.innerText = formatPMC(oppPmc) + " PMC";
@@ -6948,8 +6978,34 @@ if (typeof applyBoardPerspective === "function") {
     await maybeSettleStakeRoom(room, listeningRoomId);
 }
 
-        renderPlayersFromRoom(room);
-        updateReadyUI();
+// Nếu B thoát làm A được hoàn PMC, cập nhật ví A liền, khỏi cần reset app
+syncMyWalletCacheFromRoomPlayer(room);
+// Trường hợp B thoát/phòng rớt mạng, A đang chờ mà đã bị trừ SS:
+// A tự kiểm tra và tự hoàn lại cho chính mình, tránh kẹt tiền tới khi reset.
+if (
+    mySide === "do" &&
+    room.status === "waiting" &&
+    !room.players?.den &&
+    room.stakeLocked?.do &&
+    !room.refunds?.do?.done
+) {
+    maybeRefundWaitingStakePMC(listeningRoomId, room, "do")
+        .then(async (nextPmc) => {
+            if (nextPmc != null) {
+                currentPmcBalance = nextPmc;
+                localStorage.setItem(getPmcCacheKey(), String(nextPmc));
+                updatePmcUI(nextPmc);
+                refreshMyMatchBalanceBoxesNow(getPiBalance(), nextPmc);
+            }
+
+            await loadWalletBalance().catch(() => {});
+            await syncMyMatchBalanceToRoomNow().catch(() => {});
+        })
+        .catch(err => console.error("A tự hoàn PMC khi B thoát lỗi:", err));
+}
+
+renderPlayersFromRoom(room);
+updateReadyUI();
 
 const hasEnoughPlayersWaiting = !!room.players?.do && !!room.players?.den && room.status === "waiting";
 
