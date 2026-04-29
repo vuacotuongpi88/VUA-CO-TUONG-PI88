@@ -5783,6 +5783,8 @@ let readyDen = false;
 let readyTime = 30;
 let readyInterval = null;
 let readyOverlayWaitingShown = false;
+let readyOverlayRoomKey = "";
+let readyOverlayOpeningLock = false;
 let currentRoomStatus = null;
 
 function formatTime(s) {
@@ -5929,6 +5931,10 @@ async function playNextMatch() {
     hideVictoryPopup();
     clearInterval(interval);
     clearInterval(readyInterval);
+    readyOverlayWaitingShown = false;
+readyOverlayRoomKey = "";
+readyOverlayOpeningLock = false;
+readyTime = 30;
 
     if (sounds.bgm) sounds.bgm.pause();
     if (sounds.heartbeat) sounds.heartbeat.pause();
@@ -7230,24 +7236,29 @@ if (hasEnoughPlayersWaiting) {
     hideVictoryPopup();
     renderTimerUI();
 
-    const overlay = document.getElementById("ready-overlay");
-    const overlayIsHidden = !overlay || overlay.style.display !== "flex";
-
-    // Dù readyOverlayWaitingShown có bị kẹt true,
-    // nếu overlay đang ẩn thì vẫn ép hiện lại bảng SS.
-    if (overlayIsHidden) {
-        showReadyOverlay(room.mode || currentRoomMode);
-    } else {
-        readyOverlayWaitingShown = true;
-        updateReadyUI();
-    }
+    // Mở bảng SS ổn định, không cho Firebase snapshot làm chớp tắt
+    ensureReadyOverlayForWaitingRoom(room, listeningRoomId);
 } else {
-    closeReadyOverlay();
+    // Chỉ đóng bảng SS khi thật sự đã vào trận hoặc phòng không còn đủ người.
+    // Không đóng/mở theo mấy update phụ như số dư, ready, stakeLocked.
+    const reallyMustCloseReady =
+        room.status === "playing" ||
+        !!room.winner ||
+        !room.players?.do ||
+        !room.players?.den;
+
+    if (reallyMustCloseReady) {
+        closeReadyOverlay();
+        readyOverlayRoomKey = "";
+    }
+
     renderTimerUI();
 }
 
 if (room.status === "playing" && !room.winner) {
     readyOverlayWaitingShown = false;
+    readyOverlayRoomKey = "";
+    readyOverlayOpeningLock = false;
     isGameOver = false;
 
     // Ván mới rồi thì cho phép hiện hiệu ứng thắng/thua của ván mới
@@ -7255,6 +7266,8 @@ if (room.status === "playing" && !room.winner) {
 
     const overlay = document.getElementById("ready-overlay");
     if (overlay) overlay.style.display = "none";
+
+    clearInterval(readyInterval);
 }
 const hasBothPlayersInRoom = !!room.players?.do && !!room.players?.den;
 const canRenderLiveBoard =
@@ -9796,20 +9809,63 @@ function autoResetNextMatch() {
     }, 5000);
 }
 
-function showReadyOverlay(mode) {
+function showReadyOverlay(mode, forceResetTime = false) {
     pendingGameMode = mode || pendingGameMode || currentRoomMode || "tong";
     const overlay = document.getElementById("ready-overlay");
     if (!overlay) return;
 
-    // Quan trọng: mở overlay thì đánh dấu đang hiện thật
-    readyOverlayWaitingShown = true;
+    // Nếu nó đang hiện rồi thì KHÔNG reset lại thời gian, KHÔNG chạy lại interval
+    if (overlay.style.display === "flex" && !forceResetTime) {
+        readyOverlayWaitingShown = true;
+        updateReadyUI();
+        return;
+    }
 
+    readyOverlayWaitingShown = true;
     overlay.style.display = "flex";
-    readyTime = 30;
+
+    if (forceResetTime || !readyTime || readyTime <= 0) {
+        readyTime = 30;
+    }
+
     updateReadyUI();
     startReadyCountdown();
 }
+function ensureReadyOverlayForWaitingRoom(room = {}, roomId = currentRoomId) {
+    const overlay = document.getElementById("ready-overlay");
+    if (!overlay) return;
 
+    const key = [
+        roomId || "",
+        room.players?.do?.uid || room.players?.do?.walletKey || "",
+        room.players?.den?.uid || room.players?.den?.walletKey || "",
+        room.status || "",
+        room.updatedAt || ""
+    ].join("|");
+
+    // Chống Firebase bắn nhiều snapshot làm bảng SS chớp tắt
+    if (readyOverlayOpeningLock) {
+        updateReadyUI();
+        return;
+    }
+
+    const alreadyVisible = overlay.style.display === "flex";
+
+    if (alreadyVisible && readyOverlayRoomKey === key) {
+        readyOverlayWaitingShown = true;
+        updateReadyUI();
+        return;
+    }
+
+    readyOverlayOpeningLock = true;
+    readyOverlayRoomKey = key;
+
+    showReadyOverlay(room.mode || currentRoomMode, !alreadyVisible);
+
+    setTimeout(() => {
+        readyOverlayOpeningLock = false;
+    }, 350);
+}
 async function setReady() {
     if (!currentRoomId || !mySide) return;
 
