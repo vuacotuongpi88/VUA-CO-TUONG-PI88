@@ -6604,16 +6604,25 @@ if (bottomAvatar) {
 }
 
 const roomStake = Number(room?.stakePMC || 0);
-const oppPmc = Math.max(0, Math.floor(Number(oppPlayer.pmcBalance || 0) || 0));
-const myPmc = Math.max(0, Math.floor(Number(myPlayer.pmcBalance || 0) || 0));
-const oppPi = Math.max(0, Number(oppPlayer.piBalance || 0) || 0);
-const myPi = Math.max(0, Number(myPlayer.piBalance || 0) || 0);
+
+const readPlayerPmc = (p) =>
+    Math.max(0, Math.floor(Number(p?.pmcBalance ?? 0) || 0));
+
+const readPlayerPi = (p) =>
+    Math.max(0, Number(p?.piBalance ?? p?.balance ?? 0) || 0);
+
+// Đối thủ đọc từ room.
+// Bản thân mình đọc ví live/cache hiện tại, để bấm SS / thắng là đổi liền.
+const oppPmc = readPlayerPmc(oppPlayer);
+const oppPi = readPlayerPi(oppPlayer);
+
+const myPmc = getPmcBalance();
+const myPi = getPiBalance();
 
 if (topPiBox) topPiBox.innerText = oppPi.toFixed(2) + " π";
 if (topPmcBox) topPmcBox.innerText = formatPMC(oppPmc) + " PMC";
 if (bottomPiBox) bottomPiBox.innerText = myPi.toFixed(2) + " π";
 if (bottomPmcBox) bottomPmcBox.innerText = formatPMC(myPmc) + " PMC";
-
     if (topRank) {
         topRank.classList.remove("player-ready-on", "player-ready-off");
 
@@ -7424,7 +7433,38 @@ function setPiBalance(amount) {
         console.error("Lỗi sync số dư Pi:", err);
     });
 }
+function refreshMyMatchBalanceBoxesNow(piAmount = getPiBalance(), pmcAmount = getPmcBalance()) {
+    const bottomPiBox = document.getElementById("player-do-pi-balance");
+    const bottomPmcBox = document.getElementById("player-do-pmc-balance");
+    const topPiBox = document.getElementById("player-den-pi-balance");
+    const topPmcBox = document.getElementById("player-den-pmc-balance");
 
+    // Trong render hiện tại: dưới luôn là mình, trên là đối thủ
+    if (bottomPiBox) bottomPiBox.innerText = Math.max(0, Number(piAmount) || 0).toFixed(2) + " π";
+    if (bottomPmcBox) bottomPmcBox.innerText = formatPMC(pmcAmount) + " PMC";
+
+    // Nếu có lúc UI chưa đảo đúng, vẫn ép theo mySide cho chắc
+    if (mySide === "den") {
+        if (topPiBox) topPiBox.innerText = Math.max(0, Number(piAmount) || 0).toFixed(2) + " π";
+        if (topPmcBox) topPmcBox.innerText = formatPMC(pmcAmount) + " PMC";
+    }
+}
+
+async function syncMyMatchBalanceToRoomNow() {
+    if (!currentRoomId || !mySide) return;
+
+    const piAmount = getPiBalance();
+    const pmcAmount = getPmcBalance();
+
+    refreshMyMatchBalanceBoxesNow(piAmount, pmcAmount);
+
+    await db.ref("matches/" + currentRoomId + "/players/" + mySide).update({
+        balance: piAmount,
+        piBalance: piAmount,
+        pmcBalance: pmcAmount,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+    }).catch(err => console.error("Lỗi sync số dư vào phòng:", err));
+}
 function setPmcBalance(amount) {
     const safeAmount = Math.max(0, Math.floor(Number(amount) || 0));
     currentPmcBalance = safeAmount;
@@ -8137,7 +8177,8 @@ try {
         }
 
         console.log("Settle PMC qua API OK:", data);
-        await loadWalletBalance().catch(() => {});
+await loadWalletBalance().catch(() => {});
+await syncMyMatchBalanceToRoomNow();
     } catch (err) {
         console.error("Lỗi gọi API settle PMC:", err);
     }
@@ -8339,6 +8380,7 @@ async function maybeSettleStakeRoom(room, roomId) {
         }
 
         await loadWalletBalance().catch(() => {});
+        await syncMyMatchBalanceToRoomNow();
         return;
     }
 
@@ -8564,15 +8606,24 @@ async function chargeStakeForReady(roomId, side) {
             return { ok: false, stage: "tx_not_committed" };
         }
 
-        if (targetWalletKey === localProfile.walletKey) {
-            currentPmcBalance = paid;
-            localStorage.setItem(getPmcCacheKey(), String(paid));
-            updatePmcUI(paid);
-        } else {
-            await loadWalletBalance().catch(() => {});
-        }
+       if (targetWalletKey === localProfile.walletKey) {
+    currentPmcBalance = paid;
+    localStorage.setItem(getPmcCacheKey(), String(paid));
+    updatePmcUI(paid);
+    refreshMyMatchBalanceBoxesNow(getPiBalance(), paid);
+} else {
+    await loadWalletBalance().catch(() => {});
+}
 
-        await db.ref("matches/" + roomId + "/stakeLocked/" + side).set(true);
+// Cập nhật luôn số dư trong room để avatar trong trận đổi liền
+await db.ref("matches/" + roomId + "/players/" + side).update({
+    balance: getPiBalance(),
+    piBalance: getPiBalance(),
+    pmcBalance: paid,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP
+}).catch(err => console.error("Lỗi cập nhật PMC trong room sau SS:", err));
+
+await db.ref("matches/" + roomId + "/stakeLocked/" + side).set(true);
 
         return { ok: true, stage: "done", walletKey: targetWalletKey, paid };
     } catch (err) {
