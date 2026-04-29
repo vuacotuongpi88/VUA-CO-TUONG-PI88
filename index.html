@@ -7574,15 +7574,6 @@ function refreshOwnAvatarSkinUI() {
     applyAvatarSkinToElement(document.getElementById("edit-user-photo"), skinId);
 
     renderAvatarSkinShop();
-    requestAnimationFrame(() => {
-    refreshOwnAvatarSkinUI();
-    refreshRoomAvatarSkinUI();
-
-    setTimeout(() => {
-        refreshOwnAvatarSkinUI();
-        refreshRoomAvatarSkinUI();
-    }, 80);
-});
 }
 
 async function loadAvatarSkinState() {
@@ -7788,21 +7779,22 @@ async function equipAvatarSkin(skinId) {
         return;
     }
 
-   saveAvatarSkinLocal(skin.id, owned);
+saveAvatarSkinLocal(skin.id, owned);
+
 refreshOwnAvatarSkinUI();
 refreshRoomAvatarSkinUI();
+
 await syncEquippedAvatarSkinToRoom(skin.id);
 
 await walletRef().update({
+    avatarSkin: skin.id,
+    ownedAvatarSkins: owned,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP,
+    name: localStorage.getItem("user-name-display") || "Người chơi",
+    photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+}).catch(err => console.error("Lỗi lưu skin avatar:", err));
 
-        avatarSkin: skin.id,
-        ownedAvatarSkins: owned,
-        updatedAt: firebase.database.ServerValue.TIMESTAMP,
-        name: localStorage.getItem("user-name-display") || "Người chơi",
-        photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-    }).catch(err => console.error("Lỗi lưu skin avatar:", err));
-
-    refreshOwnAvatarSkinUI();
+refreshOwnAvatarSkinUI();
 refreshRoomAvatarSkinUI();
 renderAvatarSkinShop();
 }
