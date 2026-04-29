@@ -7242,6 +7242,7 @@ function appendMatchChatMessage(msg) {
 function bindRoom(roomId) {
     cleanupRoomListeners();
     const listeningRoomId = roomId;
+    let roomUiVersion = 0;
 
     currentRoomId = listeningRoomId;
 roomValueRef = db.ref("matches/" + listeningRoomId);
@@ -7252,10 +7253,14 @@ roomChatRef = db.ref("matches/" + listeningRoomId + "/chat");
         content.innerHTML = '<p style="color:#55efc4;">Hệ thống: Đang ghép phòng...</p>';
     }
 
-    roomValueRef.on("value", async (snap) => {
+   roomValueRef.on("value", async (snap) => {
         if (currentRoomId !== listeningRoomId) return;
+
+        const uiVersion = ++roomUiVersion;
+
         const room = snap.val();
         if (!room) return;
+
 const me = getCurrentPlayerProfile();
 
 const detectedSide = getMySideFromRoomSafe(room);
@@ -7288,16 +7293,19 @@ if (typeof applyBoardPerspective === "function") {
 
 if (room.winner) {
     didSettleWinnerNow = await maybeSettleStakeRoom(room, listeningRoomId) === true;
-    // Tách riêng khối bàn giao phòng sau bỏ chạy/đầu hàng.
-// Không phụ thuộc popup thắng, tránh lỗi popup không gọi thì B không được nhường phòng.
-if (
-    room.winner === mySide &&
-    room.winReason === "bochay"
-) {
-    scheduleResetWinnerRoomAfterPaid(room, listeningRoomId);
-}
-}
 
+    // Nếu trong lúc await, phòng đã reset sang ván 2 rồi,
+    // callback cũ của ván 1 không được phép đóng/mở bảng SS nữa.
+    if (uiVersion !== roomUiVersion || currentRoomId !== listeningRoomId) return;
+
+    // Tách riêng khối bàn giao phòng sau bỏ chạy.
+    if (
+        room.winner === mySide &&
+        room.winReason === "bochay"
+    ) {
+        scheduleResetWinnerRoomAfterPaid(room, listeningRoomId);
+    }
+}
 // Khi đã có winner, room.players vẫn có thể là số dư cũ trước khi settle.
 // Không cho số dư cũ trong room đè lại ví vừa cộng thưởng.
 if (!room.winner) {
@@ -7305,6 +7313,8 @@ if (!room.winner) {
 } else if (mySide === room.winner || didSettleWinnerNow) {
     await loadWalletBalance().catch(() => {});
     await syncMyMatchBalanceToRoomNow().catch(() => {});
+    // Chặn callback cũ của ván trước chạy tiếp xuống dưới rồi closeReadyOverlay().
+if (uiVersion !== roomUiVersion || currentRoomId !== listeningRoomId) return;
 }
 // Trường hợp B thoát/phòng rớt mạng, A đang chờ mà đã bị trừ SS:
 // A tự kiểm tra và tự hoàn lại cho chính mình, tránh kẹt tiền tới khi reset.
