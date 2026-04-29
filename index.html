@@ -7292,6 +7292,40 @@ if (typeof applyBoardPerspective === "function") {
         let didSettleWinnerNow = false;
 
 if (room.winner) {
+    // Hiện popup thắng/thua NGAY khi thấy winner.
+    // Không đợi settle PMC, vì bên thắng settle xong có thể bị return sớm.
+    window.__shownVictoryKeys = window.__shownVictoryKeys || {};
+
+    const victoryKey = [
+        listeningRoomId,
+        room.winner || "",
+        room.winReason || "",
+        room.finishedAt || room.settlement?.paidAt || ""
+    ].join("|");
+
+    if (!window.__shownVictoryKeys[victoryKey] && !isGameOver) {
+        window.__shownVictoryKeys[victoryKey] = true;
+
+        if (room.winner === "hoa") {
+            endGame("HÒA CỜ", "2 BÊN HÒA");
+        } else {
+            let title = "CHIẾU BÍ";
+
+            if (room.winReason === "dauhang") {
+                title = "ĐẦU HÀNG";
+            }
+
+            if (room.winReason === "bochay") {
+                title = "ĐỐI THỦ THOÁT";
+            }
+
+            endGame(
+                title,
+                `BÊN ${room.winner === "do" ? "ĐỎ" : "ĐEN"} THẮNG`
+            );
+        }
+    }
+
     didSettleWinnerNow = await maybeSettleStakeRoom(room, listeningRoomId) === true;
 
     // Nếu trong lúc await, phòng đã reset sang ván 2 rồi,
