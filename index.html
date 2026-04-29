@@ -6722,10 +6722,48 @@ function updateCheckEffectFromBoard() {
         });
     });
 }
-function syncMyWalletCacheFromRoomPlayer(room = {}) {
-    if (!mySide) return;
+function getLocalUidSafe() {
+    return String(
+        firebase.auth().currentUser?.uid ||
+        localStorage.getItem("uid") ||
+        ""
+    ).trim();
+}
 
-    const p = room?.players?.[mySide] || {};
+function getLocalWalletKeySafe() {
+    return String(makeWalletDbKey() || "").trim();
+}
+
+function isSamePlayerAsMe(p = {}) {
+    const myUid = getLocalUidSafe();
+    const myWalletKey = getLocalWalletKeySafe();
+
+    const pUid = String(p?.uid || "").trim();
+    const pWalletKey = String(p?.walletKey || "").trim();
+
+    return (
+        (myUid && pUid && myUid === pUid) ||
+        (myWalletKey && pWalletKey && myWalletKey === pWalletKey)
+    );
+}
+
+function getMySideFromRoomSafe(room = {}) {
+    if (isSamePlayerAsMe(room?.players?.do)) return "do";
+    if (isSamePlayerAsMe(room?.players?.den)) return "den";
+    return null;
+}
+function syncMyWalletCacheFromRoomPlayer(room = {}) {
+    const realSide = getMySideFromRoomSafe(room);
+    if (!realSide) return;
+
+    const p = room?.players?.[realSide] || {};
+
+    // Chặn tuyệt đối vụ lấy nhầm ví đối thủ.
+    if (!isSamePlayerAsMe(p)) return;
+
+    mySide = realSide;
+    viewSide = realSide;
+
     const hasPmc = p.pmcBalance !== undefined && p.pmcBalance !== null && p.pmcBalance !== "";
     const hasPi = (p.piBalance ?? p.balance) !== undefined && (p.piBalance ?? p.balance) !== null && (p.piBalance ?? p.balance) !== "";
 
@@ -6771,11 +6809,18 @@ const bottomPmcBox = document.getElementById("player-do-pmc-balance");
     const denReadyNow = !!room?.ready?.den;
     const isPlayingNow = room?.status === "playing";
 
-    const myPlayer = mySide === "den" ? denPlayer : doPlayer;
-    const oppPlayer = mySide === "den" ? doPlayer : denPlayer;
+const safeMySide = getMySideFromRoomSafe(room) || mySide || "do";
 
-    const myReady = mySide === "den" ? denReadyNow : doReadyNow;
-    const oppReady = mySide === "den" ? doReadyNow : denReadyNow;
+if (getMySideFromRoomSafe(room)) {
+    mySide = safeMySide;
+    viewSide = safeMySide;
+}
+
+const myPlayer = safeMySide === "den" ? denPlayer : doPlayer;
+const oppPlayer = safeMySide === "den" ? doPlayer : denPlayer;
+
+const myReady = safeMySide === "den" ? denReadyNow : doReadyNow;
+const oppReady = safeMySide === "den" ? doReadyNow : denReadyNow;
 
     if (topName) topName.innerText = oppPlayer.name || "ĐỐI THỦ";
     if (bottomName) bottomName.innerText = myPlayer.name || "TAO";
@@ -6803,11 +6848,10 @@ const readPlayerPi = (p) =>
 const oppPmc = readPlayerPmc(oppPlayer);
 const oppPi = readPlayerPi(oppPlayer);
 
-const hasMyRoomPmc = myPlayer.pmcBalance !== undefined && myPlayer.pmcBalance !== null && myPlayer.pmcBalance !== "";
-const hasMyRoomPi = (myPlayer.piBalance ?? myPlayer.balance) !== undefined && (myPlayer.piBalance ?? myPlayer.balance) !== null && (myPlayer.piBalance ?? myPlayer.balance) !== "";
-
-const myPmc = hasMyRoomPmc ? readPlayerPmc(myPlayer) : getPmcBalance();
-const myPi = hasMyRoomPi ? readPlayerPi(myPlayer) : getPiBalance();
+// Bản thân mình luôn lấy từ ví/cache thật.
+// Không lấy từ room.players nữa để tránh dính số dư của đối thủ khi chuyển chủ phòng.
+const myPmc = getPmcBalance();
+const myPi = getPiBalance();
 
 if (topPiBox) topPiBox.innerText = oppPi.toFixed(2) + " π";
 if (topPmcBox) topPmcBox.innerText = formatPMC(oppPmc) + " PMC";
@@ -6917,19 +6961,27 @@ if (room.winner && side !== room.winner) {
 }
 
         // ===== Nếu đang chơi mà 1 bên thoát => xử thua như cũ =====
-        if (stillPlaying && otherPlayerExists && !room.winner) {
-            await db.ref("matches/" + roomId).update({
-                winner: otherSide,
-winReason: "bochay",
-finishedAt: firebase.database.ServerValue.TIMESTAMP,
-updatedAt: firebase.database.ServerValue.TIMESTAMP
-            });
+if (stillPlaying && otherPlayerExists && !room.winner) {
+    await db.ref("matches/" + roomId).update({
+        winner: otherSide,
+        winReason: "bochay",
+        finishedAt: firebase.database.ServerValue.TIMESTAMP,
 
-            await db.ref("matches/" + roomId + "/players/" + side).remove().catch(() => {});
-            await db.ref("matches/" + roomId + "/ready/" + side).remove().catch(() => {});
-            await db.ref("matches/" + roomId + "/stakeLocked/" + side).set(false).catch(() => {});
-            return;
-        }
+        // Ván đã kết thúc vì bỏ chạy, không để board cũ render lại.
+        status: "finished",
+        board: null,
+        lastMoveFrom: null,
+        lastMoveTo: null,
+        drawRequest: null,
+
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+    });
+
+    await db.ref("matches/" + roomId + "/players/" + side).remove().catch(() => {});
+    await db.ref("matches/" + roomId + "/ready/" + side).set(false).catch(() => {});
+    await db.ref("matches/" + roomId + "/stakeLocked/" + side).set(false).catch(() => {});
+    return;
+}
 
         // ===== HOST (do) rời khi phòng đang chờ và đã có người được mời =====
         if (
@@ -7098,13 +7150,15 @@ roomChatRef = db.ref("matches/" + listeningRoomId + "/chat");
         if (!room) return;
 const me = getCurrentPlayerProfile();
 
-if (room.players?.do?.uid === me.uid) {
-    mySide = "do";
-} else if (room.players?.den?.uid === me.uid) {
-    mySide = "den";
+const detectedSide = getMySideFromRoomSafe(room);
+
+if (detectedSide) {
+    mySide = detectedSide;
+    viewSide = detectedSide;
+} else {
+    viewSide = mySide || "do";
 }
 
-viewSide = mySide || "do";
 if (typeof applyBoardPerspective === "function") {
     applyBoardPerspective();
 }
@@ -7253,11 +7307,7 @@ if (!canRenderLiveBoard) {
                 await db.ref("matches/" + roomId + "/drawRequest").remove();
             }
         }
-        if (room.winner) {
-    setTimeout(() => {
-        settlePmcViaApi(listeningRoomId);
-    }, 0);
-}
+        
         if (room.winner) {
     window.__shownVictoryKeys = window.__shownVictoryKeys || {};
 
@@ -7290,7 +7340,9 @@ if (room.winReason === "bochay" || room.winReason === "dauhang") {
     }
 }
 
-        await maybeStartRoomFromHost(room, listeningRoomId);
+        if (!room.winner) {
+    await maybeStartRoomFromHost(room, listeningRoomId);
+}
     });
 
     roomChatRef.on("child_added", (snap) => {
