@@ -6139,7 +6139,16 @@ function taoMaTran() {
 
     return mt;
 }
+function getPieceAtBoardPos(c, r) {
+    const viewPos = mapBoardToView(c, r);
 
+    return Array.from(document.querySelectorAll(".piece")).find(p => {
+        const pc = columns.indexOf(parseFloat(p.style.left));
+        const pr = rows.indexOf(parseFloat(p.style.top));
+
+        return pc === viewPos.c && pr === viewPos.r;
+    }) || null;
+}
 function countV(x1, y1, x2, y2, mt) {
 let count = 0;
 if (x1 === x2) { for (let y = Math.min(y1, y2) + 1; y < Math.max(y1, y2); y++) if (mt[y][x1]) count++; }
@@ -6227,7 +6236,7 @@ if (mt[tr][tc] && mt[tr][tc].side === side) return false;
 
 let luatType = type;
 // XÁC ĐỊNH LUẬT CỜ ÚP DỰA TRÊN VỊ TRÍ XUẤT PHÁT
-const pieceAtPos = document.querySelector(`.piece[style*="left: ${columns[c]}%"][style*="top: ${rows[r]}%"]`);
+const pieceAtPos = getPieceAtBoardPos(c, r);
 if (isCoUp && pieceAtPos && pieceAtPos.dataset.isUp === "true") {
 if (r === 0 || r === 9) {
 if (c === 0 || c === 8) luatType = (side === 'do' ? '俥' : '車');
