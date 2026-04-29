@@ -14855,10 +14855,47 @@ function ensureArenaSkinButton() {
 
     btn.style.display = document.body.classList.contains("in-match") ? "none" : "flex";
 }
+function ensureArenaTopButton() {
+    let btn = document.getElementById("arena-top-btn");
 
-document.addEventListener("DOMContentLoaded", ensureArenaSkinButton);
+    if (!btn) {
+        btn = document.createElement("div");
+        btn.id = "arena-top-btn";
+        btn.innerHTML = "🏆";
+        btn.onclick = toggleArenaTopBox;
+    }
+
+    // Đẩy TOP ra thẳng body, không để nằm trong game-arena bị ẩn
+    if (btn.parentElement !== document.body) {
+        document.body.appendChild(btn);
+    }
+
+    let box = document.getElementById("arena-top-box");
+    if (box && box.parentElement !== document.body) {
+        document.body.appendChild(box);
+    }
+
+    btn.style.setProperty(
+        "display",
+        document.body.classList.contains("in-match") ? "none" : "flex",
+        "important"
+    );
+    btn.style.setProperty("position", "fixed", "important");
+    btn.style.setProperty("top", "16px", "important");
+    btn.style.setProperty("right", "192px", "important");
+    btn.style.setProperty("z-index", "13055", "important");
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+    ensureArenaSkinButton();
+    ensureArenaTopButton();
+});
+
 setTimeout(ensureArenaSkinButton, 500);
 setTimeout(ensureArenaSkinButton, 1500);
+
+setTimeout(ensureArenaTopButton, 500);
+setTimeout(ensureArenaTopButton, 1500);
 </script>
 </body>
 
