@@ -10123,41 +10123,52 @@ function showReadyOverlay(mode, forceResetTime = false) {
 function ensureReadyOverlayForWaitingRoom(room = {}, roomId = currentRoomId) {
     const overlay = document.getElementById("ready-overlay");
     if (!overlay) return;
-const key = [
-    roomId || "",
-    room.players?.do?.uid || room.players?.do?.walletKey || "",
-    room.players?.den?.uid || room.players?.den?.walletKey || "",
-    room.status || ""
-].join("|");
 
-    // Chống Firebase bắn nhiều snapshot làm bảng SS chớp tắt
-    if (readyOverlayOpeningLock && overlay.style.display === "flex") {
-    updateReadyUI();
-    return;
-}
+    const hasEnoughPlayersWaiting =
+        !!room.players?.do &&
+        !!room.players?.den &&
+        room.status === "waiting" &&
+        !room.winner;
 
-// Nếu lock bị kẹt trong lúc overlay đang ẩn,
-// mở khóa lại để bảng SS hiện ra, khỏi cần reset app.
-if (readyOverlayOpeningLock && overlay.style.display !== "flex") {
-    readyOverlayOpeningLock = false;
-}
+    if (!hasEnoughPlayersWaiting) return;
 
+    const key = [
+        roomId || "",
+        room.players?.do?.uid || room.players?.do?.walletKey || "",
+        room.players?.den?.uid || room.players?.den?.walletKey || "",
+        room.status || ""
+    ].join("|");
+
+    const oldKey = readyOverlayRoomKey || "";
     const alreadyVisible = overlay.style.display === "flex";
 
-    if (alreadyVisible && readyOverlayRoomKey === key) {
-        readyOverlayWaitingShown = true;
+    readyOverlayWaitingShown = true;
+    readyOverlayRoomKey = key;
+
+    // Quan trọng:
+    // Nếu bảng SS đang hiện rồi thì tuyệt đối không gọi showReadyOverlay lại.
+    // Chỉ update chữ nút / ready thôi, không reset countdown, không tắt/mở lại.
+    if (alreadyVisible) {
+        readyOverlayOpeningLock = false;
         updateReadyUI();
+
+        if (!readyInterval) {
+            startReadyCountdown();
+        }
+
         return;
     }
 
-    readyOverlayOpeningLock = true;
-    readyOverlayRoomKey = key;
+    // Nếu bảng đang ẩn thì mở lại.
+    // Chỉ reset 30 giây khi đổi phòng / đổi cặp người chơi / hết giờ.
+    readyOverlayOpeningLock = false;
 
-    showReadyOverlay(room.mode || currentRoomMode, !alreadyVisible);
+    const needResetTime =
+        oldKey !== key ||
+        !readyTime ||
+        readyTime <= 0;
 
-    setTimeout(() => {
-        readyOverlayOpeningLock = false;
-    }, 350);
+    showReadyOverlay(room.mode || currentRoomMode, needResetTime);
 }
 async function setReady() {
     if (!currentRoomId || !mySide) return;
