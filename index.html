@@ -7334,7 +7334,14 @@ if (room.winner) {
             );
         }
     }
-
+// A/B bỏ chạy ngang khi đang đánh:
+// gọi lịch bàn giao NGAY trước khi settle để không bị uiVersion return chặn mất.
+if (
+    room.winReason === "bochay" &&
+    room.winner === mySide
+) {
+    scheduleResetWinnerRoomAfterPaid(room, listeningRoomId);
+}
     didSettleWinnerNow = await maybeSettleStakeRoom(room, listeningRoomId) === true;
 
     // Nếu trong lúc await, phòng đã reset sang ván 2 rồi,
