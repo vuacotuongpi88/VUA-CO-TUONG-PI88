@@ -3160,6 +3160,81 @@ display: inline;
 cursor: pointer;
 }
 }
+#match-chat-btn {
+position: fixed;
+bottom: 20px;
+right: 10px;
+width: 50px;
+height: 50px;
+background: #55efc4;
+color: black;
+border-radius: 50%;
+display: flex;
+align-items: center;
+justify-content: center;
+cursor: pointer;
+font-size: 20px;
+z-index: 9999;
+}
+/* ===== BONG BÓNG BÁO TIN NHẮN TRONG TRẬN ===== */
+#match-chat-peek {
+    position: fixed;
+    right: 12px;
+    bottom: 78px;
+    width: min(72vw, 260px);
+    max-width: 260px;
+    padding: 10px 12px;
+    box-sizing: border-box;
+    border-radius: 16px;
+    background: rgba(8, 14, 12, 0.96);
+    border: 2px solid #55efc4;
+    color: #fff;
+    z-index: 10002;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+    transition: opacity 0.22s ease, transform 0.22s ease;
+    box-shadow:
+        0 0 14px rgba(85, 239, 196, 0.35),
+        0 8px 22px rgba(0, 0, 0, 0.55);
+}
+
+#match-chat-peek.show {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+#match-chat-peek::after {
+    content: "";
+    position: absolute;
+    right: 22px;
+    bottom: -9px;
+    width: 14px;
+    height: 14px;
+    background: rgba(8, 14, 12, 0.96);
+    border-right: 2px solid #55efc4;
+    border-bottom: 2px solid #55efc4;
+    transform: rotate(45deg);
+}
+
+.match-chat-peek-title {
+    color: #55efc4;
+    font-size: 12px;
+    font-weight: 900;
+    margin-bottom: 4px;
+}
+
+.match-chat-peek-text {
+    color: #fff;
+    font-size: 13px;
+    line-height: 1.35;
+    font-weight: 700;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
 #ready-overlay {
 position: fixed;
 inset: 0;
@@ -5331,7 +5406,48 @@ let roomChatRef = null;
 let lastRoomBoardHash = "";
 let lastDrawRequestAt = 0;
 const ACTIVE_MATCH_KEY = "co_tuong_active_match_v1";
+let matchChatPeekTimer = null;
 
+function escapeChatPeekText(value = "") {
+    const div = document.createElement("div");
+    div.textContent = String(value || "");
+    return div.innerHTML;
+}
+
+function showMatchChatPeek(msg = {}) {
+    const btn = document.getElementById("match-chat-btn");
+    if (!btn) return;
+
+    // Chỉ hiện khi icon chat đang hiện. PC đang mở khung chat sẵn thì khỏi hiện.
+    if (getComputedStyle(btn).display === "none") return;
+
+    const chat = document.getElementById("match-chat-popup");
+    if (chat && getComputedStyle(chat).display !== "none") return;
+
+    let box = document.getElementById("match-chat-peek");
+    if (!box) {
+        box = document.createElement("div");
+        box.id = "match-chat-peek";
+        document.body.appendChild(box);
+    }
+
+    const name = String(msg.name || "Đối thủ").trim().slice(0, 18);
+    const text = String(msg.text || "").trim().slice(0, 90);
+
+    box.innerHTML = `
+        <div class="match-chat-peek-title">💬 ${escapeChatPeekText(name)} nhắn:</div>
+        <div class="match-chat-peek-text">${escapeChatPeekText(text)}</div>
+    `;
+
+    box.classList.remove("show");
+    void box.offsetWidth;
+    box.classList.add("show");
+
+    clearTimeout(matchChatPeekTimer);
+    matchChatPeekTimer = setTimeout(() => {
+        box.classList.remove("show");
+    }, 5200);
+}
 function readActiveMatchSnapshot() {
     try {
         return JSON.parse(localStorage.getItem(ACTIVE_MATCH_KEY) || "null");
@@ -7619,19 +7735,45 @@ if (room.winReason === "bochay") {
 }
     });
 
-    roomChatRef.on("child_added", (snap) => {
-        if (currentRoomId !== listeningRoomId) return;
-        const data = snap.val();
-        const content = document.getElementById("match-content-popup");
-        if (!data || !content) return;
+const chatBindAt = typeof readyNowMs === "function" ? readyNowMs() : Date.now();
 
-        const mine = data.side === mySide;
-        const msg = document.createElement("div");
-        msg.style.marginBottom = "6px";
-        msg.innerHTML = `<b style="color:${mine ? "#55efc4" : "#ffeaa7"};">${mine ? "Mầy" : (data.name || "Đối thủ")}:</b> <span style="word-break:break-word;">${data.text || ""}</span>`;
-        content.appendChild(msg);
-        content.scrollTop = content.scrollHeight;
-    });
+roomChatRef.on("child_added", (snap) => {
+    if (currentRoomId !== listeningRoomId) return;
+
+    const data = snap.val();
+    const content = document.getElementById("match-content-popup");
+    if (!data || !content) return;
+
+    const mineByUid =
+        !!data.uid &&
+        !!auth.currentUser &&
+        data.uid === auth.currentUser.uid;
+
+    const mineBySide =
+        !!data.side &&
+        !!mySide &&
+        data.side === mySide;
+
+    const mine = mineByUid || mineBySide;
+
+    const msg = document.createElement("div");
+    msg.style.marginBottom = "6px";
+    msg.innerHTML = `<b style="color:${mine ? "#55efc4" : "#ffeaa7"};">${mine ? "Mầy" : (data.name || "Đối thủ")}:</b> <span style="word-break:break-word;">${data.text || ""}</span>`;
+    content.appendChild(msg);
+    content.scrollTop = content.scrollHeight;
+
+    // Chỉ báo bong bóng cho tin nhắn mới của đối thủ.
+    // Chặn tin nhắn cũ lúc vừa bindRoom không tự bật lên.
+    const msgAt = Number(data.at || 0) || 0;
+    const isNewOpponentMsg =
+        !mine &&
+        msgAt &&
+        msgAt >= chatBindAt - 3000;
+
+    if (isNewOpponentMsg) {
+        showMatchChatPeek(data);
+    }
+});
 }
 function normalizeInviteCode(value = "") {
     return String(value)
