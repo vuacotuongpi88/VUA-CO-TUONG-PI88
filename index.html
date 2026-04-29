@@ -10294,7 +10294,7 @@ if (readyDeadlineAt) {
 
         updateReadyUI();
 
-       if (readyTime <= 0) {
+if (readyTime <= 0) {
     clearInterval(readyInterval);
     readyInterval = null;
 
@@ -10304,14 +10304,25 @@ if (readyDeadlineAt) {
         (mySide === "do" && readyDo) ||
         (mySide === "den" && readyDen);
 
-    // Ai đã SS rồi thì không tự văng.
-    // Chỉ thằng chưa SS mới bị đá khỏi phòng.
-    if (iAmReady) {
+    // Chủ phòng A/Đỏ luôn được quyền xử lý hết giờ:
+    // A không văng, nhưng A sẽ đá B/Đen nếu B chưa SS.
+    if (mySide === "do") {
+        Promise.resolve(failReadyAndBackHome()).catch(err => {
+            console.error("HOST_READY_TIMEOUT_CLEANUP_FAIL:", err);
+        });
+        return;
+    }
+
+    // B/Đen nếu đã SS rồi thì không tự văng.
+    if (mySide === "den" && iAmReady) {
         updateReadyUI();
         return;
     }
 
-    failReadyAndBackHome();
+    // B/Đen chưa SS thì bị đá ra.
+    Promise.resolve(failReadyAndBackHome()).catch(err => {
+        console.error("GUEST_READY_TIMEOUT_LEAVE_FAIL:", err);
+    });
 }
     };
 
