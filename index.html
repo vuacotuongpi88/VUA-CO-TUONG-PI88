@@ -7319,6 +7319,52 @@ const me = getCurrentPlayerProfile();
 
 const detectedSide = getMySideFromRoomSafe(room);
 
+// Nếu mình là B/đen, nhưng Firebase đã xóa players/den
+// nghĩa là A đã đá B vì hết 30 giây chưa SS.
+// Chỉ xử lý local cho B văng về sảnh, KHÔNG gọi leaveRealtimeMatch nữa.
+const iWasKickedByReadyTimeout =
+    mySide === "den" &&
+    !detectedSide &&
+    room.status === "waiting" &&
+    !room.winner &&
+    !!room.players?.do &&
+    !room.players?.den;
+
+if (iWasKickedByReadyTimeout) {
+    clearInterval(readyInterval);
+    readyInterval = null;
+
+    closeReadyOverlay();
+
+    alert("Hết thời gian sẵn sàng!");
+
+    clearActiveMatchSnapshot(listeningRoomId);
+    cleanupRoomListeners();
+
+    currentRoomId = null;
+    mySide = null;
+    viewSide = "do";
+    currentRoomMode = null;
+    currentRoomStakePMC = 0;
+    currentRoomBucket = null;
+    currentRoomStatus = null;
+
+    readyDo = false;
+    readyDen = false;
+    readyDeadlineAt = 0;
+    readyTime = 30;
+    readyOverlayWaitingShown = false;
+    readyOverlayRoomKey = "";
+    readyOverlayOpeningLock = false;
+
+    showHomeUI();
+
+    const arena = document.getElementById("game-arena");
+    if (arena) arena.style.display = "none";
+
+    return;
+}
+
 if (detectedSide) {
     mySide = detectedSide;
     viewSide = detectedSide;
