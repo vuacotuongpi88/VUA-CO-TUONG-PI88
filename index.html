@@ -6440,8 +6440,9 @@ refreshTimerRings();
                 if (currentRoomId) {
                     db.ref("matches/" + currentRoomId).update({
                         winner: winnerSide,
-                        winReason: "checkmate",
-                        updatedAt: firebase.database.ServerValue.TIMESTAMP
+winReason: "checkmate",
+finishedAt: firebase.database.ServerValue.TIMESTAMP,
+updatedAt: firebase.database.ServerValue.TIMESTAMP
                     });
                 } else {
                     endGame("CHIẾU BÍ", resultSub);
@@ -6768,13 +6769,67 @@ async function leaveRealtimeMatch() {
         const otherSide = side === "do" ? "den" : "do";
         const stillPlaying = room.status === "playing";
         const otherPlayerExists = !!room.players?.[otherSide];
+        // ===== Ván đã có người thắng, người thua thoát => dọn kết quả cũ, nhường phòng cho người thắng =====
+if (room.winner && side !== room.winner) {
+    const winnerSide = room.winner;
+    const winnerPlayer = room.players?.[winnerSide] || room.players?.[otherSide] || null;
+
+    if (winnerPlayer?.uid) {
+        const cleanMode = room.mode || mode || currentRoomMode || "co-tuong";
+        const cleanStake = Math.max(0, Math.floor(Number(room.stakePMC || currentRoomStakePMC || 0) || 0));
+        const cleanBucket = room.roomBucket || roomBucket || makeStakeBucket(cleanMode, cleanStake);
+        const cleanInviteCode = String(room.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
+
+        const updates = {};
+
+        // Người thắng giữ phòng, chuyển về phe đỏ/chủ phòng cho ván mới
+        updates[`matches/${roomId}/players/do`] = {
+            ...winnerPlayer,
+            side: "do"
+        };
+        updates[`matches/${roomId}/players/den`] = null;
+
+        updates[`matches/${roomId}/status`] = "waiting";
+        updates[`matches/${roomId}/turn`] = "do";
+        updates[`matches/${roomId}/board`] = null;
+        updates[`matches/${roomId}/ready/do`] = false;
+        updates[`matches/${roomId}/ready/den`] = false;
+        updates[`matches/${roomId}/stakeLocked/do`] = false;
+        updates[`matches/${roomId}/stakeLocked/den`] = false;
+
+        // Quan trọng: xóa kết quả cũ để B không bị gọi lại hiệu ứng thắng
+        updates[`matches/${roomId}/winner`] = null;
+        updates[`matches/${roomId}/winReason`] = null;
+        updates[`matches/${roomId}/drawRequest`] = null;
+        updates[`matches/${roomId}/lastMoveFrom`] = null;
+        updates[`matches/${roomId}/lastMoveTo`] = null;
+        updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+        // Đưa phòng về danh sách chờ để người khác vào
+        updates[`waitingRooms/${cleanBucket}/${roomId}`] = {
+            roomId,
+            uid: winnerPlayer.uid,
+            name: winnerPlayer.name || "Người chơi",
+            mode: cleanMode,
+            stakePMC: cleanStake,
+            inviteCode: cleanInviteCode,
+            createdAt: Date.now(),
+            claimedBy: null,
+            claimedAt: null
+        };
+
+        await db.ref().update(updates);
+        return;
+    }
+}
 
         // ===== Nếu đang chơi mà 1 bên thoát => xử thua như cũ =====
         if (stillPlaying && otherPlayerExists && !room.winner) {
             await db.ref("matches/" + roomId).update({
                 winner: otherSide,
-                winReason: "bochay",
-                updatedAt: firebase.database.ServerValue.TIMESTAMP
+winReason: "bochay",
+finishedAt: firebase.database.ServerValue.TIMESTAMP,
+updatedAt: firebase.database.ServerValue.TIMESTAMP
             });
 
             await db.ref("matches/" + roomId + "/players/" + side).remove().catch(() => {});
@@ -7047,6 +7102,10 @@ if (hasEnoughPlayersWaiting) {
 if (room.status === "playing" && !room.winner) {
     readyOverlayWaitingShown = false;
     isGameOver = false;
+
+    // Ván mới rồi thì cho phép hiện hiệu ứng thắng/thua của ván mới
+    window.__shownVictoryKeys = {};
+
     const overlay = document.getElementById("ready-overlay");
     if (overlay) overlay.style.display = "none";
 }
@@ -7094,18 +7153,31 @@ if (room.status === "playing" && !room.winner) {
         settlePmcViaApi(listeningRoomId);
     }, 0);
 }
-        if (room.winner && !isGameOver) {
-    if (room.winner === "hoa") {
-        endGame("HÒA CỜ", "2 BÊN HÒA");
-    } else {
-        let title = "CHIẾU BÍ";
-        if (room.winReason === "dauhang") title = "ĐẦU HÀNG";
-        if (room.winReason === "bochay") title = "ĐỐI THỦ THOÁT";
+        if (room.winner) {
+    window.__shownVictoryKeys = window.__shownVictoryKeys || {};
 
-        endGame(
-            title,
-            `BÊN ${room.winner === "do" ? "ĐỎ" : "ĐEN"} THẮNG`
-        );
+    const victoryKey = [
+        listeningRoomId,
+        room.winner || "",
+        room.winReason || "",
+        room.finishedAt || room.settlement?.paidAt || ""
+    ].join("|");
+
+    if (!window.__shownVictoryKeys[victoryKey] && !isGameOver) {
+        window.__shownVictoryKeys[victoryKey] = true;
+
+        if (room.winner === "hoa") {
+            endGame("HÒA CỜ", "2 BÊN HÒA");
+        } else {
+            let title = "CHIẾU BÍ";
+            if (room.winReason === "dauhang") title = "ĐẦU HÀNG";
+            if (room.winReason === "bochay") title = "ĐỐI THỦ THOÁT";
+
+            endGame(
+                title,
+                `BÊN ${room.winner === "do" ? "ĐỎ" : "ĐEN"} THẮNG`
+            );
+        }
     }
 }
 
@@ -9393,7 +9465,9 @@ function handleMatchAction(type) {
         if (confirm("Đầu hàng ván này?")) {
             db.ref("matches/" + currentRoomId).update({
                 winner: mySide === "do" ? "den" : "do",
-                winReason: "dauhang"
+winReason: "dauhang",
+finishedAt: firebase.database.ServerValue.TIMESTAMP,
+updatedAt: firebase.database.ServerValue.TIMESTAMP
             });
         }
         return;
