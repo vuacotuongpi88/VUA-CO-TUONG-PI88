@@ -5306,6 +5306,22 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.database();
 const provider = new firebase.auth.GoogleAuthProvider();
+let readyServerOffsetMs = 0;
+
+db.ref(".info/serverTimeOffset").on("value", snap => {
+    readyServerOffsetMs = Number(snap.val() || 0) || 0;
+});
+
+function readyNowMs() {
+    return Date.now() + readyServerOffsetMs;
+}
+
+function getReadySecondsLeft(deadlineAt) {
+    const left = Math.ceil((Number(deadlineAt || 0) - readyNowMs()) / 1000);
+
+    // Chặn tuyệt đối vụ nhảy 38, 40, 45 giây
+    return Math.max(0, Math.min(30, left));
+}
 
 let currentRoomId = null;
 let currentRoomMode = null;
@@ -10118,15 +10134,12 @@ function startReadyCountdown() {
 
         // Có deadline chung thì tính theo deadline chung.
         // Như vậy 2 máy sẽ hiện cùng 1 số, không còn lệch 17/18.
-        if (readyDeadlineAt) {
-            readyTime = Math.max(
-                0,
-                Math.ceil((Number(readyDeadlineAt) - Date.now()) / 1000)
-            );
-        } else {
-            // Fallback cũ nếu chưa có deadline
-            readyTime = Math.max(0, Math.floor(Number(readyTime) || 0) - 1);
-        }
+if (readyDeadlineAt) {
+    readyTime = getReadySecondsLeft(readyDeadlineAt);
+} else {
+    // Fallback cũ nếu chưa có deadline
+    readyTime = Math.max(0, Math.floor(Number(readyTime) || 0) - 1);
+}
 
         updateReadyUI();
 
@@ -10191,12 +10204,9 @@ function showReadyOverlay(mode, forceResetTime = false) {
     readyOverlayWaitingShown = true;
     overlay.style.display = "flex";
 
-    if (forceResetTime || !readyTime || readyTime <= 0) {
+if (forceResetTime || !readyTime || readyTime <= 0) {
     if (readyDeadlineAt) {
-        readyTime = Math.max(
-            0,
-            Math.ceil((Number(readyDeadlineAt) - Date.now()) / 1000)
-        );
+        readyTime = getReadySecondsLeft(readyDeadlineAt);
     } else {
         readyTime = 30;
     }
@@ -10229,14 +10239,14 @@ function ensureReadyOverlayForWaitingRoom(room = {}, roomId = currentRoomId) {
     if (!Number(room.readyDeadlineAt || 0)) {
         db.ref("matches/" + roomId + "/readyDeadlineAt").transaction((current) => {
             if (current) return current;
-            return Date.now() + 30000;
+            return readyNowMs() + 30000;
         }, undefined, false);
 
         return;
     }
 
     readyDeadlineAt = Number(room.readyDeadlineAt || 0);
-    readyTime = Math.max(0, Math.ceil((readyDeadlineAt - Date.now()) / 1000));
+    readyTime = getReadySecondsLeft(readyDeadlineAt);
 
     const oldKey = readyOverlayRoomKey || "";
     const alreadyVisible = overlay.style.display === "flex";
