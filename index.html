@@ -7015,7 +7015,11 @@ if (
 renderPlayersFromRoom(room);
 updateReadyUI();
 
-const hasEnoughPlayersWaiting = !!room.players?.do && !!room.players?.den && room.status === "waiting";
+const hasEnoughPlayersWaiting =
+    !!room.players?.do &&
+    !!room.players?.den &&
+    room.status === "waiting" &&
+    !room.winner;
 
 if (hasEnoughPlayersWaiting) {
     isGameOver = false;
@@ -7024,12 +7028,18 @@ if (hasEnoughPlayersWaiting) {
     hideVictoryPopup();
     renderTimerUI();
 
-    if (!readyOverlayWaitingShown) {
+    const overlay = document.getElementById("ready-overlay");
+    const overlayIsHidden = !overlay || overlay.style.display !== "flex";
+
+    // Dù readyOverlayWaitingShown có bị kẹt true,
+    // nếu overlay đang ẩn thì vẫn ép hiện lại bảng SS.
+    if (overlayIsHidden) {
+        showReadyOverlay(room.mode || currentRoomMode);
+    } else {
         readyOverlayWaitingShown = true;
-        showReadyOverlay(room.mode);
+        updateReadyUI();
     }
 } else {
-    readyOverlayWaitingShown = false;
     closeReadyOverlay();
     renderTimerUI();
 }
@@ -7309,12 +7319,30 @@ for (const waiting of waitingList) {
         safeStake
     );
 
-    if (joined) {
+   if (joined) {
+    // B vừa vào phòng thành công thì phải hiện bảng SS liền,
+    // không được closeReadyOverlay ở đây nữa.
+    const freshSnap = await db.ref("matches/" + waiting.roomId).once("value").catch(() => null);
+    const freshRoom = freshSnap?.val?.() || null;
+
+    if (
+        freshRoom &&
+        freshRoom.status === "waiting" &&
+        freshRoom.players?.do &&
+        freshRoom.players?.den &&
+        !freshRoom.winner
+    ) {
+        currentRoomStatus = "waiting";
+        readyDo = !!freshRoom.ready?.do;
+        readyDen = !!freshRoom.ready?.den;
+        showReadyOverlay(freshRoom.mode || mode);
+    } else {
         closeReadyOverlay();
-        readyOverlayWaitingShown = false;
         updateReadyUI();
-        return;
     }
+
+    return;
+}
 }
 
 const created = await createAndPublishWaitingRoom(
@@ -9461,6 +9489,11 @@ if (countdownEl) {
 function closeReadyOverlay() {
     const overlay = document.getElementById("ready-overlay");
     if (overlay) overlay.style.display = "none";
+
+    // Quan trọng: tắt overlay thì phải reset cờ này,
+    // tránh bị kẹt true khiến lần sau không hiện bảng SS.
+    readyOverlayWaitingShown = false;
+
     clearInterval(readyInterval);
 }
 function failReadyAndBackHome() {
@@ -9532,6 +9565,9 @@ function showReadyOverlay(mode) {
     pendingGameMode = mode || pendingGameMode || currentRoomMode || "tong";
     const overlay = document.getElementById("ready-overlay");
     if (!overlay) return;
+
+    // Quan trọng: mở overlay thì đánh dấu đang hiện thật
+    readyOverlayWaitingShown = true;
 
     overlay.style.display = "flex";
     readyTime = 30;
