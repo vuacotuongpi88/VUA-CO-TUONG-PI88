@@ -5785,6 +5785,7 @@ let readyInterval = null;
 let readyOverlayWaitingShown = false;
 let readyOverlayRoomKey = "";
 let readyOverlayOpeningLock = false;
+let readyDeadlineAt = 0; // mốc hết giờ SS chung lấy từ Firebase
 let currentRoomStatus = null;
 
 function formatTime(s) {
@@ -5935,6 +5936,7 @@ async function playNextMatch() {
 readyOverlayRoomKey = "";
 readyOverlayOpeningLock = false;
 readyTime = 30;
+readyDeadlineAt = 0;
 
     if (sounds.bgm) sounds.bgm.pause();
     if (sounds.heartbeat) sounds.heartbeat.pause();
@@ -5973,8 +5975,9 @@ await db.ref("matches/" + currentRoomId).update({
     winReason: null,
     drawRequest: null,
     settlement: null,
-    refunds: null,
-    updatedAt: firebase.database.ServerValue.TIMESTAMP
+refunds: null,
+readyDeadlineAt: null,
+updatedAt: firebase.database.ServerValue.TIMESTAMP
 });
 const freshSnap = await db.ref("matches/" + currentRoomId).once("value").catch(() => null);
 const freshRoom = freshSnap?.val?.();
@@ -10101,30 +10104,45 @@ function failReadyAndBackHome() {
 
 function startReadyCountdown() {
     clearInterval(readyInterval);
+    readyInterval = null;
 
-    readyInterval = setInterval(() => {
+    const tickReadyCountdown = () => {
         const overlay = document.getElementById("ready-overlay");
 
         // Nếu overlay đã tắt thì dừng countdown luôn
         if (!overlay || overlay.style.display === "none") {
             clearInterval(readyInterval);
+            readyInterval = null;
             return;
         }
 
-        readyTime--;
+        // Có deadline chung thì tính theo deadline chung.
+        // Như vậy 2 máy sẽ hiện cùng 1 số, không còn lệch 17/18.
+        if (readyDeadlineAt) {
+            readyTime = Math.max(
+                0,
+                Math.ceil((Number(readyDeadlineAt) - Date.now()) / 1000)
+            );
+        } else {
+            // Fallback cũ nếu chưa có deadline
+            readyTime = Math.max(0, Math.floor(Number(readyTime) || 0) - 1);
+        }
+
         updateReadyUI();
 
         if (readyTime <= 0) {
             clearInterval(readyInterval);
+            readyInterval = null;
 
-            // chặn báo nhảm nếu đã vào trận / overlay đã tắt
             if (!overlay || overlay.style.display === "none") return;
 
             alert("Hết thời gian sẵn sàng!");
             failReadyAndBackHome();
         }
-    }, 1000);
+    };
 
+    updateReadyUI();
+    readyInterval = setInterval(tickReadyCountdown, 1000);
 }
 function getCurrentMode() {
     return isCoUp ? 'co-up' : 'co-tuong';
@@ -10174,8 +10192,15 @@ function showReadyOverlay(mode, forceResetTime = false) {
     overlay.style.display = "flex";
 
     if (forceResetTime || !readyTime || readyTime <= 0) {
+    if (readyDeadlineAt) {
+        readyTime = Math.max(
+            0,
+            Math.ceil((Number(readyDeadlineAt) - Date.now()) / 1000)
+        );
+    } else {
         readyTime = 30;
     }
+}
 
     updateReadyUI();
     startReadyCountdown();
@@ -10199,15 +10224,27 @@ function ensureReadyOverlayForWaitingRoom(room = {}, roomId = currentRoomId) {
         room.status || ""
     ].join("|");
 
+    // Nếu phòng chưa có mốc hết giờ SS thì tạo 1 lần trên Firebase.
+    // Cả A và B sẽ đọc cùng readyDeadlineAt này.
+    if (!Number(room.readyDeadlineAt || 0)) {
+        db.ref("matches/" + roomId + "/readyDeadlineAt").transaction((current) => {
+            if (current) return current;
+            return Date.now() + 30000;
+        }, undefined, false);
+
+        return;
+    }
+
+    readyDeadlineAt = Number(room.readyDeadlineAt || 0);
+    readyTime = Math.max(0, Math.ceil((readyDeadlineAt - Date.now()) / 1000));
+
     const oldKey = readyOverlayRoomKey || "";
     const alreadyVisible = overlay.style.display === "flex";
 
     readyOverlayWaitingShown = true;
     readyOverlayRoomKey = key;
 
-    // Quan trọng:
-    // Nếu bảng SS đang hiện rồi thì tuyệt đối không gọi showReadyOverlay lại.
-    // Chỉ update chữ nút / ready thôi, không reset countdown, không tắt/mở lại.
+    // Nếu bảng SS đang hiện rồi thì không mở lại, chỉ cập nhật số giây + nút.
     if (alreadyVisible) {
         readyOverlayOpeningLock = false;
         updateReadyUI();
@@ -10219,8 +10256,6 @@ function ensureReadyOverlayForWaitingRoom(room = {}, roomId = currentRoomId) {
         return;
     }
 
-    // Nếu bảng đang ẩn thì mở lại.
-    // Chỉ reset 30 giây khi đổi phòng / đổi cặp người chơi / hết giờ.
     readyOverlayOpeningLock = false;
 
     const needResetTime =
