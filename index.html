@@ -5648,6 +5648,8 @@ auth.onAuthStateChanged(async user => {
     }
 });
 function hideHomeUI() {
+    document.body.classList.add("in-match");
+
     const homeMenu = document.getElementById("home-menu");
     if (homeMenu) homeMenu.style.display = "none";
 
