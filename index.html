@@ -10316,11 +10316,105 @@ function renderLobbyRoomList(roomList) {
 
     syncLobbyRoomTabs(latestLobbyRoomList);
 }
+function getRoomTimeMs(room = {}) {
+    return Number(room.updatedAt || room.createdAt || 0) || 0;
+}
 
+function getRoomBucketSafe(room = {}) {
+    if (room.roomBucket) return room.roomBucket;
+
+    const mode = room.mode || "co-tuong";
+    const stake = Math.max(0, Math.floor(Number(room.stakePMC || 0) || 0));
+
+    if (typeof makeStakeBucket === "function") {
+        return makeStakeBucket(mode, stake);
+    }
+
+    return `${mode}__${stake}`;
+}
+
+function isGhostLobbyRoom(room = {}) {
+    const now = Date.now();
+    const status = String(room.status || "");
+    const hasDo = !!room?.players?.do;
+    const hasDen = !!room?.players?.den;
+    const t = getRoomTimeMs(room);
+    const age = t ? now - t : 999999999;
+
+    // Không có chủ bàn thì là rác
+    if (!hasDo) return true;
+
+    // Đã có kết quả thì không cần nằm trong danh sách bàn nữa
+    if (room.winner || status === "finished" || status === "ended") return true;
+
+    // Phòng chờ quá 15 phút chưa có người vào thì coi là phòng ảo
+    if (status === "waiting" && !hasDen && age > 15 * 60 * 1000) {
+        return true;
+    }
+
+    // Phòng đang chơi mà treo quá 2 tiếng thì dọn rác
+    if (status === "playing" && age > 2 * 60 * 60 * 1000) {
+        return true;
+    }
+
+    return false;
+}
+
+function shouldShowLobbyRoom(room = {}) {
+    const status = String(room.status || "");
+    const hasDo = !!room?.players?.do;
+    const hasDen = !!room?.players?.den;
+
+    if (isGhostLobbyRoom(room)) return false;
+
+    // Chỉ hiện bàn đang chờ và còn thiếu người.
+    // Bàn đang chơi thì không hiện ngoài danh sách nữa.
+    return hasDo && !hasDen && status === "waiting" && !room.winner;
+}
+
+async function cleanupGhostLobbyRoom(roomId, room = {}) {
+    if (!roomId || !isGhostLobbyRoom(room)) return;
+
+    const bucket = getRoomBucketSafe(room);
+    const updates = {};
+
+    updates[`matches/${roomId}`] = null;
+
+    if (bucket) {
+        updates[`waitingRooms/${bucket}/${roomId}`] = null;
+    }
+
+    try {
+        await db.ref().update(updates);
+        console.log("Đã xóa bàn ảo:", roomId);
+    } catch (err) {
+        console.warn("Lỗi xóa bàn ảo:", roomId, err);
+    }
+}
+
+async function cleanupGhostLobbyRoomsOnce() {
+    const snap = await db.ref("matches").orderByChild("createdAt").limitToLast(100).once("value");
+    const jobs = [];
+
+    snap.forEach(child => {
+        const room = child.val() || {};
+        if (isGhostLobbyRoom(room)) {
+            jobs.push(cleanupGhostLobbyRoom(child.key, room));
+        }
+    });
+
+    await Promise.all(jobs);
+    console.log("Dọn bàn ảo xong:", jobs.length);
+}
 function bindLobbyRoomList() {
     if (lobbyRoomListRef) {
         lobbyRoomListRef.off();
     }
+
+    // Vừa vào sảnh thì dọn rác 1 lần
+    cleanupGhostLobbyRoomsOnce().catch(err => {
+        console.warn("cleanupGhostLobbyRoomsOnce lỗi:", err);
+    });
 
     lobbyRoomListRef = db.ref("matches").orderByChild("createdAt").limitToLast(50);
 
@@ -10329,15 +10423,15 @@ function bindLobbyRoomList() {
 
         snap.forEach(child => {
             const room = child.val() || {};
-            const hasDo = !!room?.players?.do;
-            const hasDen = !!room?.players?.den;
 
-            const shouldShow =
-                !room?.winner &&
-                hasDo &&
-                (room?.status === "waiting" || room?.status === "playing");
+            // Gặp bàn ảo thì xóa khỏi Firebase
+            if (isGhostLobbyRoom(room)) {
+                cleanupGhostLobbyRoom(child.key, room);
+                return;
+            }
 
-            if (!shouldShow) return;
+            // Chỉ hiện bàn thật còn thiếu người
+            if (!shouldShowLobbyRoom(room)) return;
 
             roomList.push({
                 id: child.key,
