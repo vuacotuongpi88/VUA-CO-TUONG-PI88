@@ -10373,48 +10373,19 @@ function shouldShowLobbyRoom(room = {}) {
 }
 
 async function cleanupGhostLobbyRoom(roomId, room = {}) {
-    if (!roomId || !isGhostLobbyRoom(room)) return;
-
-    const bucket = getRoomBucketSafe(room);
-    const updates = {};
-
-    updates[`matches/${roomId}`] = null;
-
-    if (bucket) {
-        updates[`waitingRooms/${bucket}/${roomId}`] = null;
-    }
-
-    try {
-        await db.ref().update(updates);
-        console.log("Đã xóa bàn ảo:", roomId);
-    } catch (err) {
-        console.warn("Lỗi xóa bàn ảo:", roomId, err);
-    }
+    // KHÔNG xóa matches ở client nữa.
+    // Nếu xóa matches khi room vừa có winner, bên thắng/thua sẽ bị lệch popup.
+    return;
 }
 
 async function cleanupGhostLobbyRoomsOnce() {
-    const snap = await db.ref("matches").orderByChild("createdAt").limitToLast(100).once("value");
-    const jobs = [];
-
-    snap.forEach(child => {
-        const room = child.val() || {};
-        if (isGhostLobbyRoom(room)) {
-            jobs.push(cleanupGhostLobbyRoom(child.key, room));
-        }
-    });
-
-    await Promise.all(jobs);
-    console.log("Dọn bàn ảo xong:", jobs.length);
+    // Tạm tắt dọn phòng ảo tự động để không ảnh hưởng trận đang chơi.
+    return;
 }
 function bindLobbyRoomList() {
     if (lobbyRoomListRef) {
         lobbyRoomListRef.off();
     }
-
-    // Vừa vào sảnh thì dọn rác 1 lần
-    cleanupGhostLobbyRoomsOnce().catch(err => {
-        console.warn("cleanupGhostLobbyRoomsOnce lỗi:", err);
-    });
 
     lobbyRoomListRef = db.ref("matches").orderByChild("createdAt").limitToLast(50);
 
@@ -10423,15 +10394,19 @@ function bindLobbyRoomList() {
 
         snap.forEach(child => {
             const room = child.val() || {};
+            const status = String(room.status || "");
+            const hasDo = !!room?.players?.do;
+            const hasDen = !!room?.players?.den;
 
-            // Gặp bàn ảo thì xóa khỏi Firebase
-            if (isGhostLobbyRoom(room)) {
-                cleanupGhostLobbyRoom(child.key, room);
-                return;
-            }
+            // CHỈ HIỆN phòng đang chờ, có chủ bàn, chưa có đối thủ
+            // Không xóa gì trong Firebase ở đây
+            const shouldShow =
+                !room.winner &&
+                status === "waiting" &&
+                hasDo &&
+                !hasDen;
 
-            // Chỉ hiện bàn thật còn thiếu người
-            if (!shouldShowLobbyRoom(room)) return;
+            if (!shouldShow) return;
 
             roomList.push({
                 id: child.key,
