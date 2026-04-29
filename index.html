@@ -5646,7 +5646,16 @@ auth.onAuthStateChanged(async user => {
 function hideHomeUI() {
     const homeMenu = document.getElementById("home-menu");
     if (homeMenu) homeMenu.style.display = "none";
-const mobileLobbyTitle = document.getElementById("mobile-lobby-title");
+
+    // Ẩn cụm góc trái khi vào phòng/vào game: 3 gạch + SĐT/tên + Pi + PMC
+    const userDisplay = document.getElementById("user-display");
+    if (userDisplay) userDisplay.style.display = "none";
+
+    const profileDropdown = document.getElementById("profile-dropdown");
+    if (profileDropdown) profileDropdown.classList.remove("show");
+
+    const mobileLobbyTitle = document.getElementById("mobile-lobby-title");
+    if (mobileLobbyTitle) mobileLobbyTitle.style.display = "none";
 if (mobileLobbyTitle) mobileLobbyTitle.style.display = "none";
     const friendWrap = document.getElementById("mobile-friend-wrap");
 if (friendWrap) friendWrap.style.display = "none";
@@ -5667,6 +5676,10 @@ if (friendBox) friendBox.classList.remove("show");
 function showHomeUI() {
     const homeMenu = document.getElementById("home-menu");
     if (homeMenu) homeMenu.style.display = "block";
+
+    // Ra sảnh thì hiện lại cụm góc trái
+    const userDisplay = document.getElementById("user-display");
+    if (userDisplay) userDisplay.style.display = "flex";
 
     if (window.innerWidth <= 600) {
        const friendWrap = document.getElementById("mobile-friend-wrap");
