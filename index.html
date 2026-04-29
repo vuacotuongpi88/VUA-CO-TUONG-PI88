@@ -6649,11 +6649,14 @@ function scheduleResetWinnerRoomAfterPaid(room, roomId) {
             const updates = {};
 
             // Người thắng giữ phòng, chuyển về phe đỏ/chủ phòng cho ván mới
-            updates[`matches/${roomId}/players/do`] = {
-                ...winnerPlayer,
-                side: "do"
-            };
-            updates[`matches/${roomId}/players/den`] = null;
+           updates[`matches/${roomId}/players/do`] = {
+    ...winnerPlayer,
+    side: "do",
+    updatedAt: firebase.database.ServerValue.TIMESTAMP
+};
+updates[`matches/${roomId}/players/den`] = null;
+updates[`matches/${roomId}/hostUid`] = winnerPlayer.uid || "";
+updates[`matches/${roomId}/hostWalletKey`] = winnerPlayer.walletKey || "";
 
             updates[`matches/${roomId}/status`] = "waiting";
             updates[`matches/${roomId}/turn`] = "do";
@@ -6694,9 +6697,19 @@ function scheduleResetWinnerRoomAfterPaid(room, roomId) {
 
             await db.ref().update(updates);
 
-            mySide = "do";
-            viewSide = "do";
-            currentRoomStatus = "waiting";
+           mySide = "do";
+viewSide = "do";
+currentRoomId = roomId;
+currentRoomMode = cleanMode;
+currentRoomStakePMC = cleanStake;
+currentRoomBucket = cleanBucket;
+currentRoomStatus = "waiting";
+
+saveActiveMatchSnapshot({
+    roomId,
+    mode: cleanMode,
+    side: "do"
+});
 
             clearRealtimeBoardVisualOnly();
             hideVictoryPopup();
@@ -7387,47 +7400,87 @@ function makeInviteCodeFromRoomId(roomId = "") {
 }
 
 async function joinExistingWaitingRoom(waitingRoomRef, roomId, me, mode, stakePMC) {
+    roomId = String(roomId || "").trim();
+    if (!roomId || !me?.uid) return false;
+
     const roomRef = db.ref("matches/" + roomId);
     const roomSnap = await roomRef.once("value");
     const room = roomSnap.val();
 
-    if (!room || room.mode !== mode || !room.players?.do) {
-        const currentWaiting = (await waitingRoomRef.once("value")).val();
+    const roomMode = room?.mode || mode || "co-tuong";
+    const roomStake = Math.max(0, Math.floor(Number(room?.stakePMC ?? stakePMC ?? 0) || 0));
+
+    // CHẶN phòng ảo/phòng cũ/phòng đang chơi/phòng đã có kết quả
+    if (
+        !room ||
+        roomMode !== mode ||
+        room.winner ||
+        room.status !== "waiting" ||
+        !room.players?.do ||
+        room.players?.den
+    ) {
+        const currentWaiting = await waitingRoomRef.once("value").then(s => s.val()).catch(() => null);
         if (currentWaiting && currentWaiting.roomId === roomId && currentWaiting.claimedBy === me.uid) {
             await waitingRoomRef.remove().catch(() => {});
         }
         return false;
     }
+
+    // Không tự vào lại bàn của chính mình
+    if (room.players?.do?.uid === me.uid || room.players?.do?.walletKey === me.walletKey) {
+        return false;
+    }
+
+    const denProfile = {
+        ...me,
+        side: "den",
+        pmcBalance: Math.max(0, Math.floor(Number(me.pmcBalance || getPmcBalance() || 0) || 0)),
+        balance: Math.max(0, Number(me.balance ?? getPiBalance() ?? 0) || 0),
+        piBalance: Math.max(0, Number(me.piBalance ?? me.balance ?? getPiBalance() ?? 0) || 0),
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+    };
 
     const denRef = db.ref("matches/" + roomId + "/players/den");
+
     const denJoinResult = await denRef.transaction((current) => {
         if (current && current.uid && current.uid !== me.uid) return;
-        return me;
+        return denProfile;
     }, undefined, false);
 
-    if (!denJoinResult.committed) {
-        const currentWaiting = (await waitingRoomRef.once("value")).val();
+    const joinedDen = denJoinResult.snapshot?.val?.() || null;
+
+    if (!denJoinResult.committed || !joinedDen || joinedDen.uid !== me.uid) {
+        const currentWaiting = await waitingRoomRef.once("value").then(s => s.val()).catch(() => null);
         if (currentWaiting && currentWaiting.roomId === roomId && currentWaiting.claimedBy === me.uid) {
             await waitingRoomRef.remove().catch(() => {});
         }
         return false;
     }
 
-    await db.ref("matches/" + roomId + "/ready/den").set(false);
-    await db.ref("matches/" + roomId + "/stakeLocked/den").set(false);
+    await db.ref().update({
+        [`matches/${roomId}/ready/den`]: false,
+        [`matches/${roomId}/stakeLocked/den`]: false,
+        [`matches/${roomId}/updatedAt`]: firebase.database.ServerValue.TIMESTAMP
+    });
 
-    const currentWaiting = (await waitingRoomRef.once("value")).val();
+    const currentWaiting = await waitingRoomRef.once("value").then(s => s.val()).catch(() => null);
     if (currentWaiting && currentWaiting.roomId === roomId && currentWaiting.claimedBy === me.uid) {
         await waitingRoomRef.remove().catch(() => {});
     }
 
     mySide = "den";
+    viewSide = "den";
     currentRoomId = roomId;
-    currentRoomMode = mode;
-    currentRoomStakePMC = stakePMC;
-    currentRoomBucket = room?.roomBucket || makeStakeBucket(mode, stakePMC);
+    currentRoomMode = roomMode;
+    currentRoomStakePMC = roomStake;
+    currentRoomBucket = room?.roomBucket || makeStakeBucket(roomMode, roomStake);
 
-    saveActiveMatchSnapshot({ roomId, mode, side: "den" });
+    saveActiveMatchSnapshot({
+        roomId,
+        mode: roomMode,
+        side: "den"
+    });
+
     bindRoom(roomId);
     return true;
 }
@@ -10548,33 +10601,51 @@ function canJoinLobbyRoom(room) {
 
 async function joinRoomFromLobby(roomId) {
     try {
+        roomId = String(roomId || "").trim();
+        if (!roomId) return;
+
         const roomSnap = await db.ref("matches/" + roomId).once("value");
         const room = roomSnap.val();
 
         if (!room) {
             alert("Bàn này không còn.");
+            bindLobbyRoomList();
             return;
         }
 
+        const me = getCurrentPlayerProfile();
         const hasDo = !!room?.players?.do;
         const hasDen = !!room?.players?.den;
         const stakePMC = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
         const mode = room?.mode || "co-tuong";
         const bucket = room?.roomBucket || makeStakeBucket(mode, stakePMC);
-        const me = getCurrentPlayerProfile();
 
-        if (room?.winner) {
+        if (room?.winner || room?.status === "finished" || room?.status === "ended") {
             alert("Bàn này đã kết thúc.");
+            bindLobbyRoomList();
             return;
         }
 
-        if (room?.status === "playing" || (hasDo && hasDen)) {
+        if (room?.status !== "waiting") {
             alert("Bàn này đang trong trận.");
+            bindLobbyRoomList();
             return;
         }
 
         if (!hasDo) {
             alert("Bàn này chưa có chủ bàn.");
+            bindLobbyRoomList();
+            return;
+        }
+
+        if (hasDen) {
+            alert("Bàn này đã đủ 2 người.");
+            bindLobbyRoomList();
+            return;
+        }
+
+        if (room.players?.do?.uid === me.uid || room.players?.do?.walletKey === me.walletKey) {
+            alert("Đây là bàn của mầy rồi.");
             return;
         }
 
@@ -10583,15 +10654,58 @@ async function joinRoomFromLobby(roomId) {
             return;
         }
 
-        const waitingRef = db.ref("waitingRooms/" + bucket);
-        const ok = await joinExistingWaitingRoom(waitingRef, roomId, me, mode, stakePMC);
+        // QUAN TRỌNG: phải trỏ đúng roomId, không trỏ nguyên bucket
+        const waitingRef = db.ref("waitingRooms/" + bucket + "/" + roomId);
 
-        if (!ok) {
-            alert("Không vào được bàn này, có thể vừa đủ người.");
+        const claim = await waitingRef.transaction((current) => {
+            // Nếu waitingRooms bị thiếu do bản cũ, tự dựng lại đúng từ matches
+            const base = current && current.roomId
+                ? current
+                : {
+                    roomId,
+                    uid: room.players.do.uid,
+                    name: room.players.do.name || "Chủ bàn",
+                    mode,
+                    stakePMC,
+                    inviteCode: room.inviteCode || makeInviteCodeFromRoomId(roomId),
+                    createdAt: Date.now(),
+                    claimedBy: null,
+                    claimedAt: null
+                };
+
+            if (!base.roomId || base.roomId !== roomId) return;
+            if (base.uid === me.uid) return;
+            if (base.claimedBy && base.claimedBy !== me.uid) return;
+
+            return {
+                ...base,
+                claimedBy: me.uid,
+                claimedAt: Date.now()
+            };
+        }, undefined, false);
+
+        const claimedWaiting = claim.snapshot?.val?.() || null;
+        const iClaimedIt =
+            claim.committed &&
+            claimedWaiting &&
+            claimedWaiting.roomId === roomId &&
+            claimedWaiting.claimedBy === me.uid;
+
+        if (!iClaimedIt) {
+            alert("Không vào được bàn này, có thể vừa có người khác vào.");
+            bindLobbyRoomList();
             return;
         }
 
-        closeRankingModal();   // đóng bảng danh sách trước
+        const ok = await joinExistingWaitingRoom(waitingRef, roomId, me, mode, stakePMC);
+
+        if (!ok) {
+            alert("Không vào được bàn này, bàn đã đổi trạng thái.");
+            bindLobbyRoomList();
+            return;
+        }
+
+        closeRankingModal();
         prepareRealtimeArenaUI();
         clearInterval(interval);
 
