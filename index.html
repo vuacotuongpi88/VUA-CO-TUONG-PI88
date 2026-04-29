@@ -4774,6 +4774,255 @@ margin-bottom: 14px;
     opacity: 0.55;
     filter: grayscale(0.4);
 }
+/* ===== ICON TOP NGOÀI SẢNH ===== */
+#arena-top-btn {
+    position: fixed !important;
+    top: 16px !important;
+    right: 192px !important;
+    bottom: auto !important;
+    width: 52px !important;
+    height: 52px !important;
+    border-radius: 50% !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, #f4c542, #b7791f) !important;
+    color: #1b1200 !important;
+    font-size: 24px !important;
+    cursor: pointer !important;
+    z-index: 13055 !important;
+    box-shadow:
+        0 0 14px rgba(244, 197, 66, 0.42),
+        0 0 18px rgba(255, 255, 255, 0.12) !important;
+    border: 1px solid rgba(255, 248, 214, 0.62) !important;
+}
+
+#arena-top-btn:active {
+    transform: scale(0.94);
+}
+
+/* ép 4 icon nằm ngang ngoài sảnh */
+#arena-friend-btn {
+    top: 16px !important;
+    right: 12px !important;
+    bottom: auto !important;
+}
+
+#arena-mission-btn {
+    top: 16px !important;
+    right: 72px !important;
+    bottom: auto !important;
+}
+
+#arena-skin-btn {
+    top: 16px !important;
+    right: 132px !important;
+    bottom: auto !important;
+}
+
+/* vào trận thì ẩn TOP */
+body.in-match #arena-top-btn,
+body.in-match #arena-top-box {
+    display: none !important;
+}
+
+/* ===== BOX BẢNG TOP ===== */
+#arena-top-box {
+    position: fixed;
+    top: 76px;
+    right: 12px;
+    width: min(92vw, 430px);
+    max-height: 78vh;
+    display: none;
+    flex-direction: column;
+    background: rgba(5, 12, 9, 0.96);
+    border: 2px solid #f4c542;
+    border-radius: 18px;
+    z-index: 30000;
+    overflow: hidden;
+    box-shadow:
+        0 0 22px rgba(0, 0, 0, 0.72),
+        0 0 18px rgba(244, 197, 66, 0.22);
+}
+
+#arena-top-box.show {
+    display: flex;
+}
+
+.arena-top-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    background: linear-gradient(180deg, #f4c542, #b7791f);
+    color: #140d00;
+    font-weight: 900;
+    font-size: 15px;
+}
+
+.arena-top-close {
+    cursor: pointer;
+    font-size: 18px;
+}
+
+.arena-top-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.28);
+}
+
+.arena-top-tab {
+    padding: 8px 4px !important;
+    border-radius: 10px !important;
+    font-size: 11px !important;
+    font-weight: 900 !important;
+    background: rgba(15, 30, 15, 0.95) !important;
+    border: 1px solid rgba(85, 239, 196, 0.35) !important;
+    color: #dfffea !important;
+}
+
+.arena-top-tab.active {
+    background: linear-gradient(180deg, #00c38a, #008f67) !important;
+    color: #fff8d6 !important;
+    border-color: #f4c542 !important;
+}
+
+#arena-top-list {
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.arena-top-loading,
+.arena-top-empty {
+    padding: 20px 10px;
+    text-align: center;
+    color: #b2bec3;
+    font-size: 13px;
+}
+
+.arena-top-row {
+    display: grid;
+    grid-template-columns: 34px 42px 1fr auto;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 7px;
+    border-radius: 12px;
+    margin-bottom: 8px;
+    background: rgba(255, 255, 255, 0.055);
+    border: 1px solid rgba(85, 239, 196, 0.12);
+}
+
+.arena-top-rank {
+    font-size: 16px;
+    font-weight: 900;
+    color: #f4c542;
+    text-align: center;
+}
+
+.arena-top-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid rgba(244, 197, 66, 0.55);
+    background: #111;
+}
+
+.arena-top-name {
+    color: #fff;
+    font-size: 12px;
+    font-weight: 900;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.arena-top-score {
+    color: #55efc4;
+    font-size: 11px;
+    font-weight: 800;
+    margin-top: 2px;
+}
+
+.arena-top-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 900;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.arena-top-status.on {
+    color: #55efc4;
+    background: rgba(0, 184, 148, 0.16);
+}
+
+.arena-top-status.off {
+    color: #b2bec3;
+    background: rgba(99, 110, 114, 0.18);
+}
+
+.arena-top-status.wait {
+    color: #ffeaa7;
+    background: rgba(253, 203, 110, 0.16);
+}
+
+.arena-top-status.play {
+    color: #ff7675;
+    background: rgba(214, 48, 49, 0.18);
+}
+
+.arena-top-action {
+    padding: 7px 8px !important;
+    min-width: 58px;
+    border-radius: 10px !important;
+    font-size: 10px !important;
+    font-weight: 900 !important;
+    background: linear-gradient(180deg, #00c38a, #008f67) !important;
+}
+
+.arena-top-action.watch {
+    background: linear-gradient(180deg, #7b2ff7, #4d1d95) !important;
+}
+
+.arena-top-action.challenge {
+    background: linear-gradient(180deg, #f4c542, #b7791f) !important;
+    color: #1b1200 !important;
+}
+
+.arena-top-action.disabled {
+    background: #636e72 !important;
+    color: #dfe6e9 !important;
+    cursor: default !important;
+}
+
+@media (max-width: 390px) {
+    #arena-friend-btn,
+    #arena-mission-btn,
+    #arena-skin-btn,
+    #arena-top-btn {
+        width: 46px !important;
+        height: 46px !important;
+        font-size: 21px !important;
+    }
+
+    #arena-friend-btn { right: 8px !important; }
+    #arena-mission-btn { right: 60px !important; }
+    #arena-skin-btn { right: 112px !important; }
+    #arena-top-btn { right: 164px !important; }
+
+    #arena-top-box {
+        top: 68px;
+        right: 6px;
+        width: calc(100vw - 12px);
+    }
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -5325,7 +5574,28 @@ margin-bottom: 14px;
     👥
     <span id="arena-friend-badge" class="friend-badge-dot">0</span>
 </div>
+
 <div id="arena-skin-btn" onclick="openAvatarSkinShop()">🎭</div>
+
+<div id="arena-top-btn" onclick="toggleArenaTopBox(event)">🏆</div>
+
+<div id="arena-top-box">
+    <div class="arena-top-header">
+        <span>🏆 BẢNG TOP</span>
+        <span class="arena-top-close" onclick="closeArenaTopBox()">✖</span>
+    </div>
+
+    <div class="arena-top-tabs">
+        <button class="arena-top-tab active" data-top="asset" onclick="switchArenaTopTab('asset')">Tài sản</button>
+        <button class="arena-top-tab" data-top="level" onclick="switchArenaTopTab('level')">Lever</button>
+        <button class="arena-top-tab" data-top="skin" onclick="switchArenaTopTab('skin')">Skin</button>
+        <button class="arena-top-tab" data-top="wins" onclick="switchArenaTopTab('wins')">Thắng</button>
+    </div>
+
+    <div id="arena-top-list">
+        <div class="arena-top-loading">Đang tải bảng top...</div>
+    </div>
+</div>
 
 <div id="arena-friend-box">
     <div class="arena-friend-header">
@@ -5928,6 +6198,10 @@ function hideHomeUI() {
 
     const skinBtn = document.getElementById("arena-skin-btn");
     if (skinBtn) skinBtn.style.display = "none";
+    const topBtn = document.getElementById("arena-top-btn");
+if (topBtn) topBtn.style.display = "none";
+
+closeArenaTopBox();
 
     const missionBadge = document.getElementById("arena-mission-badge");
     if (missionBadge) {
@@ -5951,7 +6225,541 @@ if (friendBox) friendBox.classList.remove("show");
     if (rankingModal) rankingModal.classList.remove("show");
 
 }
+/* ===== BẢNG TOP NGOÀI SẢNH ===== */
+let arenaTopTab = "asset";
+let arenaTopCache = [];
+let arenaTopLoading = false;
 
+function arenaTopEscape(value = "") {
+    const div = document.createElement("div");
+    div.textContent = String(value || "");
+    return div.innerHTML;
+}
+
+function arenaTopNum(value) {
+    return Math.max(0, Number(value || 0) || 0);
+}
+
+function arenaTopInt(value) {
+    return Math.max(0, Math.floor(Number(value || 0) || 0));
+}
+
+function arenaTopPi(value) {
+    return arenaTopNum(value).toLocaleString("vi-VN", {
+        maximumFractionDigits: 2
+    });
+}
+
+function arenaTopPmc(value) {
+    return arenaTopInt(value).toLocaleString("vi-VN");
+}
+
+function getArenaTopLevel(wallet = {}) {
+    return arenaTopInt(
+        wallet?.levelMeta?.level ??
+        wallet?.level?.level ??
+        wallet?.level ??
+        1
+    ) || 1;
+}
+
+function getArenaTopWins(wallet = {}) {
+    return arenaTopInt(
+        wallet?.levelMeta?.wins ??
+        wallet?.stats?.wins ??
+        wallet?.wins ??
+        wallet?.win ??
+        0
+    );
+}
+
+function getArenaTopSkinScore(wallet = {}) {
+    const owned =
+        wallet?.ownedAvatarSkins ||
+        wallet?.avatarSkins ||
+        wallet?.skins ||
+        {};
+
+    let count = 0;
+
+    if (owned && typeof owned === "object") {
+        count = Object.keys(owned).filter(key => {
+            if (!key || key === "none") return false;
+            return owned[key] !== false && owned[key] != null;
+        }).length;
+    }
+
+    const equipped = String(wallet?.avatarSkin || wallet?.equippedAvatarSkin || "none");
+    if (equipped && equipped !== "none" && count <= 0) count = 1;
+
+    return count;
+}
+
+function getArenaTopAssetScore(wallet = {}) {
+    const pi = arenaTopNum(wallet?.balance ?? wallet?.piBalance ?? 0);
+    const pmc = arenaTopInt(wallet?.pmcBalance ?? 0);
+
+    // chỉ để sort chung: 1 Pi = PMC_RATE PMC
+    const rate = Number(typeof PMC_RATE !== "undefined" ? PMC_RATE : 500) || 500;
+    return Math.floor(pi * rate) + pmc;
+}
+
+function getArenaTopStatus(row = {}) {
+    const now = Date.now();
+
+    if (row.roomStatus === "playing") {
+        return { text: "ĐANG TRẬN", cls: "play" };
+    }
+
+    if (row.roomStatus === "waiting" && row.roomOpen) {
+        return { text: "ĐANG CHỜ", cls: "wait" };
+    }
+
+    const st = row.playerState || {};
+    const fresh = st.updatedAt && (now - Number(st.updatedAt || 0) < 90000);
+
+    if (fresh) {
+        if (st.state === "playing") return { text: "ĐANG TRẬN", cls: "play" };
+        if (st.state === "waiting") return { text: "ĐANG CHỜ", cls: "wait" };
+        return { text: "ONLINE", cls: "on" };
+    }
+
+    return { text: "OFFLINE", cls: "off" };
+}
+
+function getArenaTopScoreText(row = {}) {
+    const wallet = row.wallet || {};
+
+    if (arenaTopTab === "asset") {
+        const pi = arenaTopNum(wallet?.balance ?? wallet?.piBalance ?? 0);
+        const pmc = arenaTopInt(wallet?.pmcBalance ?? 0);
+        return `${arenaTopPi(pi)} π · ${arenaTopPmc(pmc)} PMC`;
+    }
+
+    if (arenaTopTab === "level") {
+        const lv = getArenaTopLevel(wallet);
+        const title = wallet?.levelMeta?.title || wallet?.title || "";
+        return `Lever ${lv}${title ? " · " + arenaTopEscape(title) : ""}`;
+    }
+
+    if (arenaTopTab === "skin") {
+        const skinScore = getArenaTopSkinScore(wallet);
+        const equipped = String(wallet?.avatarSkin || wallet?.equippedAvatarSkin || "none");
+        return `${skinScore} skin${equipped !== "none" ? " · đang dùng " + arenaTopEscape(equipped) : ""}`;
+    }
+
+    if (arenaTopTab === "wins") {
+        return `${getArenaTopWins(wallet)} trận thắng`;
+    }
+
+    return "";
+}
+
+function getArenaTopRankIcon(index) {
+    if (index === 0) return "🥇";
+    if (index === 1) return "🥈";
+    if (index === 2) return "🥉";
+    return "#" + (index + 1);
+}
+
+function getArenaTopMeWalletKey() {
+    try {
+        if (typeof makeWalletDbKey === "function") return makeWalletDbKey();
+    } catch (_) {}
+
+    try {
+        const me = typeof getCurrentPlayerProfile === "function" ? getCurrentPlayerProfile() : null;
+        return me?.walletKey || "";
+    } catch (_) {}
+
+    return "";
+}
+
+function sortArenaTopRows(rows = []) {
+    return rows.sort((a, b) => {
+        const aw = a.wallet || {};
+        const bw = b.wallet || {};
+
+        if (arenaTopTab === "asset") {
+            return getArenaTopAssetScore(bw) - getArenaTopAssetScore(aw);
+        }
+
+        if (arenaTopTab === "level") {
+            return getArenaTopLevel(bw) - getArenaTopLevel(aw);
+        }
+
+        if (arenaTopTab === "skin") {
+            return getArenaTopSkinScore(bw) - getArenaTopSkinScore(aw);
+        }
+
+        if (arenaTopTab === "wins") {
+            return getArenaTopWins(bw) - getArenaTopWins(aw);
+        }
+
+        return 0;
+    });
+}
+
+function buildArenaTopAction(row = {}) {
+    const myWalletKey = getArenaTopMeWalletKey();
+
+    if (row.walletKey === myWalletKey) {
+        return `<button class="arena-top-action disabled">MẦY</button>`;
+    }
+
+    if (row.roomId && row.roomStatus === "waiting" && row.roomOpen) {
+        return `<button class="arena-top-action" onclick="handleArenaTopAction('${encodeURIComponent(row.walletKey)}')">VÀO</button>`;
+    }
+
+    if (row.roomId && row.roomStatus === "playing") {
+        return `<button class="arena-top-action watch" onclick="handleArenaTopAction('${encodeURIComponent(row.walletKey)}')">XEM</button>`;
+    }
+
+    const status = getArenaTopStatus(row);
+    if (status.cls === "on") {
+        return `<button class="arena-top-action challenge" onclick="handleArenaTopAction('${encodeURIComponent(row.walletKey)}')">THÁCH</button>`;
+    }
+
+    return `<button class="arena-top-action disabled">OFF</button>`;
+}
+
+function renderArenaTopRows(rows = []) {
+    const list = document.getElementById("arena-top-list");
+    if (!list) return;
+
+    if (!rows.length) {
+        list.innerHTML = `<div class="arena-top-empty">Chưa có dữ liệu bảng top.</div>`;
+        return;
+    }
+
+    const html = rows.slice(0, 50).map((row, index) => {
+        const wallet = row.wallet || {};
+        const status = getArenaTopStatus(row);
+
+        const name = String(
+            wallet.name ||
+            wallet.displayName ||
+            wallet.username ||
+            row.walletKey ||
+            "Người chơi"
+        );
+
+        const photo = String(wallet.photo || wallet.avatar || "images/do_tuong.png");
+
+        return `
+            <div class="arena-top-row">
+                <div class="arena-top-rank">${getArenaTopRankIcon(index)}</div>
+
+                <img class="arena-top-avatar"
+                     src="${arenaTopEscape(photo)}"
+                     onerror="this.src='images/do_tuong.png'">
+
+                <div class="arena-top-info">
+                    <div class="arena-top-name">${arenaTopEscape(name)}</div>
+                    <div class="arena-top-score">${getArenaTopScoreText(row)}</div>
+                    <div class="arena-top-status ${status.cls}">${status.text}</div>
+                </div>
+
+                <div class="arena-top-action-wrap">
+                    ${buildArenaTopAction(row)}
+                </div>
+            </div>
+        `;
+    }).join("");
+
+    list.innerHTML = html;
+}
+
+async function loadArenaTopList(force = false) {
+    if (arenaTopLoading && !force) return;
+
+    const list = document.getElementById("arena-top-list");
+    if (list) list.innerHTML = `<div class="arena-top-loading">Đang tải bảng top...</div>`;
+
+    arenaTopLoading = true;
+
+    try {
+        const [walletSnap, stateSnap, matchSnap] = await Promise.all([
+            db.ref("wallets").once("value"),
+            db.ref("social/playerState").once("value"),
+            db.ref("matches").once("value")
+        ]);
+
+        const wallets = walletSnap.val() || {};
+        const states = stateSnap.val() || {};
+        const matches = matchSnap.val() || {};
+
+        const roomByWallet = {};
+
+        Object.entries(matches).forEach(([roomId, room]) => {
+            if (!room || room.winner) return;
+
+            const status = String(room.status || "waiting");
+            if (status !== "waiting" && status !== "playing") return;
+
+            ["do", "den"].forEach(side => {
+                const p = room?.players?.[side];
+                const walletKey = p?.walletKey;
+                if (!walletKey) return;
+
+                const hasDo = !!room?.players?.do?.walletKey;
+                const hasDen = !!room?.players?.den?.walletKey;
+                const roomOpen = status === "waiting" && hasDo && !hasDen;
+
+                roomByWallet[walletKey] = {
+                    roomId,
+                    roomStatus: status,
+                    roomOpen,
+                    roomMode: room.mode || "",
+                    roomBucket: room.roomBucket || "",
+                    stakePMC: arenaTopInt(room.stakePMC || 0),
+                    inviteCode: String(room.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase()
+                };
+            });
+        });
+
+        const rows = Object.entries(wallets).map(([walletKey, wallet]) => {
+            const roomInfo = roomByWallet[walletKey] || {};
+            return {
+                walletKey,
+                wallet: wallet || {},
+                playerState: states[walletKey] || {},
+                ...roomInfo
+            };
+        }).filter(row => {
+            const w = row.wallet || {};
+            return (
+                w.name ||
+                w.displayName ||
+                w.username ||
+                w.balance != null ||
+                w.pmcBalance != null ||
+                w.levelMeta ||
+                row.roomId
+            );
+        });
+
+        arenaTopCache = sortArenaTopRows(rows);
+        renderArenaTopRows(arenaTopCache);
+    } catch (err) {
+        console.error("Lỗi tải bảng top:", err);
+        if (list) {
+            list.innerHTML = `<div class="arena-top-empty">Không tải được bảng top. Mở Console xem lỗi.</div>`;
+        }
+    } finally {
+        arenaTopLoading = false;
+    }
+}
+
+function toggleArenaTopBox(event) {
+    if (event) event.stopPropagation();
+
+    const box = document.getElementById("arena-top-box");
+    if (!box) return;
+
+    if (box.classList.contains("show")) {
+        closeArenaTopBox();
+        return;
+    }
+
+    closeArenaFriendBox?.();
+
+    box.classList.add("show");
+    loadArenaTopList(true);
+}
+
+function closeArenaTopBox() {
+    const box = document.getElementById("arena-top-box");
+    if (box) box.classList.remove("show");
+}
+
+function switchArenaTopTab(tab) {
+    arenaTopTab = tab || "asset";
+
+    document.querySelectorAll(".arena-top-tab").forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.top === arenaTopTab);
+    });
+
+    if (arenaTopCache.length) {
+        arenaTopCache = sortArenaTopRows(arenaTopCache);
+        renderArenaTopRows(arenaTopCache);
+    } else {
+        loadArenaTopList(true);
+    }
+}
+
+async function handleArenaTopAction(encodedWalletKey) {
+    const walletKey = decodeURIComponent(encodedWalletKey || "");
+    const row = arenaTopCache.find(item => item.walletKey === walletKey);
+
+    if (!row) {
+        alert("Không tìm thấy người chơi này trong bảng top.");
+        return;
+    }
+
+    if (row.roomId && row.roomStatus === "waiting" && row.roomOpen) {
+        await joinArenaTopWaitingRoom(row.roomId);
+        return;
+    }
+
+    if (row.roomId && row.roomStatus === "playing") {
+        await watchArenaTopMatch(row.roomId);
+        return;
+    }
+
+    await sendArenaTopChallenge(row.walletKey);
+}
+
+async function joinArenaTopWaitingRoom(roomId) {
+    if (!roomId) return;
+
+    try {
+        const roomSnap = await db.ref("matches/" + roomId).once("value");
+        const room = roomSnap.val();
+
+        if (!room) {
+            alert("Phòng này không còn tồn tại.");
+            await loadArenaTopList(true);
+            return;
+        }
+
+        if (room.status !== "waiting" || room.winner) {
+            alert("Phòng này không còn trống.");
+            await loadArenaTopList(true);
+            return;
+        }
+
+        if (!room.players?.do || room.players?.den) {
+            alert("Phòng này đã đủ người.");
+            await loadArenaTopList(true);
+            return;
+        }
+
+        const me = getCurrentPlayerProfile();
+        if (room.players.do.walletKey === me.walletKey || room.players.do.uid === me.uid) {
+            alert("Đây là phòng của mầy rồi.");
+            return;
+        }
+
+        const stake = arenaTopInt(room.stakePMC || 0);
+        if (stake > 0 && getPmcBalance() < stake) {
+            alert(`Không đủ PMC để vào phòng này. Cần ${arenaTopPmc(stake)} PMC.`);
+            return;
+        }
+
+        const result = await db.ref("matches/" + roomId).transaction(current => {
+            if (!current) return;
+            if (current.status !== "waiting") return;
+            if (current.winner) return;
+            if (!current.players || !current.players.do || current.players.den) return;
+
+            current.players.den = {
+                ...me,
+                side: "den"
+            };
+
+            current.ready = current.ready || {};
+            current.ready.den = false;
+
+            current.stakeLocked = current.stakeLocked || {};
+            current.stakeLocked.den = false;
+
+            current.updatedAt = Date.now();
+            return current;
+        });
+
+        if (!result.committed) {
+            alert("Vào phòng thất bại, có thể người khác vừa vào trước.");
+            await loadArenaTopList(true);
+            return;
+        }
+
+        const joinedRoom = result.snapshot.val() || {};
+        const bucket = joinedRoom.roomBucket || makeStakeBucket(joinedRoom.mode || "co-tuong", joinedRoom.stakePMC || 0);
+
+        await db.ref("waitingRooms/" + bucket + "/" + roomId).remove().catch(() => {});
+
+        mySide = "den";
+        currentRoomId = roomId;
+        currentRoomMode = joinedRoom.mode || "co-tuong";
+        currentRoomStakePMC = arenaTopInt(joinedRoom.stakePMC || 0);
+        currentRoomBucket = bucket;
+
+        if (typeof prepareRealtimeArenaUI === "function") {
+            prepareRealtimeArenaUI();
+        } else {
+            hideHomeUI();
+            const arena = document.getElementById("game-arena");
+            if (arena) arena.style.display = "block";
+        }
+
+        clearInterval(interval);
+
+        saveActiveMatchSnapshot({
+            roomId,
+            mode: currentRoomMode,
+            side: "den"
+        });
+
+        closeArenaTopBox();
+        bindRoom(roomId);
+        await setPlayerPresence("waiting").catch(() => {});
+    } catch (err) {
+        console.error("Lỗi vào phòng từ bảng top:", err);
+        alert("Vào phòng lỗi. Mở Console xem chi tiết.");
+    }
+}
+
+async function watchArenaTopMatch(roomId) {
+    try {
+        const snap = await db.ref("matches/" + roomId).once("value");
+        const room = snap.val();
+
+        if (!room || room.status !== "playing") {
+            alert("Trận này không còn đang đánh.");
+            await loadArenaTopList(true);
+            return;
+        }
+
+        const doName = room?.players?.do?.name || "Đỏ";
+        const denName = room?.players?.den?.name || "Đen";
+        const stake = arenaTopInt(room.stakePMC || 0);
+        const turn = room.turn === "den" ? "ĐEN" : "ĐỎ";
+
+        alert(
+            "ĐANG XEM TRẬN\n\n" +
+            "Đỏ: " + doName + "\n" +
+            "Đen: " + denName + "\n" +
+            "Phòng: " + arenaTopPmc(stake) + " PMC\n" +
+            "Lượt: " + turn + "\n\n" +
+            "Bản này đã đọc live từ Firebase. Muốn xem bằng bàn cờ thật thì tách spectator riêng để không đụng quyền đánh."
+        );
+    } catch (err) {
+        console.error("Lỗi xem trận:", err);
+        alert("Không xem được trận này.");
+    }
+}
+
+async function sendArenaTopChallenge(targetWalletKey) {
+    try {
+        const me = getCurrentPlayerProfile();
+        if (!targetWalletKey || targetWalletKey === me.walletKey) return;
+
+        await db.ref("social/topChallenges/" + targetWalletKey + "/" + me.walletKey).set({
+            fromWalletKey: me.walletKey,
+            fromUid: me.uid || "",
+            fromName: me.name || "Người chơi",
+            fromPhoto: me.photo || "images/do_tuong.png",
+            status: "pending",
+            createdAt: Date.now()
+        });
+
+        alert("Đã gửi lời thách đấu. Phần popup nhận thách đấu tao sẽ móc tiếp vào icon đỏ sau.");
+    } catch (err) {
+        console.error("Lỗi gửi thách đấu:", err);
+        alert("Gửi thách đấu lỗi.");
+    }
+}
 function showHomeUI() {
     document.body.classList.remove("in-match");
 
@@ -5973,6 +6781,8 @@ function showHomeUI() {
 
     const skinBtn = document.getElementById("arena-skin-btn");
     if (skinBtn) skinBtn.style.display = "flex";
+    const topBtn = document.getElementById("arena-top-btn");
+if (topBtn) topBtn.style.display = "flex";
 
     if (typeof refreshMissionLobbyBadgeSilently === "function") {
         refreshMissionLobbyBadgeSilently();
@@ -12646,19 +13456,57 @@ function isHomeVisible() {
 
 async function setPlayerPresence(state = "home") {
     try {
-        const me = getCurrentFriendProfile();
+        const me = typeof getCurrentFriendProfile === "function"
+            ? getCurrentFriendProfile()
+            : getCurrentPlayerProfile();
+
         if (!me?.walletKey) return;
 
+        let roomInfo = {};
+
+        if (currentRoomId) {
+            const roomSnap = await db.ref("matches/" + currentRoomId).once("value").catch(() => null);
+            const room = roomSnap?.val?.() || null;
+
+            if (room) {
+                const status = room.status || state || "waiting";
+
+                roomInfo = {
+                    state: status === "playing" ? "playing" : "waiting",
+                    roomId: currentRoomId,
+                    mode: room.mode || currentRoomMode || null,
+                    roomBucket: room.roomBucket || currentRoomBucket || null,
+                    stakePMC: Math.max(0, Math.floor(Number(room.stakePMC || currentRoomStakePMC || 0) || 0)),
+                    inviteCode: String(room.inviteCode || makeInviteCodeFromRoomId(currentRoomId)).toUpperCase(),
+                    lobbyOpen: status === "waiting" && !!room?.players?.do && !room?.players?.den
+                };
+            }
+        }
+
         await db.ref("social/playerState/" + me.walletKey).set({
-            state,
-            roomId: currentRoomId || null,
-            mode: currentRoomMode || null,
+            state: roomInfo.state || state || "home",
+            roomId: roomInfo.roomId || null,
+            mode: roomInfo.mode || currentRoomMode || null,
+            roomBucket: roomInfo.roomBucket || currentRoomBucket || null,
+            stakePMC: roomInfo.stakePMC || 0,
+            inviteCode: roomInfo.inviteCode || "",
+            lobbyOpen: !!roomInfo.lobbyOpen,
             updatedAt: Date.now()
         });
     } catch (err) {
         console.error("Lỗi setPlayerPresence:", err);
     }
 }
+setInterval(() => {
+    const name = localStorage.getItem("user-name-display") || localStorage.getItem("currentUsername");
+    if (!auth.currentUser && !name) return;
+
+    const state = currentRoomId
+        ? (currentRoomStatus === "playing" ? "playing" : "waiting")
+        : "home";
+
+    setPlayerPresence(state).catch(() => {});
+}, 30000);
 async function isPlayerActuallyBusy(walletKey) {
     const stateRef = db.ref("social/playerState/" + walletKey);
     const snap = await stateRef.once("value");
