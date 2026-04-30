@@ -7436,7 +7436,243 @@ function refreshTimerRings() {
     updateSingleTimerRing(timerDenEl, topSeconds);
     updateSingleTimerRing(timerDoEl, bottomSeconds);
 }
+function oneWinPointSafeKey(value) {
+    return String(value || "").replace(/[.#$/\[\]]/g, "_");
+}
 
+function oneWinPointNum(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+}
+
+function oneWinPointMonthKey() {
+    const now = new Date(Date.now() + 7 * 60 * 60 * 1000);
+    const y = now.getUTCFullYear();
+    const m = String(now.getUTCMonth() + 1).padStart(2, "0");
+    return `${y}-${m}`;
+}
+
+async function addOneWinOnlyToWallet(walletKey) {
+    walletKey = String(walletKey || "").trim();
+    if (!walletKey) return null;
+
+    const monthKey = oneWinPointMonthKey();
+    const ref = db.ref("wallets/" + walletKey);
+
+    let afterWallet = null;
+
+    await ref.transaction(current => {
+        const w = current && typeof current === "object" ? current : {};
+
+        const clean = w.matchStatsCleanV1 && typeof w.matchStatsCleanV1 === "object"
+            ? { ...w.matchStatsCleanV1 }
+            : {};
+
+        const cleanMonths = clean.months && typeof clean.months === "object"
+            ? { ...clean.months }
+            : {};
+
+        const cleanMonth = cleanMonths[monthKey] && typeof cleanMonths[monthKey] === "object"
+            ? { ...cleanMonths[monthKey] }
+            : {};
+
+        // Chỉ lấy 1 nguồn chính, không Math.max nữa để khỏi nhảy số bậy.
+        const baseWins = oneWinPointNum(
+            clean.wins ??
+            w.wins ??
+            w.totalWins ??
+            w.levelMeta?.wins ??
+            0
+        );
+
+        const baseMonthWins = oneWinPointNum(
+            cleanMonth.wins ??
+            clean.monthWins ??
+            w.monthWins ??
+            w.levelMeta?.monthWins ??
+            0
+        );
+
+        const nextWins = baseWins + 1;
+        const nextMonthWins = baseMonthWins + 1;
+
+        afterWallet = {
+            ...w,
+
+            wins: nextWins,
+            totalWins: nextWins,
+            monthWins: nextMonthWins,
+
+            matchStatsCleanV1: {
+                ...clean,
+                wins: nextWins,
+                totalWins: nextWins,
+                monthWins: nextMonthWins,
+                updatedAt: Date.now(),
+                months: {
+                    ...cleanMonths,
+                    [monthKey]: {
+                        ...cleanMonth,
+                        wins: nextMonthWins,
+                        updatedAt: Date.now()
+                    }
+                }
+            },
+
+            levelMeta: {
+                ...(w.levelMeta || {}),
+                wins: nextWins,
+                monthWins: nextMonthWins,
+                lastResult: "win",
+                updatedAt: Date.now()
+            },
+
+            matchStats: {
+                ...(w.matchStats || {}),
+                wins: nextWins,
+                totalWins: nextWins,
+                updatedAt: Date.now()
+            },
+
+            stats: {
+                ...(w.stats || {}),
+                wins: nextWins,
+                totalWins: nextWins,
+                updatedAt: Date.now()
+            },
+
+            statsByMonth: {
+                ...(w.statsByMonth || {}),
+                [monthKey]: {
+                    ...((w.statsByMonth || {})[monthKey] || {}),
+                    wins: nextMonthWins,
+                    updatedAt: Date.now()
+                }
+            },
+
+            monthlyStats: {
+                ...(w.monthlyStats || {}),
+                [monthKey]: {
+                    ...((w.monthlyStats || {})[monthKey] || {}),
+                    wins: nextMonthWins,
+                    updatedAt: Date.now()
+                }
+            },
+
+            updatedAt: Date.now()
+        };
+
+        return afterWallet;
+    });
+
+    return afterWallet;
+}
+
+async function forceAddOneWinFromVictoryPopup(winnerSide) {
+    try {
+        if (!winnerSide || winnerSide === "hoa" || winnerSide === "draw") return false;
+        if (winnerSide !== "do" && winnerSide !== "den") return false;
+        if (!currentRoomId) return false;
+
+        const roomId = currentRoomId;
+        const roomSnap = await db.ref("matches/" + roomId).once("value");
+        const room = roomSnap.val() || {};
+
+        // Nếu Firebase có winner khác popup thì không cộng bậy.
+        if (room.winner && room.winner !== winnerSide) return false;
+
+        const winnerPlayer = room.players?.[winnerSide] || {};
+        const winnerKey = String(
+            winnerPlayer.walletKey ||
+            winnerPlayer.walletDbKey ||
+            winnerPlayer.uid ||
+            ""
+        ).trim();
+
+        if (!winnerKey) {
+            console.warn("ONE WIN POINT SKIP: thiếu ví winner", {
+                roomId,
+                winnerSide,
+                players: room.players
+            });
+            return false;
+        }
+
+        const roundNo = Math.max(1, Math.floor(Number(room.roundNo || 1) || 1));
+
+        // Dùng mốc ván ổn định. Không lấy updatedAt làm chính vì updatedAt chớp liên tục.
+        const matchStamp = String(
+            room.startedAt ||
+            room.finishedAt ||
+            room.winAt ||
+            room.readyDoneAt ||
+            room.createdAt ||
+            roundNo
+        );
+
+        const claimKey = oneWinPointSafeKey(`${roomId}_${roundNo}_${winnerSide}_${matchStamp}`);
+
+        // Chặn chính máy này gọi lại nhiều lần.
+        if (window.__lastOneWinPointClaimKey === claimKey) return false;
+        window.__lastOneWinPointClaimKey = claimKey;
+
+        // Chặn cả 2 máy A/B cùng cộng trùng.
+        const claimRef = db.ref("oneWinPointClaimsV1/" + claimKey);
+        const claimTx = await claimRef.transaction(current => {
+            if (current && current.done) return;
+
+            return {
+                done: true,
+                roomId,
+                roundNo,
+                winnerSide,
+                winnerKey,
+                matchStamp,
+                at: Date.now()
+            };
+        });
+
+        if (!claimTx.committed) return false;
+
+        const after = await addOneWinOnlyToWallet(winnerKey);
+
+        if (!after) {
+            await claimRef.remove().catch(() => {});
+            return false;
+        }
+
+        const updates = {};
+        updates[`matches/${roomId}/players/${winnerSide}/wins`] = after.wins || 0;
+        updates[`matches/${roomId}/players/${winnerSide}/totalWins`] = after.totalWins || 0;
+        updates[`matches/${roomId}/players/${winnerSide}/monthWins`] = after.monthWins || 0;
+        updates[`matches/${roomId}/players/${winnerSide}/levelMeta`] = after.levelMeta || {};
+        updates[`matches/${roomId}/oneWinPointRecordedV1/${claimKey}`] = {
+            done: true,
+            winnerSide,
+            winnerKey,
+            wins: after.wins || 0,
+            at: Date.now()
+        };
+
+        await db.ref().update(updates);
+
+        if (typeof scheduleArenaTopRefresh === "function") {
+            scheduleArenaTopRefresh();
+        }
+
+        console.log("ONE WIN POINT OK", {
+            roomId,
+            winnerSide,
+            winnerKey,
+            wins: after.wins
+        });
+
+        return true;
+    } catch (err) {
+        console.error("forceAddOneWinFromVictoryPopup lỗi:", err);
+        return false;
+    }
+}
 
 function endGame(main, sub) {
     isGameOver = true;
@@ -7454,11 +7690,16 @@ function endGame(main, sub) {
     if (mainEl) mainEl.innerText = main;
     if (subEl) subEl.innerText = sub;
 
-    let winnerSide = null;
-    if (sub.includes("ĐỎ THẮNG")) winnerSide = "do";
-    else if (sub.includes("ĐEN THẮNG")) winnerSide = "den";
+   let winnerSide = null;
+if (sub.includes("ĐỎ THẮNG")) winnerSide = "do";
+else if (sub.includes("ĐEN THẮNG")) winnerSide = "den";
 
-    const myLocalSide = mySide || viewSide || null;
+// Chỉ cộng +1 thắng đúng lúc popup thắng/thua được gọi.
+// Không đụng bảng SS, không đụng settlement, không đụng ván 2.
+forceAddOneWinFromVictoryPopup(winnerSide);
+
+const myLocalSide = mySide || viewSide || null;
+
     const isDraw = !winnerSide;
 
     if (banner) {
