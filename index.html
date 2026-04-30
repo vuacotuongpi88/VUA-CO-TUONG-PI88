@@ -6704,6 +6704,9 @@ setTimeout(() => {
     db.ref("social/playerState").on("child_added", scheduleArenaTopRefresh);
     db.ref("social/playerState").on("child_changed", scheduleArenaTopRefresh);
     db.ref("social/playerState").on("child_removed", scheduleArenaTopRefresh);
+    db.ref("wallets").on("child_added", scheduleArenaTopRefresh);
+db.ref("wallets").on("child_changed", scheduleArenaTopRefresh);
+db.ref("wallets").on("child_removed", scheduleArenaTopRefresh);
 }
 
 function toggleArenaTopBox(event) {
@@ -10793,150 +10796,157 @@ async function updateOneWalletMatchStats(walletKey, resultType) {
     const monthKey = getVNMonthKeyForMatchStats();
     const ref = db.ref("wallets/" + safeKey);
 
-    let afterWallet = null;
+    const snap = await ref.once("value");
+    const w = snap.val() && typeof snap.val() === "object" ? snap.val() : {};
 
-    await runRefTransaction(ref, current => {
-        const w = current && typeof current === "object" ? current : {};
+    const levelMeta = w.levelMeta && typeof w.levelMeta === "object" ? { ...w.levelMeta } : {};
+    const matchStats = w.matchStats && typeof w.matchStats === "object" ? { ...w.matchStats } : {};
+    const stats = w.stats && typeof w.stats === "object" ? { ...w.stats } : {};
+    const statsByMonth = w.statsByMonth && typeof w.statsByMonth === "object" ? { ...w.statsByMonth } : {};
+    const monthlyStats = w.monthlyStats && typeof w.monthlyStats === "object" ? { ...w.monthlyStats } : {};
+    const matchStatsByMonth = w.matchStatsByMonth && typeof w.matchStatsByMonth === "object" ? { ...w.matchStatsByMonth } : {};
 
-        const levelMeta = w.levelMeta && typeof w.levelMeta === "object" ? { ...w.levelMeta } : {};
-        const matchStats = w.matchStats && typeof w.matchStats === "object" ? { ...w.matchStats } : {};
-        const stats = w.stats && typeof w.stats === "object" ? { ...w.stats } : {};
-        const statsByMonth = w.statsByMonth && typeof w.statsByMonth === "object" ? { ...w.statsByMonth } : {};
-        const monthlyStats = w.monthlyStats && typeof w.monthlyStats === "object" ? { ...w.monthlyStats } : {};
-        const matchStatsByMonth = w.matchStatsByMonth && typeof w.matchStatsByMonth === "object" ? { ...w.matchStatsByMonth } : {};
+    const oldMonth =
+        statsByMonth[monthKey] ||
+        monthlyStats[monthKey] ||
+        matchStatsByMonth[monthKey] ||
+        {};
 
-        const oldMonth =
-            statsByMonth[monthKey] ||
-            monthlyStats[monthKey] ||
-            matchStatsByMonth[monthKey] ||
-            {};
+    const winAdd = resultType === "win" ? 1 : 0;
+    const loseAdd = resultType === "lose" ? 1 : 0;
 
-        const winAdd = resultType === "win" ? 1 : 0;
-        const loseAdd = resultType === "lose" ? 1 : 0;
+    const baseWins = Math.max(
+        matchStatsNum(w.totalWins),
+        matchStatsNum(w.wins),
+        matchStatsNum(stats.totalWins),
+        matchStatsNum(stats.wins),
+        matchStatsNum(matchStats.totalWins),
+        matchStatsNum(levelMeta.wins)
+    );
 
-        const baseWins = Math.max(
-            matchStatsNum(w.totalWins),
-            matchStatsNum(w.wins),
-            matchStatsNum(stats.totalWins),
-            matchStatsNum(stats.wins),
-            matchStatsNum(matchStats.totalWins),
-            matchStatsNum(levelMeta.wins)
-        );
+    const baseLosses = Math.max(
+        matchStatsNum(w.totalLosses),
+        matchStatsNum(w.losses),
+        matchStatsNum(w.loses),
+        matchStatsNum(stats.totalLosses),
+        matchStatsNum(stats.losses),
+        matchStatsNum(matchStats.totalLosses),
+        matchStatsNum(levelMeta.losses)
+    );
 
-        const baseLosses = Math.max(
-            matchStatsNum(w.totalLosses),
-            matchStatsNum(w.losses),
-            matchStatsNum(w.loses),
-            matchStatsNum(stats.totalLosses),
-            matchStatsNum(stats.losses),
-            matchStatsNum(matchStats.totalLosses),
-            matchStatsNum(levelMeta.losses)
-        );
+    const baseMatches = Math.max(
+        matchStatsNum(w.totalMatches),
+        matchStatsNum(w.matches),
+        matchStatsNum(stats.matches),
+        matchStatsNum(matchStats.matches),
+        matchStatsNum(levelMeta.matches),
+        baseWins + baseLosses
+    );
 
-        const baseMatches = Math.max(
-            matchStatsNum(w.totalMatches),
-            matchStatsNum(w.matches),
-            matchStatsNum(stats.matches),
-            matchStatsNum(matchStats.matches),
-            matchStatsNum(levelMeta.matches),
-            baseWins + baseLosses
-        );
+    const monthWins = Math.max(
+        matchStatsNum(oldMonth.wins),
+        matchStatsNum(oldMonth.win),
+        matchStatsNum(w.monthWins),
+        matchStatsNum(levelMeta.monthWins)
+    );
 
-        const monthWins = Math.max(
-            matchStatsNum(oldMonth.wins),
-            matchStatsNum(oldMonth.win),
-            matchStatsNum(w.monthWins),
-            matchStatsNum(levelMeta.monthWins)
-        );
+    const monthLosses = Math.max(
+        matchStatsNum(oldMonth.losses),
+        matchStatsNum(oldMonth.lose),
+        matchStatsNum(oldMonth.loses),
+        matchStatsNum(w.monthLosses),
+        matchStatsNum(levelMeta.monthLosses)
+    );
 
-        const monthLosses = Math.max(
-            matchStatsNum(oldMonth.losses),
-            matchStatsNum(oldMonth.lose),
-            matchStatsNum(oldMonth.loses),
-            matchStatsNum(w.monthLosses),
-            matchStatsNum(levelMeta.monthLosses)
-        );
+    const nextTotalWins = baseWins + winAdd;
+    const nextTotalLosses = baseLosses + loseAdd;
+    const nextTotalMatches = baseMatches + 1;
 
-        const nextTotalWins = baseWins + winAdd;
-        const nextTotalLosses = baseLosses + loseAdd;
-        const nextTotalMatches = baseMatches + 1;
+    const nextMonth = {
+        ...oldMonth,
+        wins: monthWins + winAdd,
+        losses: monthLosses + loseAdd,
+        matches: matchStatsNum(oldMonth.matches) + 1,
+        updatedAt: Date.now()
+    };
 
-        const nextMonth = {
-            ...oldMonth,
-            wins: monthWins + winAdd,
-            losses: monthLosses + loseAdd,
-            matches: matchStatsNum(oldMonth.matches) + 1,
-            updatedAt: Date.now()
-        };
+    const nextLevelMeta = {
+        ...levelMeta,
+        wins: nextTotalWins,
+        losses: nextTotalLosses,
+        matches: nextTotalMatches,
+        monthWins: nextMonth.wins,
+        monthLosses: nextMonth.losses,
+        lastResult: resultType,
+        updatedAt: Date.now()
+    };
 
-        const nextLevelMeta = {
-            ...levelMeta,
+    const updatePayload = {
+        wins: nextTotalWins,
+        totalWins: nextTotalWins,
+        losses: nextTotalLosses,
+        totalLosses: nextTotalLosses,
+        matches: nextTotalMatches,
+        totalMatches: nextTotalMatches,
+
+        monthWins: nextMonth.wins,
+        monthLosses: nextMonth.losses,
+
+        levelMeta: nextLevelMeta,
+
+        matchStats: {
+            ...matchStats,
+            totalWins: nextTotalWins,
+            totalLosses: nextTotalLosses,
             wins: nextTotalWins,
             losses: nextTotalLosses,
             matches: nextTotalMatches,
-            monthWins: nextMonth.wins,
-            monthLosses: nextMonth.losses,
-            lastResult: resultType,
             updatedAt: Date.now()
-        };
+        },
 
-        afterWallet = {
-            ...w,
-
+        stats: {
+            ...stats,
             wins: nextTotalWins,
             totalWins: nextTotalWins,
             losses: nextTotalLosses,
             totalLosses: nextTotalLosses,
             matches: nextTotalMatches,
-            totalMatches: nextTotalMatches,
-
-            monthWins: nextMonth.wins,
-            monthLosses: nextMonth.losses,
-
-            levelMeta: nextLevelMeta,
-
-            matchStats: {
-                ...matchStats,
-                totalWins: nextTotalWins,
-                totalLosses: nextTotalLosses,
-                matches: nextTotalMatches,
-                updatedAt: Date.now()
-            },
-
-            stats: {
-                ...stats,
-                wins: nextTotalWins,
-                totalWins: nextTotalWins,
-                losses: nextTotalLosses,
-                totalLosses: nextTotalLosses,
-                matches: nextTotalMatches,
-                updatedAt: Date.now()
-            },
-
-            statsByMonth: {
-                ...statsByMonth,
-                [monthKey]: nextMonth
-            },
-
-            monthlyStats: {
-                ...monthlyStats,
-                [monthKey]: nextMonth
-            },
-
-            matchStatsByMonth: {
-                ...matchStatsByMonth,
-                [monthKey]: nextMonth
-            },
-
             updatedAt: Date.now()
-        };
+        },
 
-        return afterWallet;
+        statsByMonth: {
+            ...statsByMonth,
+            [monthKey]: nextMonth
+        },
+
+        monthlyStats: {
+            ...monthlyStats,
+            [monthKey]: nextMonth
+        },
+
+        matchStatsByMonth: {
+            ...matchStatsByMonth,
+            [monthKey]: nextMonth
+        },
+
+        updatedAt: Date.now()
+    };
+
+    await ref.update(updatePayload);
+
+    console.log("UPDATE WALLET MATCH STATS OK", {
+        walletKey: safeKey,
+        resultType,
+        wins: nextTotalWins,
+        losses: nextTotalLosses,
+        matches: nextTotalMatches
     });
 
-    return afterWallet;
+    return {
+        ...w,
+        ...updatePayload
+    };
 }
-
 async function recordMatchStatsOnce(roomId, room = {}) {
     try {
         if (!roomId || !room?.winner) return false;
