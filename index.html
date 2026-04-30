@@ -6229,6 +6229,7 @@ if (friendBox) friendBox.classList.remove("show");
 let arenaTopTab = "asset";
 let arenaTopCache = [];
 let arenaTopLoading = false;
+let arenaTopLastHtml = "";
 
 function arenaTopEscape(value = "") {
     const div = document.createElement("div");
@@ -6528,10 +6529,14 @@ function renderArenaTopRows(rows = []) {
     const list = document.getElementById("arena-top-list");
     if (!list) return;
 
-    if (!rows.length) {
-        list.innerHTML = `<div class="arena-top-empty">Chưa có dữ liệu bảng top.</div>`;
-        return;
+if (!rows.length) {
+    const emptyHtml = `<div class="arena-top-empty">Chưa có dữ liệu bảng top.</div>`;
+    if (emptyHtml !== arenaTopLastHtml) {
+        arenaTopLastHtml = emptyHtml;
+        list.innerHTML = emptyHtml;
     }
+    return;
+}
 
     const html = rows.slice(0, 50).map((row, index) => {
         const wallet = row.wallet || {};
@@ -6568,14 +6573,21 @@ function renderArenaTopRows(rows = []) {
         `;
     }).join("");
 
+if (html !== arenaTopLastHtml) {
+    arenaTopLastHtml = html;
     list.innerHTML = html;
+}
 }
 
 async function loadArenaTopList(force = false) {
-    if (arenaTopLoading && !force) return;
+    if (arenaTopLoading) return;
 
     const list = document.getElementById("arena-top-list");
-    if (list) list.innerHTML = `<div class="arena-top-loading">Đang tải bảng top...</div>`;
+
+    // Chỉ hiện loading lần đầu, không xóa bảng mỗi lần Firebase cập nhật
+    if (list && arenaTopCache.length === 0) {
+        list.innerHTML = `<div class="arena-top-loading">Đang tải bảng top...</div>`;
+    }
 
     arenaTopLoading = true;
 
@@ -6658,20 +6670,31 @@ Object.entries(matches).forEach(([roomId, room]) => {
 }
 let arenaTopRealtimeAttached = false;
 let arenaTopRefreshTimer = null;
+let arenaTopRealtimeWarmup = true;
 
 function scheduleArenaTopRefresh() {
     const box = document.getElementById("arena-top-box");
     if (!box || !box.classList.contains("show")) return;
 
+    // Bỏ qua loạt child_added ban đầu khi vừa mở bảng top
+    if (arenaTopRealtimeWarmup) return;
+
     clearTimeout(arenaTopRefreshTimer);
     arenaTopRefreshTimer = setTimeout(() => {
-        loadArenaTopList(true);
-    }, 250);
-}
+        const currentBox = document.getElementById("arena-top-box");
+        if (!currentBox || !currentBox.classList.contains("show")) return;
 
+        // Không dùng force=true nữa, tránh nhiều lượt load đè nhau
+        loadArenaTopList(false);
+    }, 1200);
+}
 function ensureArenaTopRealtimeRefresh() {
     if (arenaTopRealtimeAttached) return;
     arenaTopRealtimeAttached = true;
+    arenaTopRealtimeWarmup = true;
+setTimeout(() => {
+    arenaTopRealtimeWarmup = false;
+}, 1500);
 
     db.ref("matches").on("child_added", scheduleArenaTopRefresh);
     db.ref("matches").on("child_changed", scheduleArenaTopRefresh);
