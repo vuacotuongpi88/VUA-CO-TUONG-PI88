@@ -6264,10 +6264,98 @@ function getArenaTopLevel(wallet = {}) {
     ) || 1;
 }
 
-function getArenaTopWins(wallet = {}) {
-    return arenaTopInt(wallet?.matchStatsCleanV1?.wins || 0);
+function readMatchStatsForDisplay(wallet = {}) {
+    const clean = wallet?.matchStatsCleanV1 && typeof wallet.matchStatsCleanV1 === "object"
+        ? wallet.matchStatsCleanV1
+        : null;
+
+    // Có khối sạch thì ưu tiên khối sạch.
+    // Không có khối sạch mới fallback qua mấy field cũ.
+    const hasClean = !!(clean && (
+        clean.updatedAt ||
+        clean.wins !== undefined ||
+        clean.losses !== undefined ||
+        clean.matches !== undefined ||
+        clean.monthWins !== undefined ||
+        clean.monthLosses !== undefined ||
+        clean.months
+    ));
+
+    const monthKey = typeof getVNMonthKeyForProfile === "function"
+        ? getVNMonthKeyForProfile()
+        : (typeof getVNMonthKeyForMatchStats === "function" ? getVNMonthKeyForMatchStats() : "");
+
+    const cleanMonth = hasClean && clean?.months && typeof clean.months === "object"
+        ? (clean.months[monthKey] || {})
+        : {};
+
+    const oldMonth =
+        wallet?.matchStatsByMonth?.[monthKey] ||
+        wallet?.monthlyStats?.[monthKey] ||
+        wallet?.statsByMonth?.[monthKey] ||
+        {};
+
+    const levelMeta = wallet?.levelMeta && typeof wallet.levelMeta === "object" ? wallet.levelMeta : {};
+    const matchStats = wallet?.matchStats && typeof wallet.matchStats === "object" ? wallet.matchStats : {};
+    const stats = wallet?.stats && typeof wallet.stats === "object" ? wallet.stats : {};
+
+    const totalSrc = hasClean ? clean : {};
+    const monthSrc = hasClean ? cleanMonth : oldMonth;
+
+    return {
+        monthWins: arenaTopInt(
+            monthSrc.wins ??
+            totalSrc.monthWins ??
+            wallet.monthWins ??
+            levelMeta.monthWins ??
+            matchStats.monthWins ??
+            stats.monthWins ??
+            0
+        ),
+
+        monthLosses: arenaTopInt(
+            monthSrc.losses ??
+            totalSrc.monthLosses ??
+            wallet.monthLosses ??
+            levelMeta.monthLosses ??
+            matchStats.monthLosses ??
+            stats.monthLosses ??
+            0
+        ),
+
+        totalWins: arenaTopInt(
+            totalSrc.wins ??
+            totalSrc.totalWins ??
+            wallet.wins ??
+            wallet.totalWins ??
+            levelMeta.wins ??
+            levelMeta.totalWins ??
+            matchStats.wins ??
+            matchStats.totalWins ??
+            stats.wins ??
+            stats.totalWins ??
+            0
+        ),
+
+        totalLosses: arenaTopInt(
+            totalSrc.losses ??
+            totalSrc.totalLosses ??
+            wallet.losses ??
+            wallet.totalLosses ??
+            levelMeta.losses ??
+            levelMeta.totalLosses ??
+            matchStats.losses ??
+            matchStats.totalLosses ??
+            stats.losses ??
+            stats.totalLosses ??
+            0
+        )
+    };
 }
 
+function getArenaTopWins(wallet = {}) {
+    return readMatchStatsForDisplay(wallet).totalWins;
+}
 function getArenaTopSkinScore(wallet = {}) {
     const owned =
         wallet?.ownedAvatarSkins ||
@@ -13925,21 +14013,12 @@ async function openOpponentMatchProfile() {
 
         const title = levelMeta.title || wallet.levelTitle || opp.levelTitle || getSimpleLevelTitle(level);
 
-        const monthKey = getVNMonthKeyForProfile();
-const cleanStats = wallet.matchStatsCleanV1 && typeof wallet.matchStatsCleanV1 === "object"
-    ? wallet.matchStatsCleanV1
-    : {};
+const displayStats = readMatchStatsForDisplay(wallet);
 
-const cleanMonth =
-    cleanStats.months?.[monthKey] ||
-    {};
-
-const monthWins = arenaTopInt(cleanMonth.wins || 0);
-const monthLosses = arenaTopInt(cleanMonth.losses || 0);
-
-const totalWins = arenaTopInt(cleanStats.wins || 0);
-const totalLosses = arenaTopInt(cleanStats.losses || 0);
-
+const monthWins = displayStats.monthWins;
+const monthLosses = displayStats.monthLosses;
+const totalWins = displayStats.totalWins;
+const totalLosses = displayStats.totalLosses;
         currentMatchOpponentProfile = {
             walletKey: opp.walletKey,
             uid: opp.uid || wallet.uid || opp.walletKey,
