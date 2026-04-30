@@ -7615,19 +7615,12 @@ async function forceAddOneWinFromVictoryPopup(winnerSide, attempt = 0) {
         // QUAN TRỌNG:
         // Không lấy startedAt trước nữa, vì phòng đánh ván 2/ván 3 vẫn có thể giữ startedAt cũ.
         // Phải lấy finishedAt / winAt / settlement trước để mỗi ván thắng có 1 khóa riêng.
-        const matchStamp = String(room.matchResultId || room.finishedAt || room.winAt || "");
+const roundNo = Math.max(1, Math.floor(Number(room.roundNo || room.gameNo || 1) || 1));
 
-if (!matchStamp) {
-    if (attempt < 8) {
-        setTimeout(() => forceAddOneWinFromVictoryPopup(winnerSide, attempt + 1), 300);
-    }
-    return false;
-}
-
-        const roundNo = Math.max(1, Math.floor(Number(room.roundNo || room.gameNo || 1) || 1));
-
-        // Đổi sang V2 để không bị mấy khóa V1 cũ chặn nữa
-        const claimKey = oneWinPointSafeKey(`${roomId}_${winnerSide}_${roundNo}_${matchStamp}`);
+// CHỐT: 1 ván chỉ 1 khóa.
+// Không dùng finishedAt/winAt nữa vì Firebase có thể đổi timestamp 2 nhịp,
+// làm cùng 1 ván sinh 2 claimKey rồi cộng +2.
+const claimKey = oneWinPointSafeKey(`${roomId}_${winnerSide}_${roundNo}`);
 
         if (window.__lastOneWinPointClaimKeyV2 === claimKey) return false;
         window.__lastOneWinPointClaimKeyV2 = claimKey;
@@ -7905,12 +7898,6 @@ if (!loserKey) {
 }
 const matchStamp = String(room.matchResultId || room.finishedAt || room.winAt || "");
 
-if (!matchStamp) {
-    if (attempt < 8) {
-        setTimeout(() => forceAddOneLossFromVictoryPopup(winnerSide, attempt + 1), 300);
-    }
-    return false;
-}
         const roundNo = Math.max(1, Math.floor(Number(room.roundNo || room.gameNo || 1) || 1));
 
         // Đổi thua sang V2 giống thắng để không bị oneLossPointClaimsV1 cũ chặn trận đầu.
