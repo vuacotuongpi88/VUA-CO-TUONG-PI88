@@ -7986,7 +7986,17 @@ if (!matchStamp) {
     }
 }
 function endGame(main, sub) {
-    const endGameKey = `${currentRoomId || "local"}|${String(main || "")}|${String(sub || "")}`;
+    const resultKey =
+        window.__currentVictoryKeyFromRoom ||
+        window.__currentEndGameResultKey ||
+        "";
+
+    const endGameKey = [
+        currentRoomId || "local",
+        resultKey,
+        String(main || ""),
+        String(sub || "")
+    ].join("|");
 
     window.__endGameOnceKeyV3 = window.__endGameOnceKeyV3 || "";
 
@@ -8066,9 +8076,11 @@ function hideVictoryPopup() {
 
 async function playNextMatch() {
     hideVictoryPopup();
-        window.__endGameOnceKeyV3 = "";
-    window.__lastOneWinPointClaimKeyV2 = "";
-    window.__lastOneLossPointClaimKeyV2 = "";
+window.__endGameOnceKeyV3 = "";
+window.__lastOneWinPointClaimKeyV2 = "";
+window.__lastOneLossPointClaimKeyV2 = "";
+window.__currentVictoryKeyFromRoom = "";
+window.__currentEndGameResultKey = "";
     clearInterval(interval);
     clearInterval(readyInterval);
     readyOverlayWaitingShown = false;
@@ -9571,15 +9583,28 @@ if (room.winner) {
     // Không đợi settle PMC, vì bên thắng settle xong có thể bị return sớm.
     window.__shownVictoryKeys = window.__shownVictoryKeys || {};
 
-    const victoryKey = [
-        listeningRoomId,
-        room.winner || "",
-        room.winReason || "",
-        room.finishedAt || room.settlement?.paidAt || ""
-    ].join("|");
+   const victoryStamp =
+    room.matchResultId ||
+    room.finishedAt ||
+    room.winAt ||
+    room.settlement?.paidAt ||
+    room.updatedAt ||
+    "";
 
-    if (!window.__shownVictoryKeys[victoryKey] && !isGameOver) {
-        window.__shownVictoryKeys[victoryKey] = true;
+const victoryKey = [
+    listeningRoomId,
+    room.winner || "",
+    room.winReason || "",
+    victoryStamp
+].join("|");
+
+// QUAN TRỌNG:
+// Không chặn bằng isGameOver nữa.
+// Có lúc máy bên thua còn dính isGameOver=true từ ván/callback trước,
+// làm đầu hàng có winner rồi mà popup thua không hiện.
+if (!window.__shownVictoryKeys[victoryKey]) {
+    window.__shownVictoryKeys[victoryKey] = true;
+    window.__currentVictoryKeyFromRoom = victoryKey;
 
         if (room.winner === "hoa") {
             endGame("HÒA CỜ", "2 BÊN HÒA");
@@ -12687,7 +12712,7 @@ function hoaTran() {
     document.getElementById("sub-result").innerText = "KHÔNG PHÂN THẮNG BẠI";
     wrap.style.transform = "translate(-50%, -50%) scale(1)";
 }
-function handleMatchAction(type) {
+async function handleMatchAction(type) {
     closeActionMenu();
 
     if (type === "thoat") {
@@ -12697,17 +12722,84 @@ function handleMatchAction(type) {
 
     if (!currentRoomId || !mySide) return;
 
-    if (type === "dauhang") {
-        if (confirm("Đầu hàng ván này?")) {
-            db.ref("matches/" + currentRoomId).update({
-                winner: mySide === "do" ? "den" : "do",
-winReason: "dauhang",
-finishedAt: firebase.database.ServerValue.TIMESTAMP,
-updatedAt: firebase.database.ServerValue.TIMESTAMP
-            });
+if (type === "dauhang") {
+    if (!confirm("Đầu hàng ván này?")) return;
+
+    const roomId = currentRoomId;
+    const loserSide = mySide;
+    const winnerSide = mySide === "do" ? "den" : "do";
+    const resultId = `${Date.now()}_${loserSide}_dauhang`;
+
+    try {
+        const roomSnap = await db.ref("matches/" + roomId).once("value");
+        const room = roomSnap.val() || {};
+
+        if (room.winner) {
+            return;
         }
-        return;
+
+        const doPlayer = room.players?.do || {};
+        const denPlayer = room.players?.den || {};
+        const resultPlayers = {
+            do: doPlayer,
+            den: denPlayer
+        };
+
+        const winnerPlayer = resultPlayers[winnerSide] || {};
+        const loserPlayer = resultPlayers[loserSide] || {};
+
+        await db.ref("matches/" + roomId).update({
+            winner: winnerSide,
+            winReason: "dauhang",
+            matchResultId: resultId,
+
+            resultWinnerSide: winnerSide,
+            resultLoserSide: loserSide,
+
+            resultWinnerWalletKey:
+                winnerPlayer.walletKey ||
+                winnerPlayer.walletDbKey ||
+                winnerPlayer.uid ||
+                "",
+
+            resultLoserWalletKey:
+                loserPlayer.walletKey ||
+                loserPlayer.walletDbKey ||
+                loserPlayer.uid ||
+                "",
+
+            resultWinnerUid: winnerPlayer.uid || "",
+            resultLoserUid: loserPlayer.uid || "",
+            resultPlayers,
+
+            finishedAt: firebase.database.ServerValue.TIMESTAMP,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+
+        // Máy bấm đầu hàng tự hiện popup thua ngay, không chờ Firebase listener.
+        const localVictoryKey = [
+            roomId,
+            winnerSide,
+            "dauhang",
+            resultId
+        ].join("|");
+
+        window.__shownVictoryKeys = window.__shownVictoryKeys || {};
+        window.__shownVictoryKeys[localVictoryKey] = true;
+        window.__currentVictoryKeyFromRoom = localVictoryKey;
+        window.__currentEndGameResultKey = resultId;
+
+        endGame(
+            "ĐẦU HÀNG",
+            `BÊN ${winnerSide === "do" ? "ĐỎ" : "ĐEN"} THẮNG`
+        );
+    } catch (err) {
+        console.error("Đầu hàng lỗi:", err);
+        alert("Đầu hàng lỗi, thử lại.");
     }
+
+    return;
+}
 
     if (type === "hoa") {
         if (confirm("Gửi xin hòa cho đối thủ?")) {
