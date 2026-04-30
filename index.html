@@ -6004,13 +6004,7 @@ function loginGuest() {
 }
 
 function savePiUser(userName) {
-    const safeName = String(userName || "Pi User").trim();
-
-    // Giữ thêm trên window để vừa login Pi xong là makeWalletDbKey đọc đúng ngay,
-    // tránh rớt sang guest khi Pi app vừa reset localStorage.
-    window.__piLoggedUsername = safeName;
-
-    localStorage.setItem("pi-user-name", safeName);
+    localStorage.setItem("pi-user-name", userName || "Pi User");
     localStorage.setItem("pi-user-photo", "images/do_tuong.png");
 }
 function isRealPiBrowser() {
@@ -7026,20 +7020,8 @@ async function sendArenaTopChallenge(targetWalletKey) {
 
         const updates = {};
         updates[`matches/${roomId}`] = roomData;
-const targetInboxKeys = getTopChallengeWalletAliases(targetKey);
-
-targetInboxKeys.forEach(inboxKey => {
-    updates[`social/topChallenges/${inboxKey}/${me.walletKey}`] = {
-        ...challengeData,
-        targetInboxKey: inboxKey,
-        targetInboxKeys
-    };
-});
-
-updates[`social/topChallengeSent/${me.walletKey}/${targetKey}`] = {
-    ...challengeData,
-    targetInboxKeys
-};
+        updates[`social/topChallenges/${targetKey}/${me.walletKey}`] = challengeData;
+        updates[`social/topChallengeSent/${me.walletKey}/${targetKey}`] = challengeData;
 
         await db.ref().update(updates);
 
@@ -7072,92 +7054,40 @@ updates[`social/topChallengeSent/${me.walletKey}/${targetKey}`] = {
 
         await setPlayerPresence("waiting").catch(() => {});
 
-        console.log(`Đã thách đấu ${targetName} mức ${stakePMC} PMC. Chờ đối thủ chấp nhận.`);
+        alert(`Đã thách đấu ${targetName} mức ${stakePMC} PMC.\nMầy đã vào phòng riêng, chờ đối thủ chấp nhận.`);
     } catch (err) {
         console.error("sendArenaTopChallenge lỗi:", err);
         alert("Gửi thách đấu lỗi. Mở Console xem chi tiết.");
     }
 }
-let topChallengeInboxRefs = [];
+let topChallengeInboxRef = null;
 let topChallengeInboxKey = "";
 let topChallengeListenAt = 0;
-let topChallengeHandledIds = {};
-function cleanTopChallengeKey(key) {
-    return String(key || "")
-        .trim()
-        .toLowerCase()
-        .replace(/[.#$\[\]\/]/g, "_");
-}
 
-function getTopChallengeWalletAliases(key) {
-    const set = new Set();
-
-    function add(v) {
-        const k = cleanTopChallengeKey(v);
-        if (!k || k === "guest" || k === "pi_") return;
-        set.add(k);
-
-        if (k.startsWith("pi_")) {
-            const raw = cleanTopChallengeKey(k.slice(3));
-            if (raw) set.add(raw);
-        } else {
-            set.add(cleanTopChallengeKey("pi_" + k));
-        }
-    }
-
-    add(key);
-    add(makeWalletDbKey?.());
-
-    add(localStorage.getItem("pi-user-name"));
-    add(window.__piLoggedUsername);
-    add(localStorage.getItem("user-name-display"));
-    add(localStorage.getItem("currentUsername"));
-
-    return Array.from(set);
-}
 function bindTopChallengeInbox() {
     try {
         const me = getCurrentPlayerProfile();
         if (!me?.walletKey) return;
 
-        const keys = getTopChallengeWalletAliases(me.walletKey);
-        if (!keys.length) return;
+        if (topChallengeInboxKey === me.walletKey && topChallengeInboxRef) return;
 
-        const sign = keys.slice().sort().join("|");
+        if (topChallengeInboxRef) {
+            topChallengeInboxRef.off();
+            topChallengeInboxRef = null;
+        }
 
-        if (topChallengeInboxKey === sign && topChallengeInboxRefs.length) return;
-
-        topChallengeInboxRefs.forEach(ref => {
-            try { ref.off(); } catch (_) {}
-        });
-
-        topChallengeInboxRefs = [];
-        topChallengeInboxKey = sign;
+        topChallengeInboxKey = me.walletKey;
         topChallengeListenAt = Date.now();
 
-        keys.forEach(inboxKey => {
-            const ref = db.ref("social/topChallenges/" + inboxKey);
+        topChallengeInboxRef = db.ref("social/topChallenges/" + me.walletKey);
 
-            ref.on("child_added", snap => {
-                const v = snap.val() || {};
-                handleIncomingTopChallenge(snap.key, {
-                    ...v,
-                    __inboxWalletKey: inboxKey
-                });
-            });
-
-            ref.on("child_changed", snap => {
-                const v = snap.val() || {};
-                handleIncomingTopChallenge(snap.key, {
-                    ...v,
-                    __inboxWalletKey: inboxKey
-                });
-            });
-
-            topChallengeInboxRefs.push(ref);
+        topChallengeInboxRef.on("child_added", snap => {
+            handleIncomingTopChallenge(snap.key, snap.val());
         });
 
-        console.log("TOP CHALLENGE LISTEN KEYS:", keys);
+        topChallengeInboxRef.on("child_changed", snap => {
+            handleIncomingTopChallenge(snap.key, snap.val());
+        });
     } catch (err) {
         console.error("bindTopChallengeInbox lỗi:", err);
     }
@@ -7170,28 +7100,11 @@ async function handleIncomingTopChallenge(fromWalletKey, data) {
         const now = Date.now();
         const createdAt = Number(data.createdAt || 0);
         const expiresAt = Number(data.expiresAt || 0);
-        const roomId = String(data.roomId || "").trim();
 
         if (expiresAt && now > expiresAt) return;
 
         // Chặn mấy lời mời cũ bật lại khi vừa load app
         if (createdAt && createdAt < topChallengeListenAt - 3000) return;
-
-        // QUAN TRỌNG:
-        // Không đưa inboxKey vào onceKey nữa.
-        // Vì cùng 1 lời mời có thể được ghi vào 086... và pi_086...
-        const onceKey = [
-            String(fromWalletKey || ""),
-            roomId,
-            String(createdAt || ""),
-            String(data.stakePMC || "")
-        ].join("|");
-
-        if (topChallengeHandledIds[onceKey]) return;
-        topChallengeHandledIds[onceKey] = true;
-
-        // Nếu máy này đã vào đúng phòng đó rồi thì khỏi bật thông báo nữa
-        if (currentRoomId && roomId && currentRoomId === roomId) return;
 
         const stakePMC = Math.max(0, Math.floor(Number(data.stakePMC || 0) || 0));
         const fromName = data.fromName || fromWalletKey || "Đối thủ";
@@ -7210,6 +7123,7 @@ async function handleIncomingTopChallenge(fromWalletKey, data) {
         console.error("handleIncomingTopChallenge lỗi:", err);
     }
 }
+
 async function acceptTopChallenge(fromWalletKey, data) {
     try {
         const me = getCurrentPlayerProfile();
@@ -7236,16 +7150,7 @@ async function acceptTopChallenge(fromWalletKey, data) {
             if (room.winner) return;
             if (room.status !== "waiting") return;
             if (!room.privateChallenge) return;
-           const allowedTargetKeys = new Set([
-    ...getTopChallengeWalletAliases(me.walletKey),
-    ...getTopChallengeWalletAliases(data.targetWalletKey),
-    ...getTopChallengeWalletAliases(data.__inboxWalletKey),
-    ...getTopChallengeWalletAliases(data.targetInboxKey)
-].map(String));
-
-const roomTargetKey = String(room.challengeTargetWalletKey || "").trim();
-
-if (roomTargetKey && !allowedTargetKeys.has(roomTargetKey)) return;
+            if (String(room.challengeTargetWalletKey || "") !== String(me.walletKey || "")) return;
             if (!room.players || !room.players.do) return;
             if (room.players.den) return;
 
@@ -7269,52 +7174,19 @@ if (roomTargetKey && !allowedTargetKeys.has(roomTargetKey)) return;
             return room;
         });
 
-if (!result.committed) {
-    console.warn("TOP CHALLENGE SKIP: phòng hết hạn hoặc đã xử lý rồi", {
-        roomId,
-        fromWalletKey,
-        targetWalletKey: data?.targetWalletKey
-    });
-
-    const expiredAt = Date.now();
-    const expireUpdates = {};
-
-    const targetStatusKeys = new Set([
-        ...getTopChallengeWalletAliases(me.walletKey),
-        ...getTopChallengeWalletAliases(data?.targetWalletKey),
-        ...getTopChallengeWalletAliases(data?.__inboxWalletKey),
-        ...getTopChallengeWalletAliases(data?.targetInboxKey)
-    ]);
-
-    targetStatusKeys.forEach(k => {
-        expireUpdates[`social/topChallenges/${k}/${fromWalletKey}/status`] = "expired";
-        expireUpdates[`social/topChallenges/${k}/${fromWalletKey}/expiredAt`] = expiredAt;
-        expireUpdates[`social/topChallengeSent/${fromWalletKey}/${k}/status`] = "expired";
-        expireUpdates[`social/topChallengeSent/${fromWalletKey}/${k}/expiredAt`] = expiredAt;
-    });
-
-    await db.ref().update(expireUpdates).catch(() => {});
-    return;
-}
+        if (!result.committed) {
+            alert("Phòng thách đấu đã hết hạn hoặc đối thủ không còn chờ.");
+            await db.ref(`social/topChallenges/${me.walletKey}/${fromWalletKey}/status`).set("expired").catch(() => {});
+            return;
+        }
 
         const room = result.snapshot.val() || {};
 
         const updates = {};
-const acceptedAt = Date.now();
-
-const targetStatusKeys = new Set([
-    ...getTopChallengeWalletAliases(me.walletKey),
-    ...getTopChallengeWalletAliases(data.targetWalletKey),
-    ...getTopChallengeWalletAliases(data.__inboxWalletKey),
-    ...getTopChallengeWalletAliases(data.targetInboxKey)
-]);
-
-targetStatusKeys.forEach(k => {
-    updates[`social/topChallenges/${k}/${fromWalletKey}/status`] = "accepted";
-    updates[`social/topChallenges/${k}/${fromWalletKey}/acceptedAt`] = acceptedAt;
-    updates[`social/topChallengeSent/${fromWalletKey}/${k}/status`] = "accepted";
-    updates[`social/topChallengeSent/${fromWalletKey}/${k}/acceptedAt`] = acceptedAt;
-});
+        updates[`social/topChallenges/${me.walletKey}/${fromWalletKey}/status`] = "accepted";
+        updates[`social/topChallenges/${me.walletKey}/${fromWalletKey}/acceptedAt`] = Date.now();
+        updates[`social/topChallengeSent/${fromWalletKey}/${me.walletKey}/status`] = "accepted";
+        updates[`social/topChallengeSent/${fromWalletKey}/${me.walletKey}/acceptedAt`] = Date.now();
 
         await db.ref().update(updates).catch(() => {});
 
@@ -7357,22 +7229,11 @@ async function rejectTopChallenge(fromWalletKey, data) {
 
         const roomId = String(data?.roomId || "").trim();
 
-    const updates = {};
-const rejectedAt = Date.now();
-
-const targetStatusKeys = new Set([
-    ...getTopChallengeWalletAliases(me.walletKey),
-    ...getTopChallengeWalletAliases(data?.targetWalletKey),
-    ...getTopChallengeWalletAliases(data?.__inboxWalletKey),
-    ...getTopChallengeWalletAliases(data?.targetInboxKey)
-]);
-
-targetStatusKeys.forEach(k => {
-    updates[`social/topChallenges/${k}/${fromWalletKey}/status`] = "rejected";
-    updates[`social/topChallenges/${k}/${fromWalletKey}/rejectedAt`] = rejectedAt;
-    updates[`social/topChallengeSent/${fromWalletKey}/${k}/status`] = "rejected";
-    updates[`social/topChallengeSent/${fromWalletKey}/${k}/rejectedAt`] = rejectedAt;
-});
+        const updates = {};
+        updates[`social/topChallenges/${me.walletKey}/${fromWalletKey}/status`] = "rejected";
+        updates[`social/topChallenges/${me.walletKey}/${fromWalletKey}/rejectedAt`] = Date.now();
+        updates[`social/topChallengeSent/${fromWalletKey}/${me.walletKey}/status`] = "rejected";
+        updates[`social/topChallengeSent/${fromWalletKey}/${me.walletKey}/rejectedAt`] = Date.now();
 
         if (roomId) {
             updates[`matches/${roomId}/challengeRejected`] = true;
@@ -7584,58 +7445,7 @@ function oneWinPointMonthKey() {
     const m = String(now.getUTCMonth() + 1).padStart(2, "0");
     return `${y}-${m}`;
 }
-function readWinLossStatsFromWalletData(data = {}) {
-    const monthKey = oneWinPointMonthKey();
 
-    const oneWin = data.oneWinOnlyV1 || {};
-    const oneWinMonth = oneWin.months?.[monthKey] || {};
-
-    const oneLoss = data.oneLossOnlyV1 || {};
-    const oneLossMonth = oneLoss.months?.[monthKey] || {};
-
-    const wins = oneWinPointNum(
-        oneWin.wins ??
-        data.wins ??
-        data.totalWins ??
-        data.stats?.wins ??
-        data.matchStats?.wins ??
-        0
-    );
-
-    const monthWins = oneWinPointNum(
-        oneWinMonth.wins ??
-        oneWin.monthWins ??
-        data.monthWins ??
-        data.levelMeta?.monthWins ??
-        0
-    );
-
-    const losses = oneWinPointNum(
-        oneLoss.losses ??
-        data.losses ??
-        data.totalLosses ??
-        data.stats?.losses ??
-        data.matchStats?.losses ??
-        0
-    );
-
-    const monthLosses = oneWinPointNum(
-        oneLossMonth.losses ??
-        oneLoss.monthLosses ??
-        data.monthLosses ??
-        data.levelMeta?.monthLosses ??
-        0
-    );
-
-    return {
-        wins,
-        totalWins: wins,
-        monthWins,
-        losses,
-        totalLosses: losses,
-        monthLosses
-    };
-}
 async function addOneWinOnlyToWallet(walletKey) {
     walletKey = String(walletKey || "").trim();
     if (!walletKey) return null;
@@ -7721,9 +7531,7 @@ async function addOneWinOnlyToWallet(walletKey) {
 
         return afterWallet;
     });
-if (walletKey === makeWalletDbKey() && afterWallet) {
-    currentWinLossStats = readWinLossStatsFromWalletData(afterWallet);
-}
+
     return afterWallet;
 }
 async function forceAddOneWinFromVictoryPopup(winnerSide, attempt = 0) {
@@ -7967,9 +7775,7 @@ async function addOneLossOnlyToWallet(walletKey) {
 
         return afterWallet;
     });
-if (walletKey === makeWalletDbKey() && afterWallet) {
-    currentWinLossStats = readWinLossStatsFromWalletData(afterWallet);
-}
+
     return afterWallet;
 }
 
@@ -8331,8 +8137,7 @@ if (
     !freshRoom.winner &&
     freshRoom.players?.do &&
     freshRoom.players?.den
-)
- {
+) {
     readyDo = false;
     readyDen = false;
     isGameOver = false;
@@ -8874,36 +8679,16 @@ startTimer();
 }
 function getCurrentPlayerProfile() {
     const user = auth.currentUser;
-    const s = currentWinLossStats || {};
 
     return {
         uid: user?.uid || ("guest_" + (localStorage.getItem("user-name-display") || "guest")),
         walletKey: makeWalletDbKey(),
-        walletDbKey: makeWalletDbKey(),
         name: localStorage.getItem("user-name-display") || user?.displayName || "Người chơi",
         photo: localStorage.getItem("user-photo") || user?.photoURL || "images/do_tuong.png",
 
         // GIỮ LẠI SỐ DƯ ĐỂ TẠO PHÒNG / VÀO PHÒNG KHÔNG BỊ BÁO THIẾU PMC
         balance: getPiBalance(),
         pmcBalance: getPmcBalance(),
-
-        // THẮNG / THUA LẤY TỪ FIREBASE WALLET, RESET APP PI VẪN CÒN
-        wins: oneWinPointNum(s.wins),
-        totalWins: oneWinPointNum(s.totalWins ?? s.wins),
-        monthWins: oneWinPointNum(s.monthWins),
-
-        losses: oneWinPointNum(s.losses),
-        totalLosses: oneWinPointNum(s.totalLosses ?? s.losses),
-        monthLosses: oneWinPointNum(s.monthLosses),
-
-        levelMeta: {
-            wins: oneWinPointNum(s.wins),
-            totalWins: oneWinPointNum(s.totalWins ?? s.wins),
-            monthWins: oneWinPointNum(s.monthWins),
-            losses: oneWinPointNum(s.losses),
-            totalLosses: oneWinPointNum(s.totalLosses ?? s.losses),
-            monthLosses: oneWinPointNum(s.monthLosses)
-        },
 
         // SKIN AVATAR
         avatarSkin: getEquippedAvatarSkin()
@@ -9817,6 +9602,12 @@ if (room.winner) {
     }
 // A/B bỏ chạy ngang khi đang đánh:
 // gọi lịch bàn giao NGAY trước khi settle để không bị uiVersion return chặn mất.
+if (
+    room.winReason === "bochay" &&
+    room.winner === mySide
+) {
+    scheduleResetWinnerRoomAfterPaid(room, listeningRoomId);
+}
     didSettleWinnerNow = await maybeSettleStakeRoom(room, listeningRoomId) === true;
 
     // Nếu trong lúc await, phòng đã reset sang ván 2 rồi,
@@ -10348,38 +10139,20 @@ let selectedRoomMode = "co-tuong";
 let currentRoomStakePMC = 0;
 let currentRoomBucket = null;
 let isJoiningStakeRoom = false;
-let currentWinLossStats = {
-    wins: 0,
-    totalWins: 0,
-    monthWins: 0,
-    losses: 0,
-    totalLosses: 0,
-    monthLosses: 0
-};
+
 function getAccountKey() {
     const user = auth.currentUser;
     if (user?.uid) return `google_${user.uid}`;
 
-    let piAuthName = "";
-    try {
-        piAuthName = piAuth?.user?.username || "";
-    } catch (_) {}
-
-    const piName =
-        localStorage.getItem("pi-user-name") ||
-        window.__piLoggedUsername ||
-        piAuthName;
-
-    if (piName) {
-        return `pi_${String(piName).trim().toLowerCase()}`;
-    }
+    const piName = localStorage.getItem("pi-user-name");
+    if (piName) return `pi_${piName.trim().toLowerCase()}`;
 
     const guestName =
         localStorage.getItem("currentUsername") ||
         localStorage.getItem("user-name-display") ||
         "guest";
 
-    return `guest_${String(guestName).trim().toLowerCase().replace(/\s+/g, "_")}`;
+    return `guest_${guestName.trim().toLowerCase().replace(/\s+/g, "_")}`;
 }
 
 function makeWalletDbKey() {
@@ -10453,7 +10226,7 @@ function saveWithdrawState(state) {
 async function loadWalletBalance() {
     try {
         const snap = await walletRef().once("value");
-       currentWinLossStats = readWinLossStatsFromWalletData(data);
+        const data = snap.val() || {};
 
         let piAmount = 0;
         if (data.balance != null) {
