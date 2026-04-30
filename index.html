@@ -8907,34 +8907,24 @@ async function maybeStartRoomFromHost(room, roomId = currentRoomId) {
     const freshBoard = exportBoardState();
 const waitingRoomRef = db.ref("waitingRooms/" + room.roomBucket + "/" + roomId);
 await waitingRoomRef.remove().catch(() => {});
-await db.ref("matches/" + roomId).update({
-    status: "playing",
-    isCoUp,
-    board: freshBoard,
-    turn: "do",
-    timeDo: 540,
-    timeDen: 540,
-    lastMoveFrom: null,
-    lastMoveTo: null,
-
-    // DỌN SẠCH DẤU VÁN CŨ KHI BẮT ĐẦU VÁN MỚI
-    winner: null,
-    winReason: null,
-    finishedAt: null,
-    winAt: null,
-    settlement: null,
-    refunds: null,
-    matchStatsRecordedDirect: null,
-    matchStatsRecordedAt: null,
-    matchStatsLastKey: null,
-
-    drawRequest: null,
-    ready: {
-        do: false,
-        den: false
-    },
-    updatedAt: firebase.database.ServerValue.TIMESTAMP
-});
+    await db.ref("matches/" + roomId).update({
+        status: "playing",
+        isCoUp,
+        board: freshBoard,
+        turn: "do",
+        timeDo: 540,
+        timeDen: 540,
+        lastMoveFrom: null,
+        lastMoveTo: null,
+        winner: null,
+        winReason: null,
+        drawRequest: null,
+        ready: {
+            do: false,
+            den: false
+        },
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+    });
 }
 function appendMatchChatMessage(msg) {
     const content = document.getElementById("match-content-popup");
@@ -11199,10 +11189,10 @@ const roundNo = Math.max(1, Math.floor(Number(room.roundNo || 1) || 1));
 // CHỐT: khóa thống kê phải dùng mốc cố định.
 // TUYỆT ĐỐI không dùng room.updatedAt, vì updatedAt nhảy liên tục sẽ cộng thua/thắng nhiều lần.
 const finishedAt = String(
-    room.finishedAt ||
-    room.winAt ||
     room.settlement?.paidAt ||
     room.settlement?.winnerPaid?.at ||
+    room.finishedAt ||
+    room.winAt ||
     ""
 ).trim();
 
