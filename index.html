@@ -10801,63 +10801,94 @@ async function updateOneWalletMatchStats(walletKey, resultType) {
     await runRefTransaction(ref, current => {
         const w = current && typeof current === "object" ? current : {};
 
-        const clean = w.matchStatsCleanV1 && typeof w.matchStatsCleanV1 === "object"
-            ? { ...w.matchStatsCleanV1 }
+        const levelMeta = w.levelMeta && typeof w.levelMeta === "object"
+            ? { ...w.levelMeta }
             : {};
 
-        const cleanMonths = clean.months && typeof clean.months === "object"
-            ? { ...clean.months }
+        const matchStats = w.matchStats && typeof w.matchStats === "object"
+            ? { ...w.matchStats }
             : {};
 
-        const cleanMonth = cleanMonths[monthKey] && typeof cleanMonths[monthKey] === "object"
-            ? { ...cleanMonths[monthKey] }
+        const stats = w.stats && typeof w.stats === "object"
+            ? { ...w.stats }
             : {};
 
-        const levelMeta = w.levelMeta && typeof w.levelMeta === "object" ? { ...w.levelMeta } : {};
-        const matchStats = w.matchStats && typeof w.matchStats === "object" ? { ...w.matchStats } : {};
-        const stats = w.stats && typeof w.stats === "object" ? { ...w.stats } : {};
+        const statsByMonth = w.statsByMonth && typeof w.statsByMonth === "object"
+            ? { ...w.statsByMonth }
+            : {};
+
+        const monthlyStats = w.monthlyStats && typeof w.monthlyStats === "object"
+            ? { ...w.monthlyStats }
+            : {};
+
+        const matchStatsByMonth = w.matchStatsByMonth && typeof w.matchStatsByMonth === "object"
+            ? { ...w.matchStatsByMonth }
+            : {};
+
+        const oldMonth =
+            statsByMonth[monthKey] ||
+            monthlyStats[monthKey] ||
+            matchStatsByMonth[monthKey] ||
+            {};
 
         const winAdd = resultType === "win" ? 1 : 0;
         const loseAdd = resultType === "lose" ? 1 : 0;
 
-        // CHỐT: chỉ lấy từ khối sạch, không lấy wins/losses cũ nữa
-        const baseWins = matchStatsNum(clean.wins);
-        const baseLosses = matchStatsNum(clean.losses);
-        const baseMatches = matchStatsNum(clean.matches);
+        /*
+          CHỐT LỖI:
+          Không dùng Math.max nhiều field nữa.
+          Vì field cũ bị bẩn 99/100 thì nó kéo số thắng nhảy vọt.
+          Từ giờ lấy levelMeta làm gốc chính.
+        */
+        const baseWins = matchStatsNum(levelMeta.wins ?? w.wins ?? w.totalWins ?? 0);
+        const baseLosses = matchStatsNum(levelMeta.losses ?? w.losses ?? w.totalLosses ?? 0);
+        const baseMatches = matchStatsNum(levelMeta.matches ?? w.matches ?? w.totalMatches ?? (baseWins + baseLosses));
 
-        const baseMonthWins = matchStatsNum(cleanMonth.wins);
-        const baseMonthLosses = matchStatsNum(cleanMonth.losses);
-        const baseMonthMatches = matchStatsNum(cleanMonth.matches);
+        const baseMonthWins = matchStatsNum(
+            levelMeta.monthWins ??
+            oldMonth.wins ??
+            w.monthWins ??
+            0
+        );
+
+        const baseMonthLosses = matchStatsNum(
+            levelMeta.monthLosses ??
+            oldMonth.losses ??
+            w.monthLosses ??
+            0
+        );
+
+        const baseMonthMatches = matchStatsNum(
+            oldMonth.matches ??
+            (baseMonthWins + baseMonthLosses)
+        );
 
         const nextTotalWins = baseWins + winAdd;
         const nextTotalLosses = baseLosses + loseAdd;
         const nextTotalMatches = baseMatches + 1;
 
         const nextMonth = {
+            ...oldMonth,
             wins: baseMonthWins + winAdd,
             losses: baseMonthLosses + loseAdd,
             matches: baseMonthMatches + 1,
             updatedAt: Date.now()
         };
 
-        const nextClean = {
+        const nextLevelMeta = {
+            ...levelMeta,
             wins: nextTotalWins,
             losses: nextTotalLosses,
             matches: nextTotalMatches,
             monthWins: nextMonth.wins,
             monthLosses: nextMonth.losses,
             lastResult: resultType,
-            updatedAt: Date.now(),
-            months: {
-                ...cleanMonths,
-                [monthKey]: nextMonth
-            }
+            updatedAt: Date.now()
         };
 
         afterWallet = {
             ...w,
 
-            // vẫn ghi đè mấy field cũ cho đồng bộ, nhưng nguồn gốc là khối sạch
             wins: nextTotalWins,
             totalWins: nextTotalWins,
             losses: nextTotalLosses,
@@ -10868,18 +10899,7 @@ async function updateOneWalletMatchStats(walletKey, resultType) {
             monthWins: nextMonth.wins,
             monthLosses: nextMonth.losses,
 
-            matchStatsCleanV1: nextClean,
-
-            levelMeta: {
-                ...levelMeta,
-                wins: nextTotalWins,
-                losses: nextTotalLosses,
-                matches: nextTotalMatches,
-                monthWins: nextMonth.wins,
-                monthLosses: nextMonth.losses,
-                lastResult: resultType,
-                updatedAt: Date.now()
-            },
+            levelMeta: nextLevelMeta,
 
             matchStats: {
                 ...matchStats,
@@ -10902,17 +10922,17 @@ async function updateOneWalletMatchStats(walletKey, resultType) {
             },
 
             statsByMonth: {
-                ...(w.statsByMonth || {}),
+                ...statsByMonth,
                 [monthKey]: nextMonth
             },
 
             monthlyStats: {
-                ...(w.monthlyStats || {}),
+                ...monthlyStats,
                 [monthKey]: nextMonth
             },
 
             matchStatsByMonth: {
-                ...(w.matchStatsByMonth || {}),
+                ...matchStatsByMonth,
                 [monthKey]: nextMonth
             },
 
@@ -10922,7 +10942,7 @@ async function updateOneWalletMatchStats(walletKey, resultType) {
         return afterWallet;
     });
 
-    console.log("UPDATE CLEAN MATCH STATS OK", {
+    console.log("UPDATE WALLET MATCH STATS OK", {
         walletKey: safeKey,
         resultType,
         wins: afterWallet?.wins,
