@@ -7446,7 +7446,9 @@ function oneWinPointNum(value) {
     const n = Number(value);
     return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
 }
-
+function oneWinPointMax(...values) {
+    return values.reduce((max, v) => Math.max(max, oneWinPointNum(v)), 0);
+}
 function oneWinPointMonthKey() {
     const now = new Date(Date.now() + 7 * 60 * 60 * 1000);
     const y = now.getUTCFullYear();
@@ -7462,38 +7464,59 @@ function readWinLossStatsFromWalletData(data = {}) {
     const oneLoss = data.oneLossOnlyV1 || {};
     const oneLossMonth = oneLoss.months?.[monthKey] || {};
 
-    const wins = oneWinPointNum(
-        oneWin.wins ??
-        data.wins ??
-        data.totalWins ??
-        data.stats?.wins ??
-        data.matchStats?.wins ??
-        0
+    // Lấy số lớn nhất giữa nhánh mới và các nhánh cũ.
+    // Không được dùng ?? kiểu cũ nữa, vì oneWinOnlyV1 cũ thấp hơn sẽ kéo tụt số.
+    const wins = oneWinPointMax(
+        oneWin.wins,
+        oneWin.totalWins,
+        data.wins,
+        data.totalWins,
+        data.stats?.wins,
+        data.stats?.totalWins,
+        data.matchStats?.wins,
+        data.matchStats?.totalWins,
+        data.levelMeta?.wins,
+        data.levelMeta?.totalWins
     );
 
-    const monthWins = oneWinPointNum(
-        oneWinMonth.wins ??
-        oneWin.monthWins ??
-        data.monthWins ??
-        data.levelMeta?.monthWins ??
-        0
+    const monthWins = oneWinPointMax(
+        oneWinMonth.wins,
+        oneWin.monthWins,
+        data.monthWins,
+        data.stats?.monthWins,
+        data.matchStats?.monthWins,
+        data.levelMeta?.monthWins,
+
+        // Legacy fallback: hiện mầy chỉ còn ô "thắng tháng này",
+        // nên nếu dữ liệu tháng chưa có thì tạm giữ tổng thắng để khỏi tụt về 1.
+        data.wins,
+        data.totalWins
     );
 
-    const losses = oneWinPointNum(
-        oneLoss.losses ??
-        data.losses ??
-        data.totalLosses ??
-        data.stats?.losses ??
-        data.matchStats?.losses ??
-        0
+    const losses = oneWinPointMax(
+        oneLoss.losses,
+        oneLoss.totalLosses,
+        data.losses,
+        data.totalLosses,
+        data.stats?.losses,
+        data.stats?.totalLosses,
+        data.matchStats?.losses,
+        data.matchStats?.totalLosses,
+        data.levelMeta?.losses,
+        data.levelMeta?.totalLosses
     );
 
-    const monthLosses = oneWinPointNum(
-        oneLossMonth.losses ??
-        oneLoss.monthLosses ??
-        data.monthLosses ??
-        data.levelMeta?.monthLosses ??
-        0
+    const monthLosses = oneWinPointMax(
+        oneLossMonth.losses,
+        oneLoss.monthLosses,
+        data.monthLosses,
+        data.stats?.monthLosses,
+        data.matchStats?.monthLosses,
+        data.levelMeta?.monthLosses,
+
+        // Legacy fallback cho số thua tháng này.
+        data.losses,
+        data.totalLosses
     );
 
     return {
@@ -7530,8 +7553,31 @@ async function addOneWinOnlyToWallet(walletKey) {
             : {};
 
         // CHỐT: chỉ lấy số từ oneWinOnlyV1, không lấy wins/totalWins cũ nữa
-        const baseWins = oneWinPointNum(clean.wins);
-        const baseMonthWins = oneWinPointNum(cleanMonth.wins);
+       const baseWins = oneWinPointMax(
+    clean.wins,
+    clean.totalWins,
+    w.wins,
+    w.totalWins,
+    w.stats?.wins,
+    w.stats?.totalWins,
+    w.matchStats?.wins,
+    w.matchStats?.totalWins,
+    w.levelMeta?.wins,
+    w.levelMeta?.totalWins
+);
+
+const baseMonthWins = oneWinPointMax(
+    cleanMonth.wins,
+    clean.monthWins,
+    w.monthWins,
+    w.stats?.monthWins,
+    w.matchStats?.monthWins,
+    w.levelMeta?.monthWins,
+
+    // Legacy fallback để số đang 4 không tụt về nhánh oneWinOnlyV1 cũ.
+    w.wins,
+    w.totalWins
+);
 
         const nextWins = baseWins + 1;
         const nextMonthWins = baseMonthWins + 1;
@@ -7590,6 +7636,10 @@ async function addOneWinOnlyToWallet(walletKey) {
 
         return afterWallet;
     });
+
+       if (walletKey === makeWalletDbKey() && afterWallet) {
+        currentWinLossStats = readWinLossStatsFromWalletData(afterWallet);
+    }
 
     return afterWallet;
 }
@@ -7747,8 +7797,31 @@ async function addOneLossOnlyToWallet(walletKey) {
             ? { ...cleanMonths[monthKey] }
             : {};
 
-        const baseLosses = oneWinPointNum(clean.losses);
-        const baseMonthLosses = oneWinPointNum(cleanMonth.losses);
+        const baseLosses = oneWinPointMax(
+    clean.losses,
+    clean.totalLosses,
+    w.losses,
+    w.totalLosses,
+    w.stats?.losses,
+    w.stats?.totalLosses,
+    w.matchStats?.losses,
+    w.matchStats?.totalLosses,
+    w.levelMeta?.losses,
+    w.levelMeta?.totalLosses
+);
+
+const baseMonthLosses = oneWinPointMax(
+    cleanMonth.losses,
+    clean.monthLosses,
+    w.monthLosses,
+    w.stats?.monthLosses,
+    w.matchStats?.monthLosses,
+    w.levelMeta?.monthLosses,
+
+    // Legacy fallback để số thua không tụt.
+    w.losses,
+    w.totalLosses
+);
 
         const nextLosses = baseLosses + 1;
         const nextMonthLosses = baseMonthLosses + 1;
@@ -7834,6 +7907,10 @@ async function addOneLossOnlyToWallet(walletKey) {
 
         return afterWallet;
     });
+
+        if (walletKey === makeWalletDbKey() && afterWallet) {
+        currentWinLossStats = readWinLossStatsFromWalletData(afterWallet);
+    }
 
     return afterWallet;
 }
