@@ -9119,21 +9119,6 @@ let joined = false;
 
 for (const waiting of waitingList) {
     const waitingRoomRef = db.ref("waitingRooms/" + currentRoomBucket + "/" + waiting.id);
-        const liveRoomSnap = await db.ref("matches/" + waiting.roomId).once("value").catch(() => null);
-    const liveRoom = liveRoomSnap?.val?.() || null;
-
-    const ownerKey = getLobbyOwnerWalletKey(liveRoom || {});
-    const ownerStateSnap = ownerKey
-        ? await db.ref("social/playerState/" + ownerKey).once("value").catch(() => null)
-        : null;
-
-    const ownerState = ownerStateSnap?.val?.() || {};
-
-    if (!isRealJoinableLobbyRoom(liveRoom, waiting.roomId, { [ownerKey]: ownerState })) {
-        // Xóa rác waitingRooms thôi, không đụng matches để khỏi ảnh hưởng trận đang xử lý
-        await waitingRoomRef.remove().catch(() => {});
-        continue;
-    }
 
     const claimed = await waitingRoomRef.transaction((current) => {
         if (!current || !current.roomId) return current;
@@ -12491,18 +12476,6 @@ async function joinRoomFromLobby(roomId) {
 
         const roomSnap = await db.ref("matches/" + roomId).once("value");
         const room = roomSnap.val();
-        const ownerKey = getLobbyOwnerWalletKey(room || {});
-const ownerStateSnap = ownerKey
-    ? await db.ref("social/playerState/" + ownerKey).once("value").catch(() => null)
-    : null;
-
-const ownerState = ownerStateSnap?.val?.() || {};
-
-if (!isRealJoinableLobbyRoom(room, roomId, { [ownerKey]: ownerState })) {
-    alert("Bàn này đã cũ hoặc chủ phòng không còn chờ.");
-    bindLobbyRoomList();
-    return;
-}
 
         if (!room) {
             alert("Bàn này không còn.");
@@ -12942,60 +12915,28 @@ async function cleanupGhostLobbyRoomsOnce() {
     // Tạm tắt dọn phòng ảo tự động để không ảnh hưởng trận đang chơi.
     return;
 }
-let lobbyPlayerStateRef = null;
-let latestLobbyMatchSnap = null;
-let latestLobbyStateSnap = null;
-let lobbyRenderTimer = null;
-
-function renderLobbyRoomsFromSnapshots() {
-    if (!latestLobbyMatchSnap) return;
-
-    const states = latestLobbyStateSnap?.val?.() || {};
-    const roomList = [];
-
-    latestLobbyMatchSnap.forEach(child => {
-        const room = child.val() || {};
-
-        // Quét kỹ: chỉ hiện bàn khi chủ phòng còn đang chờ đúng phòng đó
-        if (!isRealJoinableLobbyRoom(room, child.key, states)) return;
-
-        roomList.push({
-            id: child.key,
-            ...room
-        });
-    });
-
-    roomList.sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
-    renderLobbyRoomList(roomList);
-}
-
-function scheduleRenderLobbyRooms() {
-    clearTimeout(lobbyRenderTimer);
-    lobbyRenderTimer = setTimeout(renderLobbyRoomsFromSnapshots, 150);
-}
-
 function bindLobbyRoomList() {
     if (lobbyRoomListRef) {
         lobbyRoomListRef.off();
     }
 
-    if (lobbyPlayerStateRef) {
-        lobbyPlayerStateRef.off();
-    }
-
     lobbyRoomListRef = db.ref("matches").orderByChild("createdAt").limitToLast(50);
-    lobbyPlayerStateRef = db.ref("social/playerState");
 
     lobbyRoomListRef.on("value", snap => {
-        latestLobbyMatchSnap = snap;
-        scheduleRenderLobbyRooms();
-    });
+        const roomList = [];
 
-    // Quan trọng: chủ phòng ra sảnh thì social/playerState đổi,
-    // danh sách bàn phải tự biến mất liền, không đợi matches đổi.
-    lobbyPlayerStateRef.on("value", snap => {
-        latestLobbyStateSnap = snap;
-        scheduleRenderLobbyRooms();
+        snap.forEach(child => {
+            const room = child.val() || {};
+if (!shouldShowLobbyRoom(room)) return;
+
+            roomList.push({
+                id: child.key,
+                ...room
+            });
+        });
+
+        roomList.sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+        renderLobbyRoomList(roomList);
     });
 }
 let friendListRef = null;
