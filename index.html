@@ -6905,22 +6905,347 @@ async function watchArenaTopMatch(roomId) {
 
 async function sendArenaTopChallenge(targetWalletKey) {
     try {
-        const me = getCurrentPlayerProfile();
-        if (!targetWalletKey || targetWalletKey === me.walletKey) return;
+        const targetKey = String(targetWalletKey || "").trim();
+        if (!targetKey) {
+            alert("Không có ví người cần thách đấu.");
+            return;
+        }
 
-        await db.ref("social/topChallenges/" + targetWalletKey + "/" + me.walletKey).set({
+        const me = getCurrentPlayerProfile();
+        if (!me?.walletKey) {
+            alert("Chưa đọc được ví của mầy.");
+            return;
+        }
+
+        if (targetKey === me.walletKey) {
+            alert("Không thể tự thách đấu chính mình.");
+            return;
+        }
+
+        const rawStake = prompt("Nhập mức cược PMC muốn thách đấu:", "2");
+        if (rawStake === null) return;
+
+        const stakePMC = Math.max(0, Math.floor(Number(String(rawStake).replace(/[^\d.]/g, "")) || 0));
+
+        if (stakePMC <= 0) {
+            alert("Mức cược phải lớn hơn 0 PMC.");
+            return;
+        }
+
+        if (typeof getPmcBalance === "function" && getPmcBalance() < stakePMC) {
+            alert("Mầy không đủ PMC để tạo lời thách đấu này.");
+            return;
+        }
+
+        const mode = "co-tuong";
+        const roomRef = db.ref("matches").push();
+        const roomId = roomRef.key;
+        const now = Date.now();
+
+        const roomBucket = typeof makeStakeBucket === "function"
+            ? makeStakeBucket(mode, stakePMC)
+            : `${mode}_${stakePMC}`;
+
+        const inviteCode = typeof makeInviteCodeFromRoomId === "function"
+            ? makeInviteCodeFromRoomId(roomId)
+            : String(roomId || "").slice(-8).toUpperCase();
+
+        const targetSnap = await db.ref("wallets/" + targetKey).once("value").catch(() => null);
+        const targetWallet = targetSnap?.val?.() || {};
+
+        const targetName =
+            targetWallet.name ||
+            targetWallet.displayName ||
+            targetWallet.username ||
+            targetKey;
+
+        const roomData = {
+            mode,
+            roomBucket,
+            stakePMC,
+            originalStakePMC: stakePMC,
+
+            status: "waiting",
+            lobbyOpen: false,
+            privateChallenge: true,
+
+            challengeFromWalletKey: me.walletKey,
+            challengeTargetWalletKey: targetKey,
+
+            hostUid: me.uid || "",
+            hostWalletKey: me.walletKey,
+            lobbyOwnerUid: me.uid || "",
+            lobbyOwnerWalletKey: me.walletKey,
+
+            inviteCode: String(inviteCode).toUpperCase(),
+
+            players: {
+                do: {
+                    ...me,
+                    side: "do"
+                }
+            },
+
+            ready: {
+                do: false,
+                den: false
+            },
+
+            stakeLocked: {
+                do: false,
+                den: false
+            },
+
+            readyDeadlineAt: null,
+            createdAt: now,
+            updatedAt: now,
+            lobbyUpdatedAt: now
+        };
+
+        const challengeData = {
             fromWalletKey: me.walletKey,
             fromUid: me.uid || "",
-            fromName: me.name || "Người chơi",
+            fromName: me.name || me.displayName || me.username || "Người chơi",
             fromPhoto: me.photo || "images/do_tuong.png",
+
+            targetWalletKey: targetKey,
+            targetName,
+
+            roomId,
+            mode,
+            stakePMC,
+
             status: "pending",
-            createdAt: Date.now()
+            createdAt: now,
+            expiresAt: now + 60000
+        };
+
+        const updates = {};
+        updates[`matches/${roomId}`] = roomData;
+        updates[`social/topChallenges/${targetKey}/${me.walletKey}`] = challengeData;
+        updates[`social/topChallengeSent/${me.walletKey}/${targetKey}`] = challengeData;
+
+        await db.ref().update(updates);
+
+        mySide = "do";
+        viewSide = "do";
+        currentRoomId = roomId;
+        currentRoomMode = mode;
+        currentRoomStakePMC = stakePMC;
+        currentRoomBucket = roomBucket;
+        currentRoomStatus = "waiting";
+
+        if (typeof prepareRealtimeArenaUI === "function") {
+            prepareRealtimeArenaUI();
+        } else {
+            hideHomeUI();
+            const arena = document.getElementById("game-arena");
+            if (arena) arena.style.display = "block";
+        }
+
+        if (typeof saveActiveMatchSnapshot === "function") {
+            saveActiveMatchSnapshot({
+                roomId,
+                mode,
+                side: "do"
+            });
+        }
+
+        closeArenaTopBox?.();
+        bindRoom(roomId);
+
+        await setPlayerPresence("waiting").catch(() => {});
+
+        alert(`Đã thách đấu ${targetName} mức ${stakePMC} PMC.\nMầy đã vào phòng riêng, chờ đối thủ chấp nhận.`);
+    } catch (err) {
+        console.error("sendArenaTopChallenge lỗi:", err);
+        alert("Gửi thách đấu lỗi. Mở Console xem chi tiết.");
+    }
+}
+let topChallengeInboxRef = null;
+let topChallengeInboxKey = "";
+let topChallengeListenAt = 0;
+
+function bindTopChallengeInbox() {
+    try {
+        const me = getCurrentPlayerProfile();
+        if (!me?.walletKey) return;
+
+        if (topChallengeInboxKey === me.walletKey && topChallengeInboxRef) return;
+
+        if (topChallengeInboxRef) {
+            topChallengeInboxRef.off();
+            topChallengeInboxRef = null;
+        }
+
+        topChallengeInboxKey = me.walletKey;
+        topChallengeListenAt = Date.now();
+
+        topChallengeInboxRef = db.ref("social/topChallenges/" + me.walletKey);
+
+        topChallengeInboxRef.on("child_added", snap => {
+            handleIncomingTopChallenge(snap.key, snap.val());
         });
 
-        alert("Đã gửi lời thách đấu. Phần popup nhận thách đấu tao sẽ móc tiếp vào icon đỏ sau.");
+        topChallengeInboxRef.on("child_changed", snap => {
+            handleIncomingTopChallenge(snap.key, snap.val());
+        });
     } catch (err) {
-        console.error("Lỗi gửi thách đấu:", err);
-        alert("Gửi thách đấu lỗi.");
+        console.error("bindTopChallengeInbox lỗi:", err);
+    }
+}
+
+async function handleIncomingTopChallenge(fromWalletKey, data) {
+    try {
+        if (!data || data.status !== "pending") return;
+
+        const now = Date.now();
+        const createdAt = Number(data.createdAt || 0);
+        const expiresAt = Number(data.expiresAt || 0);
+
+        if (expiresAt && now > expiresAt) return;
+
+        // Chặn mấy lời mời cũ bật lại khi vừa load app
+        if (createdAt && createdAt < topChallengeListenAt - 3000) return;
+
+        const stakePMC = Math.max(0, Math.floor(Number(data.stakePMC || 0) || 0));
+        const fromName = data.fromName || fromWalletKey || "Đối thủ";
+
+        const ok = confirm(
+            `${fromName} thách đấu mầy ${stakePMC} PMC.\n\n` +
+            `Bấm OK để vào phòng.\nBấm Cancel để từ chối.`
+        );
+
+        if (ok) {
+            await acceptTopChallenge(fromWalletKey, data);
+        } else {
+            await rejectTopChallenge(fromWalletKey, data);
+        }
+    } catch (err) {
+        console.error("handleIncomingTopChallenge lỗi:", err);
+    }
+}
+
+async function acceptTopChallenge(fromWalletKey, data) {
+    try {
+        const me = getCurrentPlayerProfile();
+        if (!me?.walletKey) {
+            alert("Chưa đọc được ví của mầy.");
+            return;
+        }
+
+        const roomId = String(data.roomId || "").trim();
+        if (!roomId) {
+            alert("Lời thách đấu thiếu phòng.");
+            return;
+        }
+
+        const stakePMC = Math.max(0, Math.floor(Number(data.stakePMC || 0) || 0));
+
+        if (typeof getPmcBalance === "function" && getPmcBalance() < stakePMC) {
+            alert("Mầy không đủ PMC để nhận thách đấu này.");
+            return;
+        }
+
+        const result = await db.ref("matches/" + roomId).transaction(room => {
+            if (!room) return;
+            if (room.winner) return;
+            if (room.status !== "waiting") return;
+            if (!room.privateChallenge) return;
+            if (String(room.challengeTargetWalletKey || "") !== String(me.walletKey || "")) return;
+            if (!room.players || !room.players.do) return;
+            if (room.players.den) return;
+
+            room.players.den = {
+                ...me,
+                side: "den"
+            };
+
+            room.ready = room.ready || {};
+            room.ready.do = false;
+            room.ready.den = false;
+
+            room.stakeLocked = room.stakeLocked || {};
+            room.stakeLocked.do = false;
+            room.stakeLocked.den = false;
+
+            room.readyDeadlineAt = null;
+            room.lobbyOpen = false;
+            room.updatedAt = Date.now();
+
+            return room;
+        });
+
+        if (!result.committed) {
+            alert("Phòng thách đấu đã hết hạn hoặc đối thủ không còn chờ.");
+            await db.ref(`social/topChallenges/${me.walletKey}/${fromWalletKey}/status`).set("expired").catch(() => {});
+            return;
+        }
+
+        const room = result.snapshot.val() || {};
+
+        const updates = {};
+        updates[`social/topChallenges/${me.walletKey}/${fromWalletKey}/status`] = "accepted";
+        updates[`social/topChallenges/${me.walletKey}/${fromWalletKey}/acceptedAt`] = Date.now();
+        updates[`social/topChallengeSent/${fromWalletKey}/${me.walletKey}/status`] = "accepted";
+        updates[`social/topChallengeSent/${fromWalletKey}/${me.walletKey}/acceptedAt`] = Date.now();
+
+        await db.ref().update(updates).catch(() => {});
+
+        mySide = "den";
+        viewSide = "den";
+        currentRoomId = roomId;
+        currentRoomMode = room.mode || data.mode || "co-tuong";
+        currentRoomStakePMC = Math.max(0, Math.floor(Number(room.stakePMC || data.stakePMC || 0) || 0));
+        currentRoomBucket = room.roomBucket || null;
+        currentRoomStatus = "waiting";
+
+        if (typeof prepareRealtimeArenaUI === "function") {
+            prepareRealtimeArenaUI();
+        } else {
+            hideHomeUI();
+            const arena = document.getElementById("game-arena");
+            if (arena) arena.style.display = "block";
+        }
+
+        if (typeof saveActiveMatchSnapshot === "function") {
+            saveActiveMatchSnapshot({
+                roomId,
+                mode: currentRoomMode,
+                side: "den"
+            });
+        }
+
+        bindRoom(roomId);
+        await setPlayerPresence("waiting").catch(() => {});
+    } catch (err) {
+        console.error("acceptTopChallenge lỗi:", err);
+        alert("Nhận thách đấu lỗi.");
+    }
+}
+
+async function rejectTopChallenge(fromWalletKey, data) {
+    try {
+        const me = getCurrentPlayerProfile();
+        if (!me?.walletKey) return;
+
+        const roomId = String(data?.roomId || "").trim();
+
+        const updates = {};
+        updates[`social/topChallenges/${me.walletKey}/${fromWalletKey}/status`] = "rejected";
+        updates[`social/topChallenges/${me.walletKey}/${fromWalletKey}/rejectedAt`] = Date.now();
+        updates[`social/topChallengeSent/${fromWalletKey}/${me.walletKey}/status`] = "rejected";
+        updates[`social/topChallengeSent/${fromWalletKey}/${me.walletKey}/rejectedAt`] = Date.now();
+
+        if (roomId) {
+            updates[`matches/${roomId}/challengeRejected`] = true;
+            updates[`matches/${roomId}/status`] = "cancelled";
+            updates[`matches/${roomId}/updatedAt`] = Date.now();
+        }
+
+        await db.ref().update(updates);
+    } catch (err) {
+        console.error("rejectTopChallenge lỗi:", err);
     }
 }
 function showHomeUI() {
@@ -15165,6 +15490,7 @@ function ensureArenaTopButton() {
 document.addEventListener("DOMContentLoaded", function () {
     ensureArenaSkinButton();
     ensureArenaTopButton();
+    bindTopChallengeInbox();
 });
 
 setTimeout(ensureArenaSkinButton, 500);
@@ -15172,6 +15498,9 @@ setTimeout(ensureArenaSkinButton, 1500);
 
 setTimeout(ensureArenaTopButton, 500);
 setTimeout(ensureArenaTopButton, 1500);
+setInterval(() => {
+    bindTopChallengeInbox();
+}, 5000);
 </script>
 </body>
 
