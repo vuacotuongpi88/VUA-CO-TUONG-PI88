@@ -6265,14 +6265,8 @@ function getArenaTopLevel(wallet = {}) {
 }
 
 function getArenaTopWins(wallet = {}) {
-    return arenaTopInt(Math.max(
-        Number(wallet?.matchStats?.totalWins || 0) || 0,
-        Number(wallet?.stats?.totalWins || 0) || 0,
-        Number(wallet?.stats?.wins || 0) || 0,
-        Number(wallet?.totalWins || 0) || 0,
-        Number(wallet?.wins || 0) || 0,
-        Number(wallet?.levelMeta?.wins || 0) || 0
-    ));
+    // CHỐT: bảng top chỉ đọc nhánh sạch này, không đọc mấy nhánh cũ nữa
+    return arenaTopInt(wallet?.oneWinOnlyV1?.wins ?? 0);
 }
 
 function getArenaTopSkinScore(wallet = {}) {
@@ -7464,8 +7458,8 @@ async function addOneWinOnlyToWallet(walletKey) {
     await ref.transaction(current => {
         const w = current && typeof current === "object" ? current : {};
 
-        const clean = w.matchStatsCleanV1 && typeof w.matchStatsCleanV1 === "object"
-            ? { ...w.matchStatsCleanV1 }
+        const clean = w.oneWinOnlyV1 && typeof w.oneWinOnlyV1 === "object"
+            ? { ...w.oneWinOnlyV1 }
             : {};
 
         const cleanMonths = clean.months && typeof clean.months === "object"
@@ -7476,61 +7470,45 @@ async function addOneWinOnlyToWallet(walletKey) {
             ? { ...cleanMonths[monthKey] }
             : {};
 
-        // Chỉ lấy 1 nguồn chính, không Math.max nữa để khỏi nhảy số bậy.
-        const baseWins = oneWinPointNum(
-            clean.wins ??
-            w.wins ??
-            w.totalWins ??
-            w.levelMeta?.wins ??
-            0
-        );
-
-        const baseMonthWins = oneWinPointNum(
-            cleanMonth.wins ??
-            clean.monthWins ??
-            w.monthWins ??
-            w.levelMeta?.monthWins ??
-            0
-        );
+        // CHỐT: chỉ lấy số từ oneWinOnlyV1, không lấy wins/totalWins cũ nữa
+        const baseWins = oneWinPointNum(clean.wins);
+        const baseMonthWins = oneWinPointNum(cleanMonth.wins);
 
         const nextWins = baseWins + 1;
         const nextMonthWins = baseMonthWins + 1;
 
-        afterWallet = {
-            ...w,
-
+        const nextOneWinOnly = {
+            ...clean,
             wins: nextWins,
             totalWins: nextWins,
             monthWins: nextMonthWins,
-
-            matchStatsCleanV1: {
-                ...clean,
-                wins: nextWins,
-                totalWins: nextWins,
-                monthWins: nextMonthWins,
-                updatedAt: Date.now(),
-                months: {
-                    ...cleanMonths,
-                    [monthKey]: {
-                        ...cleanMonth,
-                        wins: nextMonthWins,
-                        updatedAt: Date.now()
-                    }
+            updatedAt: Date.now(),
+            months: {
+                ...cleanMonths,
+                [monthKey]: {
+                    ...cleanMonth,
+                    wins: nextMonthWins,
+                    updatedAt: Date.now()
                 }
-            },
+            }
+        };
+
+        afterWallet = {
+            ...w,
+
+            // Nhánh sạch chính
+            oneWinOnlyV1: nextOneWinOnly,
+
+            // Ghi đè lại mấy field cũ để UI cũ không còn lôi số bậy
+            wins: nextWins,
+            totalWins: nextWins,
+            monthWins: nextMonthWins,
 
             levelMeta: {
                 ...(w.levelMeta || {}),
                 wins: nextWins,
                 monthWins: nextMonthWins,
                 lastResult: "win",
-                updatedAt: Date.now()
-            },
-
-            matchStats: {
-                ...(w.matchStats || {}),
-                wins: nextWins,
-                totalWins: nextWins,
                 updatedAt: Date.now()
             },
 
@@ -7541,22 +7519,11 @@ async function addOneWinOnlyToWallet(walletKey) {
                 updatedAt: Date.now()
             },
 
-            statsByMonth: {
-                ...(w.statsByMonth || {}),
-                [monthKey]: {
-                    ...((w.statsByMonth || {})[monthKey] || {}),
-                    wins: nextMonthWins,
-                    updatedAt: Date.now()
-                }
-            },
-
-            monthlyStats: {
-                ...(w.monthlyStats || {}),
-                [monthKey]: {
-                    ...((w.monthlyStats || {})[monthKey] || {}),
-                    wins: nextMonthWins,
-                    updatedAt: Date.now()
-                }
+            matchStats: {
+                ...(w.matchStats || {}),
+                wins: nextWins,
+                totalWins: nextWins,
+                updatedAt: Date.now()
             },
 
             updatedAt: Date.now()
@@ -7567,7 +7534,6 @@ async function addOneWinOnlyToWallet(walletKey) {
 
     return afterWallet;
 }
-
 async function forceAddOneWinFromVictoryPopup(winnerSide) {
     try {
         if (!winnerSide || winnerSide === "hoa" || winnerSide === "draw") return false;
@@ -11572,9 +11538,8 @@ if (!winLock.committed) {
             room?.settlement?.winnerPaid?.done === true
         )
     ) {
-        await recordMatchStatsAfterPaidOnce(roomId, room).catch(err => {
-            console.error("Ghi thống kê sau winnerPaid cũ lỗi:", err);
-        });
+       // TẮT THỐNG KÊ CŨ: tránh cộng thắng/thua nhảy 14, 27.
+// Giờ chỉ cộng +1 thắng trong endGame() qua forceAddOneWinFromVictoryPopup().
     }
 
     await loadWalletBalance().catch(() => {});
@@ -11711,9 +11676,8 @@ await db.ref(`matches/${roomId}/players/${mySide}`).update({
         winnerReceivePMC,
         adminWalletKey
     });
-    await recordMatchStatsAfterPaidOnce(roomId, room).catch(err => {
-    console.error("Ghi thống kê sau settle lỗi:", err);
-});
+    // TẮT THỐNG KÊ CŨ: tiền PMC vẫn settle bình thường,
+// nhưng thắng chỉ cộng bằng oneWinOnlyV1 trong popup thắng/thua.
 
     await settleDebugRef.update({
     stage: "done",
@@ -14179,13 +14143,14 @@ async function openOpponentMatchProfile() {
             wallet.stats?.month ||
             {};
 
-        const monthWins = Math.max(0, Math.floor(Number(
-            monthly.wins ??
-            monthly.win ??
-            wallet.monthWins ??
-            levelMeta.monthWins ??
-            0
-        ) || 0));
+const oneWinStats = wallet.oneWinOnlyV1 || {};
+const oneWinMonth = oneWinStats.months?.[monthKey] || {};
+
+const monthWins = Math.max(0, Math.floor(Number(
+    oneWinMonth.wins ??
+    oneWinStats.monthWins ??
+    0
+) || 0));
 
         const monthLosses = Math.max(0, Math.floor(Number(
             monthly.losses ??
@@ -14196,12 +14161,10 @@ async function openOpponentMatchProfile() {
             0
         ) || 0));
 
-        const totalWins = Math.max(0, Math.floor(Number(
-            levelMeta.wins ??
-            wallet.wins ??
-            wallet.totalWins ??
-            0
-        ) || 0));
+const totalWins = Math.max(0, Math.floor(Number(
+    oneWinStats.wins ??
+    0
+) || 0));
 
         const totalLosses = Math.max(0, Math.floor(Number(
             levelMeta.losses ??
