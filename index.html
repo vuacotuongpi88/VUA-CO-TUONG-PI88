@@ -7567,7 +7567,7 @@ async function forceAddOneWinFromVictoryPopup(winnerSide, attempt = 0) {
         // QUAN TRỌNG:
         // Không lấy startedAt trước nữa, vì phòng đánh ván 2/ván 3 vẫn có thể giữ startedAt cũ.
         // Phải lấy finishedAt / winAt / settlement trước để mỗi ván thắng có 1 khóa riêng.
-        const matchStamp = String(room.finishedAt || room.winAt || "");
+        const matchStamp = String(room.matchResultId || room.finishedAt || room.winAt || "");
 
 if (!matchStamp) {
     if (attempt < 8) {
@@ -7799,16 +7799,32 @@ async function forceAddOneLossFromVictoryPopup(winnerSide, attempt = 0) {
             return false;
         }
 
-        const loserPlayer = room.players?.[loserSide] || {};
-        const loserKey = String(
-            loserPlayer.walletKey ||
-            loserPlayer.walletDbKey ||
-            loserPlayer.uid ||
-            ""
-        ).trim();
+const savedLoserPlayer =
+    room.resultPlayers?.[loserSide] ||
+    (
+        room.resultLoserSide === loserSide
+            ? {
+                walletKey: room.resultLoserWalletKey,
+                walletDbKey: room.resultLoserWalletKey,
+                uid: room.resultLoserUid
+            }
+            : {}
+    );
+
+const loserPlayer = room.players?.[loserSide] || savedLoserPlayer || {};
+
+const loserKey = String(
+    loserPlayer.walletKey ||
+    loserPlayer.walletDbKey ||
+    room.resultLoserWalletKey ||
+    loserPlayer.uid ||
+    room.resultLoserUid ||
+    ""
+).trim();
 
         if (!loserKey) {
             console.warn("ONE LOSS POINT RETRY: thiếu ví loser", {
+                
                 roomId,
                 winnerSide,
                 loserSide,
@@ -7822,8 +7838,31 @@ async function forceAddOneLossFromVictoryPopup(winnerSide, attempt = 0) {
 
             return false;
         }
+if (!loserKey) {
+    console.warn("ONE LOSS POINT: thiếu ví loser", {
+        roomId,
+        winnerSide,
+        loserSide,
+        attempt,
+        winReason: room.winReason,
+        players: room.players,
+        resultPlayers: room.resultPlayers,
+        resultLoserWalletKey: room.resultLoserWalletKey
+    });
 
-      const matchStamp = String(room.finishedAt || room.winAt || "");
+    // Bỏ chạy thì thằng thua đã bị xóa khỏi players.
+    // Nếu không có resultLoserWalletKey thì retry sẽ dễ dính qua ván sau rồi cộng dồn.
+    if (room.winReason === "bochay") {
+        return false;
+    }
+
+    if (attempt < 6) {
+        setTimeout(() => forceAddOneLossFromVictoryPopup(winnerSide, attempt + 1), 350);
+    }
+
+    return false;
+}
+const matchStamp = String(room.matchResultId || room.finishedAt || room.winAt || "");
 
 if (!matchStamp) {
     if (attempt < 8) {
@@ -8071,10 +8110,18 @@ await db.ref("matches/" + currentRoomId).update({
     timeDen: 540,
     lastMoveFrom: null,
     lastMoveTo: null,
-    winner: null,
+winner: null,
 winReason: null,
+matchResultId: null,
 finishedAt: null,
 winAt: null,
+resultLoserSide: null,
+resultLoserWalletKey: null,
+resultLoserUid: null,
+resultPlayers: null,
+quitSide: null,
+quitUid: null,
+quitAt: null,
 drawRequest: null,
 settlement: null,
 refunds: null,
@@ -9196,9 +9243,31 @@ if (room.winner && side !== room.winner) {
 if (stillPlaying && otherPlayerExists && !room.winner) {
     const updates = {};
 
+    const loserPlayerBeforeQuit = room.players?.[side] || {};
+    const winnerPlayerBeforeQuit = room.players?.[otherSide] || {};
+
+    const loserWalletKeyBeforeQuit = String(
+        loserPlayerBeforeQuit.walletKey ||
+        loserPlayerBeforeQuit.walletDbKey ||
+        loserPlayerBeforeQuit.uid ||
+        ""
+    ).trim();
+
+    const resultId = `${roomId}_${Date.now()}_${side}_bochay`;
+
     updates[`matches/${roomId}/winner`] = otherSide;
     updates[`matches/${roomId}/winReason`] = "bochay";
+    updates[`matches/${roomId}/matchResultId`] = resultId;
     updates[`matches/${roomId}/finishedAt`] = firebase.database.ServerValue.TIMESTAMP;
+    updates[`matches/${roomId}/winAt`] = Date.now();
+
+    // Lưu lại ví thằng thoát trước khi xóa players/side.
+    // Không có cái này thì hàm cộng thua không biết cộng cho ai.
+    updates[`matches/${roomId}/resultLoserSide`] = side;
+    updates[`matches/${roomId}/resultLoserWalletKey`] = loserWalletKeyBeforeQuit;
+    updates[`matches/${roomId}/resultLoserUid`] = loserPlayerBeforeQuit.uid || "";
+    updates[`matches/${roomId}/resultPlayers/${side}`] = loserPlayerBeforeQuit;
+    updates[`matches/${roomId}/resultPlayers/${otherSide}`] = winnerPlayerBeforeQuit;
 
     // Đang xử lý kết quả, tuyệt đối không cho phòng này hiện ngoài danh sách.
     updates[`matches/${roomId}/status`] = "finished";
