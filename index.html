@@ -11052,6 +11052,8 @@ async function recordMatchStatsOnce(roomId, room = {}) {
     }
 }
 async function recordMatchStatsAfterPaidOnce(roomId, room = {}) {
+    const statsLockRef = { current: null };
+
     try {
         if (!roomId || !room?.winner) return false;
         if (room.winner === "hoa" || room.winner === "draw") return false;
@@ -11087,13 +11089,48 @@ async function recordMatchStatsAfterPaidOnce(roomId, room = {}) {
                 loserKey,
                 players: room.players
             });
+            return false;
+        }
 
-            alert(
-                "STATS SKIP: thiếu ví thắng/thua\n" +
-                "winnerKey: " + winnerKey + "\n" +
-                "loserKey: " + loserKey
-            );
+        const finishedAt = String(
+            room.finishedAt ||
+            room.winAt ||
+            room.updatedAt ||
+            room.settlement?.winnerPaid?.at ||
+            room.settlement?.paidAt ||
+            ""
+        );
 
+        if (!finishedAt) {
+            console.warn("STATS SKIP thiếu mốc ván:", {
+                roomId,
+                winnerSide,
+                updatedAt: room.updatedAt,
+                finishedAt: room.finishedAt,
+                settlement: room.settlement
+            });
+            return false;
+        }
+
+        const statsKey = safeMatchStatsKey(`${winnerSide}_${finishedAt}`);
+        statsLockRef.current = db.ref(`matches/${roomId}/matchStatsDone/${statsKey}`);
+
+        const lockTx = await runRefTransaction(statsLockRef.current, current => {
+            if (current && current.done) return;
+
+            return {
+                processing: true,
+                roomId,
+                winnerSide,
+                loserSide,
+                winnerKey,
+                loserKey,
+                finishedAt,
+                at: Date.now()
+            };
+        });
+
+        if (!lockTx.committed) {
             return false;
         }
 
@@ -11103,11 +11140,8 @@ async function recordMatchStatsAfterPaidOnce(roomId, room = {}) {
         ]);
 
         if (!winnerAfter || !loserAfter) {
-            alert(
-                "STATS FAIL: không ghi được ví\n" +
-                "winnerKey: " + winnerKey + "\n" +
-                "loserKey: " + loserKey
-            );
+            await statsLockRef.current.remove().catch(() => {});
+            console.warn("STATS FAIL ví null:", { winnerKey, loserKey });
             return false;
         }
 
@@ -11115,6 +11149,18 @@ async function recordMatchStatsAfterPaidOnce(roomId, room = {}) {
 
         updates[`matches/${roomId}/matchStatsRecordedDirect`] = true;
         updates[`matches/${roomId}/matchStatsRecordedAt`] = Date.now();
+        updates[`matches/${roomId}/matchStatsLastKey`] = statsKey;
+
+        updates[`matches/${roomId}/matchStatsDone/${statsKey}`] = {
+            done: true,
+            roomId,
+            winnerSide,
+            loserSide,
+            winnerKey,
+            loserKey,
+            finishedAt,
+            at: Date.now()
+        };
 
         updates[`matches/${roomId}/players/${winnerSide}/levelMeta`] = winnerAfter.levelMeta || {};
         updates[`matches/${roomId}/players/${winnerSide}/wins`] = winnerAfter.wins || 0;
@@ -11138,24 +11184,22 @@ async function recordMatchStatsAfterPaidOnce(roomId, room = {}) {
             scheduleArenaTopRefresh();
         }
 
-        console.log("MATCH STATS DIRECT RECORDED", {
+        console.log("MATCH STATS DONE", {
             roomId,
+            statsKey,
             winnerSide,
             loserSide,
             winnerKey,
-            loserKey,
-            winnerAfter,
-            loserAfter
+            loserKey
         });
 
         return true;
     } catch (err) {
         console.error("recordMatchStatsAfterPaidOnce lỗi:", err);
 
-        alert(
-            "GHI THỐNG KÊ LỖI:\n" +
-            (err?.message || String(err))
-        );
+        if (statsLockRef.current) {
+            await statsLockRef.current.remove().catch(() => {});
+        }
 
         return false;
     }
@@ -11270,6 +11314,18 @@ if (winLock && winLock.timeout) {
 }
 
 if (!winLock.committed) {
+    if (
+        room.winner === mySide &&
+        (
+            room?.settlement?.paid === true ||
+            room?.settlement?.winnerPaid?.done === true
+        )
+    ) {
+        await recordMatchStatsAfterPaidOnce(roomId, room).catch(err => {
+            console.error("Ghi thống kê sau winnerPaid cũ lỗi:", err);
+        });
+    }
+
     await loadWalletBalance().catch(() => {});
     await syncMyMatchBalanceToRoomNow().catch(() => {});
     return false;
