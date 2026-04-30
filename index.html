@@ -8963,11 +8963,6 @@ if (typeof applyBoardPerspective === "function") {
 if (room.winner) {
     // Hiện popup thắng/thua NGAY khi thấy winner.
     // Không đợi settle PMC, vì bên thắng settle xong có thể bị return sớm.
-    if (room.winner && room.winner !== "hoa") {
-    recordMatchStatsOnce(listeningRoomId, room).catch(err => {
-        console.error("Ghi thống kê thắng/thua lỗi:", err);
-    });
-}
     window.__shownVictoryKeys = window.__shownVictoryKeys || {};
 
     const victoryKey = [
@@ -11056,6 +11051,118 @@ async function recordMatchStatsOnce(roomId, room = {}) {
         return false;
     }
 }
+async function recordMatchStatsAfterPaidOnce(roomId, room = {}) {
+    try {
+        if (!roomId || !room?.winner) return false;
+        if (room.winner === "hoa" || room.winner === "draw") return false;
+
+        const winnerSide = String(room.winner || "").trim();
+        if (winnerSide !== "do" && winnerSide !== "den") return false;
+
+        const loserSide = winnerSide === "do" ? "den" : "do";
+
+        const winnerPlayer = room.players?.[winnerSide] || {};
+        const loserPlayer = room.players?.[loserSide] || {};
+
+        const winnerKey = String(
+            winnerPlayer.walletKey ||
+            winnerPlayer.walletDbKey ||
+            winnerPlayer.uid ||
+            ""
+        ).trim();
+
+        const loserKey = String(
+            loserPlayer.walletKey ||
+            loserPlayer.walletDbKey ||
+            loserPlayer.uid ||
+            ""
+        ).trim();
+
+        if (!winnerKey || !loserKey) {
+            console.warn("STATS SKIP thiếu ví:", {
+                roomId,
+                winnerSide,
+                loserSide,
+                winnerKey,
+                loserKey,
+                players: room.players
+            });
+            return false;
+        }
+
+        const roundNo = Math.max(1, Math.floor(Number(room.roundNo || 1) || 1));
+
+        // Dùng V3 để không bị lock lỗi cũ V1/V2 chặn
+        const claimKey = safeMatchStatsKey(`${roomId}_round_${roundNo}_${winnerSide}`);
+        const claimRef = db.ref("matchStatsClaimsV3/" + claimKey);
+
+        const claimTx = await runRefTransaction(claimRef, current => {
+            if (current && current.done) return;
+
+            return {
+                done: true,
+                roomId,
+                roundNo,
+                winnerSide,
+                loserSide,
+                winnerKey,
+                loserKey,
+                at: Date.now()
+            };
+        });
+
+        if (!claimTx.committed) return false;
+
+        const [winnerAfter, loserAfter] = await Promise.all([
+            updateOneWalletMatchStats(winnerKey, "win"),
+            updateOneWalletMatchStats(loserKey, "lose")
+        ]);
+
+        const updates = {};
+
+        updates[`matches/${roomId}/matchStatsRecordedV3`] = true;
+        updates[`matches/${roomId}/matchStatsRecordedAt`] = Date.now();
+
+        if (winnerAfter?.levelMeta) {
+            updates[`matches/${roomId}/players/${winnerSide}/levelMeta`] = winnerAfter.levelMeta;
+            updates[`matches/${roomId}/players/${winnerSide}/wins`] = winnerAfter.wins || 0;
+            updates[`matches/${roomId}/players/${winnerSide}/losses`] = winnerAfter.losses || 0;
+            updates[`matches/${roomId}/players/${winnerSide}/totalWins`] = winnerAfter.totalWins || 0;
+            updates[`matches/${roomId}/players/${winnerSide}/totalLosses`] = winnerAfter.totalLosses || 0;
+            updates[`matches/${roomId}/players/${winnerSide}/monthWins`] = winnerAfter.monthWins || 0;
+            updates[`matches/${roomId}/players/${winnerSide}/monthLosses`] = winnerAfter.monthLosses || 0;
+        }
+
+        if (loserAfter?.levelMeta) {
+            updates[`matches/${roomId}/players/${loserSide}/levelMeta`] = loserAfter.levelMeta;
+            updates[`matches/${roomId}/players/${loserSide}/wins`] = loserAfter.wins || 0;
+            updates[`matches/${roomId}/players/${loserSide}/losses`] = loserAfter.losses || 0;
+            updates[`matches/${roomId}/players/${loserSide}/totalWins`] = loserAfter.totalWins || 0;
+            updates[`matches/${roomId}/players/${loserSide}/totalLosses`] = loserAfter.totalLosses || 0;
+            updates[`matches/${roomId}/players/${loserSide}/monthWins`] = loserAfter.monthWins || 0;
+            updates[`matches/${roomId}/players/${loserSide}/monthLosses`] = loserAfter.monthLosses || 0;
+        }
+
+        await db.ref().update(updates);
+
+        if (typeof scheduleArenaTopRefresh === "function") {
+            scheduleArenaTopRefresh();
+        }
+
+        console.log("MATCH STATS V3 RECORDED", {
+            roomId,
+            winnerSide,
+            loserSide,
+            winnerKey,
+            loserKey
+        });
+
+        return true;
+    } catch (err) {
+        console.error("recordMatchStatsAfterPaidOnce lỗi:", err);
+        return false;
+    }
+}
 async function maybeSettleStakeRoom(room, roomId) {
     const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
     if (!roomId || !stake || !room?.winner) return;
@@ -11300,6 +11407,9 @@ await db.ref(`matches/${roomId}/players/${mySide}`).update({
         winnerReceivePMC,
         adminWalletKey
     });
+    await recordMatchStatsAfterPaidOnce(roomId, room).catch(err => {
+    console.error("Ghi thống kê sau settle lỗi:", err);
+});
 
     await settleDebugRef.update({
     stage: "done",
