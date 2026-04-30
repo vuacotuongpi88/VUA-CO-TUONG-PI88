@@ -13908,19 +13908,44 @@ async function openOpponentMatchProfile() {
         const title = levelMeta.title || wallet.levelTitle || opp.levelTitle || getSimpleLevelTitle(level);
 
         const monthKey = getVNMonthKeyForProfile();
-const cleanStats = wallet.matchStatsCleanV1 && typeof wallet.matchStatsCleanV1 === "object"
-    ? wallet.matchStatsCleanV1
-    : {};
+        const monthly =
+            wallet.statsByMonth?.[monthKey] ||
+            wallet.monthlyStats?.[monthKey] ||
+            wallet.matchStatsByMonth?.[monthKey] ||
+            wallet.matchStatsMonth?.[monthKey] ||
+            wallet.stats?.month ||
+            {};
 
-const cleanMonth =
-    cleanStats.months?.[monthKey] ||
-    {};
+        const monthWins = Math.max(0, Math.floor(Number(
+            monthly.wins ??
+            monthly.win ??
+            wallet.monthWins ??
+            levelMeta.monthWins ??
+            0
+        ) || 0));
 
-const monthWins = arenaTopInt(cleanMonth.wins || 0);
-const monthLosses = arenaTopInt(cleanMonth.losses || 0);
+        const monthLosses = Math.max(0, Math.floor(Number(
+            monthly.losses ??
+            monthly.lose ??
+            monthly.loses ??
+            wallet.monthLosses ??
+            levelMeta.monthLosses ??
+            0
+        ) || 0));
 
-const totalWins = arenaTopInt(cleanStats.wins || 0);
-const totalLosses = arenaTopInt(cleanStats.losses || 0);
+        const totalWins = Math.max(0, Math.floor(Number(
+            levelMeta.wins ??
+            wallet.wins ??
+            wallet.totalWins ??
+            0
+        ) || 0));
+
+        const totalLosses = Math.max(0, Math.floor(Number(
+            levelMeta.losses ??
+            wallet.losses ??
+            wallet.totalLosses ??
+            0
+        ) || 0));
 
         currentMatchOpponentProfile = {
             walletKey: opp.walletKey,
