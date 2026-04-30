@@ -6006,8 +6006,14 @@ function loginGuest() {
 }
 
 function savePiUser(userName) {
-    localStorage.setItem("pi-user-name", userName || "Pi User");
+    const safeName = String(userName || "Pi User").trim();
+
+    window.__piLoggedUsername = safeName;
+
+    localStorage.setItem("pi-user-name", safeName);
+    localStorage.setItem("user-name-display", safeName);
     localStorage.setItem("pi-user-photo", "images/do_tuong.png");
+    localStorage.setItem("user-photo", "images/do_tuong.png");
 }
 function isRealPiBrowser() {
     const ua = navigator.userAgent || "";
@@ -7447,7 +7453,58 @@ function oneWinPointMonthKey() {
     const m = String(now.getUTCMonth() + 1).padStart(2, "0");
     return `${y}-${m}`;
 }
+function readWinLossStatsFromWalletData(data = {}) {
+    const monthKey = oneWinPointMonthKey();
 
+    const oneWin = data.oneWinOnlyV1 || {};
+    const oneWinMonth = oneWin.months?.[monthKey] || {};
+
+    const oneLoss = data.oneLossOnlyV1 || {};
+    const oneLossMonth = oneLoss.months?.[monthKey] || {};
+
+    const wins = oneWinPointNum(
+        oneWin.wins ??
+        data.wins ??
+        data.totalWins ??
+        data.stats?.wins ??
+        data.matchStats?.wins ??
+        0
+    );
+
+    const monthWins = oneWinPointNum(
+        oneWinMonth.wins ??
+        oneWin.monthWins ??
+        data.monthWins ??
+        data.levelMeta?.monthWins ??
+        0
+    );
+
+    const losses = oneWinPointNum(
+        oneLoss.losses ??
+        data.losses ??
+        data.totalLosses ??
+        data.stats?.losses ??
+        data.matchStats?.losses ??
+        0
+    );
+
+    const monthLosses = oneWinPointNum(
+        oneLossMonth.losses ??
+        oneLoss.monthLosses ??
+        data.monthLosses ??
+        data.levelMeta?.monthLosses ??
+        0
+    );
+
+    return {
+        wins,
+        totalWins: wins,
+        monthWins,
+        losses,
+        totalLosses: losses,
+        monthLosses
+    };
+}
 async function addOneWinOnlyToWallet(walletKey) {
     walletKey = String(walletKey || "").trim();
     if (!walletKey) return null;
@@ -10161,6 +10218,14 @@ let withdrawLockResolve = null;
 let withdrawLockMode = "verify"; // verify | create
 let currentWalletBalance = 0;
 let currentPmcBalance = 0;
+let currentWinLossStats = {
+    wins: 0,
+    totalWins: 0,
+    monthWins: 0,
+    losses: 0,
+    totalLosses: 0,
+    monthLosses: 0
+};
 let selectedRoomStakePMC = 0;
 let selectedRoomMode = "co-tuong";
 let currentRoomStakePMC = 0;
@@ -10171,15 +10236,26 @@ function getAccountKey() {
     const user = auth.currentUser;
     if (user?.uid) return `google_${user.uid}`;
 
-    const piName = localStorage.getItem("pi-user-name");
-    if (piName) return `pi_${piName.trim().toLowerCase()}`;
+    let piAuthName = "";
+    try {
+        piAuthName = piAuth?.user?.username || "";
+    } catch (_) {}
+
+    const piName =
+        localStorage.getItem("pi-user-name") ||
+        window.__piLoggedUsername ||
+        piAuthName;
+
+    if (piName) {
+        return `pi_${String(piName).trim().toLowerCase()}`;
+    }
 
     const guestName =
         localStorage.getItem("currentUsername") ||
         localStorage.getItem("user-name-display") ||
         "guest";
 
-    return `guest_${guestName.trim().toLowerCase().replace(/\s+/g, "_")}`;
+    return `guest_${String(guestName).trim().toLowerCase().replace(/\s+/g, "_")}`;
 }
 
 function makeWalletDbKey() {
@@ -10254,6 +10330,9 @@ async function loadWalletBalance() {
     try {
         const snap = await walletRef().once("value");
         const data = snap.val() || {};
+     if (typeof readWinLossStatsFromWalletData === "function") {
+            currentWinLossStats = readWinLossStatsFromWalletData(data);
+        }
 
         let piAmount = 0;
         if (data.balance != null) {
