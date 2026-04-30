@@ -6004,13 +6004,7 @@ function loginGuest() {
 }
 
 function savePiUser(userName) {
-    const safeName = String(userName || "Pi User").trim();
-
-    // Giữ thêm trên window để vừa login Pi xong là makeWalletDbKey đọc đúng ngay,
-    // tránh rớt sang guest khi Pi app vừa reset localStorage.
-    window.__piLoggedUsername = safeName;
-
-    localStorage.setItem("pi-user-name", safeName);
+    localStorage.setItem("pi-user-name", userName || "Pi User");
     localStorage.setItem("pi-user-photo", "images/do_tuong.png");
 }
 function isRealPiBrowser() {
@@ -7451,58 +7445,7 @@ function oneWinPointMonthKey() {
     const m = String(now.getUTCMonth() + 1).padStart(2, "0");
     return `${y}-${m}`;
 }
-function readWinLossStatsFromWalletData(data = {}) {
-    const monthKey = oneWinPointMonthKey();
 
-    const oneWin = data.oneWinOnlyV1 || {};
-    const oneWinMonth = oneWin.months?.[monthKey] || {};
-
-    const oneLoss = data.oneLossOnlyV1 || {};
-    const oneLossMonth = oneLoss.months?.[monthKey] || {};
-
-    const wins = oneWinPointNum(
-        oneWin.wins ??
-        data.wins ??
-        data.totalWins ??
-        data.stats?.wins ??
-        data.matchStats?.wins ??
-        0
-    );
-
-    const monthWins = oneWinPointNum(
-        oneWinMonth.wins ??
-        oneWin.monthWins ??
-        data.monthWins ??
-        data.levelMeta?.monthWins ??
-        0
-    );
-
-    const losses = oneWinPointNum(
-        oneLoss.losses ??
-        data.losses ??
-        data.totalLosses ??
-        data.stats?.losses ??
-        data.matchStats?.losses ??
-        0
-    );
-
-    const monthLosses = oneWinPointNum(
-        oneLossMonth.losses ??
-        oneLoss.monthLosses ??
-        data.monthLosses ??
-        data.levelMeta?.monthLosses ??
-        0
-    );
-
-    return {
-        wins,
-        totalWins: wins,
-        monthWins,
-        losses,
-        totalLosses: losses,
-        monthLosses
-    };
-}
 async function addOneWinOnlyToWallet(walletKey) {
     walletKey = String(walletKey || "").trim();
     if (!walletKey) return null;
@@ -7588,9 +7531,7 @@ async function addOneWinOnlyToWallet(walletKey) {
 
         return afterWallet;
     });
-if (walletKey === makeWalletDbKey() && afterWallet) {
-    currentWinLossStats = readWinLossStatsFromWalletData(afterWallet);
-}
+
     return afterWallet;
 }
 async function forceAddOneWinFromVictoryPopup(winnerSide, attempt = 0) {
@@ -7834,9 +7775,7 @@ async function addOneLossOnlyToWallet(walletKey) {
 
         return afterWallet;
     });
-if (walletKey === makeWalletDbKey() && afterWallet) {
-    currentWinLossStats = readWinLossStatsFromWalletData(afterWallet);
-}
+
     return afterWallet;
 }
 
@@ -8740,36 +8679,16 @@ startTimer();
 }
 function getCurrentPlayerProfile() {
     const user = auth.currentUser;
-    const s = currentWinLossStats || {};
 
     return {
         uid: user?.uid || ("guest_" + (localStorage.getItem("user-name-display") || "guest")),
         walletKey: makeWalletDbKey(),
-        walletDbKey: makeWalletDbKey(),
         name: localStorage.getItem("user-name-display") || user?.displayName || "Người chơi",
         photo: localStorage.getItem("user-photo") || user?.photoURL || "images/do_tuong.png",
 
         // GIỮ LẠI SỐ DƯ ĐỂ TẠO PHÒNG / VÀO PHÒNG KHÔNG BỊ BÁO THIẾU PMC
         balance: getPiBalance(),
         pmcBalance: getPmcBalance(),
-
-        // THẮNG / THUA LẤY TỪ FIREBASE WALLET, RESET APP PI VẪN CÒN
-        wins: oneWinPointNum(s.wins),
-        totalWins: oneWinPointNum(s.totalWins ?? s.wins),
-        monthWins: oneWinPointNum(s.monthWins),
-
-        losses: oneWinPointNum(s.losses),
-        totalLosses: oneWinPointNum(s.totalLosses ?? s.losses),
-        monthLosses: oneWinPointNum(s.monthLosses),
-
-        levelMeta: {
-            wins: oneWinPointNum(s.wins),
-            totalWins: oneWinPointNum(s.totalWins ?? s.wins),
-            monthWins: oneWinPointNum(s.monthWins),
-            losses: oneWinPointNum(s.losses),
-            totalLosses: oneWinPointNum(s.totalLosses ?? s.losses),
-            monthLosses: oneWinPointNum(s.monthLosses)
-        },
 
         // SKIN AVATAR
         avatarSkin: getEquippedAvatarSkin()
@@ -10220,38 +10139,20 @@ let selectedRoomMode = "co-tuong";
 let currentRoomStakePMC = 0;
 let currentRoomBucket = null;
 let isJoiningStakeRoom = false;
-let currentWinLossStats = {
-    wins: 0,
-    totalWins: 0,
-    monthWins: 0,
-    losses: 0,
-    totalLosses: 0,
-    monthLosses: 0
-};
+
 function getAccountKey() {
     const user = auth.currentUser;
     if (user?.uid) return `google_${user.uid}`;
 
-    let piAuthName = "";
-    try {
-        piAuthName = piAuth?.user?.username || "";
-    } catch (_) {}
-
-    const piName =
-        localStorage.getItem("pi-user-name") ||
-        window.__piLoggedUsername ||
-        piAuthName;
-
-    if (piName) {
-        return `pi_${String(piName).trim().toLowerCase()}`;
-    }
+    const piName = localStorage.getItem("pi-user-name");
+    if (piName) return `pi_${piName.trim().toLowerCase()}`;
 
     const guestName =
         localStorage.getItem("currentUsername") ||
         localStorage.getItem("user-name-display") ||
         "guest";
 
-    return `guest_${String(guestName).trim().toLowerCase().replace(/\s+/g, "_")}`;
+    return `guest_${guestName.trim().toLowerCase().replace(/\s+/g, "_")}`;
 }
 
 function makeWalletDbKey() {
@@ -10325,7 +10226,7 @@ function saveWithdrawState(state) {
 async function loadWalletBalance() {
     try {
         const snap = await walletRef().once("value");
-       currentWinLossStats = readWinLossStatsFromWalletData(data);
+        const data = snap.val() || {};
 
         let piAmount = 0;
         if (data.balance != null) {
