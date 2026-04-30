@@ -11080,33 +11080,28 @@ async function recordMatchStatsAfterPaidOnce(roomId, room = {}) {
             return false;
         }
 
-const roundNo = Math.max(1, Math.floor(Number(room.roundNo || 1) || 1));
+        const finishedAt = String(
+            room.finishedAt ||
+            room.winAt ||
+            room.updatedAt ||
+            room.settlement?.winnerPaid?.at ||
+            room.settlement?.paidAt ||
+            ""
+        );
 
-// CHỐT: khóa thống kê phải dùng mốc cố định.
-// TUYỆT ĐỐI không dùng room.updatedAt, vì updatedAt nhảy liên tục sẽ cộng thua/thắng nhiều lần.
-const finishedAt = String(
-    room.settlement?.paidAt ||
-    room.settlement?.winnerPaid?.at ||
-    room.finishedAt ||
-    room.winAt ||
-    ""
-).trim();
+        if (!finishedAt) {
+            console.warn("STATS SKIP thiếu mốc ván:", {
+                roomId,
+                winnerSide,
+                updatedAt: room.updatedAt,
+                finishedAt: room.finishedAt,
+                settlement: room.settlement
+            });
+            return false;
+        }
 
-if (!finishedAt) {
-    console.warn("STATS SKIP: chưa có paidAt/finishedAt cố định", {
-        roomId,
-        winnerSide,
-        settlement: room.settlement,
-        finishedAt: room.finishedAt,
-        winAt: room.winAt
-    });
-    return false;
-}
-
-const statsKey = safeMatchStatsKey(`${roomId}_round_${roundNo}_${winnerSide}_${loserSide}_${finishedAt}`);
-
-// Khóa toàn cục, không để room updatedAt làm đổi key nữa
-statsLockRef.current = db.ref(`matchStatsFinalLocksV1/${statsKey}`);
+        const statsKey = safeMatchStatsKey(`${winnerSide}_${finishedAt}`);
+        statsLockRef.current = db.ref(`matches/${roomId}/matchStatsDone/${statsKey}`);
 
         const lockTx = await runRefTransaction(statsLockRef.current, current => {
             if (current && current.done) return;
