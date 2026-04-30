@@ -11087,61 +11087,50 @@ async function recordMatchStatsAfterPaidOnce(roomId, room = {}) {
                 loserKey,
                 players: room.players
             });
+
+            alert(
+                "STATS SKIP: thiếu ví thắng/thua\n" +
+                "winnerKey: " + winnerKey + "\n" +
+                "loserKey: " + loserKey
+            );
+
             return false;
         }
-
-        const roundNo = Math.max(1, Math.floor(Number(room.roundNo || 1) || 1));
-
-        // Dùng V3 để không bị lock lỗi cũ V1/V2 chặn
-        const claimKey = safeMatchStatsKey(`${roomId}_round_${roundNo}_${winnerSide}`);
-        const claimRef = db.ref("matchStatsClaimsV3/" + claimKey);
-
-        const claimTx = await runRefTransaction(claimRef, current => {
-            if (current && current.done) return;
-
-            return {
-                done: true,
-                roomId,
-                roundNo,
-                winnerSide,
-                loserSide,
-                winnerKey,
-                loserKey,
-                at: Date.now()
-            };
-        });
-
-        if (!claimTx.committed) return false;
 
         const [winnerAfter, loserAfter] = await Promise.all([
             updateOneWalletMatchStats(winnerKey, "win"),
             updateOneWalletMatchStats(loserKey, "lose")
         ]);
 
+        if (!winnerAfter || !loserAfter) {
+            alert(
+                "STATS FAIL: không ghi được ví\n" +
+                "winnerKey: " + winnerKey + "\n" +
+                "loserKey: " + loserKey
+            );
+            return false;
+        }
+
         const updates = {};
 
-        updates[`matches/${roomId}/matchStatsRecordedV3`] = true;
+        updates[`matches/${roomId}/matchStatsRecordedDirect`] = true;
         updates[`matches/${roomId}/matchStatsRecordedAt`] = Date.now();
 
-        if (winnerAfter?.levelMeta) {
-            updates[`matches/${roomId}/players/${winnerSide}/levelMeta`] = winnerAfter.levelMeta;
-            updates[`matches/${roomId}/players/${winnerSide}/wins`] = winnerAfter.wins || 0;
-            updates[`matches/${roomId}/players/${winnerSide}/losses`] = winnerAfter.losses || 0;
-            updates[`matches/${roomId}/players/${winnerSide}/totalWins`] = winnerAfter.totalWins || 0;
-            updates[`matches/${roomId}/players/${winnerSide}/totalLosses`] = winnerAfter.totalLosses || 0;
-            updates[`matches/${roomId}/players/${winnerSide}/monthWins`] = winnerAfter.monthWins || 0;
-            updates[`matches/${roomId}/players/${winnerSide}/monthLosses`] = winnerAfter.monthLosses || 0;
-        }
+        updates[`matches/${roomId}/players/${winnerSide}/levelMeta`] = winnerAfter.levelMeta || {};
+        updates[`matches/${roomId}/players/${winnerSide}/wins`] = winnerAfter.wins || 0;
+        updates[`matches/${roomId}/players/${winnerSide}/losses`] = winnerAfter.losses || 0;
+        updates[`matches/${roomId}/players/${winnerSide}/totalWins`] = winnerAfter.totalWins || 0;
+        updates[`matches/${roomId}/players/${winnerSide}/totalLosses`] = winnerAfter.totalLosses || 0;
+        updates[`matches/${roomId}/players/${winnerSide}/monthWins`] = winnerAfter.monthWins || 0;
+        updates[`matches/${roomId}/players/${winnerSide}/monthLosses`] = winnerAfter.monthLosses || 0;
 
-        if (loserAfter?.levelMeta) {
-            updates[`matches/${roomId}/players/${loserSide}/levelMeta`] = loserAfter.levelMeta;
-            updates[`matches/${roomId}/players/${loserSide}/wins`] = loserAfter.wins || 0;
-            updates[`matches/${roomId}/players/${loserSide}/losses`] = loserAfter.losses || 0;
-            updates[`matches/${roomId}/players/${loserSide}/totalWins`] = loserAfter.totalWins || 0;
-            updates[`matches/${roomId}/players/${loserSide}/totalLosses`] = loserAfter.totalLosses || 0;
-            updates[`matches/${roomId}/players/${loserSide}/monthWins`] = loserAfter.monthWins || 0;
-            updates[`matches/${roomId}/players/${loserSide}/monthLosses`] = loserAfter.monthLosses || 0;
-        }
+        updates[`matches/${roomId}/players/${loserSide}/levelMeta`] = loserAfter.levelMeta || {};
+        updates[`matches/${roomId}/players/${loserSide}/wins`] = loserAfter.wins || 0;
+        updates[`matches/${roomId}/players/${loserSide}/losses`] = loserAfter.losses || 0;
+        updates[`matches/${roomId}/players/${loserSide}/totalWins`] = loserAfter.totalWins || 0;
+        updates[`matches/${roomId}/players/${loserSide}/totalLosses`] = loserAfter.totalLosses || 0;
+        updates[`matches/${roomId}/players/${loserSide}/monthWins`] = loserAfter.monthWins || 0;
+        updates[`matches/${roomId}/players/${loserSide}/monthLosses`] = loserAfter.monthLosses || 0;
 
         await db.ref().update(updates);
 
@@ -11149,17 +11138,25 @@ async function recordMatchStatsAfterPaidOnce(roomId, room = {}) {
             scheduleArenaTopRefresh();
         }
 
-        console.log("MATCH STATS V3 RECORDED", {
+        console.log("MATCH STATS DIRECT RECORDED", {
             roomId,
             winnerSide,
             loserSide,
             winnerKey,
-            loserKey
+            loserKey,
+            winnerAfter,
+            loserAfter
         });
 
         return true;
     } catch (err) {
         console.error("recordMatchStatsAfterPaidOnce lỗi:", err);
+
+        alert(
+            "GHI THỐNG KÊ LỖI:\n" +
+            (err?.message || String(err))
+        );
+
         return false;
     }
 }
