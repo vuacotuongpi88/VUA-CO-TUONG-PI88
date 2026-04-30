@@ -6265,13 +6265,15 @@ function getArenaTopLevel(wallet = {}) {
 }
 
 function getArenaTopWins(wallet = {}) {
-    return arenaTopInt(
-        wallet?.levelMeta?.wins ??
-        wallet?.stats?.wins ??
-        wallet?.wins ??
-        wallet?.win ??
-        0
-    );
+    return arenaTopInt(Math.max(
+        Number(wallet?.matchStats?.totalWins || 0) || 0,
+        Number(wallet?.stats?.totalWins || 0) || 0,
+        Number(wallet?.stats?.wins || 0) || 0,
+        Number(wallet?.totalWins || 0) || 0,
+        Number(wallet?.wins || 0) || 0,
+        Number(wallet?.win || 0) || 0,
+        Number(wallet?.levelMeta?.wins || 0) || 0
+    ));
 }
 
 function getArenaTopSkinScore(wallet = {}) {
@@ -8962,6 +8964,11 @@ if (typeof applyBoardPerspective === "function") {
 if (room.winner) {
     // Hiện popup thắng/thua NGAY khi thấy winner.
     // Không đợi settle PMC, vì bên thắng settle xong có thể bị return sớm.
+    if (room.winner && room.winner !== "hoa") {
+    recordMatchStatsOnce(listeningRoomId, room).catch(err => {
+        console.error("Ghi thống kê thắng/thua lỗi:", err);
+    });
+}
     window.__shownVictoryKeys = window.__shownVictoryKeys || {};
 
     const victoryKey = [
@@ -10769,6 +10776,261 @@ const hostStillInThisRoom =
     }
 
     return room;
+}
+function safeMatchStatsKey(value) {
+    return String(value || "").replace(/[.#$\[\]\/]/g, "_");
+}
+
+function matchStatsNum(value) {
+    return Math.max(0, Math.floor(Number(value || 0) || 0));
+}
+
+function getVNMonthKeyForMatchStats() {
+    const now = new Date(Date.now() + 7 * 60 * 60 * 1000);
+    const y = now.getUTCFullYear();
+    const m = String(now.getUTCMonth() + 1).padStart(2, "0");
+    return `${y}-${m}`;
+}
+
+async function updateOneWalletMatchStats(walletKey, resultType) {
+    const safeKey = safeMatchStatsKey(walletKey);
+    if (!safeKey) return null;
+
+    const monthKey = getVNMonthKeyForMatchStats();
+    const ref = db.ref("wallets/" + safeKey);
+
+    let afterWallet = null;
+
+    await runRefTransaction(ref, current => {
+        const w = current && typeof current === "object" ? current : {};
+
+        const levelMeta = w.levelMeta && typeof w.levelMeta === "object"
+            ? { ...w.levelMeta }
+            : {};
+
+        const matchStats = w.matchStats && typeof w.matchStats === "object"
+            ? { ...w.matchStats }
+            : {};
+
+        const stats = w.stats && typeof w.stats === "object"
+            ? { ...w.stats }
+            : {};
+
+        const statsByMonth = w.statsByMonth && typeof w.statsByMonth === "object"
+            ? { ...w.statsByMonth }
+            : {};
+
+        const monthlyStats = w.monthlyStats && typeof w.monthlyStats === "object"
+            ? { ...w.monthlyStats }
+            : {};
+
+        const matchStatsByMonth = w.matchStatsByMonth && typeof w.matchStatsByMonth === "object"
+            ? { ...w.matchStatsByMonth }
+            : {};
+
+        const oldMonth =
+            statsByMonth[monthKey] ||
+            monthlyStats[monthKey] ||
+            matchStatsByMonth[monthKey] ||
+            {};
+
+        const winAdd = resultType === "win" ? 1 : 0;
+        const loseAdd = resultType === "lose" ? 1 : 0;
+
+        const baseWins = Math.max(
+            matchStatsNum(w.totalWins),
+            matchStatsNum(w.wins),
+            matchStatsNum(stats.totalWins),
+            matchStatsNum(stats.wins),
+            matchStatsNum(matchStats.totalWins),
+            matchStatsNum(levelMeta.wins)
+        );
+
+        const baseLosses = Math.max(
+            matchStatsNum(w.totalLosses),
+            matchStatsNum(w.losses),
+            matchStatsNum(w.loses),
+            matchStatsNum(stats.totalLosses),
+            matchStatsNum(stats.losses),
+            matchStatsNum(matchStats.totalLosses),
+            matchStatsNum(levelMeta.losses)
+        );
+
+        const baseMatches = Math.max(
+            matchStatsNum(w.totalMatches),
+            matchStatsNum(w.matches),
+            matchStatsNum(stats.matches),
+            matchStatsNum(matchStats.matches),
+            matchStatsNum(levelMeta.matches),
+            baseWins + baseLosses
+        );
+
+        const monthWins = Math.max(
+            matchStatsNum(oldMonth.wins),
+            matchStatsNum(oldMonth.win),
+            matchStatsNum(w.monthWins),
+            matchStatsNum(levelMeta.monthWins)
+        );
+
+        const monthLosses = Math.max(
+            matchStatsNum(oldMonth.losses),
+            matchStatsNum(oldMonth.lose),
+            matchStatsNum(oldMonth.loses),
+            matchStatsNum(w.monthLosses),
+            matchStatsNum(levelMeta.monthLosses)
+        );
+
+        const nextTotalWins = baseWins + winAdd;
+        const nextTotalLosses = baseLosses + loseAdd;
+        const nextTotalMatches = baseMatches + 1;
+
+        const nextMonth = {
+            ...oldMonth,
+            wins: monthWins + winAdd,
+            losses: monthLosses + loseAdd,
+            matches: matchStatsNum(oldMonth.matches) + 1,
+            updatedAt: Date.now()
+        };
+
+        const nextLevelMeta = {
+            ...levelMeta,
+            wins: nextTotalWins,
+            losses: nextTotalLosses,
+            matches: nextTotalMatches,
+            lastResult: resultType,
+            updatedAt: Date.now()
+        };
+
+        afterWallet = {
+            ...w,
+            wins: nextTotalWins,
+            totalWins: nextTotalWins,
+            losses: nextTotalLosses,
+            totalLosses: nextTotalLosses,
+            matches: nextTotalMatches,
+            totalMatches: nextTotalMatches,
+
+            monthWins: nextMonth.wins,
+            monthLosses: nextMonth.losses,
+
+            levelMeta: nextLevelMeta,
+
+            matchStats: {
+                ...matchStats,
+                totalWins: nextTotalWins,
+                totalLosses: nextTotalLosses,
+                matches: nextTotalMatches,
+                updatedAt: Date.now()
+            },
+
+            stats: {
+                ...stats,
+                wins: nextTotalWins,
+                totalWins: nextTotalWins,
+                losses: nextTotalLosses,
+                totalLosses: nextTotalLosses,
+                matches: nextTotalMatches,
+                updatedAt: Date.now()
+            },
+
+            statsByMonth: {
+                ...statsByMonth,
+                [monthKey]: nextMonth
+            },
+
+            monthlyStats: {
+                ...monthlyStats,
+                [monthKey]: nextMonth
+            },
+
+            matchStatsByMonth: {
+                ...matchStatsByMonth,
+                [monthKey]: nextMonth
+            },
+
+            updatedAt: Date.now()
+        };
+
+        return afterWallet;
+    });
+
+    return afterWallet;
+}
+
+async function recordMatchStatsOnce(roomId, room = {}) {
+    try {
+        if (!roomId || !room?.winner) return false;
+        if (room.winner === "hoa" || room.winner === "draw") return false;
+
+        const winnerSide = String(room.winner || "").trim();
+        if (winnerSide !== "do" && winnerSide !== "den") return false;
+
+        const doPlayer = room.players?.do || {};
+        const denPlayer = room.players?.den || {};
+
+        const doWalletKey = String(doPlayer.walletKey || doPlayer.uid || "").trim();
+        const denWalletKey = String(denPlayer.walletKey || denPlayer.uid || "").trim();
+
+        if (!doWalletKey || !denWalletKey) return false;
+
+        const roundNo = Math.max(1, Math.floor(Number(room.roundNo || 1) || 1));
+        const matchKey = safeMatchStatsKey(`${roomId}_round_${roundNo}`);
+
+        const claimRef = db.ref("matchStatsClaimsV1/" + matchKey);
+
+        const claimTx = await runRefTransaction(claimRef, current => {
+            if (current && current.done) return;
+            return {
+                done: true,
+                roomId,
+                roundNo,
+                winner: winnerSide,
+                at: Date.now()
+            };
+        });
+
+        if (!claimTx.committed) return false;
+
+        const doResult = winnerSide === "do" ? "win" : "lose";
+        const denResult = winnerSide === "den" ? "win" : "lose";
+
+        const [doAfter, denAfter] = await Promise.all([
+            updateOneWalletMatchStats(doWalletKey, doResult),
+            updateOneWalletMatchStats(denWalletKey, denResult)
+        ]);
+
+        const updates = {};
+
+        if (doAfter?.levelMeta) {
+            updates[`matches/${roomId}/players/do/levelMeta`] = doAfter.levelMeta;
+            updates[`matches/${roomId}/players/do/totalWins`] = doAfter.totalWins || 0;
+            updates[`matches/${roomId}/players/do/totalLosses`] = doAfter.totalLosses || 0;
+        }
+
+        if (denAfter?.levelMeta) {
+            updates[`matches/${roomId}/players/den/levelMeta`] = denAfter.levelMeta;
+            updates[`matches/${roomId}/players/den/totalWins`] = denAfter.totalWins || 0;
+            updates[`matches/${roomId}/players/den/totalLosses`] = denAfter.totalLosses || 0;
+        }
+
+        updates[`matches/${roomId}/matchStatsRecorded`] = true;
+        updates[`matches/${roomId}/matchStatsRecordedAt`] = Date.now();
+
+        await db.ref().update(updates);
+
+        console.log("MATCH STATS RECORDED", {
+            roomId,
+            roundNo,
+            winnerSide,
+            doWalletKey,
+            denWalletKey
+        });
+
+        return true;
+    } catch (err) {
+        console.error("recordMatchStatsOnce lỗi:", err);
+        return false;
+    }
 }
 async function maybeSettleStakeRoom(room, roomId) {
     const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
