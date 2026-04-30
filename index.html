@@ -7544,7 +7544,7 @@ async function forceAddOneWinFromVictoryPopup(winnerSide) {
         const roomSnap = await db.ref("matches/" + roomId).once("value");
         const room = roomSnap.val() || {};
 
-        // Nếu Firebase có winner khác popup thì không cộng bậy.
+        // Nếu Firebase đã có winner khác popup thì không cộng bậy
         if (room.winner && room.winner !== winnerSide) return false;
 
         const winnerPlayer = room.players?.[winnerSide] || {};
@@ -7556,7 +7556,7 @@ async function forceAddOneWinFromVictoryPopup(winnerSide) {
         ).trim();
 
         if (!winnerKey) {
-            console.warn("ONE WIN POINT SKIP: thiếu ví winner", {
+            console.warn("ONE WIN POINT SKIP V2: thiếu ví winner", {
                 roomId,
                 winnerSide,
                 players: room.players
@@ -7564,46 +7564,58 @@ async function forceAddOneWinFromVictoryPopup(winnerSide) {
             return false;
         }
 
-        const roundNo = Math.max(1, Math.floor(Number(room.roundNo || 1) || 1));
-
-        // Dùng mốc ván ổn định. Không lấy updatedAt làm chính vì updatedAt chớp liên tục.
+        // QUAN TRỌNG:
+        // Không lấy startedAt trước nữa, vì phòng đánh ván 2/ván 3 vẫn có thể giữ startedAt cũ.
+        // Phải lấy finishedAt / winAt / settlement trước để mỗi ván thắng có 1 khóa riêng.
         const matchStamp = String(
-            room.startedAt ||
             room.finishedAt ||
             room.winAt ||
-            room.readyDoneAt ||
-            room.createdAt ||
-            roundNo
+            room.settlement?.winnerPaid?.at ||
+            room.settlement?.paidAt ||
+            room.matchStatsRecordedAt ||
+            room.updatedAt ||
+            Date.now()
         );
 
-        const claimKey = oneWinPointSafeKey(`${roomId}_${roundNo}_${winnerSide}_${matchStamp}`);
+        const roundNo = Math.max(1, Math.floor(Number(room.roundNo || room.gameNo || 1) || 1));
 
-        // Chặn chính máy này gọi lại nhiều lần.
-        if (window.__lastOneWinPointClaimKey === claimKey) return false;
-        window.__lastOneWinPointClaimKey = claimKey;
+        // Đổi sang V2 để không bị mấy khóa V1 cũ chặn nữa
+        const claimKey = oneWinPointSafeKey(`${roomId}_${winnerSide}_${roundNo}_${matchStamp}`);
 
-        // Chặn cả 2 máy A/B cùng cộng trùng.
-        const claimRef = db.ref("oneWinPointClaimsV1/" + claimKey);
-        const claimTx = await claimRef.transaction(current => {
+        if (window.__lastOneWinPointClaimKeyV2 === claimKey) return false;
+        window.__lastOneWinPointClaimKeyV2 = claimKey;
+
+        // Khóa nằm trong matches/roomId cho chắc, không tạo nhánh top-level lạ
+        const claimRef = db.ref(`matches/${roomId}/oneWinPointClaimsV2/${claimKey}`);
+
+        const claimTx = await runRefTransaction(claimRef, current => {
             if (current && current.done) return;
 
             return {
-                done: true,
+                processing: true,
                 roomId,
-                roundNo,
                 winnerSide,
                 winnerKey,
+                roundNo,
                 matchStamp,
                 at: Date.now()
             };
         });
 
-        if (!claimTx.committed) return false;
+        if (!claimTx.committed) {
+            console.warn("ONE WIN POINT SKIP V2: claim đã có", { roomId, claimKey });
+            return false;
+        }
 
         const after = await addOneWinOnlyToWallet(winnerKey);
 
         if (!after) {
             await claimRef.remove().catch(() => {});
+            console.warn("ONE WIN POINT FAIL V2: addOneWinOnlyToWallet null", {
+                roomId,
+                winnerSide,
+                winnerKey
+            });
             return false;
         }
 
@@ -7612,8 +7624,21 @@ async function forceAddOneWinFromVictoryPopup(winnerSide) {
         updates[`matches/${roomId}/players/${winnerSide}/totalWins`] = after.totalWins || 0;
         updates[`matches/${roomId}/players/${winnerSide}/monthWins`] = after.monthWins || 0;
         updates[`matches/${roomId}/players/${winnerSide}/levelMeta`] = after.levelMeta || {};
-        updates[`matches/${roomId}/oneWinPointRecordedV1/${claimKey}`] = {
+
+        updates[`matches/${roomId}/oneWinPointClaimsV2/${claimKey}`] = {
             done: true,
+            roomId,
+            winnerSide,
+            winnerKey,
+            roundNo,
+            matchStamp,
+            wins: after.wins || 0,
+            at: Date.now()
+        };
+
+        updates[`matches/${roomId}/oneWinPointRecordedV2`] = {
+            done: true,
+            claimKey,
             winnerSide,
             winnerKey,
             wins: after.wins || 0,
@@ -7626,16 +7651,17 @@ async function forceAddOneWinFromVictoryPopup(winnerSide) {
             scheduleArenaTopRefresh();
         }
 
-        console.log("ONE WIN POINT OK", {
+        console.log("ONE WIN POINT OK V2", {
             roomId,
             winnerSide,
             winnerKey,
+            claimKey,
             wins: after.wins
         });
 
         return true;
     } catch (err) {
-        console.error("forceAddOneWinFromVictoryPopup lỗi:", err);
+        console.error("forceAddOneWinFromVictoryPopup V2 lỗi:", err);
         return false;
     }
 }
