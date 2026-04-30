@@ -7586,13 +7586,12 @@ async function addOneWinOnlyToWallet(walletKey) {
             updatedAt: Date.now()
         };
 
-        
+        return afterWallet;
     });
-return afterWallet;
-        if (walletKey === makeWalletDbKey() && afterWallet) {
+if (walletKey === makeWalletDbKey() && afterWallet) {
     currentWinLossStats = readWinLossStatsFromWalletData(afterWallet);
 }
-   
+    return afterWallet;
 }
 async function forceAddOneWinFromVictoryPopup(winnerSide, attempt = 0) {
     try {
@@ -7833,12 +7832,12 @@ async function addOneLossOnlyToWallet(walletKey) {
             updatedAt: Date.now()
         };
 
+        return afterWallet;
     });
-
-    return afterWallet;
-    if (walletKey === makeWalletDbKey() && afterWallet) {
+if (walletKey === makeWalletDbKey() && afterWallet) {
     currentWinLossStats = readWinLossStatsFromWalletData(afterWallet);
 }
+    return afterWallet;
 }
 
 async function forceAddOneLossFromVictoryPopup(winnerSide, attempt = 0) {
