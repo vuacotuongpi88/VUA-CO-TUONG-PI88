@@ -7698,24 +7698,73 @@ async function addOneLossOnlyToWallet(walletKey) {
 
     return afterWallet;
 }
+function cleanHistoryWalletKey(key) {
+    return String(key || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[.#$\[\]\/]/g, "_");
+}
+
+function addHistoryAlias(set, key) {
+    const k = cleanHistoryWalletKey(key);
+    if (!k || k === "guest" || k === "pi_") return;
+
+    set.add(k);
+
+    // Pi Browser có lúc lưu ví dạng 086..., có lúc dạng pi_086...
+    // Ghi/đọc cả 2 alias để thua không bị đứng ở ván 2, ván 3.
+    if (k.startsWith("pi_")) {
+        const raw = cleanHistoryWalletKey(k.slice(3));
+        if (raw) set.add(raw);
+    } else if (!k.startsWith("google_") && !k.startsWith("guest_")) {
+        set.add(cleanHistoryWalletKey("pi_" + k));
+    }
+}
+
+function getHistoryWalletAliasesFromValues(...values) {
+    const set = new Set();
+    values.flat().forEach(v => addHistoryAlias(set, v));
+    return Array.from(set).filter(Boolean);
+}
+
+function getMyHistoryWalletAliases() {
+    let piAuthName = "";
+    try { piAuthName = piAuth?.user?.username || ""; } catch (_) {}
+
+    return getHistoryWalletAliasesFromValues(
+        makeWalletDbKey?.(),
+        getAccountKey?.(),
+        localStorage.getItem("pi-user-name"),
+        window.__piLoggedUsername,
+        piAuthName,
+        localStorage.getItem("user-name-display"),
+        localStorage.getItem("currentUsername")
+    );
+}
+
+function getPlayerHistoryWalletAliases(room, side) {
+    const p = room?.players?.[side] || room?.resultPlayers?.[side] || {};
+
+    const byResultLoser = room?.resultLoserSide === side
+        ? [room?.resultLoserWalletKey, room?.resultLoserUid]
+        : [];
+
+    const byResultWinner = room?.resultWinnerSide === side
+        ? [room?.resultWinnerWalletKey, room?.resultWinnerUid]
+        : [];
+
+    return getHistoryWalletAliasesFromValues(
+        p.walletKey,
+        p.walletDbKey,
+        p.uid,
+        byResultLoser,
+        byResultWinner
+    );
+}
+
 function getMatchHistoryWalletKey(room, side) {
-    const p =
-        room?.players?.[side] ||
-        room?.resultPlayers?.[side] ||
-        {};
-
-    const byResultLoser =
-        room?.resultLoserSide === side
-            ? room?.resultLoserWalletKey
-            : "";
-
-    return String(
-        p.walletKey ||
-        p.walletDbKey ||
-        byResultLoser ||
-        p.uid ||
-        ""
-    ).trim();
+    const keys = getPlayerHistoryWalletAliases(room, side);
+    return String(keys[0] || "").trim();
 }
 
 async function getOrCreateHistoryResultId(roomId, winnerSide) {
@@ -7753,9 +7802,8 @@ async function recordWinnerWinAndPendingLossAfterPmcPaid(roomId, room, winnerSid
             getMatchHistoryWalletKey(room, winnerSide)
         ).trim();
 
-        const loserKey = String(
-            getMatchHistoryWalletKey(room, loserSide)
-        ).trim();
+        const loserKeys = getPlayerHistoryWalletAliases(room, loserSide);
+        const loserKey = String(loserKeys[0] || "").trim();
 
         if (!winnerKey) {
             console.warn("HISTORY WIN SKIP: thiếu ví winner", {
@@ -7833,37 +7881,50 @@ async function recordWinnerWinAndPendingLossAfterPmcPaid(roomId, room, winnerSid
         }
 
         // ===== 2. TREO THUA CHO LOSER, CHƯA CỘNG LIỀN =====
-        if (loserKey) {
-            const pendingRef = db.ref(`wallets/${loserKey}/pendingLossesV1/${resultId}`);
-
-            await runRefTransaction(pendingRef, current => {
-                if (current) return current;
-
-                return {
-                    done: false,
-                    roomId,
-                    resultId,
-                    winnerSide,
-                    loserSide,
-                    loserKey,
-                    winReason: room?.winReason || "",
-                    createdAt: Date.now()
-                };
-            });
-
-            await db.ref(`matches/${roomId}/pendingLossV1`).set({
+        // Ghi pending vào mọi alias của bên thua. Nếu ván sau Pi Browser đổi
+        // makeWalletDbKey từ 086... sang pi_086... thì bấm SS vẫn tìm thấy để cộng.
+        if (loserKeys.length) {
+            const pendingPayload = {
                 done: false,
+                roomId,
                 resultId,
+                winnerSide,
                 loserSide,
                 loserKey,
+                loserKeys,
+                winReason: room?.winReason || "",
+                createdAt: Date.now()
+            };
+
+            await Promise.all(loserKeys.map(async key => {
+                const pendingRef = db.ref(`wallets/${key}/pendingLossesV1/${resultId}`);
+
+                await runRefTransaction(pendingRef, current => {
+                    if (current) {
+                        return {
+                            ...current,
+                            loserKeys: Array.from(new Set([
+                                ...(current.loserKeys || []),
+                                ...loserKeys
+                            ])),
+                            loserKey: current.loserKey || loserKey
+                        };
+                    }
+                    return pendingPayload;
+                });
+            }));
+
+            await db.ref(`matches/${roomId}/pendingLossV1`).set({
+                ...pendingPayload,
                 createdAt: Date.now()
             }).catch(() => {});
 
-            console.log("PENDING LOSS SAVED", {
+            console.log("PENDING LOSS SAVED ALIASES", {
                 roomId,
                 resultId,
                 loserSide,
-                loserKey
+                loserKey,
+                loserKeys
             });
         } else {
             console.warn("PENDING LOSS SKIP: thiếu ví loser", {
@@ -7891,66 +7952,110 @@ async function claimPendingLossBeforeReady(roomId = "") {
         const walletKey = String(makeWalletDbKey() || "").trim();
         if (!walletKey) return false;
 
-        const pendingSnap = await db.ref(`wallets/${walletKey}/pendingLossesV1`).once("value");
-        const pending = pendingSnap.val() || {};
+        const aliases = Array.from(new Set([
+            walletKey,
+            ...getMyHistoryWalletAliases()
+        ].map(cleanHistoryWalletKey).filter(Boolean)));
 
         let claimedAny = false;
+        const seenResultIds = new Set();
 
-        for (const [resultIdRaw, item] of Object.entries(pending)) {
-            if (!item || item.done) continue;
+        for (const sourceWalletKey of aliases) {
+            const pendingSnap = await db.ref(`wallets/${sourceWalletKey}/pendingLossesV1`).once("value");
+            const pending = pendingSnap.val() || {};
 
-            const resultId = oneWinPointSafeKey(resultIdRaw);
-            if (!resultId) continue;
+            for (const [resultIdRaw, item] of Object.entries(pending)) {
+                if (!item || item.done) continue;
 
-            const claimRef = db.ref(`wallets/${walletKey}/pendingLossClaimsV1/${resultId}`);
+                const resultId = oneWinPointSafeKey(resultIdRaw || item.resultId || "");
+                if (!resultId) continue;
 
-            const claimTx = await runRefTransaction(claimRef, current => {
-                if (current && current.done) return;
+                if (seenResultIds.has(resultId)) {
+                    await db.ref(`wallets/${sourceWalletKey}/pendingLossesV1/${resultId}`).update({
+                        done: true,
+                        claimedAt: Date.now(),
+                        claimedByWalletKey: walletKey,
+                        duplicateAliasDone: true
+                    }).catch(() => {});
+                    continue;
+                }
 
-                return {
-                    processing: true,
-                    resultId,
-                    roomId: item.roomId || roomId || "",
+                seenResultIds.add(resultId);
+                const claimRef = db.ref(`wallets/${walletKey}/pendingLossClaimsV1/${resultId}`);
+
+                const claimTx = await runRefTransaction(claimRef, current => {
+                    if (current && current.done) return;
+                    return {
+                        processing: true,
+                        resultId,
+                        roomId: item.roomId || roomId || "",
+                        walletKey,
+                        sourceWalletKey,
+                        at: Date.now()
+                    };
+                });
+
+                if (!claimTx.committed) {
+                    await db.ref(`wallets/${sourceWalletKey}/pendingLossesV1/${resultId}`).update({
+                        done: true,
+                        claimedAt: Date.now(),
+                        claimedByWalletKey: walletKey,
+                        skippedByExistingClaim: true
+                    }).catch(() => {});
+                    continue;
+                }
+
+                const afterLoss = await addOneLossOnlyToWallet(walletKey);
+                if (!afterLoss) {
+                    await claimRef.remove().catch(() => {});
+                    continue;
+                }
+
+                const allLossKeys = Array.from(new Set([
+                    sourceWalletKey,
                     walletKey,
-                    at: Date.now()
+                    ...(item.loserKeys || []),
+                    ...aliases
+                ].map(cleanHistoryWalletKey).filter(Boolean)));
+
+                const updates = {};
+                const now = Date.now();
+
+                allLossKeys.forEach(k => {
+                    updates[`wallets/${k}/pendingLossesV1/${resultId}/done`] = true;
+                    updates[`wallets/${k}/pendingLossesV1/${resultId}/claimedAt`] = now;
+                    updates[`wallets/${k}/pendingLossesV1/${resultId}/claimedByWalletKey`] = walletKey;
+                    updates[`wallets/${k}/pendingLossesV1/${resultId}/sourceWalletKey`] = sourceWalletKey;
+                });
+
+                updates[`wallets/${walletKey}/pendingLossClaimsV1/${resultId}`] = {
+                    done: true,
+                    resultId,
+                    walletKey,
+                    sourceWalletKey,
+                    losses: afterLoss.losses || 0,
+                    at: now
                 };
-            });
 
-            if (!claimTx.committed) continue;
+                if (item.roomId) {
+                    updates[`matches/${item.roomId}/pendingLossV1/done`] = true;
+                    updates[`matches/${item.roomId}/pendingLossV1/claimedAt`] = now;
+                    updates[`matches/${item.roomId}/pendingLossV1/claimedByWalletKey`] = walletKey;
+                    updates[`matches/${item.roomId}/pendingLossV1/sourceWalletKey`] = sourceWalletKey;
+                    updates[`matches/${item.roomId}/pendingLossV1/losses`] = afterLoss.losses || 0;
+                }
 
-            const afterLoss = await addOneLossOnlyToWallet(walletKey);
+                await db.ref().update(updates);
+                claimedAny = true;
 
-            if (!afterLoss) {
-                await claimRef.remove().catch(() => {});
-                continue;
+                console.log("PENDING LOSS CLAIMED BEFORE READY ALIASES", {
+                    resultId,
+                    walletKey,
+                    sourceWalletKey,
+                    aliases,
+                    losses: afterLoss.losses
+                });
             }
-
-            const updates = {};
-            updates[`wallets/${walletKey}/pendingLossesV1/${resultId}/done`] = true;
-            updates[`wallets/${walletKey}/pendingLossesV1/${resultId}/claimedAt`] = Date.now();
-            updates[`wallets/${walletKey}/pendingLossClaimsV1/${resultId}`] = {
-                done: true,
-                resultId,
-                walletKey,
-                losses: afterLoss.losses || 0,
-                at: Date.now()
-            };
-
-            if (item.roomId) {
-                updates[`matches/${item.roomId}/pendingLossV1/done`] = true;
-                updates[`matches/${item.roomId}/pendingLossV1/claimedAt`] = Date.now();
-                updates[`matches/${item.roomId}/pendingLossV1/losses`] = afterLoss.losses || 0;
-            }
-
-            await db.ref().update(updates);
-
-            claimedAny = true;
-
-            console.log("PENDING LOSS CLAIMED BEFORE READY", {
-                resultId,
-                walletKey,
-                losses: afterLoss.losses
-            });
         }
 
         if (claimedAny) {
@@ -7958,6 +8063,8 @@ async function claimPendingLossBeforeReady(roomId = "") {
             if (typeof scheduleArenaTopRefresh === "function") {
                 scheduleArenaTopRefresh();
             }
+        } else {
+            console.log("NO PENDING LOSS FOUND BEFORE READY", { walletKey, aliases, roomId });
         }
 
         return claimedAny;
@@ -7966,6 +8073,7 @@ async function claimPendingLossBeforeReady(roomId = "") {
         return false;
     }
 }
+
 async function forceAddOneLossFromVictoryPopup(winnerSide, attempt = 0) {
     // TẮT HÀM CŨ: không cộng thua trong popup/endGame nữa.
     // Thua được treo pendingLossesV1 và chỉ cộng khi người thua bấm SS ván sau.
