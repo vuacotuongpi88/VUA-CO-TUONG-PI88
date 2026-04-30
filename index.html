@@ -6265,7 +6265,14 @@ function getArenaTopLevel(wallet = {}) {
 }
 
 function getArenaTopWins(wallet = {}) {
-    return arenaTopInt(wallet?.matchStatsCleanV1?.wins || 0);
+    return arenaTopInt(Math.max(
+        Number(wallet?.matchStats?.totalWins || 0) || 0,
+        Number(wallet?.stats?.totalWins || 0) || 0,
+        Number(wallet?.stats?.wins || 0) || 0,
+        Number(wallet?.totalWins || 0) || 0,
+        Number(wallet?.wins || 0) || 0,
+        Number(wallet?.levelMeta?.wins || 0) || 0
+    ));
 }
 
 function getArenaTopSkinScore(wallet = {}) {
