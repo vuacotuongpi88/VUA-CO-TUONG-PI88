@@ -6271,7 +6271,6 @@ function getArenaTopWins(wallet = {}) {
         Number(wallet?.stats?.wins || 0) || 0,
         Number(wallet?.totalWins || 0) || 0,
         Number(wallet?.wins || 0) || 0,
-        Number(wallet?.win || 0) || 0,
         Number(wallet?.levelMeta?.wins || 0) || 0
     ));
 }
@@ -10804,29 +10803,12 @@ async function updateOneWalletMatchStats(walletKey, resultType) {
     await runRefTransaction(ref, current => {
         const w = current && typeof current === "object" ? current : {};
 
-        const levelMeta = w.levelMeta && typeof w.levelMeta === "object"
-            ? { ...w.levelMeta }
-            : {};
-
-        const matchStats = w.matchStats && typeof w.matchStats === "object"
-            ? { ...w.matchStats }
-            : {};
-
-        const stats = w.stats && typeof w.stats === "object"
-            ? { ...w.stats }
-            : {};
-
-        const statsByMonth = w.statsByMonth && typeof w.statsByMonth === "object"
-            ? { ...w.statsByMonth }
-            : {};
-
-        const monthlyStats = w.monthlyStats && typeof w.monthlyStats === "object"
-            ? { ...w.monthlyStats }
-            : {};
-
-        const matchStatsByMonth = w.matchStatsByMonth && typeof w.matchStatsByMonth === "object"
-            ? { ...w.matchStatsByMonth }
-            : {};
+        const levelMeta = w.levelMeta && typeof w.levelMeta === "object" ? { ...w.levelMeta } : {};
+        const matchStats = w.matchStats && typeof w.matchStats === "object" ? { ...w.matchStats } : {};
+        const stats = w.stats && typeof w.stats === "object" ? { ...w.stats } : {};
+        const statsByMonth = w.statsByMonth && typeof w.statsByMonth === "object" ? { ...w.statsByMonth } : {};
+        const monthlyStats = w.monthlyStats && typeof w.monthlyStats === "object" ? { ...w.monthlyStats } : {};
+        const matchStatsByMonth = w.matchStatsByMonth && typeof w.matchStatsByMonth === "object" ? { ...w.matchStatsByMonth } : {};
 
         const oldMonth =
             statsByMonth[monthKey] ||
@@ -10897,12 +10879,15 @@ async function updateOneWalletMatchStats(walletKey, resultType) {
             wins: nextTotalWins,
             losses: nextTotalLosses,
             matches: nextTotalMatches,
+            monthWins: nextMonth.wins,
+            monthLosses: nextMonth.losses,
             lastResult: resultType,
             updatedAt: Date.now()
         };
 
         afterWallet = {
             ...w,
+
             wins: nextTotalWins,
             totalWins: nextTotalWins,
             losses: nextTotalLosses,
@@ -10965,65 +10950,104 @@ async function recordMatchStatsOnce(roomId, room = {}) {
         const winnerSide = String(room.winner || "").trim();
         if (winnerSide !== "do" && winnerSide !== "den") return false;
 
-        const doPlayer = room.players?.do || {};
-        const denPlayer = room.players?.den || {};
+        const loserSide = winnerSide === "do" ? "den" : "do";
 
-        const doWalletKey = String(doPlayer.walletKey || doPlayer.uid || "").trim();
-        const denWalletKey = String(denPlayer.walletKey || denPlayer.uid || "").trim();
+        const winnerPlayer = room.players?.[winnerSide] || {};
+        const loserPlayer = room.players?.[loserSide] || {};
 
-        if (!doWalletKey || !denWalletKey) return false;
+        const winnerKey = String(
+            winnerPlayer.walletKey ||
+            winnerPlayer.walletDbKey ||
+            winnerPlayer.uid ||
+            ""
+        ).trim();
+
+        const loserKey = String(
+            loserPlayer.walletKey ||
+            loserPlayer.walletDbKey ||
+            loserPlayer.uid ||
+            ""
+        ).trim();
+
+        if (!winnerKey || !loserKey) {
+            console.warn("MATCH STATS SKIP: thiếu walletKey", {
+                roomId,
+                winnerSide,
+                loserSide,
+                winnerKey,
+                loserKey,
+                players: room.players
+            });
+            return false;
+        }
 
         const roundNo = Math.max(1, Math.floor(Number(room.roundNo || 1) || 1));
-        const matchKey = safeMatchStatsKey(`${roomId}_round_${roundNo}`);
+        const finishedKey = String(
+            room.finishedAt ||
+            room.settlement?.paidAt ||
+            room.updatedAt ||
+            ""
+        );
 
-        const claimRef = db.ref("matchStatsClaimsV1/" + matchKey);
+        const matchKey = safeMatchStatsKey(`${roomId}_round_${roundNo}_${winnerSide}_${finishedKey}`);
+        const claimRef = db.ref("matchStatsClaimsV2/" + matchKey);
 
         const claimTx = await runRefTransaction(claimRef, current => {
             if (current && current.done) return;
+
             return {
                 done: true,
                 roomId,
                 roundNo,
                 winner: winnerSide,
+                loser: loserSide,
+                winnerKey,
+                loserKey,
                 at: Date.now()
             };
         });
 
         if (!claimTx.committed) return false;
 
-        const doResult = winnerSide === "do" ? "win" : "lose";
-        const denResult = winnerSide === "den" ? "win" : "lose";
-
-        const [doAfter, denAfter] = await Promise.all([
-            updateOneWalletMatchStats(doWalletKey, doResult),
-            updateOneWalletMatchStats(denWalletKey, denResult)
+        const [winnerAfter, loserAfter] = await Promise.all([
+            updateOneWalletMatchStats(winnerKey, "win"),
+            updateOneWalletMatchStats(loserKey, "lose")
         ]);
 
         const updates = {};
 
-        if (doAfter?.levelMeta) {
-            updates[`matches/${roomId}/players/do/levelMeta`] = doAfter.levelMeta;
-            updates[`matches/${roomId}/players/do/totalWins`] = doAfter.totalWins || 0;
-            updates[`matches/${roomId}/players/do/totalLosses`] = doAfter.totalLosses || 0;
+        if (winnerAfter?.levelMeta) {
+            updates[`matches/${roomId}/players/${winnerSide}/levelMeta`] = winnerAfter.levelMeta;
+            updates[`matches/${roomId}/players/${winnerSide}/totalWins`] = winnerAfter.totalWins || 0;
+            updates[`matches/${roomId}/players/${winnerSide}/totalLosses`] = winnerAfter.totalLosses || 0;
+            updates[`matches/${roomId}/players/${winnerSide}/monthWins`] = winnerAfter.monthWins || 0;
+            updates[`matches/${roomId}/players/${winnerSide}/monthLosses`] = winnerAfter.monthLosses || 0;
         }
 
-        if (denAfter?.levelMeta) {
-            updates[`matches/${roomId}/players/den/levelMeta`] = denAfter.levelMeta;
-            updates[`matches/${roomId}/players/den/totalWins`] = denAfter.totalWins || 0;
-            updates[`matches/${roomId}/players/den/totalLosses`] = denAfter.totalLosses || 0;
+        if (loserAfter?.levelMeta) {
+            updates[`matches/${roomId}/players/${loserSide}/levelMeta`] = loserAfter.levelMeta;
+            updates[`matches/${roomId}/players/${loserSide}/totalWins`] = loserAfter.totalWins || 0;
+            updates[`matches/${roomId}/players/${loserSide}/totalLosses`] = loserAfter.totalLosses || 0;
+            updates[`matches/${roomId}/players/${loserSide}/monthWins`] = loserAfter.monthWins || 0;
+            updates[`matches/${roomId}/players/${loserSide}/monthLosses`] = loserAfter.monthLosses || 0;
         }
 
-        updates[`matches/${roomId}/matchStatsRecorded`] = true;
+        updates[`matches/${roomId}/matchStatsRecordedV2`] = true;
         updates[`matches/${roomId}/matchStatsRecordedAt`] = Date.now();
 
         await db.ref().update(updates);
 
-        console.log("MATCH STATS RECORDED", {
+        if (typeof scheduleArenaTopRefresh === "function") {
+            scheduleArenaTopRefresh();
+        }
+
+        console.log("MATCH STATS V2 RECORDED", {
             roomId,
             roundNo,
             winnerSide,
-            doWalletKey,
-            denWalletKey
+            loserSide,
+            winnerKey,
+            loserKey
         });
 
         return true;
