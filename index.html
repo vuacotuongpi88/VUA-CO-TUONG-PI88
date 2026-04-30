@@ -7456,76 +7456,20 @@ function oneWinPointMonthKey() {
     return `${y}-${m}`;
 }
 function readWinLossStatsFromWalletData(data = {}) {
-    const monthKey = oneWinPointMonthKey();
-
     const oneWin = data.oneWinOnlyV1 || {};
-    const oneWinMonth = oneWin.months?.[monthKey] || {};
-
     const oneLoss = data.oneLossOnlyV1 || {};
-    const oneLossMonth = oneLoss.months?.[monthKey] || {};
 
-    // Lấy số lớn nhất giữa nhánh mới và các nhánh cũ.
-    // Không được dùng ?? kiểu cũ nữa, vì oneWinOnlyV1 cũ thấp hơn sẽ kéo tụt số.
-    const wins = oneWinPointMax(
-        oneWin.wins,
-        oneWin.totalWins,
-        data.wins,
-        data.totalWins,
-        data.stats?.wins,
-        data.stats?.totalWins,
-        data.matchStats?.wins,
-        data.matchStats?.totalWins,
-        data.levelMeta?.wins,
-        data.levelMeta?.totalWins
-    );
-
-    const monthWins = oneWinPointMax(
-        oneWinMonth.wins,
-        oneWin.monthWins,
-        data.monthWins,
-        data.stats?.monthWins,
-        data.matchStats?.monthWins,
-        data.levelMeta?.monthWins,
-
-        // Legacy fallback: hiện mầy chỉ còn ô "thắng tháng này",
-        // nên nếu dữ liệu tháng chưa có thì tạm giữ tổng thắng để khỏi tụt về 1.
-        data.wins,
-        data.totalWins
-    );
-
-    const losses = oneWinPointMax(
-        oneLoss.losses,
-        oneLoss.totalLosses,
-        data.losses,
-        data.totalLosses,
-        data.stats?.losses,
-        data.stats?.totalLosses,
-        data.matchStats?.losses,
-        data.matchStats?.totalLosses,
-        data.levelMeta?.losses,
-        data.levelMeta?.totalLosses
-    );
-
-    const monthLosses = oneWinPointMax(
-        oneLossMonth.losses,
-        oneLoss.monthLosses,
-        data.monthLosses,
-        data.stats?.monthLosses,
-        data.matchStats?.monthLosses,
-        data.levelMeta?.monthLosses,
-
-        // Legacy fallback cho số thua tháng này.
-        data.losses,
-        data.totalLosses
-    );
+    const wins = oneWinPointNum(oneWin.wins);
+    const losses = oneWinPointNum(oneLoss.losses);
 
     return {
         wins,
         totalWins: wins,
-        monthWins,
+        monthWins: wins,
+
         losses,
         totalLosses: losses,
-        monthLosses
+        monthLosses: losses
     };
 }
 async function addOneWinOnlyToWallet(walletKey) {
@@ -7552,47 +7496,40 @@ async function addOneWinOnlyToWallet(walletKey) {
             ? { ...cleanMonths[monthKey] }
             : {};
 
-        // CHỐT: chỉ lấy số từ oneWinOnlyV1, không lấy wins/totalWins cũ nữa
-       const baseWins = oneWinPointMax(
-    clean.wins,
-    clean.totalWins,
-    w.wins,
-    w.totalWins,
-    w.stats?.wins,
-    w.stats?.totalWins,
-    w.matchStats?.wins,
-    w.matchStats?.totalWins,
-    w.levelMeta?.wins,
-    w.levelMeta?.totalWins
-);
+        // CHỈ migrate 1 lần từ dữ liệu cũ sang oneWinOnlyV1.
+        // Sau đó tuyệt đối chỉ lấy clean.wins, không lấy w.wins/w.totalWins nữa.
+        const oldLegacyWins = oneWinPointMax(
+            w.wins,
+            w.totalWins,
+            w.stats?.wins,
+            w.stats?.totalWins,
+            w.matchStats?.wins,
+            w.matchStats?.totalWins,
+            w.levelMeta?.wins,
+            w.levelMeta?.totalWins
+        );
 
-const baseMonthWins = oneWinPointMax(
-    cleanMonth.wins,
-    clean.monthWins,
-    w.monthWins,
-    w.stats?.monthWins,
-    w.matchStats?.monthWins,
-    w.levelMeta?.monthWins,
+        const currentCleanWins = oneWinPointNum(clean.wins);
+        const alreadyFixed = clean.canonicalV4 === true;
 
-    // Legacy fallback để số đang 4 không tụt về nhánh oneWinOnlyV1 cũ.
-    w.wins,
-    w.totalWins
-);
+        const baseWins = alreadyFixed
+            ? currentCleanWins
+            : Math.max(currentCleanWins, oldLegacyWins);
 
         const nextWins = baseWins + 1;
-        const nextMonthWins = baseMonthWins + 1;
 
         const nextOneWinOnly = {
             ...clean,
+            canonicalV4: true,
             wins: nextWins,
             totalWins: nextWins,
-            monthWins: nextMonthWins,
+            monthWins: nextWins,
             updatedAt: Date.now(),
             months: {
                 ...cleanMonths,
                 [monthKey]: {
                     ...cleanMonth,
-                    wins: nextMonthWins,
+                    wins: nextWins,
                     updatedAt: Date.now()
                 }
             }
@@ -7601,18 +7538,18 @@ const baseMonthWins = oneWinPointMax(
         afterWallet = {
             ...w,
 
-            // Nhánh sạch chính
             oneWinOnlyV1: nextOneWinOnly,
 
-            // Ghi đè lại mấy field cũ để UI cũ không còn lôi số bậy
+            // Đồng bộ field cũ theo nguồn chính, chứ không cho field cũ kéo ngược lại nữa.
             wins: nextWins,
             totalWins: nextWins,
-            monthWins: nextMonthWins,
+            monthWins: nextWins,
 
             levelMeta: {
                 ...(w.levelMeta || {}),
                 wins: nextWins,
-                monthWins: nextMonthWins,
+                totalWins: nextWins,
+                monthWins: nextWins,
                 lastResult: "win",
                 updatedAt: Date.now()
             },
@@ -7621,6 +7558,7 @@ const baseMonthWins = oneWinPointMax(
                 ...(w.stats || {}),
                 wins: nextWins,
                 totalWins: nextWins,
+                monthWins: nextWins,
                 updatedAt: Date.now()
             },
 
@@ -7628,6 +7566,7 @@ const baseMonthWins = oneWinPointMax(
                 ...(w.matchStats || {}),
                 wins: nextWins,
                 totalWins: nextWins,
+                monthWins: nextWins,
                 updatedAt: Date.now()
             },
 
@@ -7637,7 +7576,7 @@ const baseMonthWins = oneWinPointMax(
         return afterWallet;
     });
 
-       if (walletKey === makeWalletDbKey() && afterWallet) {
+    if (walletKey === makeWalletDbKey() && afterWallet) {
         currentWinLossStats = readWinLossStatsFromWalletData(afterWallet);
     }
 
@@ -7797,60 +7736,41 @@ async function addOneLossOnlyToWallet(walletKey) {
             ? { ...cleanMonths[monthKey] }
             : {};
 
-        const baseLosses = oneWinPointMax(
-    clean.losses,
-    clean.totalLosses,
-    w.losses,
-    w.totalLosses,
-    w.stats?.losses,
-    w.stats?.totalLosses,
-    w.matchStats?.losses,
-    w.matchStats?.totalLosses,
-    w.levelMeta?.losses,
-    w.levelMeta?.totalLosses
-);
+        const oldLegacyLosses = oneWinPointMax(
+            w.losses,
+            w.totalLosses,
+            w.stats?.losses,
+            w.stats?.totalLosses,
+            w.matchStats?.losses,
+            w.matchStats?.totalLosses,
+            w.levelMeta?.losses,
+            w.levelMeta?.totalLosses
+        );
 
-const baseMonthLosses = oneWinPointMax(
-    cleanMonth.losses,
-    clean.monthLosses,
-    w.monthLosses,
-    w.stats?.monthLosses,
-    w.matchStats?.monthLosses,
-    w.levelMeta?.monthLosses,
+        const currentCleanLosses = oneWinPointNum(clean.losses);
+        const alreadyFixed = clean.canonicalV4 === true;
 
-    // Legacy fallback để số thua không tụt.
-    w.losses,
-    w.totalLosses
-);
+        const baseLosses = alreadyFixed
+            ? currentCleanLosses
+            : Math.max(currentCleanLosses, oldLegacyLosses);
 
         const nextLosses = baseLosses + 1;
-        const nextMonthLosses = baseMonthLosses + 1;
 
         const nextOneLossOnly = {
             ...clean,
+            canonicalV4: true,
             losses: nextLosses,
             totalLosses: nextLosses,
-            monthLosses: nextMonthLosses,
+            monthLosses: nextLosses,
             updatedAt: Date.now(),
             months: {
                 ...cleanMonths,
                 [monthKey]: {
                     ...cleanMonth,
-                    losses: nextMonthLosses,
+                    losses: nextLosses,
                     updatedAt: Date.now()
                 }
             }
-        };
-
-        const oldStatsByMonth = w.statsByMonth && typeof w.statsByMonth === "object" ? { ...w.statsByMonth } : {};
-        const oldMonthlyStats = w.monthlyStats && typeof w.monthlyStats === "object" ? { ...w.monthlyStats } : {};
-        const oldMatchStatsByMonth = w.matchStatsByMonth && typeof w.matchStatsByMonth === "object" ? { ...w.matchStatsByMonth } : {};
-
-        const monthPayload = {
-            ...(oldStatsByMonth[monthKey] || oldMonthlyStats[monthKey] || oldMatchStatsByMonth[monthKey] || {}),
-            losses: nextMonthLosses,
-            monthLosses: nextMonthLosses,
-            updatedAt: Date.now()
         };
 
         afterWallet = {
@@ -7860,13 +7780,13 @@ const baseMonthLosses = oneWinPointMax(
 
             losses: nextLosses,
             totalLosses: nextLosses,
-            monthLosses: nextMonthLosses,
+            monthLosses: nextLosses,
 
             levelMeta: {
                 ...(w.levelMeta || {}),
                 losses: nextLosses,
                 totalLosses: nextLosses,
-                monthLosses: nextMonthLosses,
+                monthLosses: nextLosses,
                 lastResult: "lose",
                 updatedAt: Date.now()
             },
@@ -7875,7 +7795,7 @@ const baseMonthLosses = oneWinPointMax(
                 ...(w.stats || {}),
                 losses: nextLosses,
                 totalLosses: nextLosses,
-                monthLosses: nextMonthLosses,
+                monthLosses: nextLosses,
                 updatedAt: Date.now()
             },
 
@@ -7883,23 +7803,8 @@ const baseMonthLosses = oneWinPointMax(
                 ...(w.matchStats || {}),
                 losses: nextLosses,
                 totalLosses: nextLosses,
-                monthLosses: nextMonthLosses,
+                monthLosses: nextLosses,
                 updatedAt: Date.now()
-            },
-
-            statsByMonth: {
-                ...oldStatsByMonth,
-                [monthKey]: monthPayload
-            },
-
-            monthlyStats: {
-                ...oldMonthlyStats,
-                [monthKey]: monthPayload
-            },
-
-            matchStatsByMonth: {
-                ...oldMatchStatsByMonth,
-                [monthKey]: monthPayload
             },
 
             updatedAt: Date.now()
@@ -7908,7 +7813,7 @@ const baseMonthLosses = oneWinPointMax(
         return afterWallet;
     });
 
-        if (walletKey === makeWalletDbKey() && afterWallet) {
+    if (walletKey === makeWalletDbKey() && afterWallet) {
         currentWinLossStats = readWinLossStatsFromWalletData(afterWallet);
     }
 
@@ -14758,33 +14663,12 @@ async function openOpponentMatchProfile() {
             wallet.stats?.month ||
             {};
 
-const oneWinStats = wallet.oneWinOnlyV1 || {};
-const oneWinMonth = oneWinStats.months?.[monthKey] || {};
+const fixedStats = readWinLossStatsFromWalletData(wallet);
 
-const oneLossStats = wallet.oneLossOnlyV1 || {};
-const oneLossMonth = oneLossStats.months?.[monthKey] || {};
-
-const monthWins = Math.max(0, Math.floor(Number(
-    oneWinMonth.wins ??
-    oneWinStats.monthWins ??
-    0
-) || 0));
-
-const monthLosses = Math.max(0, Math.floor(Number(
-    oneLossMonth.losses ??
-    oneLossStats.monthLosses ??
-    wallet.monthLosses ??
-    levelMeta.monthLosses ??
-    monthly.losses ??
-    monthly.lose ??
-    monthly.loses ??
-    0
-) || 0));
-
-const totalWins = Math.max(0, Math.floor(Number(
-    oneWinStats.wins ??
-    0
-) || 0));
+const monthWins = fixedStats.wins;
+const monthLosses = fixedStats.losses;
+const totalWins = fixedStats.wins;
+const totalLosses = fixedStats.losses;
 
 const totalLosses = Math.max(0, Math.floor(Number(
     oneLossStats.losses ??
@@ -14841,11 +14725,11 @@ const totalLosses = Math.max(0, Math.floor(Number(
 <div class="match-opponent-grid">
     <div class="match-opponent-stat">
         <strong>${monthWins}</strong>
-        <span>Thắng tháng này</span>
+        <span>Thắng</span>
     </div>
     <div class="match-opponent-stat">
         <strong>${monthLosses}</strong>
-        <span>Thua tháng này</span>
+        <span>Thua</span>
     </div>
 </div>
 
