@@ -7072,7 +7072,7 @@ updates[`social/topChallengeSent/${me.walletKey}/${targetKey}`] = {
 
         await setPlayerPresence("waiting").catch(() => {});
 
-        alert(`Đã thách đấu ${targetName} mức ${stakePMC} PMC.\nMầy đã vào phòng riêng, chờ đối thủ chấp nhận.`);
+        console.log(`Đã thách đấu ${targetName} mức ${stakePMC} PMC. Chờ đối thủ chấp nhận.`);
     } catch (err) {
         console.error("sendArenaTopChallenge lỗi:", err);
         alert("Gửi thách đấu lỗi. Mở Console xem chi tiết.");
@@ -7166,25 +7166,32 @@ function bindTopChallengeInbox() {
 async function handleIncomingTopChallenge(fromWalletKey, data) {
     try {
         if (!data || data.status !== "pending") return;
-        const inboxKey = data.__inboxWalletKey || data.targetInboxKey || "";
-const onceKey = [
-    inboxKey,
-    fromWalletKey,
-    data.roomId || "",
-    data.createdAt || ""
-].join("|");
-
-if (topChallengeHandledIds[onceKey]) return;
-topChallengeHandledIds[onceKey] = true;
 
         const now = Date.now();
         const createdAt = Number(data.createdAt || 0);
         const expiresAt = Number(data.expiresAt || 0);
+        const roomId = String(data.roomId || "").trim();
 
         if (expiresAt && now > expiresAt) return;
 
         // Chặn mấy lời mời cũ bật lại khi vừa load app
         if (createdAt && createdAt < topChallengeListenAt - 3000) return;
+
+        // QUAN TRỌNG:
+        // Không đưa inboxKey vào onceKey nữa.
+        // Vì cùng 1 lời mời có thể được ghi vào 086... và pi_086...
+        const onceKey = [
+            String(fromWalletKey || ""),
+            roomId,
+            String(createdAt || ""),
+            String(data.stakePMC || "")
+        ].join("|");
+
+        if (topChallengeHandledIds[onceKey]) return;
+        topChallengeHandledIds[onceKey] = true;
+
+        // Nếu máy này đã vào đúng phòng đó rồi thì khỏi bật thông báo nữa
+        if (currentRoomId && roomId && currentRoomId === roomId) return;
 
         const stakePMC = Math.max(0, Math.floor(Number(data.stakePMC || 0) || 0));
         const fromName = data.fromName || fromWalletKey || "Đối thủ";
@@ -7203,7 +7210,6 @@ topChallengeHandledIds[onceKey] = true;
         console.error("handleIncomingTopChallenge lỗi:", err);
     }
 }
-
 async function acceptTopChallenge(fromWalletKey, data) {
     try {
         const me = getCurrentPlayerProfile();
@@ -7263,11 +7269,33 @@ if (roomTargetKey && !allowedTargetKeys.has(roomTargetKey)) return;
             return room;
         });
 
-        if (!result.committed) {
-            alert("Phòng thách đấu đã hết hạn hoặc đối thủ không còn chờ.");
-            await db.ref(`social/topChallenges/${me.walletKey}/${fromWalletKey}/status`).set("expired").catch(() => {});
-            return;
-        }
+if (!result.committed) {
+    console.warn("TOP CHALLENGE SKIP: phòng hết hạn hoặc đã xử lý rồi", {
+        roomId,
+        fromWalletKey,
+        targetWalletKey: data?.targetWalletKey
+    });
+
+    const expiredAt = Date.now();
+    const expireUpdates = {};
+
+    const targetStatusKeys = new Set([
+        ...getTopChallengeWalletAliases(me.walletKey),
+        ...getTopChallengeWalletAliases(data?.targetWalletKey),
+        ...getTopChallengeWalletAliases(data?.__inboxWalletKey),
+        ...getTopChallengeWalletAliases(data?.targetInboxKey)
+    ]);
+
+    targetStatusKeys.forEach(k => {
+        expireUpdates[`social/topChallenges/${k}/${fromWalletKey}/status`] = "expired";
+        expireUpdates[`social/topChallenges/${k}/${fromWalletKey}/expiredAt`] = expiredAt;
+        expireUpdates[`social/topChallengeSent/${fromWalletKey}/${k}/status`] = "expired";
+        expireUpdates[`social/topChallengeSent/${fromWalletKey}/${k}/expiredAt`] = expiredAt;
+    });
+
+    await db.ref().update(expireUpdates).catch(() => {});
+    return;
+}
 
         const room = result.snapshot.val() || {};
 
@@ -8294,16 +8322,38 @@ refunds: null,
 readyDeadlineAt: null,
 updatedAt: firebase.database.ServerValue.TIMESTAMP
 });
-const freshSnap = await db.ref("matches/" + currentRoomId).once("value").catch(() => null);
-const freshRoom = freshSnap?.val?.();
-
+// Nếu đối thủ vừa thoát, phòng chỉ còn 1 người.
+// Không được rớt xuống offline fallback, nếu không sẽ đứng hình / sai trạng thái.
 if (
     freshRoom &&
     freshRoom.status === "waiting" &&
     !freshRoom.winner &&
-    freshRoom.players?.do &&
-    freshRoom.players?.den
+    (
+        (freshRoom.players?.do && !freshRoom.players?.den) ||
+        (!freshRoom.players?.do && freshRoom.players?.den)
+    )
 ) {
+    const onlySide = freshRoom.players?.do ? "do" : "den";
+    const onlyPlayer = freshRoom.players?.[onlySide];
+
+    if (onlyPlayer && isSamePlayerAsMe(onlyPlayer)) {
+        mySide = onlySide;
+        viewSide = onlySide;
+
+        readyDo = false;
+        readyDen = false;
+        isGameOver = false;
+        selectedPiece = null;
+
+        clearRealtimeBoardVisualOnly();
+        renderPlayersFromRoom(freshRoom);
+        renderTimerUI();
+        closeReadyOverlay();
+        updateReadyUI();
+
+        return;
+    }
+}
     readyDo = false;
     readyDen = false;
     isGameOver = false;
@@ -9788,12 +9838,6 @@ if (room.winner) {
     }
 // A/B bỏ chạy ngang khi đang đánh:
 // gọi lịch bàn giao NGAY trước khi settle để không bị uiVersion return chặn mất.
-if (
-    room.winReason === "bochay" &&
-    room.winner === mySide
-) {
-    scheduleResetWinnerRoomAfterPaid(room, listeningRoomId);
-}
     didSettleWinnerNow = await maybeSettleStakeRoom(room, listeningRoomId) === true;
 
     // Nếu trong lúc await, phòng đã reset sang ván 2 rồi,
