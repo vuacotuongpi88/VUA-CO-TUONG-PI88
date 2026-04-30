@@ -7780,7 +7780,7 @@ async function addOneLossOnlyToWallet(walletKey) {
     return afterWallet;
 }
 
-async function forceAddOneLossFromVictoryPopup(winnerSide) {
+async function forceAddOneLossFromVictoryPopup(winnerSide, attempt = 0) {
     try {
         if (!winnerSide || winnerSide === "hoa" || winnerSide === "draw") return false;
         if (winnerSide !== "do" && winnerSide !== "den") return false;
@@ -7792,8 +7792,13 @@ async function forceAddOneLossFromVictoryPopup(winnerSide) {
         const roomSnap = await db.ref("matches/" + roomId).once("value");
         const room = roomSnap.val() || {};
 
-        // Nếu Firebase đã có winner khác popup thì không cộng bậy
-        if (room.winner && room.winner !== winnerSide) return false;
+        // Nếu snapshot trận đầu chưa kịp có winner/players thì đợi chút rồi thử lại.
+        if (room.winner && room.winner !== winnerSide) {
+            if (attempt < 6) {
+                setTimeout(() => forceAddOneLossFromVictoryPopup(winnerSide, attempt + 1), 350);
+            }
+            return false;
+        }
 
         const loserPlayer = room.players?.[loserSide] || {};
         const loserKey = String(
@@ -7804,12 +7809,18 @@ async function forceAddOneLossFromVictoryPopup(winnerSide) {
         ).trim();
 
         if (!loserKey) {
-            console.warn("ONE LOSS POINT SKIP: thiếu ví loser", {
+            console.warn("ONE LOSS POINT RETRY: thiếu ví loser", {
                 roomId,
                 winnerSide,
                 loserSide,
+                attempt,
                 players: room.players
             });
+
+            if (attempt < 6) {
+                setTimeout(() => forceAddOneLossFromVictoryPopup(winnerSide, attempt + 1), 350);
+            }
+
             return false;
         }
 
@@ -7825,15 +7836,24 @@ async function forceAddOneLossFromVictoryPopup(winnerSide) {
 
         const roundNo = Math.max(1, Math.floor(Number(room.roundNo || room.gameNo || 1) || 1));
 
+        // Đổi thua sang V2 giống thắng để không bị oneLossPointClaimsV1 cũ chặn trận đầu.
         const claimKey = oneWinPointSafeKey(`${roomId}_${winnerSide}_${loserSide}_${roundNo}_${matchStamp}`);
 
-        if (window.__lastOneLossPointClaimKeyV1 === claimKey) return false;
-        window.__lastOneLossPointClaimKeyV1 = claimKey;
+        if (window.__lastOneLossPointClaimKeyV2 === claimKey) return false;
 
-        const claimRef = db.ref(`matches/${roomId}/oneLossPointClaimsV1/${claimKey}`);
+        const claimRef = db.ref(`matches/${roomId}/oneLossPointClaimsV2/${claimKey}`);
 
         const claimTx = await runRefTransaction(claimRef, current => {
             if (current && current.done) return;
+
+            // Nếu có máy khác đang xử lý dưới 8 giây thì không giành nhau.
+            if (
+                current &&
+                current.processing &&
+                Date.now() - Number(current.at || 0) < 8000
+            ) {
+                return;
+            }
 
             return {
                 processing: true,
@@ -7848,15 +7868,25 @@ async function forceAddOneLossFromVictoryPopup(winnerSide) {
         });
 
         if (!claimTx.committed) {
-            console.warn("ONE LOSS POINT SKIP: claim đã có", { roomId, claimKey });
+            console.warn("ONE LOSS POINT SKIP V2: claim đã có hoặc máy khác đang xử lý", {
+                roomId,
+                claimKey
+            });
+
+            if (attempt < 3) {
+                setTimeout(() => forceAddOneLossFromVictoryPopup(winnerSide, attempt + 1), 500);
+            }
+
             return false;
         }
+
+        window.__lastOneLossPointClaimKeyV2 = claimKey;
 
         const after = await addOneLossOnlyToWallet(loserKey);
 
         if (!after) {
             await claimRef.remove().catch(() => {});
-            console.warn("ONE LOSS POINT FAIL: addOneLossOnlyToWallet null", {
+            console.warn("ONE LOSS POINT FAIL V2: addOneLossOnlyToWallet null", {
                 roomId,
                 loserSide,
                 loserKey
@@ -7865,12 +7895,13 @@ async function forceAddOneLossFromVictoryPopup(winnerSide) {
         }
 
         const updates = {};
+
         updates[`matches/${roomId}/players/${loserSide}/losses`] = after.losses || 0;
         updates[`matches/${roomId}/players/${loserSide}/totalLosses`] = after.totalLosses || 0;
         updates[`matches/${roomId}/players/${loserSide}/monthLosses`] = after.monthLosses || 0;
         updates[`matches/${roomId}/players/${loserSide}/levelMeta`] = after.levelMeta || {};
 
-        updates[`matches/${roomId}/oneLossPointClaimsV1/${claimKey}`] = {
+        updates[`matches/${roomId}/oneLossPointClaimsV2/${claimKey}`] = {
             done: true,
             roomId,
             winnerSide,
@@ -7882,7 +7913,7 @@ async function forceAddOneLossFromVictoryPopup(winnerSide) {
             at: Date.now()
         };
 
-        updates[`matches/${roomId}/oneLossPointRecordedV1`] = {
+        updates[`matches/${roomId}/oneLossPointRecordedV2`] = {
             done: true,
             claimKey,
             winnerSide,
@@ -7898,7 +7929,7 @@ async function forceAddOneLossFromVictoryPopup(winnerSide) {
             scheduleArenaTopRefresh();
         }
 
-        console.log("ONE LOSS POINT OK", {
+        console.log("ONE LOSS POINT OK V2", {
             roomId,
             winnerSide,
             loserSide,
@@ -7909,7 +7940,12 @@ async function forceAddOneLossFromVictoryPopup(winnerSide) {
 
         return true;
     } catch (err) {
-        console.error("forceAddOneLossFromVictoryPopup lỗi:", err);
+        console.error("forceAddOneLossFromVictoryPopup V2 lỗi:", err);
+
+        if (attempt < 3) {
+            setTimeout(() => forceAddOneLossFromVictoryPopup(winnerSide, attempt + 1), 500);
+        }
+
         return false;
     }
 }
