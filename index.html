@@ -7689,6 +7689,7 @@ async function addOneLossOnlyToWallet(walletKey) {
             ? { ...cleanMonths[monthKey] }
             : {};
 
+        // CHỐT: chỉ lấy số từ nhánh sạch oneLossOnlyV1, không lấy losses cũ bị nhảy bậy
         const baseLosses = oneWinPointNum(clean.losses);
         const baseMonthLosses = oneWinPointNum(cleanMonth.losses);
 
@@ -7711,22 +7712,13 @@ async function addOneLossOnlyToWallet(walletKey) {
             }
         };
 
-        const oldStatsByMonth = w.statsByMonth && typeof w.statsByMonth === "object" ? { ...w.statsByMonth } : {};
-        const oldMonthlyStats = w.monthlyStats && typeof w.monthlyStats === "object" ? { ...w.monthlyStats } : {};
-        const oldMatchStatsByMonth = w.matchStatsByMonth && typeof w.matchStatsByMonth === "object" ? { ...w.matchStatsByMonth } : {};
-
-        const monthPayload = {
-            ...(oldStatsByMonth[monthKey] || oldMonthlyStats[monthKey] || oldMatchStatsByMonth[monthKey] || {}),
-            losses: nextMonthLosses,
-            monthLosses: nextMonthLosses,
-            updatedAt: Date.now()
-        };
-
         afterWallet = {
             ...w,
 
+            // Nhánh sạch chính cho thua
             oneLossOnlyV1: nextOneLossOnly,
 
+            // Ghi đè lại field cũ để UI không lôi số 27 / 212 / 600 bậy nữa
             losses: nextLosses,
             totalLosses: nextLosses,
             monthLosses: nextMonthLosses,
@@ -7734,7 +7726,6 @@ async function addOneLossOnlyToWallet(walletKey) {
             levelMeta: {
                 ...(w.levelMeta || {}),
                 losses: nextLosses,
-                totalLosses: nextLosses,
                 monthLosses: nextMonthLosses,
                 lastResult: "lose",
                 updatedAt: Date.now()
@@ -7744,7 +7735,6 @@ async function addOneLossOnlyToWallet(walletKey) {
                 ...(w.stats || {}),
                 losses: nextLosses,
                 totalLosses: nextLosses,
-                monthLosses: nextMonthLosses,
                 updatedAt: Date.now()
             },
 
@@ -7752,23 +7742,7 @@ async function addOneLossOnlyToWallet(walletKey) {
                 ...(w.matchStats || {}),
                 losses: nextLosses,
                 totalLosses: nextLosses,
-                monthLosses: nextMonthLosses,
                 updatedAt: Date.now()
-            },
-
-            statsByMonth: {
-                ...oldStatsByMonth,
-                [monthKey]: monthPayload
-            },
-
-            monthlyStats: {
-                ...oldMonthlyStats,
-                [monthKey]: monthPayload
-            },
-
-            matchStatsByMonth: {
-                ...oldMatchStatsByMonth,
-                [monthKey]: monthPayload
             },
 
             updatedAt: Date.now()
@@ -14422,39 +14396,33 @@ async function openOpponentMatchProfile() {
 const oneWinStats = wallet.oneWinOnlyV1 || {};
 const oneWinMonth = oneWinStats.months?.[monthKey] || {};
 
-const oneLossStats = wallet.oneLossOnlyV1 || {};
-const oneLossMonth = oneLossStats.months?.[monthKey] || {};
-
 const monthWins = Math.max(0, Math.floor(Number(
     oneWinMonth.wins ??
     oneWinStats.monthWins ??
     0
 ) || 0));
 
-const monthLosses = Math.max(0, Math.floor(Number(
-    oneLossMonth.losses ??
-    oneLossStats.monthLosses ??
-    wallet.monthLosses ??
-    levelMeta.monthLosses ??
-    monthly.losses ??
-    monthly.lose ??
-    monthly.loses ??
-    0
-) || 0));
+        const monthLosses = Math.max(0, Math.floor(Number(
+            monthly.losses ??
+            monthly.lose ??
+            monthly.loses ??
+            wallet.monthLosses ??
+            levelMeta.monthLosses ??
+            0
+        ) || 0));
 
 const totalWins = Math.max(0, Math.floor(Number(
     oneWinStats.wins ??
     0
 ) || 0));
 
-const totalLosses = Math.max(0, Math.floor(Number(
-    oneLossStats.losses ??
-    oneLossStats.totalLosses ??
-    wallet.totalLosses ??
-    wallet.losses ??
-    levelMeta.losses ??
-    0
-) || 0));
+        const totalLosses = Math.max(0, Math.floor(Number(
+            levelMeta.losses ??
+            wallet.losses ??
+            wallet.totalLosses ??
+            0
+        ) || 0));
+
         currentMatchOpponentProfile = {
             walletKey: opp.walletKey,
             uid: opp.uid || wallet.uid || opp.walletKey,
