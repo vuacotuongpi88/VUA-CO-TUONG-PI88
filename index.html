@@ -6277,6 +6277,11 @@ function getArenaTopWins(wallet = {}) {
     return arenaTopInt(wallet?.oneWinOnlyV1?.wins ?? 0);
 }
 
+function getArenaTopLosses(wallet = {}) {
+    // Đọc cùng nguồn sạch với popup: oneLossOnlyV1.
+    return arenaTopInt(wallet?.oneLossOnlyV1?.losses ?? 0);
+}
+
 function getArenaTopSkinScore(wallet = {}) {
     const owned =
         wallet?.ownedAvatarSkins ||
@@ -6353,7 +6358,9 @@ function getArenaTopScoreText(row = {}) {
     }
 
     if (arenaTopTab === "wins") {
-        return `${getArenaTopWins(wallet)} trận thắng`;
+        const w = getArenaTopWins(wallet);
+        const l = getArenaTopLosses(wallet);
+        return `${w} thắng · ${l} thua`;
     }
 
     return "";
@@ -7787,169 +7794,200 @@ async function getOrCreateHistoryResultId(roomId, winnerSide) {
 
     return oneWinPointSafeKey(resultId);
 }
+function pickCanonicalHistoryWalletKey(keys = [], fallback = "") {
+    const exactFallback = cleanHistoryWalletKey(fallback);
+    if (exactFallback) return exactFallback;
 
-async function recordWinnerWinAndPendingLossAfterPmcPaid(roomId, room, winnerSide, winnerKeyFromSettle = "") {
+    const all = Array.from(new Set(
+        (Array.isArray(keys) ? keys : [])
+            .map(cleanHistoryWalletKey)
+            .filter(Boolean)
+    ));
+
+    // Ưu tiên key đang nằm trong room.players trước.
+    // Như vậy nếu phòng/wallet cũ dùng 086... thì vẫn cộng đúng vào ví đang hiển thị trên Top;
+    // nếu phòng mới dùng pi_086... thì cũng cộng đúng pi_086...
+    return all[0] || "";
+}
+
+async function getOrCreateHistoryResultIdV6(roomId, room = {}, winnerSide = "") {
+    roomId = String(roomId || "").trim();
+    winnerSide = String(winnerSide || "").trim();
+    if (!roomId || !winnerSide) return "";
+
+    const ref = db.ref(`matches/${roomId}/historyResultIdV6`);
+    const preferred = oneWinPointSafeKey(
+        room.historyResultIdV6 ||
+        room.matchResultId ||
+        ""
+    );
+
+    const tx = await runRefTransaction(ref, current => {
+        if (current) return current;
+        if (preferred) return preferred;
+
+        const roundNo = Math.max(1, Math.floor(Number(room.roundNo || room.gameNo || 1) || 1));
+        const stamp = String(
+            room.finishedAt ||
+            room.winAt ||
+            room.settlement?.paidAt ||
+            room.updatedAt ||
+            room.createdAt ||
+            Date.now()
+        );
+
+        return oneWinPointSafeKey(`${roomId}_${winnerSide}_${roundNo}_${stamp}`);
+    });
+
+    let resultId = String(tx?.snapshot?.val?.() || "").trim();
+    if (!resultId) {
+        const snap = await ref.once("value").catch(() => null);
+        resultId = String(snap?.val?.() || "").trim();
+    }
+
+    return oneWinPointSafeKey(resultId);
+}
+
+async function recordMatchHistoryOnceV6(roomId, room = {}, source = "unknown", winnerKeyFromSettle = "") {
     try {
-        if (!roomId || !room || !winnerSide) return false;
-        if (winnerSide !== "do" && winnerSide !== "den") return false;
+        roomId = String(roomId || "").trim();
+        const winnerSide = String(room?.winner || "").trim();
+        if (!roomId || (winnerSide !== "do" && winnerSide !== "den")) return false;
 
         const loserSide = winnerSide === "do" ? "den" : "do";
-
-        const winnerKey = String(
-            winnerKeyFromSettle ||
-            room?.settlement?.winnerKey ||
-            room?.settlement?.winnerWalletKey ||
-            getMatchHistoryWalletKey(room, winnerSide)
-        ).trim();
-
-        const loserKeys = getPlayerHistoryWalletAliases(room, loserSide);
-        const loserKey = String(loserKeys[0] || "").trim();
-
-        if (!winnerKey) {
-            console.warn("HISTORY WIN SKIP: thiếu ví winner", {
-                roomId,
-                winnerSide,
-                players: room?.players,
-                settlement: room?.settlement
-            });
-            return false;
-        }
-
-        const resultId = await getOrCreateHistoryResultId(roomId, winnerSide);
+        const resultId = await getOrCreateHistoryResultIdV6(roomId, room, winnerSide);
         if (!resultId) return false;
 
-        // ===== 1. CỘNG THẮNG CHO WINNER NGAY SAU KHI PMC ĐÃ NHẢY =====
-        const winClaimRef = db.ref(`matches/${roomId}/historyWinClaimsV1/${resultId}`);
+        const winnerKey = pickCanonicalHistoryWalletKey(
+            getPlayerHistoryWalletAliases(room, winnerSide),
+            winnerKeyFromSettle || (winnerSide === mySide ? makeWalletDbKey() : "")
+        );
 
-        const winClaimTx = await runRefTransaction(winClaimRef, current => {
-            if (current && current.done) return;
+        const loserKey = pickCanonicalHistoryWalletKey(
+            getPlayerHistoryWalletAliases(room, loserSide),
+            loserSide === mySide ? makeWalletDbKey() : ""
+        );
 
-            return {
-                processing: true,
-                roomId,
-                resultId,
-                winnerSide,
-                winnerKey,
-                at: Date.now()
-            };
-        });
+        const updatesAfter = {};
+        let changed = false;
 
-        if (winClaimTx.committed) {
-            const afterWin = await addOneWinOnlyToWallet(winnerKey);
-
-            if (!afterWin) {
-                await winClaimRef.remove().catch(() => {});
-                console.warn("HISTORY WIN FAIL: addOneWinOnlyToWallet null", {
+        // ===== THẮNG: 1 resultId chỉ +1 đúng 1 lần =====
+        if (winnerKey) {
+            const winClaimRef = db.ref(`matches/${roomId}/historyWinDoneV6`);
+            const winClaimTx = await runRefTransaction(winClaimRef, current => {
+                if (current && current.done) return;
+                return {
+                    processing: true,
                     roomId,
-                    winnerKey
-                });
-                return false;
+                    resultId,
+                    winnerSide,
+                    winnerKey,
+                    source,
+                    at: Date.now()
+                };
+            });
+
+            if (winClaimTx.committed) {
+                const afterWin = await addOneWinOnlyToWallet(winnerKey);
+                if (!afterWin) {
+                    await winClaimRef.remove().catch(() => {});
+                } else {
+                    updatesAfter[`matches/${roomId}/historyWinDoneV6`] = {
+                        done: true,
+                        roomId,
+                        resultId,
+                        winnerSide,
+                        winnerKey,
+                        wins: afterWin.wins || 0,
+                        source,
+                        at: Date.now()
+                    };
+                    updatesAfter[`matches/${roomId}/players/${winnerSide}/wins`] = afterWin.wins || 0;
+                    updatesAfter[`matches/${roomId}/players/${winnerSide}/totalWins`] = afterWin.totalWins || 0;
+                    updatesAfter[`matches/${roomId}/players/${winnerSide}/monthWins`] = afterWin.monthWins || 0;
+                    updatesAfter[`matches/${roomId}/players/${winnerSide}/levelMeta`] = afterWin.levelMeta || {};
+                    changed = true;
+                    console.log("HISTORY WIN OK V6", { roomId, resultId, winnerSide, winnerKey, wins: afterWin.wins, source });
+                }
             }
-
-            const winUpdates = {};
-            winUpdates[`matches/${roomId}/historyWinClaimsV1/${resultId}`] = {
-                done: true,
-                roomId,
-                resultId,
-                winnerSide,
-                winnerKey,
-                wins: afterWin.wins || 0,
-                at: Date.now()
-            };
-            winUpdates[`matches/${roomId}/winnerHistoryDoneV1`] = {
-                done: true,
-                resultId,
-                winnerSide,
-                winnerKey,
-                wins: afterWin.wins || 0,
-                at: Date.now()
-            };
-            winUpdates[`matches/${roomId}/players/${winnerSide}/wins`] = afterWin.wins || 0;
-            winUpdates[`matches/${roomId}/players/${winnerSide}/totalWins`] = afterWin.totalWins || 0;
-            winUpdates[`matches/${roomId}/players/${winnerSide}/monthWins`] = afterWin.monthWins || 0;
-            winUpdates[`matches/${roomId}/players/${winnerSide}/levelMeta`] = afterWin.levelMeta || {};
-
-            await db.ref().update(winUpdates);
-
-            console.log("HISTORY WIN OK AFTER PMC", {
-                roomId,
-                resultId,
-                winnerSide,
-                winnerKey,
-                wins: afterWin.wins
-            });
-        }
-
-        // ===== 2. TREO THUA CHO LOSER, CHƯA CỘNG LIỀN =====
-        // Ghi pending vào mọi alias của bên thua. Nếu ván sau Pi Browser đổi
-        // makeWalletDbKey từ 086... sang pi_086... thì bấm SS vẫn tìm thấy để cộng.
-        if (loserKeys.length) {
-            const pendingPayload = {
-                done: false,
-                roomId,
-                resultId,
-                winnerSide,
-                loserSide,
-                loserKey,
-                loserKeys,
-                winReason: room?.winReason || "",
-                createdAt: Date.now()
-            };
-
-            await Promise.all(loserKeys.map(async key => {
-                const pendingRef = db.ref(`wallets/${key}/pendingLossesV1/${resultId}`);
-
-                await runRefTransaction(pendingRef, current => {
-                    if (current) {
-                        return {
-                            ...current,
-                            loserKeys: Array.from(new Set([
-                                ...(current.loserKeys || []),
-                                ...loserKeys
-                            ])),
-                            loserKey: current.loserKey || loserKey
-                        };
-                    }
-                    return pendingPayload;
-                });
-            }));
-
-            await db.ref(`matches/${roomId}/pendingLossV1`).set({
-                ...pendingPayload,
-                createdAt: Date.now()
-            }).catch(() => {});
-
-            console.log("PENDING LOSS SAVED ALIASES", {
-                roomId,
-                resultId,
-                loserSide,
-                loserKey,
-                loserKeys
-            });
         } else {
-            console.warn("PENDING LOSS SKIP: thiếu ví loser", {
-                roomId,
-                loserSide,
-                players: room?.players,
-                resultPlayers: room?.resultPlayers,
-                resultLoserWalletKey: room?.resultLoserWalletKey
+            console.warn("HISTORY WIN SKIP V6: thiếu ví winner", { roomId, winnerSide, source, players: room.players, resultPlayers: room.resultPlayers });
+        }
+
+        // ===== THUA: cộng luôn cùng kết quả, không treo pending nữa =====
+        if (loserKey) {
+            const lossClaimRef = db.ref(`matches/${roomId}/historyLossDoneV6`);
+            const lossClaimTx = await runRefTransaction(lossClaimRef, current => {
+                if (current && current.done) return;
+                return {
+                    processing: true,
+                    roomId,
+                    resultId,
+                    loserSide,
+                    loserKey,
+                    source,
+                    at: Date.now()
+                };
             });
+
+            if (lossClaimTx.committed) {
+                const afterLoss = await addOneLossOnlyToWallet(loserKey);
+                if (!afterLoss) {
+                    await lossClaimRef.remove().catch(() => {});
+                } else {
+                    updatesAfter[`matches/${roomId}/historyLossDoneV6`] = {
+                        done: true,
+                        roomId,
+                        resultId,
+                        loserSide,
+                        loserKey,
+                        losses: afterLoss.losses || 0,
+                        source,
+                        at: Date.now()
+                    };
+                    updatesAfter[`matches/${roomId}/players/${loserSide}/losses`] = afterLoss.losses || 0;
+                    updatesAfter[`matches/${roomId}/players/${loserSide}/totalLosses`] = afterLoss.totalLosses || 0;
+                    updatesAfter[`matches/${roomId}/players/${loserSide}/monthLosses`] = afterLoss.monthLosses || 0;
+                    changed = true;
+                    console.log("HISTORY LOSS OK V6", { roomId, resultId, loserSide, loserKey, losses: afterLoss.losses, source });
+                }
+            }
+        } else {
+            console.warn("HISTORY LOSS SKIP V6: thiếu ví loser", { roomId, loserSide, source, players: room.players, resultPlayers: room.resultPlayers, resultLoserWalletKey: room.resultLoserWalletKey });
         }
 
-        if (typeof scheduleArenaTopRefresh === "function") {
-            scheduleArenaTopRefresh();
+        if (changed && Object.keys(updatesAfter).length) {
+            updatesAfter[`matches/${roomId}/historyResultIdV6`] = resultId;
+            await db.ref().update(updatesAfter);
+
+            if (typeof scheduleArenaTopRefresh === "function") {
+                scheduleArenaTopRefresh();
+            }
         }
 
-        return true;
+        return changed;
     } catch (err) {
-        console.error("recordWinnerWinAndPendingLossAfterPmcPaid lỗi:", err);
+        console.error("recordMatchHistoryOnceV6 lỗi:", err);
         return false;
     }
 }
 
+
+async function recordWinnerWinAndPendingLossAfterPmcPaid(roomId, room, winnerSide, winnerKeyFromSettle = "") {
+    // Giữ tên hàm cũ để khỏi phải sửa nhiều nơi gọi.
+    // Bản mới: cộng cả thắng và thua ngay sau khi PMC đã settle, dùng khóa V6 chống cộng trùng.
+    const fixedRoom = {
+        ...(room || {}),
+        winner: winnerSide || room?.winner
+    };
+    return recordMatchHistoryOnceV6(roomId, fixedRoom, "after_pmc_settle", winnerKeyFromSettle);
+}
+
 async function claimPendingLossBeforeReady(roomId = "") {
+    // TẮT pending loss: thua đã được cộng ngay cùng kết quả trong recordMatchHistoryOnceV6().
+    // Không cộng ở SS nữa để tránh lúc cộng lúc không / cộng trùng alias ví.
     try {
-        const walletKey = String(makeWalletDbKey() || "").trim();
+        const walletKey = String(makeWalletDbKey?.() || "").trim();
         if (!walletKey) return false;
 
         const aliases = Array.from(new Set([
@@ -7957,130 +7995,35 @@ async function claimPendingLossBeforeReady(roomId = "") {
             ...getMyHistoryWalletAliases()
         ].map(cleanHistoryWalletKey).filter(Boolean)));
 
-        let claimedAny = false;
-        const seenResultIds = new Set();
-
+        // Dọn cờ pending cũ nếu còn sót để ván sau không bị + thua bất ngờ.
+        const updates = {};
+        const now = Date.now();
         for (const sourceWalletKey of aliases) {
-            const pendingSnap = await db.ref(`wallets/${sourceWalletKey}/pendingLossesV1`).once("value");
-            const pending = pendingSnap.val() || {};
-
-            for (const [resultIdRaw, item] of Object.entries(pending)) {
-                if (!item || item.done) continue;
-
-                const resultId = oneWinPointSafeKey(resultIdRaw || item.resultId || "");
-                if (!resultId) continue;
-
-                if (seenResultIds.has(resultId)) {
-                    await db.ref(`wallets/${sourceWalletKey}/pendingLossesV1/${resultId}`).update({
-                        done: true,
-                        claimedAt: Date.now(),
-                        claimedByWalletKey: walletKey,
-                        duplicateAliasDone: true
-                    }).catch(() => {});
-                    continue;
-                }
-
-                seenResultIds.add(resultId);
-                const claimRef = db.ref(`wallets/${walletKey}/pendingLossClaimsV1/${resultId}`);
-
-                const claimTx = await runRefTransaction(claimRef, current => {
-                    if (current && current.done) return;
-                    return {
-                        processing: true,
-                        resultId,
-                        roomId: item.roomId || roomId || "",
-                        walletKey,
-                        sourceWalletKey,
-                        at: Date.now()
-                    };
-                });
-
-                if (!claimTx.committed) {
-                    await db.ref(`wallets/${sourceWalletKey}/pendingLossesV1/${resultId}`).update({
-                        done: true,
-                        claimedAt: Date.now(),
-                        claimedByWalletKey: walletKey,
-                        skippedByExistingClaim: true
-                    }).catch(() => {});
-                    continue;
-                }
-
-                const afterLoss = await addOneLossOnlyToWallet(walletKey);
-                if (!afterLoss) {
-                    await claimRef.remove().catch(() => {});
-                    continue;
-                }
-
-                const allLossKeys = Array.from(new Set([
-                    sourceWalletKey,
-                    walletKey,
-                    ...(item.loserKeys || []),
-                    ...aliases
-                ].map(cleanHistoryWalletKey).filter(Boolean)));
-
-                const updates = {};
-                const now = Date.now();
-
-                allLossKeys.forEach(k => {
-                    updates[`wallets/${k}/pendingLossesV1/${resultId}/done`] = true;
-                    updates[`wallets/${k}/pendingLossesV1/${resultId}/claimedAt`] = now;
-                    updates[`wallets/${k}/pendingLossesV1/${resultId}/claimedByWalletKey`] = walletKey;
-                    updates[`wallets/${k}/pendingLossesV1/${resultId}/sourceWalletKey`] = sourceWalletKey;
-                });
-
-                updates[`wallets/${walletKey}/pendingLossClaimsV1/${resultId}`] = {
-                    done: true,
-                    resultId,
-                    walletKey,
-                    sourceWalletKey,
-                    losses: afterLoss.losses || 0,
-                    at: now
-                };
-
-                if (item.roomId) {
-                    updates[`matches/${item.roomId}/pendingLossV1/done`] = true;
-                    updates[`matches/${item.roomId}/pendingLossV1/claimedAt`] = now;
-                    updates[`matches/${item.roomId}/pendingLossV1/claimedByWalletKey`] = walletKey;
-                    updates[`matches/${item.roomId}/pendingLossV1/sourceWalletKey`] = sourceWalletKey;
-                    updates[`matches/${item.roomId}/pendingLossV1/losses`] = afterLoss.losses || 0;
-                }
-
-                await db.ref().update(updates);
-                claimedAny = true;
-
-                console.log("PENDING LOSS CLAIMED BEFORE READY ALIASES", {
-                    resultId,
-                    walletKey,
-                    sourceWalletKey,
-                    aliases,
-                    losses: afterLoss.losses
-                });
-            }
+            const snap = await db.ref(`wallets/${sourceWalletKey}/pendingLossesV1`).once("value").catch(() => null);
+            const pending = snap?.val?.() || {};
+            Object.keys(pending).forEach(resultIdRaw => {
+                const resultId = oneWinPointSafeKey(resultIdRaw);
+                if (!resultId || pending[resultIdRaw]?.done) return;
+                updates[`wallets/${sourceWalletKey}/pendingLossesV1/${resultId}/done`] = true;
+                updates[`wallets/${sourceWalletKey}/pendingLossesV1/${resultId}/skippedByV6`] = true;
+                updates[`wallets/${sourceWalletKey}/pendingLossesV1/${resultId}/claimedAt`] = now;
+            });
         }
 
-        if (claimedAny) {
-            await loadWalletBalance().catch(() => {});
-            if (typeof scheduleArenaTopRefresh === "function") {
-                scheduleArenaTopRefresh();
-            }
-        } else {
-            console.log("NO PENDING LOSS FOUND BEFORE READY", { walletKey, aliases, roomId });
+        if (Object.keys(updates).length) {
+            await db.ref().update(updates).catch(() => {});
         }
 
-        return claimedAny;
+        return false;
     } catch (err) {
-        console.error("claimPendingLossBeforeReady lỗi:", err);
+        console.error("claimPendingLossBeforeReady cleanup lỗi:", err);
         return false;
     }
 }
 
 async function forceAddOneLossFromVictoryPopup(winnerSide, attempt = 0) {
-    // TẮT HÀM CŨ: không cộng thua trong popup/endGame nữa.
-    // Thua được treo pendingLossesV1 và chỉ cộng khi người thua bấm SS ván sau.
-    console.warn("forceAddOneLossFromVictoryPopup đã tắt, dùng claimPendingLossBeforeReady thay thế", {
-        winnerSide,
-        attempt
-    });
+    // Tắt hàm cũ. Lịch sử thua nay cộng bằng recordMatchHistoryOnceV6() cùng lúc kết quả được settle.
+    console.warn("forceAddOneLossFromVictoryPopup đã tắt, dùng recordMatchHistoryOnceV6", { winnerSide, attempt });
     return false;
 }
 function endGame(main, sub) {
@@ -8221,6 +8164,9 @@ winner: null,
 winReason: null,
 matchResultId: null,
 historyResultIdV1: null,
+historyResultIdV6: null,
+historyWinDoneV6: null,
+historyLossDoneV6: null,
 finishedAt: null,
 winAt: null,
 oneWinPointRecordedV2: null,
@@ -9725,15 +9671,15 @@ if (!window.__shownVictoryKeys[victoryKey]) {
             );
         }
     }
-// A/B bỏ chạy ngang khi đang đánh:
-// gọi lịch bàn giao NGAY trước khi settle để không bị uiVersion return chặn mất.
-if (
-    room.winReason === "bochay" &&
-    room.winner === mySide
-) {
-    scheduleResetWinnerRoomAfterPaid(room, listeningRoomId);
-}
-    didSettleWinnerNow = await maybeSettleStakeRoom(room, listeningRoomId) === true;
+didSettleWinnerNow = await maybeSettleStakeRoom(room, listeningRoomId) === true;
+
+    // Bảo hiểm lịch sử thắng/thua: nếu settlement đã xong hoặc vừa xong,
+    // bất kỳ snapshot nào cũng có thể ghi đúng 1 lần nhờ khóa V6.
+    if (room.winner !== "hoa" && (didSettleWinnerNow || room?.settlement?.paid === true || room?.settlement?.winnerPaid?.done === true)) {
+        await recordMatchHistoryOnceV6(listeningRoomId, room, "bind_room_after_settle").catch(err => {
+            console.error("HISTORY V6 AFTER SETTLE FAIL:", err);
+        });
+    }
 
     // Nếu trong lúc await, phòng đã reset sang ván 2 rồi,
     // callback cũ của ván 1 không được phép đóng/mở bảng SS nữa.
@@ -10004,6 +9950,7 @@ room.players?.den
    await db.ref().update({
     [`matches/${roomId}/ready/den`]: false,
     [`matches/${roomId}/stakeLocked/den`]: false,
+    [`matches/${roomId}/readyDeadlineAt`]: null,
 
     // Đủ 2 người rồi thì không cho hiện ngoài danh sách bàn nữa
     [`matches/${roomId}/lobbyOpen`]: false,
@@ -13300,7 +13247,7 @@ function showReadyOverlay(mode, forceResetTime = false) {
 
 if (forceResetTime || !readyTime || readyTime <= 0) {
     if (readyDeadlineAt) {
-        readyTime = getReadySecondsLeft(readyDeadlineAt);
+        readyTime = Math.max(1, getReadySecondsLeft(readyDeadlineAt));
     } else {
         readyTime = 30;
     }
@@ -13321,27 +13268,38 @@ function ensureReadyOverlayForWaitingRoom(room = {}, roomId = currentRoomId) {
 
     if (!hasEnoughPlayersWaiting) return;
 
-const key = [
-    roomId || "",
-    room.players?.do?.uid || room.players?.do?.walletKey || "",
-    room.players?.den?.uid || room.players?.den?.walletKey || "",
-    room.status || "",
-    Number(room.readyDeadlineAt || 0)
-].join("|");
+    const key = [
+        roomId || "",
+        room.players?.do?.uid || room.players?.do?.walletKey || "",
+        room.players?.den?.uid || room.players?.den?.walletKey || "",
+        room.status || "",
+        Number(room.readyDeadlineAt || 0)
+    ].join("|");
 
-    // Nếu phòng chưa có mốc hết giờ SS thì tạo 1 lần trên Firebase.
-    // Cả A và B sẽ đọc cùng readyDeadlineAt này.
-    if (!Number(room.readyDeadlineAt || 0)) {
+    const doReady = !!room.ready?.do;
+    const denReady = !!room.ready?.den;
+    const bothReady = doReady && denReady;
+    const deadline = Number(room.readyDeadlineAt || 0);
+    const secondsLeft = deadline ? getReadySecondsLeft(deadline) : 0;
+
+    // Nếu B/C vừa vào lại mà phòng còn deadline cũ 3s/0s thì reset về 30s.
+    // Chỉ reset khi chưa đủ 2 bên SS để không phá lúc cả hai đã sẵn sàng.
+    if (!deadline || (!bothReady && secondsLeft <= 3)) {
         db.ref("matches/" + roomId + "/readyDeadlineAt").transaction((current) => {
-            if (current) return current;
-            return readyNowMs() + 30000;
+            const cur = Number(current || 0);
+            const left = cur ? getReadySecondsLeft(cur) : 0;
+            if (!cur || left <= 3) return readyNowMs() + 30000;
+            return current;
         }, undefined, false);
 
+        readyDeadlineAt = 0;
+        readyTime = 30;
+        updateReadyUI();
         return;
     }
 
-    readyDeadlineAt = Number(room.readyDeadlineAt || 0);
-    readyTime = getReadySecondsLeft(readyDeadlineAt);
+    readyDeadlineAt = deadline;
+    readyTime = Math.max(1, secondsLeft);
 
     const oldKey = readyOverlayRoomKey || "";
     const alreadyVisible = overlay.style.display === "flex";
@@ -13349,7 +13307,6 @@ const key = [
     readyOverlayWaitingShown = true;
     readyOverlayRoomKey = key;
 
-    // Nếu bảng SS đang hiện rồi thì không mở lại, chỉ cập nhật số giây + nút.
     if (alreadyVisible) {
         readyOverlayOpeningLock = false;
         updateReadyUI();
@@ -13357,7 +13314,6 @@ const key = [
         if (!readyInterval) {
             startReadyCountdown();
         }
-
         return;
     }
 
