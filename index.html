@@ -6406,6 +6406,63 @@ function isHiddenArenaTopWallet(row = {}) {
 
     return false;
 }
+const ARENA_TOP_STATE_FRESH_MS = 90000; // 90 giây, tránh hiện phòng cũ
+
+function isFreshArenaTopState(state = {}) {
+    const updatedAt = Number(state.updatedAt || 0);
+    return !!updatedAt && (Date.now() - updatedAt) <= ARENA_TOP_STATE_FRESH_MS;
+}
+
+function isArenaTopJoinableRoom(room = {}, roomId = "", states = {}) {
+    if (!room || room.winner) return false;
+
+    const status = String(room.status || "waiting");
+    if (status !== "waiting") return false;
+
+    const doPlayer = room.players?.do || null;
+    const denPlayer = room.players?.den || null;
+
+    // Phòng được vào TOP phải còn chủ phòng đỏ, chưa có đen
+    if (!doPlayer?.walletKey) return false;
+    if (denPlayer?.walletKey) return false;
+
+    const ownerKey = String(doPlayer.walletKey || "").trim();
+    const ownerState = states[ownerKey] || {};
+
+    // Quan trọng: chủ phòng phải còn đang chờ đúng roomId này
+    if (!isFreshArenaTopState(ownerState)) return false;
+    if (ownerState.state !== "waiting") return false;
+    if (String(ownerState.roomId || "") !== String(roomId || "")) return false;
+    if (ownerState.lobbyOpen !== true) return false;
+
+    return true;
+}
+
+function isArenaTopWatchableRoom(room = {}, roomId = "", states = {}) {
+    if (!room || room.winner) return false;
+
+    const status = String(room.status || "");
+    if (status !== "playing") return false;
+
+    const doKey = String(room.players?.do?.walletKey || "").trim();
+    const denKey = String(room.players?.den?.walletKey || "").trim();
+
+    const doState = states[doKey] || {};
+    const denState = states[denKey] || {};
+
+    // Ít nhất 1 người trong trận còn báo đang ở đúng room này thì mới hiện XEM
+    const doOk =
+        doKey &&
+        isFreshArenaTopState(doState) &&
+        String(doState.roomId || "") === String(roomId || "");
+
+    const denOk =
+        denKey &&
+        isFreshArenaTopState(denState) &&
+        String(denState.roomId || "") === String(roomId || "");
+
+    return !!(doOk || denOk);
+}
 function getArenaTopMeWalletKey() {
     try {
         if (typeof makeWalletDbKey === "function") return makeWalletDbKey();
@@ -6535,32 +6592,35 @@ async function loadArenaTopList(force = false) {
 
         const roomByWallet = {};
 
-        Object.entries(matches).forEach(([roomId, room]) => {
-            if (!room || room.winner) return;
+Object.entries(matches).forEach(([roomId, room]) => {
+    if (!room || room.winner) return;
 
-            const status = String(room.status || "waiting");
-            if (status !== "waiting" && status !== "playing") return;
+    const status = String(room.status || "waiting");
+    if (status !== "waiting" && status !== "playing") return;
 
-            ["do", "den"].forEach(side => {
-                const p = room?.players?.[side];
-                const walletKey = p?.walletKey;
-                if (!walletKey) return;
+    const joinable = isArenaTopJoinableRoom(room, roomId, states);
+    const watchable = isArenaTopWatchableRoom(room, roomId, states);
 
-                const hasDo = !!room?.players?.do?.walletKey;
-                const hasDen = !!room?.players?.den?.walletKey;
-                const roomOpen = status === "waiting" && hasDo && !hasDen;
+    // Không join được, không xem được => bỏ, tránh phòng ảo/phòng cũ
+    if (!joinable && !watchable) return;
 
-                roomByWallet[walletKey] = {
-                    roomId,
-                    roomStatus: status,
-                    roomOpen,
-                    roomMode: room.mode || "",
-                    roomBucket: room.roomBucket || "",
-                    stakePMC: arenaTopInt(room.stakePMC || 0),
-                    inviteCode: String(room.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase()
-                };
-            });
-        });
+    ["do", "den"].forEach(side => {
+        const p = room?.players?.[side];
+        const walletKey = String(p?.walletKey || "").trim();
+        if (!walletKey) return;
+
+        roomByWallet[walletKey] = {
+            roomId,
+            roomStatus: watchable ? "playing" : "waiting",
+            // Chỉ phòng chờ thật sự còn chủ phòng mới hiện nút VÀO
+            roomOpen: joinable && side === "do",
+            roomMode: room.mode || "",
+            roomBucket: room.roomBucket || "",
+            stakePMC: arenaTopInt(room.stakePMC || 0),
+            inviteCode: String(room.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase()
+        };
+    });
+});
 
         const rows = Object.entries(wallets).map(([walletKey, wallet]) => {
             const roomInfo = roomByWallet[walletKey] || {};
@@ -6596,6 +6656,31 @@ async function loadArenaTopList(force = false) {
         arenaTopLoading = false;
     }
 }
+let arenaTopRealtimeAttached = false;
+let arenaTopRefreshTimer = null;
+
+function scheduleArenaTopRefresh() {
+    const box = document.getElementById("arena-top-box");
+    if (!box || !box.classList.contains("show")) return;
+
+    clearTimeout(arenaTopRefreshTimer);
+    arenaTopRefreshTimer = setTimeout(() => {
+        loadArenaTopList(true);
+    }, 250);
+}
+
+function ensureArenaTopRealtimeRefresh() {
+    if (arenaTopRealtimeAttached) return;
+    arenaTopRealtimeAttached = true;
+
+    db.ref("matches").on("child_added", scheduleArenaTopRefresh);
+    db.ref("matches").on("child_changed", scheduleArenaTopRefresh);
+    db.ref("matches").on("child_removed", scheduleArenaTopRefresh);
+
+    db.ref("social/playerState").on("child_added", scheduleArenaTopRefresh);
+    db.ref("social/playerState").on("child_changed", scheduleArenaTopRefresh);
+    db.ref("social/playerState").on("child_removed", scheduleArenaTopRefresh);
+}
 
 function toggleArenaTopBox(event) {
     if (event) event.stopPropagation();
@@ -6610,8 +6695,9 @@ function toggleArenaTopBox(event) {
 
     closeArenaFriendBox?.();
 
-    box.classList.add("show");
-    loadArenaTopList(true);
+box.classList.add("show");
+ensureArenaTopRealtimeRefresh();
+loadArenaTopList(true);
 }
 
 function closeArenaTopBox() {
@@ -6680,7 +6766,15 @@ async function joinArenaTopWaitingRoom(roomId) {
             await loadArenaTopList(true);
             return;
         }
+const ownerWalletKey = String(room.players?.do?.walletKey || "").trim();
+const ownerStateSnap = await db.ref("social/playerState/" + ownerWalletKey).once("value").catch(() => null);
+const ownerState = ownerStateSnap?.val?.() || {};
 
+if (!isArenaTopJoinableRoom(room, roomId, { [ownerWalletKey]: ownerState })) {
+    alert("Phòng này đã cũ hoặc chủ phòng không còn chờ.");
+    await loadArenaTopList(true);
+    return;
+}
         const me = getCurrentPlayerProfile();
         if (room.players.do.walletKey === me.walletKey || room.players.do.uid === me.uid) {
             alert("Đây là phòng của mầy rồi.");
