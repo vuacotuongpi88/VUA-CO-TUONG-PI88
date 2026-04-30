@@ -9086,28 +9086,12 @@ if (
 ) {
     scheduleResetWinnerRoomAfterPaid(room, listeningRoomId);
 }
-didSettleWinnerNow = await maybeSettleStakeRoom(room, listeningRoomId) === true;
+    didSettleWinnerNow = await maybeSettleStakeRoom(room, listeningRoomId) === true;
 
-// Nếu trong lúc await, phòng đã reset sang ván 2 rồi,
-// callback cũ của ván 1 không được phép đóng/mở bảng SS nữa.
-if (uiVersion !== roomUiVersion || currentRoomId !== listeningRoomId) return;
+    // Nếu trong lúc await, phòng đã reset sang ván 2 rồi,
+    // callback cũ của ván 1 không được phép đóng/mở bảng SS nữa.
+    if (uiVersion !== roomUiVersion || currentRoomId !== listeningRoomId) return;
 
-// Gọi thống kê dự phòng sau khi tiền đã settle.
-// Máy thắng, máy thua, hoặc máy vào sau đều có thể kích;
-// lock global + matchStatsDone sẽ chặn cộng trùng.
-if (
-    room.winner &&
-    room.winner !== "hoa" &&
-    (
-        didSettleWinnerNow ||
-        room?.settlement?.paid === true ||
-        room?.settlement?.winnerPaid?.done === true
-    )
-) {
-    await recordMatchStatsAfterPaidOnce(listeningRoomId, room).catch(err => {
-        console.error("Ghi thống kê dự phòng lỗi:", err);
-    });
-}
     // Tách riêng khối bàn giao phòng sau bỏ chạy.
     if (
         room.winner === mySide &&
