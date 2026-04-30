@@ -14669,15 +14669,6 @@ const monthWins = fixedStats.wins;
 const monthLosses = fixedStats.losses;
 const totalWins = fixedStats.wins;
 const totalLosses = fixedStats.losses;
-
-const totalLosses = Math.max(0, Math.floor(Number(
-    oneLossStats.losses ??
-    oneLossStats.totalLosses ??
-    wallet.totalLosses ??
-    wallet.losses ??
-    levelMeta.losses ??
-    0
-) || 0));
         currentMatchOpponentProfile = {
             walletKey: opp.walletKey,
             uid: opp.uid || wallet.uid || opp.walletKey,
