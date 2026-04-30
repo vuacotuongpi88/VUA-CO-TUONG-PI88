@@ -6004,7 +6004,13 @@ function loginGuest() {
 }
 
 function savePiUser(userName) {
-    localStorage.setItem("pi-user-name", userName || "Pi User");
+    const safeName = String(userName || "Pi User").trim();
+
+    // Giữ thêm trên window để vừa login Pi xong là makeWalletDbKey đọc đúng ngay,
+    // tránh rớt sang guest khi Pi app vừa reset localStorage.
+    window.__piLoggedUsername = safeName;
+
+    localStorage.setItem("pi-user-name", safeName);
     localStorage.setItem("pi-user-photo", "images/do_tuong.png");
 }
 function isRealPiBrowser() {
@@ -7445,7 +7451,58 @@ function oneWinPointMonthKey() {
     const m = String(now.getUTCMonth() + 1).padStart(2, "0");
     return `${y}-${m}`;
 }
+function readWinLossStatsFromWalletData(data = {}) {
+    const monthKey = oneWinPointMonthKey();
 
+    const oneWin = data.oneWinOnlyV1 || {};
+    const oneWinMonth = oneWin.months?.[monthKey] || {};
+
+    const oneLoss = data.oneLossOnlyV1 || {};
+    const oneLossMonth = oneLoss.months?.[monthKey] || {};
+
+    const wins = oneWinPointNum(
+        oneWin.wins ??
+        data.wins ??
+        data.totalWins ??
+        data.stats?.wins ??
+        data.matchStats?.wins ??
+        0
+    );
+
+    const monthWins = oneWinPointNum(
+        oneWinMonth.wins ??
+        oneWin.monthWins ??
+        data.monthWins ??
+        data.levelMeta?.monthWins ??
+        0
+    );
+
+    const losses = oneWinPointNum(
+        oneLoss.losses ??
+        data.losses ??
+        data.totalLosses ??
+        data.stats?.losses ??
+        data.matchStats?.losses ??
+        0
+    );
+
+    const monthLosses = oneWinPointNum(
+        oneLossMonth.losses ??
+        oneLoss.monthLosses ??
+        data.monthLosses ??
+        data.levelMeta?.monthLosses ??
+        0
+    );
+
+    return {
+        wins,
+        totalWins: wins,
+        monthWins,
+        losses,
+        totalLosses: losses,
+        monthLosses
+    };
+}
 async function addOneWinOnlyToWallet(walletKey) {
     walletKey = String(walletKey || "").trim();
     if (!walletKey) return null;
@@ -7531,10 +7588,12 @@ async function addOneWinOnlyToWallet(walletKey) {
 
         return afterWallet;
     });
-
+if (walletKey === makeWalletDbKey() && afterWallet) {
+    currentWinLossStats = readWinLossStatsFromWalletData(afterWallet);
+}
     return afterWallet;
 }
-async function forceAddOneWinFromVictoryPopup(winnerSide) {
+async function forceAddOneWinFromVictoryPopup(winnerSide, attempt = 0) {
     try {
         if (!winnerSide || winnerSide === "hoa" || winnerSide === "draw") return false;
         if (winnerSide !== "do" && winnerSide !== "den") return false;
@@ -7567,15 +7626,14 @@ async function forceAddOneWinFromVictoryPopup(winnerSide) {
         // QUAN TRỌNG:
         // Không lấy startedAt trước nữa, vì phòng đánh ván 2/ván 3 vẫn có thể giữ startedAt cũ.
         // Phải lấy finishedAt / winAt / settlement trước để mỗi ván thắng có 1 khóa riêng.
-        const matchStamp = String(
-            room.finishedAt ||
-            room.winAt ||
-            room.settlement?.winnerPaid?.at ||
-            room.settlement?.paidAt ||
-            room.matchStatsRecordedAt ||
-            room.updatedAt ||
-            Date.now()
-        );
+        const matchStamp = String(room.matchResultId || room.finishedAt || room.winAt || "");
+
+if (!matchStamp) {
+    if (attempt < 8) {
+        setTimeout(() => forceAddOneWinFromVictoryPopup(winnerSide, attempt + 1), 300);
+    }
+    return false;
+}
 
         const roundNo = Math.max(1, Math.floor(Number(room.roundNo || room.gameNo || 1) || 1));
 
@@ -7776,7 +7834,9 @@ async function addOneLossOnlyToWallet(walletKey) {
 
         return afterWallet;
     });
-
+if (walletKey === makeWalletDbKey() && afterWallet) {
+    currentWinLossStats = readWinLossStatsFromWalletData(afterWallet);
+}
     return afterWallet;
 }
 
@@ -7800,16 +7860,32 @@ async function forceAddOneLossFromVictoryPopup(winnerSide, attempt = 0) {
             return false;
         }
 
-        const loserPlayer = room.players?.[loserSide] || {};
-        const loserKey = String(
-            loserPlayer.walletKey ||
-            loserPlayer.walletDbKey ||
-            loserPlayer.uid ||
-            ""
-        ).trim();
+const savedLoserPlayer =
+    room.resultPlayers?.[loserSide] ||
+    (
+        room.resultLoserSide === loserSide
+            ? {
+                walletKey: room.resultLoserWalletKey,
+                walletDbKey: room.resultLoserWalletKey,
+                uid: room.resultLoserUid
+            }
+            : {}
+    );
+
+const loserPlayer = room.players?.[loserSide] || savedLoserPlayer || {};
+
+const loserKey = String(
+    loserPlayer.walletKey ||
+    loserPlayer.walletDbKey ||
+    room.resultLoserWalletKey ||
+    loserPlayer.uid ||
+    room.resultLoserUid ||
+    ""
+).trim();
 
         if (!loserKey) {
             console.warn("ONE LOSS POINT RETRY: thiếu ví loser", {
+                
                 roomId,
                 winnerSide,
                 loserSide,
@@ -7823,17 +7899,38 @@ async function forceAddOneLossFromVictoryPopup(winnerSide, attempt = 0) {
 
             return false;
         }
+if (!loserKey) {
+    console.warn("ONE LOSS POINT: thiếu ví loser", {
+        roomId,
+        winnerSide,
+        loserSide,
+        attempt,
+        winReason: room.winReason,
+        players: room.players,
+        resultPlayers: room.resultPlayers,
+        resultLoserWalletKey: room.resultLoserWalletKey
+    });
 
-        const matchStamp = String(
-            room.finishedAt ||
-            room.winAt ||
-            room.settlement?.winnerPaid?.at ||
-            room.settlement?.paidAt ||
-            room.matchStatsRecordedAt ||
-            room.updatedAt ||
-            Date.now()
-        );
+    // Bỏ chạy thì thằng thua đã bị xóa khỏi players.
+    // Nếu không có resultLoserWalletKey thì retry sẽ dễ dính qua ván sau rồi cộng dồn.
+    if (room.winReason === "bochay") {
+        return false;
+    }
 
+    if (attempt < 6) {
+        setTimeout(() => forceAddOneLossFromVictoryPopup(winnerSide, attempt + 1), 350);
+    }
+
+    return false;
+}
+const matchStamp = String(room.matchResultId || room.finishedAt || room.winAt || "");
+
+if (!matchStamp) {
+    if (attempt < 8) {
+        setTimeout(() => forceAddOneLossFromVictoryPopup(winnerSide, attempt + 1), 300);
+    }
+    return false;
+}
         const roundNo = Math.max(1, Math.floor(Number(room.roundNo || room.gameNo || 1) || 1));
 
         // Đổi thua sang V2 giống thắng để không bị oneLossPointClaimsV1 cũ chặn trận đầu.
@@ -7950,6 +8047,19 @@ async function forceAddOneLossFromVictoryPopup(winnerSide, attempt = 0) {
     }
 }
 function endGame(main, sub) {
+    const endGameKey = `${currentRoomId || "local"}|${String(main || "")}|${String(sub || "")}`;
+
+    window.__endGameOnceKeyV3 = window.__endGameOnceKeyV3 || "";
+
+    if (currentRoomId && window.__endGameOnceKeyV3 === endGameKey) {
+        console.warn("SKIP endGame trùng:", endGameKey);
+        return;
+    }
+
+    if (currentRoomId) {
+        window.__endGameOnceKeyV3 = endGameKey;
+    }
+
     isGameOver = true;
     clearInterval(interval);
     clearInterval(readyInterval);
@@ -8017,6 +8127,9 @@ function hideVictoryPopup() {
 
 async function playNextMatch() {
     hideVictoryPopup();
+        window.__endGameOnceKeyV3 = "";
+    window.__lastOneWinPointClaimKeyV2 = "";
+    window.__lastOneLossPointClaimKeyV2 = "";
     clearInterval(interval);
     clearInterval(readyInterval);
     readyOverlayWaitingShown = false;
@@ -8058,10 +8171,20 @@ await db.ref("matches/" + currentRoomId).update({
     timeDen: 540,
     lastMoveFrom: null,
     lastMoveTo: null,
-    winner: null,
-    winReason: null,
-    drawRequest: null,
-    settlement: null,
+winner: null,
+winReason: null,
+matchResultId: null,
+finishedAt: null,
+winAt: null,
+resultLoserSide: null,
+resultLoserWalletKey: null,
+resultLoserUid: null,
+resultPlayers: null,
+quitSide: null,
+quitUid: null,
+quitAt: null,
+drawRequest: null,
+settlement: null,
 refunds: null,
 readyDeadlineAt: null,
 updatedAt: firebase.database.ServerValue.TIMESTAMP
@@ -8617,16 +8740,36 @@ startTimer();
 }
 function getCurrentPlayerProfile() {
     const user = auth.currentUser;
+    const s = currentWinLossStats || {};
 
     return {
         uid: user?.uid || ("guest_" + (localStorage.getItem("user-name-display") || "guest")),
         walletKey: makeWalletDbKey(),
+        walletDbKey: makeWalletDbKey(),
         name: localStorage.getItem("user-name-display") || user?.displayName || "Người chơi",
         photo: localStorage.getItem("user-photo") || user?.photoURL || "images/do_tuong.png",
 
         // GIỮ LẠI SỐ DƯ ĐỂ TẠO PHÒNG / VÀO PHÒNG KHÔNG BỊ BÁO THIẾU PMC
         balance: getPiBalance(),
         pmcBalance: getPmcBalance(),
+
+        // THẮNG / THUA LẤY TỪ FIREBASE WALLET, RESET APP PI VẪN CÒN
+        wins: oneWinPointNum(s.wins),
+        totalWins: oneWinPointNum(s.totalWins ?? s.wins),
+        monthWins: oneWinPointNum(s.monthWins),
+
+        losses: oneWinPointNum(s.losses),
+        totalLosses: oneWinPointNum(s.totalLosses ?? s.losses),
+        monthLosses: oneWinPointNum(s.monthLosses),
+
+        levelMeta: {
+            wins: oneWinPointNum(s.wins),
+            totalWins: oneWinPointNum(s.totalWins ?? s.wins),
+            monthWins: oneWinPointNum(s.monthWins),
+            losses: oneWinPointNum(s.losses),
+            totalLosses: oneWinPointNum(s.totalLosses ?? s.losses),
+            monthLosses: oneWinPointNum(s.monthLosses)
+        },
 
         // SKIN AVATAR
         avatarSkin: getEquippedAvatarSkin()
@@ -9181,9 +9324,31 @@ if (room.winner && side !== room.winner) {
 if (stillPlaying && otherPlayerExists && !room.winner) {
     const updates = {};
 
+    const loserPlayerBeforeQuit = room.players?.[side] || {};
+    const winnerPlayerBeforeQuit = room.players?.[otherSide] || {};
+
+    const loserWalletKeyBeforeQuit = String(
+        loserPlayerBeforeQuit.walletKey ||
+        loserPlayerBeforeQuit.walletDbKey ||
+        loserPlayerBeforeQuit.uid ||
+        ""
+    ).trim();
+
+    const resultId = `${roomId}_${Date.now()}_${side}_bochay`;
+
     updates[`matches/${roomId}/winner`] = otherSide;
     updates[`matches/${roomId}/winReason`] = "bochay";
+    updates[`matches/${roomId}/matchResultId`] = resultId;
     updates[`matches/${roomId}/finishedAt`] = firebase.database.ServerValue.TIMESTAMP;
+    updates[`matches/${roomId}/winAt`] = Date.now();
+
+    // Lưu lại ví thằng thoát trước khi xóa players/side.
+    // Không có cái này thì hàm cộng thua không biết cộng cho ai.
+    updates[`matches/${roomId}/resultLoserSide`] = side;
+    updates[`matches/${roomId}/resultLoserWalletKey`] = loserWalletKeyBeforeQuit;
+    updates[`matches/${roomId}/resultLoserUid`] = loserPlayerBeforeQuit.uid || "";
+    updates[`matches/${roomId}/resultPlayers/${side}`] = loserPlayerBeforeQuit;
+    updates[`matches/${roomId}/resultPlayers/${otherSide}`] = winnerPlayerBeforeQuit;
 
     // Đang xử lý kết quả, tuyệt đối không cho phòng này hiện ngoài danh sách.
     updates[`matches/${roomId}/status`] = "finished";
@@ -9673,38 +9838,7 @@ if (!canRenderLiveBoard) {
             }
         }
         
-        if (room.winner) {
-    window.__shownVictoryKeys = window.__shownVictoryKeys || {};
-
-    const victoryKey = [
-        listeningRoomId,
-        room.winner || "",
-        room.winReason || "",
-        room.finishedAt || room.settlement?.paidAt || ""
-    ].join("|");
-
-    if (!window.__shownVictoryKeys[victoryKey] && !isGameOver) {
-        window.__shownVictoryKeys[victoryKey] = true;
-
-        if (room.winner === "hoa") {
-            endGame("HÒA CỜ", "2 BÊN HÒA");
-        } else {
-            let title = "CHIẾU BÍ";
-            if (room.winReason === "dauhang") title = "ĐẦU HÀNG";
-            if (room.winReason === "bochay") title = "ĐỐI THỦ THOÁT";
-
-            endGame(
-    title,
-    `BÊN ${room.winner === "do" ? "ĐỎ" : "ĐEN"} THẮNG`
-);
-
-if (room.winReason === "bochay") {
-    scheduleResetWinnerRoomAfterPaid(room, listeningRoomId);
-}
-        }
-    }
-}
-
+       
         if (!room.winner) {
     await maybeStartRoomFromHost(room, listeningRoomId);
 }
@@ -10086,20 +10220,38 @@ let selectedRoomMode = "co-tuong";
 let currentRoomStakePMC = 0;
 let currentRoomBucket = null;
 let isJoiningStakeRoom = false;
-
+let currentWinLossStats = {
+    wins: 0,
+    totalWins: 0,
+    monthWins: 0,
+    losses: 0,
+    totalLosses: 0,
+    monthLosses: 0
+};
 function getAccountKey() {
     const user = auth.currentUser;
     if (user?.uid) return `google_${user.uid}`;
 
-    const piName = localStorage.getItem("pi-user-name");
-    if (piName) return `pi_${piName.trim().toLowerCase()}`;
+    let piAuthName = "";
+    try {
+        piAuthName = piAuth?.user?.username || "";
+    } catch (_) {}
+
+    const piName =
+        localStorage.getItem("pi-user-name") ||
+        window.__piLoggedUsername ||
+        piAuthName;
+
+    if (piName) {
+        return `pi_${String(piName).trim().toLowerCase()}`;
+    }
 
     const guestName =
         localStorage.getItem("currentUsername") ||
         localStorage.getItem("user-name-display") ||
         "guest";
 
-    return `guest_${guestName.trim().toLowerCase().replace(/\s+/g, "_")}`;
+    return `guest_${String(guestName).trim().toLowerCase().replace(/\s+/g, "_")}`;
 }
 
 function makeWalletDbKey() {
@@ -10173,7 +10325,7 @@ function saveWithdrawState(state) {
 async function loadWalletBalance() {
     try {
         const snap = await walletRef().once("value");
-        const data = snap.val() || {};
+       currentWinLossStats = readWinLossStatsFromWalletData(data);
 
         let piAmount = 0;
         if (data.balance != null) {
