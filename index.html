@@ -4736,7 +4736,9 @@ margin-bottom: 14px;
     gap: 8px;
     margin-top: 10px;
 }
-
+.match-opponent-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+}
 .match-opponent-stat {
     background: rgba(85, 239, 196, 0.08);
     border: 1px solid rgba(85, 239, 196, 0.24);
@@ -14680,24 +14682,16 @@ const totalLosses = Math.max(0, Math.floor(Number(
                 </div>
             </div>
 
-            <div class="match-opponent-grid">
-                <div class="match-opponent-stat">
-                    <strong>${monthWins}</strong>
-                    <span>Thắng tháng này</span>
-                </div>
-                <div class="match-opponent-stat">
-                    <strong>${monthLosses}</strong>
-                    <span>Thua tháng này</span>
-                </div>
-                <div class="match-opponent-stat">
-                    <strong>${totalWins}</strong>
-                    <span>Tổng thắng</span>
-                </div>
-                <div class="match-opponent-stat">
-                    <strong>${totalLosses}</strong>
-                    <span>Tổng thua</span>
-                </div>
-            </div>
+<div class="match-opponent-grid">
+    <div class="match-opponent-stat">
+        <strong>${monthWins}</strong>
+        <span>Thắng tháng này</span>
+    </div>
+    <div class="match-opponent-stat">
+        <strong>${monthLosses}</strong>
+        <span>Thua tháng này</span>
+    </div>
+</div>
 
             <button class="match-opponent-friend-btn"
                     ${disabled}
