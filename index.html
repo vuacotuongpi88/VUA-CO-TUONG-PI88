@@ -7665,25 +7665,26 @@ const claimKey = oneWinPointSafeKey(`${roomId}_${winnerSide}_${roundNo}`);
         updates[`matches/${roomId}/players/${winnerSide}/monthWins`] = after.monthWins || 0;
         updates[`matches/${roomId}/players/${winnerSide}/levelMeta`] = after.levelMeta || {};
 
-        updates[`matches/${roomId}/oneWinPointClaimsV2/${claimKey}`] = {
-            done: true,
-            roomId,
-            winnerSide,
-            winnerKey,
-            roundNo,
-            matchStamp,
-            wins: after.wins || 0,
-            at: Date.now()
-        };
+updates[`matches/${roomId}/oneWinPointClaimsV2/${claimKey}`] = {
+    done: true,
+    roomId,
+    winnerSide,
+    winnerKey,
+    roundNo,
+    matchResultId,
+    wins: after.wins || 0,
+    at: Date.now()
+};
 
-        updates[`matches/${roomId}/oneWinPointRecordedV2`] = {
-            done: true,
-            claimKey,
-            winnerSide,
-            winnerKey,
-            wins: after.wins || 0,
-            at: Date.now()
-        };
+updates[`matches/${roomId}/oneWinPointRecordedV2`] = {
+    done: true,
+    claimKey,
+    matchResultId,
+    winnerSide,
+    winnerKey,
+    wins: after.wins || 0,
+    at: Date.now()
+};
 
         await db.ref().update(updates);
 
@@ -7896,12 +7897,41 @@ if (!loserKey) {
 
     return false;
 }
-const matchStamp = String(room.matchResultId || room.finishedAt || room.winAt || "");
+const roundNo = Math.max(1, Math.floor(Number(room.roundNo || room.gameNo || 1) || 1));
 
-        const roundNo = Math.max(1, Math.floor(Number(room.roundNo || room.gameNo || 1) || 1));
+// Tạo mã kết quả ổn định cho đúng 1 ván.
+// Hai máy A/B gọi cùng lúc cũng chỉ lấy 1 mã này.
+const resultIdRef = db.ref(`matches/${roomId}/matchResultId`);
 
-        // Đổi thua sang V2 giống thắng để không bị oneLossPointClaimsV1 cũ chặn trận đầu.
-        const claimKey = oneWinPointSafeKey(`${roomId}_${winnerSide}_${loserSide}_${roundNo}_${matchStamp}`);
+const resultIdTx = await resultIdRef.transaction(current => {
+    if (current) return current;
+
+    return `${roomId}_${winnerSide}_${roundNo}_${Date.now()}`;
+});
+
+let matchResultId = String(
+    resultIdTx?.snapshot?.val?.() ||
+    room.matchResultId ||
+    ""
+).trim();
+
+if (!matchResultId) {
+    const resultSnap = await resultIdRef.once("value").catch(() => null);
+    matchResultId = String(resultSnap?.val?.() || "").trim();
+}
+
+if (!matchResultId) {
+    console.warn("ONE WIN POINT SKIP: thiếu matchResultId", {
+        roomId,
+        winnerSide,
+        roundNo
+    });
+    return false;
+}
+
+// Chốt: claimKey theo matchResultId.
+// Không dùng finishedAt/winAt nữa, không bị +2, không bị ván đầu dính claim cũ.
+const claimKey = oneWinPointSafeKey(matchResultId);
 
         if (window.__lastOneLossPointClaimKeyV2 === claimKey) return false;
 
@@ -7919,16 +7949,15 @@ const matchStamp = String(room.matchResultId || room.finishedAt || room.winAt ||
                 return;
             }
 
-            return {
-                processing: true,
-                roomId,
-                winnerSide,
-                loserSide,
-                loserKey,
-                roundNo,
-                matchStamp,
-                at: Date.now()
-            };
+return {
+    processing: true,
+    roomId,
+    winnerSide,
+    winnerKey,
+    roundNo,
+    matchResultId,
+    at: Date.now()
+};
         });
 
         if (!claimTx.committed) {
@@ -8152,9 +8181,13 @@ await db.ref("matches/" + currentRoomId).update({
     lastMoveTo: null,
 winner: null,
 winReason: null,
+winner: null,
+winReason: null,
 matchResultId: null,
 finishedAt: null,
 winAt: null,
+oneWinPointRecordedV2: null,
+oneLossPointRecordedV2: null,
 resultLoserSide: null,
 resultLoserWalletKey: null,
 resultLoserUid: null,
