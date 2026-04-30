@@ -8322,38 +8322,17 @@ refunds: null,
 readyDeadlineAt: null,
 updatedAt: firebase.database.ServerValue.TIMESTAMP
 });
-// Nếu đối thủ vừa thoát, phòng chỉ còn 1 người.
-// Không được rớt xuống offline fallback, nếu không sẽ đứng hình / sai trạng thái.
+const freshSnap = await db.ref("matches/" + currentRoomId).once("value").catch(() => null);
+const freshRoom = freshSnap?.val?.();
+
 if (
     freshRoom &&
     freshRoom.status === "waiting" &&
     !freshRoom.winner &&
-    (
-        (freshRoom.players?.do && !freshRoom.players?.den) ||
-        (!freshRoom.players?.do && freshRoom.players?.den)
-    )
-) {
-    const onlySide = freshRoom.players?.do ? "do" : "den";
-    const onlyPlayer = freshRoom.players?.[onlySide];
-
-    if (onlyPlayer && isSamePlayerAsMe(onlyPlayer)) {
-        mySide = onlySide;
-        viewSide = onlySide;
-
-        readyDo = false;
-        readyDen = false;
-        isGameOver = false;
-        selectedPiece = null;
-
-        clearRealtimeBoardVisualOnly();
-        renderPlayersFromRoom(freshRoom);
-        renderTimerUI();
-        closeReadyOverlay();
-        updateReadyUI();
-
-        return;
-    }
-}
+    freshRoom.players?.do &&
+    freshRoom.players?.den
+)
+ {
     readyDo = false;
     readyDen = false;
     isGameOver = false;
