@@ -3243,7 +3243,7 @@ display: none;
 align-items: center;
 justify-content: center;
 z-index: 20000;
-pointer-events: none;
+pointer-events: auto;
 }
 
 #ready-box {
@@ -3301,6 +3301,12 @@ margin-bottom: 14px;
     letter-spacing: 0.6px;
     border: none;
     cursor: pointer;
+    position: relative;
+    z-index: 3;
+    pointer-events: auto !important;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-tap-highlight-color: rgba(85,239,196,0.28);
 }
 
 .ready-btn-do {
@@ -14021,7 +14027,10 @@ if (countdownEl) {
 }
 function closeReadyOverlay() {
     const overlay = document.getElementById("ready-overlay");
-    if (overlay) overlay.style.display = "none";
+    if (overlay) {
+        overlay.style.display = "none";
+        overlay.style.pointerEvents = "none";
+    }
 
     // Reset sạch trạng thái bảng SS.
     // Nếu không reset 2 biến này, Firebase bắn snapshot đúng lúc sẽ làm A bị chớp rồi mất bảng.
@@ -14293,6 +14302,7 @@ function showReadyOverlay(mode, forceResetTime = false) {
 
     readyOverlayWaitingShown = true;
     overlay.style.display = "flex";
+    overlay.style.pointerEvents = "auto";
 
 if (forceResetTime || !readyTime || readyTime <= 0) {
     if (readyDeadlineAt) {
@@ -14375,18 +14385,90 @@ function ensureReadyOverlayForWaitingRoom(room = {}, roomId = currentRoomId) {
 
     showReadyOverlay(room.mode || currentRoomMode, needResetTime);
 }
-async function setReady() {
+async function setReady(evt) {
+    if (evt && typeof evt.preventDefault === "function") evt.preventDefault();
+    if (evt && typeof evt.stopPropagation === "function") evt.stopPropagation();
+
     if (!currentRoomId || !mySide) return;
 
-    const result = await chargeStakeForReady(currentRoomId, mySide);
-
-    if (!result.ok) {
-        // không alert thêm ở đây nữa
-        console.error("READY FAIL:", result);
+    // Nếu máy đang giữ trạng thái đã SS thì không trừ PMC thêm lần nữa.
+    if ((mySide === "do" && readyDo) || (mySide === "den" && readyDen)) {
+        updateReadyUI();
         return;
     }
 
-    await db.ref("matches/" + currentRoomId + "/ready/" + mySide).set(true);
+    if (window.__readyClickLock) return;
+    window.__readyClickLock = true;
+
+    const btn = document.getElementById("ready-main-btn");
+    const oldText = btn ? btn.textContent : "";
+    if (btn) {
+        btn.disabled = true;
+        btn.style.opacity = "0.85";
+        btn.style.cursor = "wait";
+        btn.textContent = "ĐANG XÁC NHẬN...";
+    }
+
+    try {
+        // Đang bấm SS mà đồng hồ còn quá ít giây thì gia hạn nhẹ,
+        // tránh vừa chạm nút thì countdown đá ra trước khi Firebase kịp ghi ready.
+        try {
+            const roomIdForDeadline = currentRoomId;
+            await db.ref("matches/" + roomIdForDeadline + "/readyDeadlineAt").transaction((current) => {
+                const cur = Number(current || 0);
+                const left = cur ? getReadySecondsLeft(cur) : 0;
+                if (!cur || left <= 8) return readyNowMs() + 15000;
+                return current;
+            }, undefined, false);
+        } catch (deadlineErr) {
+            console.warn("READY_DEADLINE_EXTEND_SKIP:", deadlineErr);
+        }
+
+        const result = await chargeStakeForReady(currentRoomId, mySide);
+
+        if (!result.ok) {
+            console.error("READY FAIL:", result);
+            if (result.stage === "insufficient_wallet") {
+                alert("PMC không đủ để sẵn sàng ván này.");
+            } else if (result.stage === "wallet_key_missing") {
+                alert("Không tìm thấy ví PMC của tài khoản này, tải lại app rồi thử lại.");
+            }
+            return;
+        }
+
+        await db.ref("matches/" + currentRoomId + "/ready/" + mySide).set(true);
+
+        if (mySide === "do") readyDo = true;
+        if (mySide === "den") readyDen = true;
+        updateReadyUI();
+    } catch (err) {
+        console.error("SET_READY_THROW:", err);
+        alert("Lỗi bấm sẵn sàng, thử lại.");
+    } finally {
+        window.__readyClickLock = false;
+        if (btn) {
+            btn.style.cursor = "pointer";
+            if (!((mySide === "do" && readyDo) || (mySide === "den" && readyDen))) {
+                btn.disabled = false;
+                btn.style.opacity = "1";
+                if (oldText) btn.textContent = oldText;
+            }
+        }
+        updateReadyUI();
+    }
+}
+
+// FIX V13: Android/Pi Browser đôi khi không ăn onclick khi overlay có lớp phủ.
+// Bắt pointerup/touchend ở document để nút SS luôn nhận chạm.
+if (!window.__readyButtonTapFixInstalled) {
+    window.__readyButtonTapFixInstalled = true;
+    ["pointerup", "touchend"].forEach((eventName) => {
+        document.addEventListener(eventName, function(e) {
+            const target = e.target;
+            if (!target || target.id !== "ready-main-btn") return;
+            setReady(e);
+        }, true);
+    });
 }
 
 async function batDauTranDau(loai) {
