@@ -1072,6 +1072,162 @@ body.in-match #arena-top-btn {
     font-size: 13px;
 }
 
+
+.top-player-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    align-items: flex-end;
+}
+
+.top-challenge-btn,
+.top-watch-btn {
+    padding: 6px 9px !important;
+    border-radius: 9px !important;
+    font-size: 10px !important;
+    font-weight: 900 !important;
+    line-height: 1 !important;
+    min-width: 68px;
+    white-space: nowrap;
+}
+
+.top-challenge-btn {
+    background: linear-gradient(180deg, #00c38a, #008f67) !important;
+    color: #fff !important;
+    border: 1px solid rgba(125,255,179,0.52) !important;
+}
+
+.top-watch-btn {
+    background: linear-gradient(180deg, #6c5ce7, #341f97) !important;
+    color: #fff8d6 !important;
+    border: 1px solid rgba(255,255,255,0.18) !important;
+}
+
+.top-status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 3px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 900;
+    border: 1px solid rgba(255,255,255,0.14);
+}
+
+.top-status-chip.playing {
+    color: #ff7675;
+    background: rgba(255,118,117,0.12);
+    border-color: rgba(255,118,117,0.28);
+}
+
+.top-status-chip.home {
+    color: #7dffb3;
+    background: rgba(125,255,179,0.10);
+    border-color: rgba(125,255,179,0.26);
+}
+
+#top-challenge-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 28000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.78);
+    padding: 14px;
+    box-sizing: border-box;
+}
+
+#top-challenge-modal.show {
+    display: flex;
+}
+
+.top-challenge-box {
+    width: min(92vw, 390px);
+    background: rgba(14, 10, 24, 0.98);
+    border: 2px solid #ffd166;
+    border-radius: 18px;
+    padding: 16px;
+    box-shadow: 0 0 22px rgba(255,209,102,0.22), 0 0 24px rgba(0,0,0,0.7);
+    text-align: center;
+}
+
+.top-challenge-title {
+    color: #ffd166;
+    font-size: 18px;
+    font-weight: 900;
+    margin-bottom: 8px;
+}
+
+.top-challenge-target {
+    color: #fff;
+    font-size: 13px;
+    font-weight: 800;
+    margin-bottom: 10px;
+}
+
+.top-challenge-mode-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 10px 0;
+}
+
+.top-challenge-mode-btn {
+    padding: 9px 8px !important;
+    border-radius: 11px !important;
+    font-size: 12px !important;
+    background: rgba(255,255,255,0.08) !important;
+    color: #dfe6e9 !important;
+    border: 1px solid rgba(255,209,102,0.25) !important;
+}
+
+.top-challenge-mode-btn.active {
+    background: linear-gradient(180deg, #ffd166, #c99712) !important;
+    color: #241000 !important;
+    border-color: #fff8d6 !important;
+}
+
+#top-challenge-stake-input {
+    width: 100%;
+    box-sizing: border-box;
+    background: #090909;
+    color: #fff;
+    border: 1px solid rgba(255,209,102,0.55);
+    border-radius: 12px;
+    padding: 12px;
+    font-size: 14px;
+    outline: none;
+    margin-top: 8px;
+}
+
+.top-challenge-note {
+    margin-top: 8px;
+    color: #b2bec3;
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.top-challenge-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.top-challenge-cancel {
+    background: linear-gradient(180deg, #636e72, #2d3436) !important;
+    border-radius: 12px !important;
+    color: #fff !important;
+}
+
+.top-challenge-ok {
+    background: linear-gradient(180deg, #00c38a, #008f67) !important;
+    border-radius: 12px !important;
+    color: #fff !important;
+}
+
 @media (max-width: 600px) {
     #arena-top-btn {
         top: 16px !important;
@@ -1094,6 +1250,20 @@ body.in-match #arena-top-btn {
         text-align: left;
         margin-top: -4px;
     }
+
+    .top-player-actions {
+        grid-column: 3 / 4;
+        align-items: flex-start;
+        margin-top: -2px;
+    }
+
+    .top-challenge-btn,
+    .top-watch-btn {
+        min-width: 76px;
+        padding: 6px 8px !important;
+        font-size: 9px !important;
+    }
+
 }
 
 /* Ẩn icon nhiệm vụ + shop khi đã vào phòng / vào trận */
@@ -5461,6 +5631,30 @@ margin-bottom: 14px;
         </div>
     </div>
 </div>
+
+<div id="top-challenge-modal">
+    <div class="top-challenge-box">
+        <div class="top-challenge-title">THÁCH ĐẤU TRONG BẢNG TOP</div>
+        <div id="top-challenge-target" class="top-challenge-target">Đối thủ: ---</div>
+
+        <div class="top-challenge-mode-row">
+            <button id="top-challenge-mode-tuong" class="top-challenge-mode-btn active" onclick="pickTopChallengeMode('co-tuong')">CỜ TƯỚNG</button>
+            <button id="top-challenge-mode-up" class="top-challenge-mode-btn" onclick="pickTopChallengeMode('co-up')">CỜ ÚP</button>
+        </div>
+
+        <input id="top-challenge-stake-input" type="number" min="1" step="1" placeholder="Nhập số PMC cược / ván">
+        <div id="top-challenge-my-pmc" class="top-challenge-note">Số dư PMC của mầy: ---</div>
+        <div class="top-challenge-note">
+            Bấm OK là tạo phòng riêng và gửi lời mời. Nếu đối thủ từ chối, phòng tự mở ra sảnh để ai cũng vào được.
+        </div>
+
+        <div class="top-challenge-actions">
+            <button class="top-challenge-cancel" onclick="closeTopChallengeModal()">HỦY</button>
+            <button class="top-challenge-ok" onclick="confirmTopChallengeInvite()">OK GỬI MỜI</button>
+        </div>
+    </div>
+</div>
+
 <div id="game-arena" style="display: none; padding: 10px;">
 <div class="game-wrapper">
 <div id="ready-overlay">
@@ -6244,6 +6438,9 @@ if (friendBox) friendBox.classList.remove("show");
 
     const topModal = document.getElementById("arena-top-modal");
     if (topModal) topModal.classList.remove("show");
+
+    const topChallengeModal = document.getElementById("top-challenge-modal");
+    if (topChallengeModal) topChallengeModal.classList.remove("show");
 
 }
 
@@ -7876,6 +8073,8 @@ roomChatRef = db.ref("matches/" + listeningRoomId + "/chat");
 
         const room = snap.val();
         if (!room) return;
+        window.__lastBoundRoom = room;
+        window.__lastBoundRoomId = listeningRoomId;
 
 const me = getCurrentPlayerProfile();
 
@@ -8482,6 +8681,8 @@ for (const waiting of waitingList) {
         currentRoomStatus = "waiting";
         readyDo = !!freshRoom.ready?.do;
         readyDen = !!freshRoom.ready?.den;
+        window.__lastBoundRoom = freshRoom;
+        window.__lastBoundRoomId = waiting.roomId;
         showReadyOverlay(freshRoom.mode || mode);
     } else {
         closeReadyOverlay();
@@ -11026,6 +11227,23 @@ function showReadyOverlay(mode, forceResetTime = false) {
     const overlay = document.getElementById("ready-overlay");
     if (!overlay) return;
 
+    // Chặn lỗi mới tạo phòng / chỉ còn 1 người mà bảng SS tự bật bên Đen.
+    // Bảng SS chỉ được hiện khi Firebase xác nhận đủ Đỏ + Đen trong phòng đang chờ.
+    const guardRoom = window.__lastBoundRoom || null;
+    const guardRoomId = window.__lastBoundRoomId || "";
+    if (currentRoomId && guardRoom && guardRoomId === currentRoomId) {
+        const enoughPlayers = !!guardRoom.players?.do && !!guardRoom.players?.den && guardRoom.status === "waiting" && !guardRoom.winner;
+        if (!enoughPlayers) {
+            overlay.style.display = "none";
+            readyOverlayWaitingShown = false;
+            readyOverlayRoomKey = "";
+            readyOverlayOpeningLock = false;
+            clearInterval(readyInterval);
+            readyInterval = null;
+            return;
+        }
+    }
+
     // Nếu nó đang hiện rồi thì KHÔNG reset lại thời gian, KHÔNG chạy lại interval
     if (overlay.style.display === "flex" && !forceResetTime) {
         readyOverlayWaitingShown = true;
@@ -11767,6 +11985,9 @@ function closeDeveloperRules() {
 
 let arenaTopActiveTab = "level";
 let arenaTopCache = [];
+let arenaTopPlayerStateCache = {};
+let pendingTopChallengeTarget = null;
+let pendingTopChallengeMode = "co-tuong";
 
 function escapeTopHtml(text = "") {
     return String(text || "")
@@ -11850,13 +12071,24 @@ function isSystemTopWallet(walletKey = "", wallet = {}) {
 }
 
 async function loadArenaTopPlayers() {
-    const snap = await db.ref("wallets").limitToLast(250).once("value");
+    const [walletSnap, stateSnap] = await Promise.all([
+        db.ref("wallets").limitToLast(250).once("value"),
+        db.ref("social/playerState").once("value").catch(() => null)
+    ]);
+
+    const stateMap = stateSnap?.val?.() || {};
+    arenaTopPlayerStateCache = stateMap || {};
     const list = [];
 
-    snap.forEach(child => {
+    walletSnap.forEach(child => {
         const wallet = child.val() || {};
         if (isSystemTopWallet(child.key, wallet)) return;
-        list.push(normalizeTopWallet(child.key, wallet));
+        const p = normalizeTopWallet(child.key, wallet);
+        const state = stateMap[p.walletKey] || {};
+        p.liveState = state.state || "home";
+        p.liveRoomId = state.roomId || "";
+        p.liveMode = state.mode || "";
+        list.push(p);
     });
 
     arenaTopCache = list;
@@ -11889,6 +12121,8 @@ function renderArenaTopList() {
         btn.classList.toggle("active", btn.id === "top-tab-" + arenaTopActiveTab);
     });
 
+    const me = getCurrentFriendProfile();
+    const myWalletKey = String(me?.walletKey || getCurrentPlayerProfile()?.walletKey || "");
     const list = getArenaTopSorted(arenaTopActiveTab).slice(0, 100);
     if (!list.length) {
         listEl.innerHTML = '<div class="top-empty">Chưa có dữ liệu Top.</div>';
@@ -11913,17 +12147,269 @@ function renderArenaTopList() {
             sub += ` • EXP ${p.exp.toLocaleString("vi-VN")}`;
         }
 
+        const isMe = myWalletKey && String(p.walletKey || "") === myWalletKey;
+        const isPlaying = p.liveState === "arena" && !!p.liveRoomId;
+        const statusHtml = isPlaying
+            ? `<span class="top-status-chip playing">● ĐANG ĐẤU</span>`
+            : `<span class="top-status-chip home">● ĐANG RẢNH</span>`;
+
+        const challengeBtn = isMe
+            ? `<button class="top-challenge-btn" disabled style="opacity:.45;">LÀ MẦY</button>`
+            : `<button class="top-challenge-btn" onclick="openTopChallengeModal('${escapeTopHtml(p.walletKey)}')">THÁCH ĐẤU</button>`;
+
+        const watchBtn = isPlaying
+            ? `<button class="top-watch-btn" onclick="watchTopPlayingRoom('${escapeTopHtml(p.liveRoomId)}')">XEM BÀN</button>`
+            : "";
+
         return `
             <div class="top-player-row">
                 <div class="top-player-rank">#${i + 1}</div>
                 <img class="top-player-avatar" src="${escapeTopHtml(p.photo)}" alt="avatar">
                 <div>
                     <div class="top-player-name">${escapeTopHtml(p.name)}</div>
-                    <div class="top-player-sub">${sub}</div>
+                    <div class="top-player-sub">${sub} ${statusHtml}</div>
                 </div>
-                <div class="top-player-value">${value}</div>
+                <div class="top-player-actions">
+                    <div class="top-player-value">${value}</div>
+                    ${challengeBtn}
+                    ${watchBtn}
+                </div>
             </div>`;
     }).join("");
+}
+
+
+
+function findTopPlayerByWalletKey(walletKey) {
+    walletKey = String(walletKey || "");
+    return arenaTopCache.find(p => String(p.walletKey || "") === walletKey) || null;
+}
+
+function pickTopChallengeMode(mode) {
+    pendingTopChallengeMode = mode === "co-up" ? "co-up" : "co-tuong";
+    const tuong = document.getElementById("top-challenge-mode-tuong");
+    const up = document.getElementById("top-challenge-mode-up");
+    if (tuong) tuong.classList.toggle("active", pendingTopChallengeMode === "co-tuong");
+    if (up) up.classList.toggle("active", pendingTopChallengeMode === "co-up");
+}
+
+function openTopChallengeModal(walletKey) {
+    const target = findTopPlayerByWalletKey(walletKey);
+    if (!target) {
+        alert("Không tìm thấy người chơi này trong bảng Top.");
+        return;
+    }
+
+    const me = getCurrentFriendProfile();
+    if (String(me?.walletKey || "") === String(target.walletKey || "")) {
+        alert("Không thể tự thách đấu chính mình.");
+        return;
+    }
+
+    if (target.liveState === "arena" && target.liveRoomId) {
+        alert("Người này đang đấu. Mầy có thể bấm XEM BÀN hoặc chờ họ rảnh rồi thách đấu.");
+        return;
+    }
+
+    pendingTopChallengeTarget = target;
+    pendingTopChallengeMode = currentRoomMode || "co-tuong";
+    pickTopChallengeMode(pendingTopChallengeMode);
+
+    const targetEl = document.getElementById("top-challenge-target");
+    const myPmcEl = document.getElementById("top-challenge-my-pmc");
+    const input = document.getElementById("top-challenge-stake-input");
+    const modal = document.getElementById("top-challenge-modal");
+
+    if (targetEl) targetEl.innerText = "Đối thủ: " + (target.name || "Người chơi Top");
+    if (myPmcEl) myPmcEl.innerText = "Số dư PMC của mầy: " + formatPMC(getPmcBalance()) + " PMC";
+    if (input) input.value = "";
+    if (modal) modal.classList.add("show");
+}
+
+function closeTopChallengeModal() {
+    const modal = document.getElementById("top-challenge-modal");
+    if (modal) modal.classList.remove("show");
+    pendingTopChallengeTarget = null;
+}
+
+async function createPrivateTopChallengeRoom(me, mode, stakePMC, target) {
+    const newRoomRef = db.ref("matches").push();
+    const newRoomId = newRoomRef.key;
+    const bucket = makeStakeBucket(mode, stakePMC);
+    const inviteCode = makeInviteCodeFromRoomId(newRoomId);
+
+    await newRoomRef.set({
+        mode,
+        stakePMC,
+        roomBucket: bucket,
+        inviteCode,
+        status: "waiting",
+        lobbyOpen: false,
+        challengeOnly: true,
+        challengeToWalletKey: target.walletKey || "",
+        lobbyOwnerUid: me.uid || "",
+        lobbyOwnerWalletKey: me.walletKey || "",
+        lobbyUpdatedAt: firebase.database.ServerValue.TIMESTAMP,
+        turn: "do",
+        isCoUp: mode === "co-up",
+        timeDo: 540,
+        timeDen: 540,
+        createdAt: firebase.database.ServerValue.TIMESTAMP,
+        players: { do: me, den: null },
+        ready: { do: false, den: false },
+        stakeLocked: { do: false, den: false },
+        board: null,
+        lastMoveFrom: null,
+        lastMoveTo: null,
+        winner: null,
+        winReason: null,
+        drawRequest: null
+    });
+
+    return { roomId: newRoomId, bucket, inviteCode };
+}
+
+async function publishChallengeRoomToLobby(roomId, invite = {}) {
+    if (!roomId) return;
+
+    const roomSnap = await db.ref("matches/" + roomId).once("value").catch(() => null);
+    const room = roomSnap?.val?.() || null;
+    if (!room || room.winner || room.status !== "waiting" || room.players?.den || !room.players?.do) return;
+
+    const mode = room.mode || invite.mode || "co-tuong";
+    const stakePMC = Math.max(0, Math.floor(Number(room.stakePMC || invite.stakePMC || 0) || 0));
+    const bucket = room.roomBucket || invite.roomBucket || makeStakeBucket(mode, stakePMC);
+    const inviteCode = String(room.inviteCode || invite.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
+
+    await db.ref().update({
+        [`matches/${roomId}/lobbyOpen`]: true,
+        [`matches/${roomId}/challengeOnly`]: false,
+        [`matches/${roomId}/challengeToWalletKey`]: null,
+        [`matches/${roomId}/readyDeadlineAt`]: null,
+        [`matches/${roomId}/ready/do`]: false,
+        [`matches/${roomId}/ready/den`]: false,
+        [`matches/${roomId}/lobbyUpdatedAt`]: firebase.database.ServerValue.TIMESTAMP,
+        [`matches/${roomId}/updatedAt`]: firebase.database.ServerValue.TIMESTAMP,
+        [`waitingRooms/${bucket}/${roomId}`]: {
+            roomId,
+            uid: room.players.do.uid || "",
+            name: room.players.do.name || "Chủ phòng",
+            walletKey: room.players.do.walletKey || "",
+            mode,
+            stakePMC,
+            inviteCode,
+            createdAt: Date.now(),
+            claimedBy: null,
+            claimedAt: null
+        }
+    });
+}
+
+async function confirmTopChallengeInvite() {
+    const target = pendingTopChallengeTarget;
+    const input = document.getElementById("top-challenge-stake-input");
+    const stakePMC = Math.max(0, Math.floor(Number(input?.value || 0) || 0));
+
+    if (!target?.walletKey) {
+        alert("Chưa chọn đối thủ.");
+        return;
+    }
+
+    if (stakePMC <= 0) {
+        alert("Nhập số PMC cược trước đã.");
+        return;
+    }
+
+    const meFriend = getCurrentFriendProfile();
+    const meGame = getCurrentPlayerProfile();
+
+    if ((getPmcBalance() || 0) < stakePMC || (meGame.pmcBalance || 0) < stakePMC) {
+        alert("PMC không đủ để thách đấu mức này.");
+        return;
+    }
+
+    const busy = await isPlayerActuallyBusy(target.walletKey).catch(() => false);
+    if (busy) {
+        alert((target.name || "Người này") + " đang bận hoặc đang đấu.");
+        await loadArenaTopPlayers().catch(() => {});
+        renderArenaTopList();
+        return;
+    }
+
+    try {
+        closeTopChallengeModal();
+        closeArenaTopModal();
+
+        prepareRealtimeArenaUI();
+        clearInterval(interval);
+        currentRoomStatus = "waiting";
+        isGameOver = false;
+        luotDi = "do";
+        timeDo = 540;
+        timeDen = 540;
+        if (timerDoEl) timerDoEl.innerText = formatTime(timeDo);
+        if (timerDenEl) timerDenEl.innerText = formatTime(timeDen);
+
+        const mode = pendingTopChallengeMode || "co-tuong";
+        const roomInfo = await createPrivateTopChallengeRoom(meGame, mode, stakePMC, target);
+
+        mySide = "do";
+        viewSide = "do";
+        currentRoomId = roomInfo.roomId;
+        currentRoomMode = mode;
+        currentRoomStakePMC = stakePMC;
+        currentRoomBucket = roomInfo.bucket;
+        saveActiveMatchSnapshot({ roomId: roomInfo.roomId, mode, side: "do" });
+        bindRoom(roomInfo.roomId);
+        setPlayerPresence("arena").catch(() => {});
+
+        const inviteRef = db.ref("social/roomInvitesInbox/" + target.walletKey).push();
+        const inviteId = inviteRef.key;
+        const payload = {
+            inviteId,
+            roomId: roomInfo.roomId,
+            roomBucket: roomInfo.bucket,
+            inviteCode: roomInfo.inviteCode,
+            mode,
+            stakePMC,
+            fromWalletKey: meFriend.walletKey,
+            fromUid: meFriend.uid,
+            fromName: meFriend.displayName || meFriend.username || meGame.name || "Người chơi",
+            fromPhoto: meFriend.photo || meGame.photo || "images/do_tuong.png",
+            toWalletKey: target.walletKey,
+            toName: target.name || "Cao thủ Top",
+            status: "pending",
+            source: "top_challenge",
+            privateChallenge: true,
+            createdAt: Date.now()
+        };
+
+        const updates = {};
+        updates[`social/roomInvitesInbox/${target.walletKey}/${inviteId}`] = payload;
+        updates[`social/roomInvitesSent/${meFriend.walletKey}/${inviteId}`] = payload;
+        await db.ref().update(updates);
+
+        alert("Đã tạo phòng riêng và gửi lời thách đấu cho " + (target.name || "đối thủ") + ".");
+    } catch (err) {
+        console.error("Lỗi gửi thách đấu Top:", err);
+        alert("Gửi thách đấu lỗi.");
+    }
+}
+
+async function watchTopPlayingRoom(roomId) {
+    roomId = String(roomId || "").trim();
+    if (!roomId) return;
+
+    const snap = await db.ref("matches/" + roomId).once("value").catch(() => null);
+    const room = snap?.val?.() || null;
+    if (!room || room.winner) {
+        alert("Bàn này đã kết thúc hoặc không còn.");
+        await loadArenaTopPlayers().catch(() => {});
+        renderArenaTopList();
+        return;
+    }
+
+    alert("Bàn đang đấu: " + (room.inviteCode || makeInviteCodeFromRoomId(roomId)) + "\nGợi ý: bản sau nên tách chế độ KHÁN GIẢ riêng để xem live mà không chạm logic đi quân/SS.");
 }
 
 async function openArenaTopModal(e) {
@@ -13399,6 +13885,13 @@ async function declineRoomInvite(reason = "declined") {
     };
 
     await db.ref().update(updates);
+
+    if (invite.privateChallenge || invite.source === "top_challenge") {
+        await publishChallengeRoomToLobby(invite.roomId, invite).catch(err => {
+            console.error("Mở phòng thách đấu ra sảnh sau khi bị từ chối lỗi:", err);
+        });
+    }
+
     activeRoomInvite = null;
     renderRoomInviteOverlay();
 }
