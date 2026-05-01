@@ -6742,12 +6742,34 @@ function startTimer() {
             timeDo--;
             if (timeDo === 30) playSnd('timeout');
             renderTimerUI();
-            if (timeDo <= 0) endGame("HẾT GIỜ", "ĐEN THẮNG");
+            if (timeDo <= 0) {
+                if (currentRoomId) {
+                    db.ref("matches/" + currentRoomId).update({
+                        winner: "den",
+                        winReason: "timeout",
+                        finishedAt: firebase.database.ServerValue.TIMESTAMP,
+                        updatedAt: firebase.database.ServerValue.TIMESTAMP
+                    });
+                } else {
+                    endGame("HẾT GIỜ", "ĐEN THẮNG");
+                }
+            }
         } else {
             timeDen--;
             if (timeDen === 30) playSnd('timeout');
             renderTimerUI();
-            if (timeDen <= 0) endGame("HẾT GIỜ", "ĐỎ THẮNG");
+            if (timeDen <= 0) {
+                if (currentRoomId) {
+                    db.ref("matches/" + currentRoomId).update({
+                        winner: "do",
+                        winReason: "timeout",
+                        finishedAt: firebase.database.ServerValue.TIMESTAMP,
+                        updatedAt: firebase.database.ServerValue.TIMESTAMP
+                    });
+                } else {
+                    endGame("HẾT GIỜ", "ĐỎ THẮNG");
+                }
+            }
         }
     }, 1000);
 }
@@ -8177,9 +8199,108 @@ function syncRoomFromBoard(extra = {}) {
         timeDen,
         lastMoveFrom: lastMoveFrom || null,
         lastMoveTo: lastMoveTo || null,
+        moveCount: firebase.database.ServerValue.increment ? firebase.database.ServerValue.increment(1) : ((window.__localMoveCountFallback = (window.__localMoveCountFallback || 0) + 1)),
         updatedAt: firebase.database.ServerValue.TIMESTAMP,
         ...extra
     });
+}
+
+
+function getRoundResultCoreId(room, roomId) {
+    if (!roomId || !room) return "";
+    if (room.activeRoundId) return String(room.activeRoundId);
+
+    const stableStart = room.startedAt || room.createdAt || "nostart";
+    const stableFinish = room.finishedAt || room.winnerAt || "nofinish";
+    return [roomId, stableStart, stableFinish, room.winner || "nowinner", room.winReason || "win"].join("_");
+}
+
+function buildRoundResultCore(room, roomId) {
+    if (!roomId || !room || !room.winner) return null;
+
+    const red = room.players?.do || null;
+    const black = room.players?.den || null;
+    const hasBothPlayers = !!red?.uid && !!black?.uid;
+    const roundId = getRoundResultCoreId(room, roomId);
+    if (!roundId || !hasBothPlayers) return null;
+
+    const winnerSide = room.winner === "do" || room.winner === "den" ? room.winner : "hoa";
+    const loserSide = winnerSide === "do" ? "den" : (winnerSide === "den" ? "do" : null);
+    const winnerPlayer = winnerSide === "do" ? red : (winnerSide === "den" ? black : null);
+    const loserPlayer = loserSide === "do" ? red : (loserSide === "den" ? black : null);
+    const moveCount = Math.max(0, Math.floor(Number(room.moveCount || 0) || 0));
+    const statusWasPlaying = room.status === "playing" || room.status === "finished" || !!room.startedAt || !!room.activeRoundId;
+    const validForStats = !!(
+        hasBothPlayers &&
+        statusWasPlaying &&
+        winnerSide &&
+        (winnerSide === "hoa" || winnerPlayer?.uid) &&
+        moveCount >= 1
+    );
+
+    return {
+        roundId,
+        roomId,
+        roundNo: Math.max(0, Math.floor(Number(room.roundNo || 0) || 0)),
+        mode: room.mode || currentRoomMode || "co-tuong",
+        stakePMC: Math.max(0, Math.floor(Number(room.stakePMC || 0) || 0)),
+        redUid: red.uid || "",
+        redWalletKey: red.walletKey || "",
+        redName: red.name || "Đỏ",
+        blackUid: black.uid || "",
+        blackWalletKey: black.walletKey || "",
+        blackName: black.name || "Đen",
+        winnerSide,
+        loserSide: loserSide || "",
+        winnerUid: winnerPlayer?.uid || "",
+        winnerWalletKey: winnerPlayer?.walletKey || "",
+        winnerName: winnerPlayer?.name || "",
+        loserUid: loserPlayer?.uid || "",
+        loserWalletKey: loserPlayer?.walletKey || "",
+        loserName: loserPlayer?.name || "",
+        reason: room.winReason || (winnerSide === "hoa" ? "hoa" : "win"),
+        moveCount,
+        startedAt: room.startedAt || null,
+        finishedAt: room.finishedAt || firebase.database.ServerValue.TIMESTAMP,
+        validForStats,
+        coreOnly: true,
+        committedAt: firebase.database.ServerValue.TIMESTAMP
+    };
+}
+
+async function commitRoundResultCoreOnce(room, roomId = currentRoomId) {
+    try {
+        const result = buildRoundResultCore(room, roomId);
+        if (!result) return false;
+
+        window.__roundResultCoreLocalLocks = window.__roundResultCoreLocalLocks || {};
+        if (window.__roundResultCoreLocalLocks[result.roundId]) return false;
+        window.__roundResultCoreLocalLocks[result.roundId] = true;
+
+        const lockRef = db.ref("matches/" + roomId + "/roundCoreLocks/" + result.roundId);
+        const tx = await lockRef.transaction(current => {
+            if (current) return;
+            return {
+                locked: true,
+                at: firebase.database.ServerValue.TIMESTAMP
+            };
+        });
+
+        if (!tx.committed) return false;
+
+        const updates = {};
+        updates[`matches/${roomId}/roundResults/${result.roundId}`] = result;
+        updates[`matches/${roomId}/lastRoundResultCore`] = result;
+        updates[`matchHistoryCore/${result.roundId}`] = result;
+        updates[`matchHistoryByRoom/${roomId}/${result.roundId}`] = result;
+
+        await db.ref().update(updates);
+        console.log("Đã ghi lõi lịch sử ván:", result.roundId, result);
+        return true;
+    } catch (err) {
+        console.error("Lỗi ghi lõi lịch sử ván:", err);
+        return false;
+    }
 }
 
 async function maybeStartRoomFromHost(room, roomId = currentRoomId) {
@@ -8197,12 +8318,18 @@ async function maybeStartRoomFromHost(room, roomId = currentRoomId) {
     resetToStartup();
 
     const freshBoard = exportBoardState();
+    const nextRoundNo = Math.max(1, Math.floor(Number(room.roundNo || 0) || 0) + 1);
+    const nextRoundId = roomId + "_r" + nextRoundNo + "_" + Date.now();
 const waitingRoomRef = db.ref("waitingRooms/" + room.roomBucket + "/" + roomId);
 await waitingRoomRef.remove().catch(() => {});
     await db.ref("matches/" + roomId).update({
         status: "playing",
         isCoUp,
         board: freshBoard,
+        activeRoundId: nextRoundId,
+        roundNo: nextRoundNo,
+        startedAt: firebase.database.ServerValue.TIMESTAMP,
+        moveCount: 0,
         turn: "do",
         timeDo: 540,
         timeDen: 540,
@@ -8352,6 +8479,9 @@ if (typeof applyBoardPerspective === "function") {
         let didSettleWinnerNow = false;
 
 if (room.winner) {
+    // LÕI LỊCH SỬ: chỉ ghi biên bản ván, không cộng Top/EXP/PMC, không đụng SS.
+    commitRoundResultCoreOnce(room, listeningRoomId).catch(err => console.error("commitRoundResultCoreOnce lỗi:", err));
+
     // Hiện popup thắng/thua NGAY khi thấy winner.
     // Không đợi settle PMC, vì bên thắng settle xong có thể bị return sớm.
     window.__shownVictoryKeys = window.__shownVictoryKeys || {};
@@ -8535,7 +8665,9 @@ if (!canRenderLiveBoard) {
                 await db.ref("matches/" + roomId).update({
                     winner: "hoa",
                     winReason: "hoa",
-                    drawRequest: null
+                    drawRequest: null,
+                    finishedAt: firebase.database.ServerValue.TIMESTAMP,
+                    updatedAt: firebase.database.ServerValue.TIMESTAMP
                 });
             } else {
                 await db.ref("matches/" + roomId + "/drawRequest").remove();
