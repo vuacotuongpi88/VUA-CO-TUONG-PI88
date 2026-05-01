@@ -6949,9 +6949,10 @@ Object.entries(matches).forEach(([roomId, room]) => {
 
         const rows = Object.entries(wallets).map(([walletKey, wallet]) => {
             const roomInfo = roomByWallet[walletKey] || {};
+            const displayWallet = mergeHistoryStatsIntoWalletForDisplay(walletKey, wallet || {}, wallets);
             return {
                 walletKey,
-                wallet: wallet || {},
+                wallet: displayWallet,
                 playerState: states[walletKey] || {},
                 ...roomInfo
             };
@@ -7974,6 +7975,130 @@ function readWinLossStatsFromWalletData(data = {}) {
         monthLosses: losses
     };
 }
+
+function getHistoryDisplayWalletAliases(walletKey = "") {
+    const raw = String(walletKey || "").trim();
+    const set = new Set();
+
+    const add = (value) => {
+        const safe = oneWinPointSafeKey(String(value || "").trim());
+        if (!safe || safe === "pi_" || safe === "guest") return;
+        set.add(safe);
+    };
+
+    add(raw);
+
+    const lower = raw.toLowerCase();
+    if (lower && lower !== raw) add(lower);
+
+    const safeRaw = oneWinPointSafeKey(raw);
+    add(safeRaw);
+
+    if (safeRaw.startsWith("pi_")) {
+        const noPi = safeRaw.slice(3);
+        add(noPi);
+        add(noPi.toLowerCase());
+    } else if (safeRaw && !safeRaw.startsWith("google_") && !safeRaw.startsWith("guest_")) {
+        add("pi_" + safeRaw);
+        add("pi_" + safeRaw.toLowerCase());
+    }
+
+    // Bảo hiểm cho Google uid bị bản cũ ghi nhầm lowercase.
+    if (safeRaw.startsWith("google_")) {
+        add(safeRaw);
+        add(safeRaw.toLowerCase());
+    }
+
+    return Array.from(set).filter(Boolean);
+}
+
+function mergeHistoryStatsIntoWalletForDisplay(walletKey = "", wallet = {}, allWallets = {}) {
+    const base = wallet && typeof wallet === "object" ? { ...wallet } : {};
+    const aliases = getHistoryDisplayWalletAliases(walletKey);
+
+    let maxWins = readWinLossStatsFromWalletData(base).wins;
+    let maxLosses = readWinLossStatsFromWalletData(base).losses;
+
+    aliases.forEach(alias => {
+        const aliasWallet = allWallets?.[alias];
+        if (!aliasWallet || typeof aliasWallet !== "object") return;
+        const st = readWinLossStatsFromWalletData(aliasWallet);
+        maxWins = Math.max(maxWins, st.wins);
+        maxLosses = Math.max(maxLosses, st.losses);
+    });
+
+    base.oneWinOnlyV1 = {
+        ...(base.oneWinOnlyV1 || {}),
+        wins: maxWins,
+        totalWins: maxWins,
+        monthWins: maxWins
+    };
+
+    base.oneLossOnlyV1 = {
+        ...(base.oneLossOnlyV1 || {}),
+        losses: maxLosses,
+        totalLosses: maxLosses,
+        monthLosses: maxLosses
+    };
+
+    base.wins = maxWins;
+    base.totalWins = maxWins;
+    base.monthWins = maxWins;
+    base.losses = maxLosses;
+    base.totalLosses = maxLosses;
+    base.monthLosses = maxLosses;
+    base.levelMeta = {
+        ...(base.levelMeta || {}),
+        wins: maxWins,
+        totalWins: maxWins,
+        monthWins: maxWins,
+        losses: maxLosses,
+        totalLosses: maxLosses,
+        monthLosses: maxLosses
+    };
+
+    return base;
+}
+
+async function readWalletWithHistoryStatsForDisplay(walletKey = "") {
+    const aliases = getHistoryDisplayWalletAliases(walletKey);
+    const all = {};
+
+    await Promise.all(aliases.map(async alias => {
+        const snap = await db.ref("wallets/" + alias).once("value").catch(() => null);
+        const val = snap?.val?.() || null;
+        if (val && typeof val === "object") all[alias] = val;
+    }));
+
+    const exactSafe = oneWinPointSafeKey(walletKey);
+    const base = all[exactSafe] || all[walletKey] || all[aliases[0]] || {};
+    return mergeHistoryStatsIntoWalletForDisplay(exactSafe || walletKey, base, all);
+}
+
+async function resolveHistoryStatsWalletKey(keys = [], fallback = "") {
+    const candidates = [];
+    const pushAliases = (key) => {
+        getHistoryDisplayWalletAliases(key).forEach(alias => {
+            if (alias && !candidates.includes(alias)) candidates.push(alias);
+        });
+    };
+
+    pushAliases(fallback);
+    (Array.isArray(keys) ? keys : []).forEach(pushAliases);
+
+    if (!candidates.length) return "";
+
+    // Ưu tiên nhánh ví đã tồn tại và có dữ liệu thật. Không tạo nhánh phụ làm Top/Avatar đọc sai.
+    for (const key of candidates) {
+        const snap = await db.ref("wallets/" + key).once("value").catch(() => null);
+        const val = snap?.val?.();
+        if (val && typeof val === "object") {
+            return key;
+        }
+    }
+
+    return candidates[0];
+}
 async function addOneWinOnlyToWallet(walletKey) {
     walletKey = String(walletKey || "").trim();
     if (!walletKey) return null;
@@ -8199,9 +8324,11 @@ async function addOneLossOnlyToWallet(walletKey) {
     return afterWallet;
 }
 function cleanHistoryWalletKey(key) {
+    // FIX V11: KHÔNG lower-case key ví nữa.
+    // Google uid có phân biệt hoa/thường; lower-case sẽ ghi thắng/thua vào sai nhánh wallets/google_xxx,
+    // nên bảng Top và popup avatar không thấy cộng. Chỉ sanitize ký tự Firebase cấm.
     return String(key || "")
         .trim()
-        .toLowerCase()
         .replace(/[.#$\[\]\/]/g, "_");
 }
 
@@ -8337,12 +8464,12 @@ async function recordMatchHistoryOnceV6(roomId, room = {}, source = "unknown", w
         const resultId = await getOrCreateHistoryResultIdV6(roomId, room, winnerSide);
         if (!resultId) return false;
 
-        const winnerKey = pickCanonicalHistoryWalletKey(
+        const winnerKey = await resolveHistoryStatsWalletKey(
             getPlayerHistoryWalletAliases(room, winnerSide),
             winnerKeyFromSettle || (winnerSide === mySide ? makeWalletDbKey() : "")
         );
 
-        const loserKey = pickCanonicalHistoryWalletKey(
+        const loserKey = await resolveHistoryStatsWalletKey(
             getPlayerHistoryWalletAliases(room, loserSide),
             loserSide === mySide ? makeWalletDbKey() : ""
         );
@@ -15518,8 +15645,7 @@ async function openOpponentMatchProfile() {
             return;
         }
 
-        const walletSnap = await db.ref("wallets/" + opp.walletKey).once("value");
-        const wallet = walletSnap.val() || {};
+        const wallet = await readWalletWithHistoryStatsForDisplay(opp.walletKey);
 
         const levelMeta = wallet.levelMeta || opp.levelMeta || {};
         const level = Math.max(1, Math.floor(Number(
