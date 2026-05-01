@@ -1228,6 +1228,70 @@ body.in-match #arena-top-btn {
     color: #fff !important;
 }
 
+
+
+/* ===== KHÁN GIẢ: MẮT XEM + CHAT TRỰC TIẾP ===== */
+#viewer-count-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 1200;
+    min-width: 54px;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 999px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: rgba(0, 0, 0, 0.78);
+    color: #ffeaa7;
+    border: 1px solid rgba(255, 209, 102, 0.55);
+    box-shadow: 0 0 12px rgba(255, 209, 102, 0.25);
+    font-size: 12px;
+    font-weight: 900;
+    pointer-events: none;
+}
+
+body.spectator-mode #viewer-count-badge,
+body.in-match #viewer-count-badge.show {
+    display: inline-flex;
+}
+
+body.spectator-mode #ready-overlay {
+    display: none !important;
+}
+
+body.spectator-mode #desktop-match-actions .action-dauhang,
+body.spectator-mode #desktop-match-actions .action-hoa,
+body.spectator-mode #desktop-match-actions .action-doitran,
+body.spectator-mode #ready-main-btn {
+    display: none !important;
+}
+
+.spectator-room-note {
+    color: #ffeaa7 !important;
+    font-size: 12px !important;
+}
+
+.top-status-chip.online {
+    color: #55efc4;
+    background: rgba(85,239,196,0.10);
+    border-color: rgba(85,239,196,0.28);
+}
+
+.top-status-chip.offline {
+    color: #b2bec3;
+    background: rgba(178,190,195,0.08);
+    border-color: rgba(178,190,195,0.18);
+}
+
+.top-status-chip.spectating {
+    color: #ffeaa7;
+    background: rgba(255,234,167,0.10);
+    border-color: rgba(255,234,167,0.28);
+}
+
 @media (max-width: 600px) {
     #arena-top-btn {
         top: 16px !important;
@@ -5697,6 +5761,7 @@ margin-bottom: 14px;
     </div>
 
     <div id="board" class="game-container">
+        <div id="viewer-count-badge" title="Số người đang xem">👁️ <span id="viewer-count-number">0</span></div>
         <div id="victory-wrap">
     <div class="victory-banner">
         <h1 id="main-result">CHIẾN THẮNG</h1>
@@ -6081,6 +6146,7 @@ function clearActiveMatchSnapshot(roomId = null) {
 }
 
 function prepareRealtimeArenaUI() {
+    if (isSpectatorMode) cleanupRoomListeners();
     hideHomeUI();
     document.getElementById("game-arena").style.display = "block";
 
@@ -6181,6 +6247,7 @@ loadWalletBalance()
 
 showHomeUI();
 setPlayerPresence("home");
+startPresenceHeartbeat();
 renderRoomInviteOverlay();
 }
 
@@ -6489,6 +6556,24 @@ function selectGame(mode) {
 }
 
 async function backToMenu() {
+    if (isSpectatorMode) {
+        cleanupRoomListeners();
+        clearActiveMatchSnapshot();
+        currentRoomId = null;
+        mySide = null;
+        viewSide = "do";
+        currentRoomMode = null;
+        currentRoomStakePMC = 0;
+        currentRoomBucket = null;
+        currentRoomStatus = null;
+        await setPlayerPresence("home").catch(() => {});
+        showHomeUI();
+        document.getElementById("game-arena").style.display = "none";
+        clearInterval(interval);
+        clearInterval(readyInterval);
+        return;
+    }
+
     if (!confirm("Thoát ván đấu này?")) return;
 
     await leaveRealtimeMatch();
@@ -6542,6 +6627,96 @@ let readyOverlayRoomKey = "";
 let readyOverlayOpeningLock = false;
 let readyDeadlineAt = 0; // mốc hết giờ SS chung lấy từ Firebase
 let currentRoomStatus = null;
+let isSpectatorMode = false;
+let currentViewerRef = null;
+let currentViewerCountRef = null;
+let currentViewerWalletKey = "";
+let presenceHeartbeatTimer = null;
+
+
+function updateViewerCountBadge(count = 0) {
+    const badge = document.getElementById("viewer-count-badge");
+    const num = document.getElementById("viewer-count-number");
+    const safeCount = Math.max(0, Math.floor(Number(count || 0) || 0));
+    if (num) num.innerText = String(safeCount);
+    if (badge) badge.classList.toggle("show", safeCount > 0 || isSpectatorMode);
+}
+
+async function startSpectatorPresence(roomId) {
+    const meFriend = getCurrentFriendProfile();
+    const meGame = getCurrentPlayerProfile();
+    const walletKey = String(meFriend.walletKey || meGame.walletKey || meGame.uid || "").trim();
+    if (!roomId || !walletKey) return;
+
+    currentViewerWalletKey = walletKey;
+    currentViewerRef = db.ref("matches/" + roomId + "/viewers/" + walletKey);
+    currentViewerCountRef = db.ref("matches/" + roomId + "/viewers");
+
+    const viewerPayload = {
+        uid: meGame.uid || meFriend.uid || "",
+        walletKey,
+        name: meFriend.displayName || meFriend.username || meGame.name || "Khán giả",
+        photo: meFriend.photo || meGame.photo || "images/do_tuong.png",
+        at: firebase.database.ServerValue.TIMESTAMP
+    };
+
+    await currentViewerRef.set(viewerPayload).catch(() => {});
+    currentViewerRef.onDisconnect().remove();
+
+    currentViewerCountRef.on("value", snap => {
+        updateViewerCountBadge(snap.numChildren ? snap.numChildren() : 0);
+    });
+}
+
+function renderSpectatorRoomSnapshot(room = {}, roomId = "") {
+    currentRoomMode = room.mode || currentRoomMode || "co-tuong";
+    currentRoomStatus = room.status || null;
+    mySide = null;
+    viewSide = "do";
+    isGameOver = !!room.winner;
+
+    if (typeof applyBoardPerspective === "function") applyBoardPerspective();
+    renderPlayersFromRoom(room);
+    closeReadyOverlay();
+
+    const turnText = room.turn === "den" ? "ĐEN" : "ĐỎ";
+    if (turnBox) turnBox.innerText = room.winner ? "Bàn đã kết thúc" : ("Lượt: " + turnText + " • Đang xem");
+
+    const chatContent = document.getElementById("match-content-popup");
+    if (chatContent && !chatContent.dataset.spectatorNoteAdded) {
+        chatContent.dataset.spectatorNoteAdded = "1";
+        chatContent.innerHTML = '<p class="spectator-room-note">👁️ Mầy đang xem bàn này. Có thể chat, nhưng không thể đi cờ.</p>';
+    }
+
+    const canRenderLiveBoard =
+        room.status === "playing" &&
+        !!room.players?.do &&
+        !!room.players?.den &&
+        Array.isArray(room.board) &&
+        room.board.length > 0;
+
+    if (!canRenderLiveBoard) {
+        clearRealtimeBoardVisualOnly();
+        renderTimerUI();
+        return;
+    }
+
+    const newBoardHash = JSON.stringify(room.board || []);
+    if (newBoardHash !== lastRoomBoardHash) {
+        lastRoomBoardHash = newBoardHash;
+        applyBoardStateFromRoom(room.board || []);
+        isCoUp = !!room.isCoUp;
+        luotDi = room.turn || "do";
+        timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
+        timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
+        lastMoveFrom = room.lastMoveFrom || null;
+        lastMoveTo = room.lastMoveTo || null;
+        updateTurnUIOnly();
+        if (lastMoveFrom && lastMoveTo) drawLastMoveMarks();
+    }
+
+    renderTimerUI();
+}
 
 function formatTime(s) {
     const m = Math.floor(s / 60);
@@ -7093,6 +7268,7 @@ board.onclick = (e) => {
     
     if (overlay && getComputedStyle(overlay).display !== "none") return;
 
+    if (isSpectatorMode) return;
     if (isGameOver) return;
     if (currentRoomId && mySide && luotDi !== mySide) return;
     if (sounds.bgm.paused) playSnd('bgm');
@@ -7740,9 +7916,19 @@ if (bottomPmcBox) bottomPmcBox.innerText = formatPMC(myPmc) + " PMC";
 function cleanupRoomListeners() {
     if (roomValueRef) roomValueRef.off();
     if (roomChatRef) roomChatRef.off();
+    if (currentViewerCountRef) currentViewerCountRef.off();
+    if (currentViewerRef) currentViewerRef.remove().catch(() => {});
     roomValueRef = null;
     roomChatRef = null;
+    currentViewerRef = null;
+    currentViewerCountRef = null;
+    currentViewerWalletKey = "";
     lastRoomBoardHash = "";
+    updateViewerCountBadge(0);
+    if (isSpectatorMode) {
+        document.body.classList.remove("spectator-mode");
+        isSpectatorMode = false;
+    }
 }
 
 async function leaveRealtimeMatch() {
@@ -8052,8 +8238,16 @@ function appendMatchChatMessage(msg) {
     content.appendChild(row);
     content.scrollTop = content.scrollHeight;
 }
-function bindRoom(roomId) {
-    cleanupRoomListeners();
+function bindRoom(roomId, skipInitialCleanup = false) {
+    if (skipInitialCleanup) {
+        if (roomValueRef) roomValueRef.off();
+        if (roomChatRef) roomChatRef.off();
+        roomValueRef = null;
+        roomChatRef = null;
+        lastRoomBoardHash = "";
+    } else {
+        cleanupRoomListeners();
+    }
     const listeningRoomId = roomId;
     let roomUiVersion = 0;
 
@@ -8075,6 +8269,11 @@ roomChatRef = db.ref("matches/" + listeningRoomId + "/chat");
         if (!room) return;
         window.__lastBoundRoom = room;
         window.__lastBoundRoomId = listeningRoomId;
+
+if (isSpectatorMode) {
+    renderSpectatorRoomSnapshot(room, listeningRoomId);
+    return;
+}
 
 const me = getCurrentPlayerProfile();
 
@@ -8375,7 +8574,7 @@ if (room.winReason === "bochay") {
     }
 }
 
-        if (!room.winner) {
+        if (!room.winner && !isSpectatorMode) {
     await maybeStartRoomFromHost(room, listeningRoomId);
 }
     });
@@ -10856,6 +11055,11 @@ function hoaTran() {
 function handleMatchAction(type) {
     closeActionMenu();
 
+    if (isSpectatorMode && type !== "thoat") {
+        alert("Mầy đang xem bàn, chỉ được chat và thoát xem thôi.");
+        return;
+    }
+
     if (type === "thoat") {
         backToMenu();
         return;
@@ -11327,6 +11531,7 @@ const key = [
     showReadyOverlay(room.mode || currentRoomMode, needResetTime);
 }
 async function setReady() {
+    if (isSpectatorMode) return;
     if (!currentRoomId || !mySide) return;
 
     const result = await chargeStakeForReady(currentRoomId, mySide);
@@ -11956,11 +12161,15 @@ function sendMatchChat() {
     if (!currentRoomId || !roomChatRef) return;
 
     const me = getCurrentPlayerProfile();
+    const friend = getCurrentFriendProfile();
+    const chatName = isSpectatorMode
+        ? ((friend.displayName || friend.username || me.name || "Khán giả") + " 👁️")
+        : (me.name || friend.displayName || "Người chơi");
 
     roomChatRef.push({
-        uid: me.uid || "",
-        name: me.name || "Người chơi",
-        side: mySide || "",
+        uid: me.uid || friend.uid || "",
+        name: chatName,
+        side: isSpectatorMode ? "viewer" : (mySide || ""),
         text,
         at: firebase.database.ServerValue.TIMESTAMP
     });
@@ -12088,11 +12297,35 @@ async function loadArenaTopPlayers() {
         p.liveState = state.state || "home";
         p.liveRoomId = state.roomId || "";
         p.liveMode = state.mode || "";
+        p.online = state.online !== false && isTopPlayerFreshOnline(state);
+        p.lastSeenAt = Number(state.updatedAt || 0) || 0;
+        p.viewerCount = 0;
         list.push(p);
+    });
+
+    const liveRoomIds = Array.from(new Set(
+        list.filter(p => p.liveRoomId && (p.liveState === "arena" || p.liveState === "spectating"))
+            .map(p => String(p.liveRoomId))
+    ));
+
+    const viewerCounts = {};
+    await Promise.all(liveRoomIds.map(async (roomId) => {
+        const snap = await db.ref("matches/" + roomId + "/viewers").once("value").catch(() => null);
+        viewerCounts[roomId] = snap?.numChildren ? snap.numChildren() : 0;
+    }));
+
+    list.forEach(p => {
+        if (p.liveRoomId) p.viewerCount = viewerCounts[String(p.liveRoomId)] || 0;
     });
 
     arenaTopCache = list;
     return list;
+}
+
+function isTopPlayerFreshOnline(state = {}) {
+    const updatedAt = Number(state.updatedAt || 0) || 0;
+    if (!updatedAt) return false;
+    return Date.now() - updatedAt < 90000;
 }
 
 function getArenaTopSorted(tab) {
@@ -12149,16 +12382,23 @@ function renderArenaTopList() {
 
         const isMe = myWalletKey && String(p.walletKey || "") === myWalletKey;
         const isPlaying = p.liveState === "arena" && !!p.liveRoomId;
-        const statusHtml = isPlaying
-            ? `<span class="top-status-chip playing">● ĐANG ĐẤU</span>`
-            : `<span class="top-status-chip home">● ĐANG RẢNH</span>`;
+        const isSpectating = p.liveState === "spectating" && !!p.liveRoomId;
+        const onlineText = p.online ? "ONLINE" : "OFFLINE";
+        let statusHtml = `<span class="top-status-chip ${p.online ? "online" : "offline"}">● ${onlineText}</span>`;
+        if (isPlaying) {
+            statusHtml += ` <span class="top-status-chip playing">⚔️ ĐANG ĐẤU</span>`;
+        } else if (isSpectating) {
+            statusHtml += ` <span class="top-status-chip spectating">👁️ ĐANG XEM</span>`;
+        } else if (p.online) {
+            statusHtml += ` <span class="top-status-chip home">● ĐANG RẢNH</span>`;
+        }
 
         const challengeBtn = isMe
             ? `<button class="top-challenge-btn" disabled style="opacity:.45;">LÀ MẦY</button>`
             : `<button class="top-challenge-btn" onclick="openTopChallengeModal('${escapeTopHtml(p.walletKey)}')">THÁCH ĐẤU</button>`;
 
         const watchBtn = isPlaying
-            ? `<button class="top-watch-btn" onclick="watchTopPlayingRoom('${escapeTopHtml(p.liveRoomId)}')">XEM BÀN</button>`
+            ? `<button class="top-watch-btn" onclick="watchTopPlayingRoom('${escapeTopHtml(p.liveRoomId)}')">👁️ XEM (${Number(p.viewerCount || 0)})</button>`
             : "";
 
         return `
@@ -12402,14 +12642,46 @@ async function watchTopPlayingRoom(roomId) {
 
     const snap = await db.ref("matches/" + roomId).once("value").catch(() => null);
     const room = snap?.val?.() || null;
-    if (!room || room.winner) {
-        alert("Bàn này đã kết thúc hoặc không còn.");
+    if (!room || room.winner || room.status !== "playing") {
+        alert("Bàn này đã kết thúc hoặc không còn đang đấu.");
         await loadArenaTopPlayers().catch(() => {});
         renderArenaTopList();
         return;
     }
 
-    alert("Bàn đang đấu: " + (room.inviteCode || makeInviteCodeFromRoomId(roomId)) + "\nGợi ý: bản sau nên tách chế độ KHÁN GIẢ riêng để xem live mà không chạm logic đi quân/SS.");
+    closeArenaTopModal();
+    closeRankingModal();
+    closeTopChallengeModal();
+
+    cleanupRoomListeners();
+    isSpectatorMode = true;
+    document.body.classList.add("spectator-mode");
+    mySide = null;
+    viewSide = "do";
+    currentRoomId = roomId;
+    currentRoomMode = room.mode || "co-tuong";
+    currentRoomStakePMC = Math.max(0, Math.floor(Number(room.stakePMC || 0) || 0));
+    currentRoomBucket = room.roomBucket || makeStakeBucket(currentRoomMode, currentRoomStakePMC);
+    currentRoomStatus = room.status || "playing";
+    clearActiveMatchSnapshot(roomId);
+
+    hideHomeUI();
+    const arena = document.getElementById("game-arena");
+    if (arena) arena.style.display = "block";
+
+    const chatPopup = document.getElementById("match-chat-popup");
+    const chatBtn = document.getElementById("match-chat-btn");
+    if (window.innerWidth <= 600) {
+        if (chatPopup) chatPopup.style.display = "none";
+        if (chatBtn) chatBtn.style.display = "flex";
+    } else {
+        if (chatPopup) chatPopup.style.display = "flex";
+        if (chatBtn) chatBtn.style.display = "none";
+    }
+
+    bindRoom(roomId, true);
+    await startSpectatorPresence(roomId).catch(() => {});
+    await setPlayerPresence("spectating").catch(() => {});
 }
 
 async function openArenaTopModal(e) {
@@ -13635,16 +13907,45 @@ async function setPlayerPresence(state = "home") {
         const me = getCurrentFriendProfile();
         if (!me?.walletKey) return;
 
-        await db.ref("social/playerState/" + me.walletKey).set({
+        const stateRef = db.ref("social/playerState/" + me.walletKey);
+        await stateRef.update({
             state,
             roomId: currentRoomId || null,
             mode: currentRoomMode || null,
+            online: true,
             updatedAt: Date.now()
+        });
+
+        stateRef.onDisconnect().update({
+            online: false,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
         });
     } catch (err) {
         console.error("Lỗi setPlayerPresence:", err);
     }
 }
+
+function startPresenceHeartbeat() {
+    clearInterval(presenceHeartbeatTimer);
+    presenceHeartbeatTimer = setInterval(() => {
+        const state = currentRoomId ? (isSpectatorMode ? "spectating" : "arena") : "home";
+        setPlayerPresence(state).catch(() => {});
+    }, 30000);
+}
+
+window.addEventListener("beforeunload", () => {
+    try {
+        const me = getCurrentFriendProfile();
+        if (me?.walletKey) {
+            db.ref("social/playerState/" + me.walletKey).update({
+                online: false,
+                updatedAt: Date.now()
+            });
+        }
+        if (currentViewerRef) currentViewerRef.remove();
+    } catch (_) {}
+});
+
 async function isPlayerActuallyBusy(walletKey) {
     const stateRef = db.ref("social/playerState/" + walletKey);
     const snap = await stateRef.once("value");
