@@ -9905,6 +9905,14 @@ if (stillPlaying && otherPlayerExists && !room.winner) {
             console.error("HISTORY V8 BOCHAY FAIL:", err);
         });
     }
+
+    // FIX V10: A/B/C/D thoát giữa trận thì người còn lại thành chủ phòng ngay,
+    // không cần chờ popup/settlement listener bên kia.
+    if (freshHistoryRoom) {
+        await handoffFinishedRoomToRemainingPlayer(roomId, freshHistoryRoom, side, roomBucket).catch(err => {
+            console.error("V10 bàn giao sau bỏ chạy lỗi:", err);
+        });
+    }
     return;
 }
 
@@ -11808,18 +11816,197 @@ async function maybeRefundWaitingStakePMC(roomId, room, side) {
     console.log("Đã hoàn PMC phòng chờ:", { roomId, side, walletKey, stake, nextPmc });
     return nextPmc;
 }
+
+// ===== FIX V10: BÀN GIAO CHỦ PHÒNG LIÊN HOÀN A -> B -> C -> D =====
+function getRoomPlayerSnapshotV10(room = {}, side = "") {
+    side = String(side || "").trim();
+    return (
+        room?.players?.[side] ||
+        room?.resultPlayers?.[side] ||
+        {}
+    );
+}
+
+function getPlayerWalletKeyV10(player = {}, fallback = "") {
+    return String(
+        player.walletKey ||
+        player.walletDbKey ||
+        player.uid ||
+        fallback ||
+        ""
+    ).trim();
+}
+
+function buildHostPresenceV10(roomId, room = {}, host = {}, bucket = "") {
+    return {
+        state: "waiting",
+        roomId,
+        mode: room.mode || currentRoomMode || "co-tuong",
+        roomBucket: bucket || room.roomBucket || currentRoomBucket || null,
+        stakePMC: Math.max(0, Math.floor(Number(room.originalStakePMC || room.stakePMC || currentRoomStakePMC || 0) || 0)),
+        inviteCode: String(room.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase(),
+        lobbyOpen: true,
+        updatedAt: Date.now()
+    };
+}
+
+async function settleFinishedRoomBeforeOwnerHandoffV10(roomId, room = {}) {
+    try {
+        if (!roomId || !room?.winner) return false;
+
+        // Lịch sử thắng/thua phải ghi trước khi dọn result khỏi room.
+        if (room.winner !== "hoa" && typeof recordMatchHistoryOnceV6 === "function") {
+            await recordMatchHistoryOnceV6(roomId, room, "owner_handoff_v10_before_clean").catch(err => {
+                console.error("HISTORY V10 BEFORE HANDOFF FAIL:", err);
+            });
+        }
+
+        if (room.winner === "hoa") return true;
+
+        const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
+        if (!stake) return true;
+
+        const currentSettlement = room.settlement || {};
+        if (currentSettlement.paid === true || currentSettlement?.winnerPaid?.done === true) {
+            return true;
+        }
+
+        const winnerSide = String(room.winner || "").trim();
+        const winnerPlayer = getRoomPlayerSnapshotV10(room, winnerSide);
+        const winnerWalletKey = getPlayerWalletKeyV10(
+            winnerPlayer,
+            winnerSide === room.resultWinnerSide ? room.resultWinnerWalletKey : ""
+        );
+
+        if (!winnerWalletKey) {
+            console.warn("V10 handoff settle thiếu ví winner, vẫn cho bàn giao phòng:", { roomId, winnerSide, room });
+            return false;
+        }
+
+        const winnerPaidRef = db.ref(`matches/${roomId}/settlement/winnerPaid`);
+        const lock = await runRefTransaction(winnerPaidRef, current => {
+            if (current && current.done) return;
+            return {
+                done: true,
+                side: winnerSide,
+                winner: winnerSide,
+                stakePMC: stake,
+                at: Date.now(),
+                uid: winnerPlayer.uid || room.resultWinnerUid || "",
+                by: "owner_handoff_v10"
+            };
+        });
+
+        if (!lock.committed) {
+            // Có thể máy winner đã giữ lock trước và đang cộng PMC.
+            // Chờ paid thật, không coi winnerPaid.done là paid vì done được set trước khi cộng ví.
+            for (let i = 0; i < 20; i++) {
+                const paidSnap = await db.ref(`matches/${roomId}/settlement`).once("value").catch(() => null);
+                const paid = paidSnap?.val?.() || {};
+                if (paid.paid === true) return true;
+                await new Promise(resolve => setTimeout(resolve, 150));
+            }
+            return false;
+        }
+
+        const totalPot = stake * 2;
+        const feePMC = Math.max(0, Math.floor(totalPot * 0.02));
+        const winnerReceivePMC = totalPot - feePMC;
+        const adminWalletKey = "pi_admin_master";
+
+        const paid = await adjustPmcWalletByKey(winnerWalletKey, winnerReceivePMC, {
+            name: winnerPlayer.name || "Người chơi",
+            photo: winnerPlayer.photo || "images/do_tuong.png"
+        });
+
+        if (paid == null) {
+            await winnerPaidRef.update({
+                done: false,
+                error: "winner_payout_failed_owner_handoff_v10",
+                errorAt: Date.now()
+            }).catch(() => {});
+            return false;
+        }
+
+        let adminPaid = null;
+        if (feePMC > 0) {
+            adminPaid = await adjustPmcWalletByKey(adminWalletKey, feePMC, {
+                name: "Ví phí hệ thống",
+                photo: "images/do_tuong.png"
+            });
+        }
+
+        const payUpdates = {};
+        payUpdates[`matches/${roomId}/settlement/paid`] = true;
+        payUpdates[`matches/${roomId}/settlement/paidAt`] = Date.now();
+        payUpdates[`matches/${roomId}/settlement/winner`] = winnerSide;
+        payUpdates[`matches/${roomId}/settlement/stakePMC`] = stake;
+        payUpdates[`matches/${roomId}/settlement/totalPot`] = totalPot;
+        payUpdates[`matches/${roomId}/settlement/feePMC`] = feePMC;
+        payUpdates[`matches/${roomId}/settlement/winnerReceivePMC`] = winnerReceivePMC;
+        payUpdates[`matches/${roomId}/settlement/adminWalletKey`] = adminWalletKey;
+        payUpdates[`matches/${roomId}/settlement/ownerHandoffV10`] = true;
+
+        if (room.players?.[winnerSide]) {
+            payUpdates[`matches/${roomId}/players/${winnerSide}/pmcBalance`] = paid;
+            payUpdates[`matches/${roomId}/players/${winnerSide}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+        }
+        if (room.resultPlayers?.[winnerSide]) {
+            payUpdates[`matches/${roomId}/resultPlayers/${winnerSide}/pmcBalance`] = paid;
+            payUpdates[`matches/${roomId}/resultPlayers/${winnerSide}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+        }
+
+        await db.ref().update(payUpdates);
+
+        await db.ref("walletTransactions").push({
+            type: "match_settle_owner_handoff_v10",
+            roomId,
+            walletKey: winnerWalletKey,
+            winnerSide,
+            stakePMC: stake,
+            totalPot,
+            feePMC,
+            winnerReceivePMC,
+            adminPaid,
+            createdAt: Date.now(),
+            status: "done"
+        }).catch(() => {});
+
+        await recordWinnerWinAndPendingLossAfterPmcPaid(
+            roomId,
+            room,
+            winnerSide,
+            winnerWalletKey
+        ).catch(err => {
+            console.error("HISTORY V10 AFTER HANDOFF SETTLE FAIL:", err);
+        });
+
+        return true;
+    } catch (err) {
+        console.error("settleFinishedRoomBeforeOwnerHandoffV10 lỗi:", err);
+        return false;
+    }
+}
+
 async function transferWaitingRoomHost(roomId, room, roomBucket) {
     if (!roomId || !room) return false;
 
     const newHost = room?.players?.den;
     if (!newHost?.uid) return false;
 
-    const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
+    const cleanMode = room.mode || currentRoomMode || "co-tuong";
+    const cleanStake = Math.max(
+        0,
+        Math.floor(Number(room.originalStakePMC || room.stakePMC || currentRoomStakePMC || 0) || 0)
+    );
+    const cleanBucket = room.roomBucket || roomBucket || currentRoomBucket || makeStakeBucket(cleanMode, cleanStake);
     const inviteCode = String(room?.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
 
-    // Nếu người được mời đã từng bị lock stake khi SS rồi, hoàn lại để họ làm chủ mới từ đầu cho sạch state
-    if (room?.stakeLocked?.den && newHost.walletKey) {
-        await adjustPmcWalletByKey(newHost.walletKey, stake, {
+    // Nếu người được mời đã từng bị lock stake khi SS rồi, hoàn lại để họ làm chủ mới từ đầu cho sạch state.
+    // Dùng stake hiện tại của phòng, nhưng room vẫn giữ cleanStake cho ván kế tiếp.
+    const lockedStake = Math.max(0, Math.floor(Number(room?.stakePMC || cleanStake || 0) || 0));
+    if (room?.stakeLocked?.den && newHost.walletKey && lockedStake > 0) {
+        await adjustPmcWalletByKey(newHost.walletKey, lockedStake, {
             name: newHost.name || "Người chơi",
             photo: newHost.photo || "images/do_tuong.png"
         }).catch(err => console.error("Refund new host lỗi:", err));
@@ -11827,21 +12014,22 @@ async function transferWaitingRoomHost(roomId, room, roomBucket) {
 
     const updates = {};
 
-    // Chuyển người bên den thành chủ mới
+    // Chuyển người bên den thành chủ mới. Không phân biệt A/B/C/D: ai còn lại thì lên do.
     updates[`matches/${roomId}/players/do`] = {
-    ...newHost,
-    side: "do",
-    updatedAt: firebase.database.ServerValue.TIMESTAMP
-};
-updates[`matches/${roomId}/players/den`] = null;
+        ...newHost,
+        side: "do",
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+    };
+    updates[`matches/${roomId}/players/den`] = null;
 
-updates[`matches/${roomId}/hostUid`] = newHost.uid || "";
-updates[`matches/${roomId}/hostWalletKey`] = newHost.walletKey || "";
+    updates[`matches/${roomId}/hostUid`] = newHost.uid || "";
+    updates[`matches/${roomId}/hostWalletKey`] = newHost.walletKey || "";
+    updates[`matches/${roomId}/roomBucket`] = cleanBucket;
 
-updates[`matches/${roomId}/lobbyOpen`] = true;
-updates[`matches/${roomId}/lobbyOwnerUid`] = newHost.uid || "";
-updates[`matches/${roomId}/lobbyOwnerWalletKey`] = newHost.walletKey || "";
-updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+    updates[`matches/${roomId}/lobbyOpen`] = true;
+    updates[`matches/${roomId}/lobbyOwnerUid`] = newHost.uid || "";
+    updates[`matches/${roomId}/lobbyOwnerWalletKey`] = newHost.walletKey || "";
+    updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
 
     // Reset trạng thái chờ cho sạch
     updates[`matches/${roomId}/ready/do`] = false;
@@ -11852,6 +12040,9 @@ updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIME
     updates[`matches/${roomId}/status`] = "waiting";
     updates[`matches/${roomId}/turn`] = "do";
     updates[`matches/${roomId}/board`] = null;
+    updates[`matches/${roomId}/moveCount`] = 0;
+    updates[`matches/${roomId}/startedAt`] = null;
+    updates[`matches/${roomId}/finishedAt`] = null;
     updates[`matches/${roomId}/lastMoveFrom`] = null;
     updates[`matches/${roomId}/lastMoveTo`] = null;
     updates[`matches/${roomId}/winner`] = null;
@@ -11870,82 +12061,91 @@ updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIME
     updates[`matches/${roomId}/resultPlayers`] = null;
     updates[`matches/${roomId}/timeDo`] = 540;
     updates[`matches/${roomId}/timeDen`] = 540;
-    updates[`matches/${roomId}/readyDeadlineAt`] = null;
     updates[`matches/${roomId}/settlement`] = null;
+    updates[`matches/${roomId}/refunds`] = null;
     updates[`matches/${roomId}/drawRequest`] = null;
     updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
 
-    // Bàn giao luôn room chờ trong waitingRooms cho chủ mới
-    if (roomBucket) {
-        updates[`waitingRooms/${roomBucket}/${roomId}`] = {
-    roomId,
-    uid: newHost.uid,
-    walletKey: newHost.walletKey || "",
-    name: newHost.name || "Người chơi",
-            mode: room.mode || "co-tuong",
-            stakePMC: stake,
-            inviteCode,
-            createdAt: Date.now(),
-            claimedBy: null,
-            claimedAt: null
-        };
+    // Bàn giao luôn room chờ trong waitingRooms cho chủ mới, kể cả roomBucket local bị null.
+    if (roomBucket && roomBucket !== cleanBucket) {
+        updates[`waitingRooms/${roomBucket}/${roomId}`] = null;
+    }
+
+    updates[`waitingRooms/${cleanBucket}/${roomId}`] = {
+        roomId,
+        uid: newHost.uid,
+        walletKey: newHost.walletKey || "",
+        name: newHost.name || "Người chơi",
+        mode: cleanMode,
+        stakePMC: cleanStake,
+        inviteCode,
+        createdAt: Date.now(),
+        claimedBy: null,
+        claimedAt: null
+    };
+
+    if (newHost.walletKey) {
+        updates[`social/playerState/${newHost.walletKey}`] = buildHostPresenceV10(roomId, {
+            ...room,
+            mode: cleanMode,
+            stakePMC: cleanStake,
+            roomBucket: cleanBucket,
+            inviteCode
+        }, newHost, cleanBucket);
     }
 
     await db.ref().update(updates);
     return true;
-    
 }
 async function handoffFinishedRoomToRemainingPlayer(roomId, room, leavingSide, roomBucket) {
     if (!roomId || !room || !leavingSide) return false;
 
     const keepSide = leavingSide === "do" ? "den" : "do";
     let freshRoom = room;
-    let newHost = freshRoom?.players?.[keepSide];
+    let newHost = freshRoom?.players?.[keepSide] || freshRoom?.resultPlayers?.[keepSide];
 
     if (!newHost?.uid) return false;
 
-    const stake = Math.max(0, Math.floor(Number(freshRoom?.stakePMC || 0) || 0));
+    // FIX V10:
+    // Không chờ vòng lặp 5 giây nữa. Khi có người thoát sau thắng/thua/đầu hàng/hết giờ,
+    // chốt lịch sử + PMC bằng khóa settlement cũ, rồi bàn giao chủ phòng ngay cho người còn lại.
+    if (freshRoom?.winner) {
+        const mustSettleBeforeClean =
+            freshRoom.winner !== "hoa" &&
+            Math.max(0, Math.floor(Number(freshRoom?.stakePMC || 0) || 0)) > 0 &&
+            freshRoom?.settlement?.paid !== true;
 
-    // Nếu ván có tiền cược, chờ settlement.paid xong rồi mới bàn giao.
-    // Không xóa phòng, không reset winner sớm, tránh hư cộng PMC.
-    if (
-        freshRoom?.winner &&
-        freshRoom.winner !== "hoa" &&
-        stake > 0 &&
-        freshRoom?.settlement?.paid !== true
-    ) {
-        for (let i = 0; i < 20; i++) {
-            await new Promise(resolve => setTimeout(resolve, 250));
+        const settledOk = await settleFinishedRoomBeforeOwnerHandoffV10(roomId, freshRoom).catch(err => {
+            console.error("V10 settle trước bàn giao lỗi:", err);
+            return false;
+        });
 
-            const snap = await db.ref("matches/" + roomId).once("value").catch(() => null);
-            const latest = snap?.val?.();
-
-            if (!latest) return false;
-
-            freshRoom = latest;
-            newHost = freshRoom?.players?.[keepSide] || newHost;
-
-            if (freshRoom?.settlement?.paid === true) break;
-        }
-
-        if (freshRoom?.settlement?.paid !== true) {
-            console.warn("Chưa paid xong, chưa bàn giao phòng:", roomId);
+        // Không dọn winner nếu PMC chưa settle xong, tránh mất tiền ván vừa rồi.
+        // Trường hợp này listener của winner hoặc lần bấm thoát sau vẫn có thể xử tiếp.
+        if (mustSettleBeforeClean && settledOk !== true) {
+            console.warn("V10 chưa settle xong nên chưa dọn winner để tránh mất PMC:", roomId);
             return false;
         }
+
+        const afterSettleSnap = await db.ref("matches/" + roomId).once("value").catch(() => null);
+        freshRoom = afterSettleSnap?.val?.() || freshRoom;
+        newHost = freshRoom?.players?.[keepSide] || freshRoom?.resultPlayers?.[keepSide] || newHost;
     }
 
     if (!newHost?.uid) return false;
 
     const cleanMode = freshRoom.mode || room.mode || currentRoomMode || "co-tuong";
-    const cleanStake = Math.max(0, Math.floor(Number(freshRoom.stakePMC || room.stakePMC || currentRoomStakePMC || 0) || 0));
-    const cleanBucket = freshRoom.roomBucket || room.roomBucket || roomBucket || makeStakeBucket(cleanMode, cleanStake);
+    const cleanStake = Math.max(
+        0,
+        Math.floor(Number(freshRoom.originalStakePMC || freshRoom.stakePMC || room.originalStakePMC || room.stakePMC || currentRoomStakePMC || 0) || 0)
+    );
+    const cleanBucket = freshRoom.roomBucket || room.roomBucket || roomBucket || currentRoomBucket || makeStakeBucket(cleanMode, cleanStake);
     const inviteCode = String(freshRoom.inviteCode || room.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
 
     const updates = {};
 
     // Người còn lại luôn thành chủ phòng mới.
-    // A rời thì B thành do.
-    // B rời thì A thành do.
+    // A rời thì B thành do. B rời thì C thành do. C rời thì D thành do... không giới hạn.
     updates[`matches/${roomId}/players/do`] = {
         ...newHost,
         side: "do",
@@ -11962,6 +12162,10 @@ async function handoffFinishedRoomToRemainingPlayer(roomId, room, leavingSide, r
     updates[`matches/${roomId}/lobbyOwnerUid`] = newHost.uid || "";
     updates[`matches/${roomId}/lobbyOwnerWalletKey`] = newHost.walletKey || "";
     updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+    updates[`matches/${roomId}/handoffSerial`] = (Math.max(0, Math.floor(Number(freshRoom.handoffSerial || 0) || 0)) + 1);
+    updates[`matches/${roomId}/lastHandoffFromSide`] = leavingSide;
+    updates[`matches/${roomId}/lastHandoffToUid`] = newHost.uid || "";
+    updates[`matches/${roomId}/lastHandoffAt`] = firebase.database.ServerValue.TIMESTAMP;
 
     // Dọn ván cũ, nhưng không đụng ví PMC.
     updates[`matches/${roomId}/turn`] = "do";
@@ -12007,7 +12211,7 @@ async function handoffFinishedRoomToRemainingPlayer(roomId, room, leavingSide, r
         updates[`waitingRooms/${roomBucket}/${roomId}`] = null;
     }
 
-    // Mở lại đúng phòng đó ngoài danh sách bàn.
+    // Mở lại đúng phòng đó ngoài danh sách bàn cho người kế nhiệm mời/vào tiếp.
     updates[`waitingRooms/${cleanBucket}/${roomId}`] = {
         roomId,
         uid: newHost.uid || "",
@@ -12020,6 +12224,16 @@ async function handoffFinishedRoomToRemainingPlayer(roomId, room, leavingSide, r
         claimedBy: null,
         claimedAt: null
     };
+
+    if (newHost.walletKey) {
+        updates[`social/playerState/${newHost.walletKey}`] = buildHostPresenceV10(roomId, {
+            ...freshRoom,
+            mode: cleanMode,
+            stakePMC: cleanStake,
+            roomBucket: cleanBucket,
+            inviteCode
+        }, newHost, cleanBucket);
+    }
 
     await db.ref().update(updates);
     return true;
