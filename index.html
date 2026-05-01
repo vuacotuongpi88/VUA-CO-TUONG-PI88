@@ -5729,7 +5729,7 @@ body.lobby-state:not(.in-match) #arena-top-btn {
 <div id="ready-side-text">ĐANG CHỜ 2 NGƯỜI XÁC NHẬN</div>
 
 <div id="ready-button-row">
-    <button id="ready-main-btn" onclick="setReady()">SẴN SÀNG</button>
+    <button id="ready-main-btn" type="button" onclick="setReady(event)">SẴN SÀNG</button>
 </div>
 </div>
 </div>
@@ -9790,8 +9790,8 @@ const topPmcBox = document.getElementById("player-den-pmc-balance");
 const bottomPiBox = document.getElementById("player-do-pi-balance");
 const bottomPmcBox = document.getElementById("player-do-pmc-balance");
 
-    const doReadyNow = !!room?.ready?.do;
-    const denReadyNow = !!room?.ready?.den;
+    const doReadyNow = isReadyFlagTrue(room?.ready?.do);
+    const denReadyNow = isReadyFlagTrue(room?.ready?.den);
     const isPlayingNow = room?.status === "playing";
 
 const safeMySide = getMySideFromRoomSafe(room) || mySide || "do";
@@ -10248,6 +10248,43 @@ function isStakeLockForReadyRound(lock, readyRoundId) {
     return !!lockRoundId && !!currentRoundId && lockRoundId === currentRoundId;
 }
 
+// FIX V15: Firebase ready phải được hiểu đúng kiểu boolean.
+// Trước đó code dùng !!value nên nếu ready bị lưu thành chuỗi/object cũ thì nút SS bị khóa như đã bấm.
+function isReadyFlagTrue(value) {
+    if (value === true || value === 1) return true;
+    if (typeof value === "string") {
+        const v = value.trim().toLowerCase();
+        return v === "true" || v === "1" || v === "yes";
+    }
+    return false;
+}
+
+function syncLocalReadyFlagsFromRoom(room = {}) {
+    readyDo = isReadyFlagTrue(room?.ready?.do);
+    readyDen = isReadyFlagTrue(room?.ready?.den);
+}
+
+function isLocalSideReadyNow(side = mySide) {
+    return side === "do" ? isReadyFlagTrue(readyDo) : side === "den" ? isReadyFlagTrue(readyDen) : false;
+}
+
+function forceReadyButtonTouchable() {
+    const overlay = document.getElementById("ready-overlay");
+    const box = document.getElementById("ready-box");
+    const btn = document.getElementById("ready-main-btn");
+
+    if (overlay && overlay.style.display === "flex") {
+        overlay.style.pointerEvents = "auto";
+    }
+    if (box) box.style.pointerEvents = "auto";
+    if (btn) {
+        btn.style.pointerEvents = "auto";
+        btn.style.touchAction = "manipulation";
+        btn.style.cursor = "pointer";
+        btn.removeAttribute("aria-disabled");
+    }
+}
+
 async function waitForSettlementPaidBeforeRematch(roomId, maxWaitMs = 7000) {
     const started = Date.now();
     let latestRoom = null;
@@ -10329,7 +10366,7 @@ async function maybeStartRoomFromHost(room, roomId = currentRoomId) {
     if (mySide !== "do") return;
     if (room.status !== "waiting") return;
     if (!room.players?.do || !room.players?.den) return;
-    if (!(room.ready?.do && room.ready?.den)) return;
+    if (!(isReadyFlagTrue(room.ready?.do) && isReadyFlagTrue(room.ready?.den))) return;
     if (Array.isArray(room.board) && room.board.length) return;
 
     isCoUp = room.mode === "co-up";
@@ -10475,8 +10512,7 @@ if (typeof applyBoardPerspective === "function") {
 
         currentRoomMode = room.mode || currentRoomMode;
         currentRoomStatus = room.status || null;
-        readyDo = !!room.ready?.do;
-        readyDen = !!room.ready?.den;
+        syncLocalReadyFlagsFromRoom(room);
 
         if (mySide) {
             saveActiveMatchSnapshot({
@@ -11023,8 +11059,7 @@ for (const waiting of waitingList) {
         !freshRoom.winner
     ) {
         currentRoomStatus = "waiting";
-        readyDo = !!freshRoom.ready?.do;
-        readyDen = !!freshRoom.ready?.den;
+        syncLocalReadyFlagsFromRoom(freshRoom);
         showReadyOverlay(freshRoom.mode || mode);
     } else {
         closeReadyOverlay();
@@ -13409,15 +13444,15 @@ async function chargeStakeForReady(roomId, side) {
             });
         }
 
+        if (!targetWalletKey) {
+            console.error("READY FAIL wallet_key_missing", { roomId, side, sidePlayer, localProfile });
+            return { ok: false, stage: "wallet_key_missing" };
+        }
+
         const safeWalletKey = String(targetWalletKey || "").replace(/[.#$\[\]\/]/g, "_");
         const targetWalletSnap = await db.ref("wallets/" + safeWalletKey).once("value");
         const targetWallet = targetWalletSnap.val() || {};
         const targetPmc = Math.max(0, Math.floor(Number(targetWallet.pmcBalance || 0) || 0));
-
-        if (!targetWalletKey) {
-            console.error("READY FAIL wallet_key_missing", { roomId, side });
-            return { ok: false, stage: "wallet_key_missing" };
-        }
 
         if (targetPmc < stake) {
             console.error("READY FAIL insufficient_wallet", { targetWalletKey, targetPmc, stake });
@@ -14185,15 +14220,17 @@ if (countdownEl) {
         sideText.textContent = "ĐANG CHỜ NHẬN PHE";
     }
 
-    if ((mySide === "do" && readyDo) || (mySide === "den" && readyDen)) {
-        btn.disabled = true;
-        btn.style.opacity = "0.72";
-        btn.style.cursor = "default";
-    } else {
-        btn.disabled = false;
-        btn.style.opacity = "1";
-        btn.style.cursor = "pointer";
-    }
+    const alreadyReadyLocal = isLocalSideReadyNow(mySide);
+
+    // FIX V15: Không disable cứng nút SS nữa.
+    // Nếu biến local bị stale, người chơi vẫn bấm lại được; setReady() sẽ đọc Firebase thật rồi quyết định.
+    btn.disabled = false;
+    btn.style.pointerEvents = "auto";
+    btn.style.touchAction = "manipulation";
+    btn.style.opacity = alreadyReadyLocal ? "0.72" : "1";
+    btn.style.cursor = "pointer";
+    btn.setAttribute("aria-disabled", alreadyReadyLocal ? "true" : "false");
+    forceReadyButtonTouchable();
 }
 function closeReadyOverlay() {
     const overlay = document.getElementById("ready-overlay");
@@ -14260,8 +14297,8 @@ async function failReadyAndBackHome() {
         return;
     }
 
-    const doReady = !!room.ready?.do;
-    const denReady = !!room.ready?.den;
+    const doReady = isReadyFlagTrue(room.ready?.do);
+    const denReady = isReadyFlagTrue(room.ready?.den);
 
     // CHỦ PHÒNG A / phe đỏ: KHÔNG VĂNG.
     // Nếu B không SS thì đá riêng B ra, A vẫn ở phòng chờ.
@@ -14507,8 +14544,8 @@ function ensureReadyOverlayForWaitingRoom(room = {}, roomId = currentRoomId) {
         Number(room.readyDeadlineAt || 0)
     ].join("|");
 
-    const doReady = !!room.ready?.do;
-    const denReady = !!room.ready?.den;
+    const doReady = isReadyFlagTrue(room.ready?.do);
+    const denReady = isReadyFlagTrue(room.ready?.den);
     const bothReady = doReady && denReady;
     const deadline = Number(room.readyDeadlineAt || 0);
     const secondsLeft = deadline ? getReadySecondsLeft(deadline) : 0;
@@ -14563,14 +14600,27 @@ async function setReady(evt) {
 
     if (!currentRoomId || !mySide) return;
 
-    // Nếu máy đang giữ trạng thái đã SS thì không trừ PMC thêm lần nữa.
-    if ((mySide === "do" && readyDo) || (mySide === "den" && readyDen)) {
-        updateReadyUI();
-        return;
-    }
-
     if (window.__readyClickLock) return;
     window.__readyClickLock = true;
+
+    // FIX V15: Nếu local tưởng đã SS nhưng Firebase thật chưa ready,
+    // vẫn cho bấm lại. Lỗi trước làm vào phòng nhìn thấy nút mà bấm không ăn.
+    if (isLocalSideReadyNow(mySide)) {
+        try {
+            const freshReadySnap = await db.ref("matches/" + currentRoomId + "/ready/" + mySide).once("value");
+            const remoteAlreadyReady = isReadyFlagTrue(freshReadySnap.val());
+            if (remoteAlreadyReady) {
+                updateReadyUI();
+                window.__readyClickLock = false;
+                return;
+            }
+            if (mySide === "do") readyDo = false;
+            if (mySide === "den") readyDen = false;
+            updateReadyUI();
+        } catch (readyReadErr) {
+            console.warn("READY_V15_REMOTE_CHECK_SKIP:", readyReadErr);
+        }
+    }
 
     const btn = document.getElementById("ready-main-btn");
     const oldText = btn ? btn.textContent : "";
@@ -14630,14 +14680,15 @@ async function setReady(evt) {
     }
 }
 
-// FIX V13: Android/Pi Browser đôi khi không ăn onclick khi overlay có lớp phủ.
-// Bắt pointerup/touchend ở document để nút SS luôn nhận chạm.
+// FIX V15: Android/Pi Browser đôi khi không ăn onclick khi overlay có lớp phủ.
+// Bắt cả pointerup/touchend/click, dùng closest để kể cả bấm trúng phần text vẫn chạy.
 if (!window.__readyButtonTapFixInstalled) {
     window.__readyButtonTapFixInstalled = true;
-    ["pointerup", "touchend"].forEach((eventName) => {
+    ["pointerup", "touchend", "click"].forEach((eventName) => {
         document.addEventListener(eventName, function(e) {
-            const target = e.target;
-            if (!target || target.id !== "ready-main-btn") return;
+            const target = e.target && e.target.closest ? e.target.closest("#ready-main-btn") : null;
+            if (!target) return;
+            forceReadyButtonTouchable();
             setReady(e);
         }, true);
     });
