@@ -10268,6 +10268,40 @@ function isLocalSideReadyNow(side = mySide) {
     return side === "do" ? isReadyFlagTrue(readyDo) : side === "den" ? isReadyFlagTrue(readyDen) : false;
 }
 
+// FIX V16: Khi B/Đen bấm SS, không tin biến mySide cũ trong máy.
+// Đọc lại Firebase để xác định đúng phe của tài khoản hiện tại rồi mới trừ PMC/ghi ready.
+async function resolveReadySideForClick(roomId = currentRoomId) {
+    if (!roomId) return { side: mySide || null, room: null };
+
+    const snap = await db.ref("matches/" + roomId).once("value").catch(() => null);
+    const room = snap?.val?.() || null;
+    const detected = room ? getMySideFromRoomSafe(room) : null;
+
+    const side = detected || mySide || null;
+    if (side === "do" || side === "den") {
+        mySide = side;
+        viewSide = side;
+
+        if (room) {
+            currentRoomMode = room.mode || currentRoomMode;
+            currentRoomStakePMC = Math.max(0, Math.floor(Number(room.stakePMC || currentRoomStakePMC || 0) || 0));
+            currentRoomBucket = room.roomBucket || currentRoomBucket || makeStakeBucket(currentRoomMode, currentRoomStakePMC);
+            syncLocalReadyFlagsFromRoom(room);
+            saveActiveMatchSnapshot({
+                roomId,
+                mode: currentRoomMode,
+                side
+            });
+        }
+
+        if (typeof applyBoardPerspective === "function") {
+            applyBoardPerspective();
+        }
+    }
+
+    return { side, room };
+}
+
 function forceReadyButtonTouchable() {
     const overlay = document.getElementById("ready-overlay");
     const box = document.getElementById("ready-box");
@@ -13432,16 +13466,34 @@ async function chargeStakeForReady(roomId, side) {
 
         const localProfile = getCurrentPlayerProfile();
         const sidePlayer = room?.players?.[side] || {};
-        let targetWalletKey = sidePlayer.walletKey || localProfile.walletKey;
 
-        if (sidePlayer.uid === localProfile.uid && targetWalletKey !== localProfile.walletKey) {
+        // FIX V16: B/Đen có lúc players/den còn giữ walletKey cũ/lệch alias,
+        // làm bấm SS không trừ được PMC nên nhìn như nút không ăn.
+        // Nếu side này đúng là tài khoản hiện tại thì luôn ưu tiên ví thật của máy đang bấm.
+        const iOwnThisSide =
+            getMySideFromRoomSafe(room) === side ||
+            sidePlayer.uid === localProfile.uid ||
+            isSamePlayerAsMe(sidePlayer);
+
+        let targetWalletKey = iOwnThisSide
+            ? (localProfile.walletKey || sidePlayer.walletKey)
+            : (sidePlayer.walletKey || localProfile.walletKey);
+
+        if (iOwnThisSide && localProfile.walletKey && targetWalletKey !== localProfile.walletKey) {
             targetWalletKey = localProfile.walletKey;
+        }
 
+        if (iOwnThisSide && localProfile.walletKey) {
             await db.ref("matches/" + roomId + "/players/" + side).update({
+                uid: localProfile.uid || sidePlayer.uid || "",
                 walletKey: localProfile.walletKey,
-                name: localProfile.name,
-                photo: localProfile.photo
-            });
+                name: localProfile.name || sidePlayer.name || "Người chơi",
+                photo: localProfile.photo || sidePlayer.photo || "images/do_tuong.png",
+                pmcBalance: getPmcBalance(),
+                piBalance: getPiBalance(),
+                balance: getPiBalance(),
+                updatedAt: firebase.database.ServerValue.TIMESTAMP
+            }).catch(err => console.warn("READY_V16_SYNC_PLAYER_SIDE_SKIP:", err));
         }
 
         if (!targetWalletKey) {
@@ -13454,8 +13506,23 @@ async function chargeStakeForReady(roomId, side) {
         const targetWallet = targetWalletSnap.val() || {};
         const targetPmc = Math.max(0, Math.floor(Number(targetWallet.pmcBalance || 0) || 0));
 
-        if (targetPmc < stake) {
-            console.error("READY FAIL insufficient_wallet", { targetWalletKey, targetPmc, stake });
+        let effectiveTargetPmc = targetPmc;
+        if (effectiveTargetPmc < stake && iOwnThisSide && targetWalletKey === localProfile.walletKey) {
+            const localCachedPmc = Math.max(0, Math.floor(Number(getPmcBalance() || localProfile.pmcBalance || 0) || 0));
+            if (localCachedPmc >= stake) {
+                await walletRefByKey(targetWalletKey).update({
+                    pmcBalance: localCachedPmc,
+                    balance: getPiBalance(),
+                    name: localProfile.name || sidePlayer.name || "Người chơi",
+                    photo: localProfile.photo || sidePlayer.photo || "images/do_tuong.png",
+                    updatedAt: Date.now()
+                }).catch(err => console.warn("READY_V16_WALLET_SEED_SKIP:", err));
+                effectiveTargetPmc = localCachedPmc;
+            }
+        }
+
+        if (effectiveTargetPmc < stake) {
+            console.error("READY FAIL insufficient_wallet", { targetWalletKey, targetPmc, effectiveTargetPmc, stake, side, iOwnThisSide });
             return { ok: false, stage: "insufficient_wallet" };
         }
 
@@ -14598,40 +14665,52 @@ async function setReady(evt) {
     if (evt && typeof evt.preventDefault === "function") evt.preventDefault();
     if (evt && typeof evt.stopPropagation === "function") evt.stopPropagation();
 
-    if (!currentRoomId || !mySide) return;
+    if (!currentRoomId) return;
 
     if (window.__readyClickLock) return;
     window.__readyClickLock = true;
 
-    // FIX V15: Nếu local tưởng đã SS nhưng Firebase thật chưa ready,
-    // vẫn cho bấm lại. Lỗi trước làm vào phòng nhìn thấy nút mà bấm không ăn.
-    if (isLocalSideReadyNow(mySide)) {
-        try {
-            const freshReadySnap = await db.ref("matches/" + currentRoomId + "/ready/" + mySide).once("value");
-            const remoteAlreadyReady = isReadyFlagTrue(freshReadySnap.val());
-            if (remoteAlreadyReady) {
-                updateReadyUI();
-                window.__readyClickLock = false;
-                return;
-            }
-            if (mySide === "do") readyDo = false;
-            if (mySide === "den") readyDen = false;
-            updateReadyUI();
-        } catch (readyReadErr) {
-            console.warn("READY_V15_REMOTE_CHECK_SKIP:", readyReadErr);
-        }
-    }
-
     const btn = document.getElementById("ready-main-btn");
     const oldText = btn ? btn.textContent : "";
-    if (btn) {
-        btn.disabled = true;
-        btn.style.opacity = "0.85";
-        btn.style.cursor = "wait";
-        btn.textContent = "ĐANG XÁC NHẬN...";
-    }
+    let readySide = mySide;
 
     try {
+        forceReadyButtonTouchable();
+
+        const resolved = await resolveReadySideForClick(currentRoomId);
+        readySide = resolved.side;
+        const freshRoom = resolved.room || {};
+
+        if (readySide !== "do" && readySide !== "den") {
+            console.error("READY V16 FAIL: không xác định được phe", { currentRoomId, mySide, freshRoom });
+            alert("Chưa nhận đúng phe trong phòng, thoát vào lại phòng rồi thử SS.");
+            return;
+        }
+
+        // Nếu local tưởng đã SS nhưng Firebase thật chưa ready,
+        // vẫn cho bấm lại. Đọc theo readySide đã resolve để B/Đen không bị dính phe Đỏ.
+        const remoteReadySnap = await db.ref("matches/" + currentRoomId + "/ready/" + readySide).once("value").catch(() => null);
+        const remoteAlreadyReady = isReadyFlagTrue(remoteReadySnap?.val?.());
+
+        if (remoteAlreadyReady) {
+            if (readySide === "do") readyDo = true;
+            if (readySide === "den") readyDen = true;
+            updateReadyUI();
+            return;
+        }
+
+        if (readySide === "do") readyDo = false;
+        if (readySide === "den") readyDen = false;
+        updateReadyUI();
+
+        if (btn) {
+            btn.disabled = true;
+            btn.style.opacity = "0.85";
+            btn.style.cursor = "wait";
+            btn.style.pointerEvents = "auto";
+            btn.textContent = "ĐANG XÁC NHẬN...";
+        }
+
         // Đang bấm SS mà đồng hồ còn quá ít giây thì gia hạn nhẹ,
         // tránh vừa chạm nút thì countdown đá ra trước khi Firebase kịp ghi ready.
         try {
@@ -14646,7 +14725,7 @@ async function setReady(evt) {
             console.warn("READY_DEADLINE_EXTEND_SKIP:", deadlineErr);
         }
 
-        const result = await chargeStakeForReady(currentRoomId, mySide);
+        const result = await chargeStakeForReady(currentRoomId, readySide);
 
         if (!result.ok) {
             console.error("READY FAIL:", result);
@@ -14654,15 +14733,34 @@ async function setReady(evt) {
                 alert("PMC không đủ để sẵn sàng ván này.");
             } else if (result.stage === "wallet_key_missing") {
                 alert("Không tìm thấy ví PMC của tài khoản này, tải lại app rồi thử lại.");
+            } else {
+                alert("Chưa sẵn sàng được, thử bấm lại lần nữa.");
             }
             return;
         }
 
-        await db.ref("matches/" + currentRoomId + "/ready/" + mySide).set(true);
+        const readyRoundId = result.readyRoundId || getReadyRoundIdFromRoom(currentRoomId, freshRoom);
+        const updates = {};
+        updates["ready/" + readySide] = true;
+        updates["readyPressedAt/" + readySide] = firebase.database.ServerValue.TIMESTAMP;
+        if (readyRoundId) updates.readyRoundId = readyRoundId;
+        updates.updatedAt = firebase.database.ServerValue.TIMESTAMP;
 
-        if (mySide === "do") readyDo = true;
-        if (mySide === "den") readyDen = true;
+        await db.ref("matches/" + currentRoomId).update(updates);
+
+        if (readySide === "do") readyDo = true;
+        if (readySide === "den") readyDen = true;
         updateReadyUI();
+
+        // Nếu máy hiện tại là host Đỏ và cả hai đã SS trong snapshot mới, start luôn.
+        // Nếu máy hiện tại là Đen, host Đỏ sẽ thấy snapshot này và tự start.
+        const afterSnap = await db.ref("matches/" + currentRoomId).once("value").catch(() => null);
+        const afterRoom = afterSnap?.val?.() || null;
+        if (afterRoom && mySide === "do") {
+            await maybeStartRoomFromHost(afterRoom, currentRoomId).catch(err => {
+                console.error("READY_V16_START_SKIP:", err);
+            });
+        }
     } catch (err) {
         console.error("SET_READY_THROW:", err);
         alert("Lỗi bấm sẵn sàng, thử lại.");
@@ -14670,10 +14768,15 @@ async function setReady(evt) {
         window.__readyClickLock = false;
         if (btn) {
             btn.style.cursor = "pointer";
-            if (!((mySide === "do" && readyDo) || (mySide === "den" && readyDen))) {
+            btn.style.pointerEvents = "auto";
+            const alreadyReady = isLocalSideReadyNow(readySide);
+            if (!alreadyReady) {
                 btn.disabled = false;
                 btn.style.opacity = "1";
                 if (oldText) btn.textContent = oldText;
+            } else {
+                btn.disabled = false;
+                btn.style.opacity = "0.72";
             }
         }
         updateReadyUI();
