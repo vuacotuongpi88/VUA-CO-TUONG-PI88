@@ -7455,6 +7455,16 @@ async function finishRealtimeRoomOnce(roomId, winnerSide, reason = "timeout") {
 
         if (!tx.committed) {
             delete finishRealtimeRoomLockMap[lockKey];
+        } else {
+            // FIX V8: chốt winner xong là cộng lịch sử ngay, không đợi PMC settlement.
+            // Trước đây nếu settlement chưa set đúng field paid thì thắng/thua đứng im.
+            const freshSnap = await roomRef.once("value").catch(() => null);
+            const freshRoom = freshSnap?.val?.() || null;
+            if (freshRoom && typeof recordMatchHistoryOnceV6 === "function") {
+                await recordMatchHistoryOnceV6(roomId, freshRoom, "finish_realtime_room_once").catch(err => {
+                    console.error("HISTORY V8 finishRealtimeRoomOnce fail:", err);
+                });
+            }
         }
 
         return !!tx.committed;
@@ -7999,11 +8009,7 @@ async function getOrCreateHistoryResultIdV6(roomId, room = {}, winnerSide = "") 
     // FIX V6: không transaction ghi historyResultIdV6 vào room nữa.
     // Snapshot cũ của ván đã xong có thể chạy sau khi bấm Tiếp tục, nếu ghi lại vào room mới
     // thì ván sau sẽ dính resultId cũ và bị chặn cộng lịch sử.
-    const preferred = oneWinPointSafeKey(
-        room.matchResultId ||
-        room.historyResultIdV6 ||
-        ""
-    );
+    const preferred = oneWinPointSafeKey(room.matchResultId || "");
     if (preferred) return preferred;
 
     const roundNo = Math.max(1, Math.floor(Number(room.roundNo || room.gameNo || 1) || 1));
@@ -9588,6 +9594,15 @@ if (stillPlaying && otherPlayerExists && !room.winner) {
     }
 
     await db.ref().update(updates);
+
+    // FIX V8: người thoát khi đang chơi cũng phải ghi thắng/thua ngay.
+    const freshHistorySnap = await db.ref("matches/" + roomId).once("value").catch(() => null);
+    const freshHistoryRoom = freshHistorySnap?.val?.() || null;
+    if (freshHistoryRoom && typeof recordMatchHistoryOnceV6 === "function") {
+        await recordMatchHistoryOnceV6(roomId, freshHistoryRoom, "leave_realtime_match_bochay_v8").catch(err => {
+            console.error("HISTORY V8 BOCHAY FAIL:", err);
+        });
+    }
     return;
 }
 
@@ -9741,6 +9756,18 @@ await waitingRoomRef.remove().catch(() => {});
         lastMoveTo: null,
         winner: null,
         winReason: null,
+        matchResultId: null,
+        historyResultIdV1: null,
+        historyResultIdV6: null,
+        historyWinDoneV6: null,
+        historyLossDoneV6: null,
+        resultPlayers: null,
+        resultWinnerSide: null,
+        resultLoserSide: null,
+        resultWinnerWalletKey: null,
+        resultLoserWalletKey: null,
+        resultWinnerUid: null,
+        resultLoserUid: null,
         drawRequest: null,
         ready: {
             do: false,
@@ -9918,15 +9945,24 @@ if (!window.__shownVictoryKeys[victoryKey]) {
             );
         }
     }
+// FIX V8: thấy winner là cộng lịch sử ngay, không phụ thuộc settlement PMC.
+// Khóa matchHistoryClaimsV7 theo resultId vẫn giữ 1 ván chỉ +1, nên gọi nhiều snapshot không bị cộng trùng.
+if (room.winner !== "hoa") {
+    await recordMatchHistoryOnceV6(listeningRoomId, room, "bind_room_winner_seen_before_settle").catch(err => {
+        console.error("HISTORY V8 WINNER SEEN FAIL:", err);
+    });
+}
+
 didSettleWinnerNow = await maybeSettleStakeRoom(room, listeningRoomId) === true;
 
-    // Bảo hiểm lịch sử thắng/thua: nếu settlement đã xong hoặc vừa xong,
-    // bất kỳ snapshot nào cũng có thể ghi đúng 1 lần nhờ khóa V6.
-    if (room.winner !== "hoa" && (didSettleWinnerNow || room?.settlement?.paid === true || room?.settlement?.winnerPaid?.done === true)) {
-        await recordMatchHistoryOnceV6(listeningRoomId, room, "bind_room_after_settle").catch(err => {
-            console.error("HISTORY V6 AFTER SETTLE FAIL:", err);
-        });
-    }
+// Bảo hiểm lần 2 sau settlement, phòng trường hợp lúc winner vừa xuất hiện còn thiếu snapshot ví.
+if (room.winner !== "hoa") {
+    const freshAfterSettleSnap = await db.ref("matches/" + listeningRoomId).once("value").catch(() => null);
+    const freshAfterSettleRoom = freshAfterSettleSnap?.val?.() || room;
+    await recordMatchHistoryOnceV6(listeningRoomId, freshAfterSettleRoom, "bind_room_after_settle_v8").catch(err => {
+        console.error("HISTORY V8 AFTER SETTLE FAIL:", err);
+    });
+}
 
     // Nếu trong lúc await, phòng đã reset sang ván 2 rồi,
     // callback cũ của ván 1 không được phép đóng/mở bảng SS nữa.
@@ -13145,6 +13181,15 @@ if (type === "dauhang") {
             finishedAt: firebase.database.ServerValue.TIMESTAMP,
             updatedAt: firebase.database.ServerValue.TIMESTAMP
         });
+
+        // FIX V8: đầu hàng xong cộng lịch sử ngay, không đợi popup/settlement.
+        const freshHistorySnap = await db.ref("matches/" + roomId).once("value").catch(() => null);
+        const freshHistoryRoom = freshHistorySnap?.val?.() || null;
+        if (freshHistoryRoom && typeof recordMatchHistoryOnceV6 === "function") {
+            await recordMatchHistoryOnceV6(roomId, freshHistoryRoom, "dau_hang_v8").catch(err => {
+                console.error("HISTORY V8 DAUHANG FAIL:", err);
+            });
+        }
 
         // Máy bấm đầu hàng tự hiện popup thua ngay, không chờ Firebase listener.
         const localVictoryKey = [
