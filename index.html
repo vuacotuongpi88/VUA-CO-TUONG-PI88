@@ -8490,11 +8490,16 @@ async function commitStatsV2FromRoundRoomOnce(room, roomId = currentRoomId) {
             at: firebase.database.ServerValue.TIMESTAMP
         };
 
-        await db.ref().update({
-            [`matches/${roomId}/statsV2Results/${result.roundId}`]: marker,
-            [`statsV2Results/${result.roundId}`]: marker
-        }).catch(err => {
-            console.warn("StatsV2 đã cộng ví, nhưng không ghi được marker tổng:", err);
+        // Ghi marker trong chính phòng trước. Không gộp với nhánh tổng,
+        // vì nếu Firebase Rules chặn /statsV2Results thì multi-location update
+        // sẽ fail toàn bộ và matches/<roomId>/statsV2Results cũng mất theo.
+        await db.ref(`matches/${roomId}/statsV2Results/${result.roundId}`).set(marker).catch(err => {
+            console.warn("StatsV2 đã cộng ví, nhưng không ghi được marker trong phòng:", err);
+        });
+
+        // Nhánh tổng chỉ là phụ để admin tra cứu nhanh; fail cũng không ảnh hưởng.
+        await db.ref(`statsV2Results/${result.roundId}`).set(marker).catch(err => {
+            console.warn("StatsV2 marker tổng bị rules chặn, bỏ qua:", err);
         });
 
         window.__statsV2Done[result.roundId] = true;
