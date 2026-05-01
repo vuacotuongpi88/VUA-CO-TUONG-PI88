@@ -8436,6 +8436,72 @@ function buildStatsV2ResultFromRoom(room, roomId = currentRoomId) {
     return result;
 }
 
+function makeStatsV2HistoryEntry(result, role) {
+    const now = Date.now();
+    return {
+        done: true,
+        role,
+        result: role === "winner" ? "win" : "loss",
+        roomId: result.roomId || "",
+        side: role === "winner" ? result.winnerSide : result.loserSide,
+        opponentWalletKey: role === "winner" ? result.loserWalletKey : result.winnerWalletKey,
+        reason: result.reason || "",
+        mode: result.mode || "",
+        stakePMC: Math.max(0, Math.floor(Number(result.stakePMC || 0) || 0)),
+        roundNo: result.roundNo || 0,
+        // Lấy thời điểm kết thúc ván làm mốc tháng. Nếu thiếu thì mới dùng now.
+        at: Number(result.finishedAt || result.committedAt || result.startedAt || now) || now
+    };
+}
+
+function summarizeStatsV2History(history = {}, fallbackMonthKey = statsV2MonthKey()) {
+    const out = {
+        wins: 0,
+        losses: 0,
+        matches: 0,
+        monthWins: 0,
+        monthLosses: 0,
+        monthMatches: 0,
+        monthKey: fallbackMonthKey,
+        months: {}
+    };
+
+    Object.keys(history || {}).forEach(roundId => {
+        const h = history[roundId] || {};
+        if (!h.done) return;
+        const res = String(h.result || "").toLowerCase();
+        const role = String(h.role || "").toLowerCase();
+        const isWin = res === "win" || role === "winner";
+        const isLoss = res === "loss" || role === "loser";
+        if (!isWin && !isLoss) return;
+
+        const at = Number(h.at || h.updatedAt || Date.now()) || Date.now();
+        const mKey = statsV2MonthKey(at);
+        if (!out.months[mKey]) {
+            out.months[mKey] = { wins: 0, losses: 0, matches: 0, updatedAt: at };
+        }
+
+        out.matches += 1;
+        out.months[mKey].matches += 1;
+        out.months[mKey].updatedAt = Math.max(Number(out.months[mKey].updatedAt || 0), at);
+
+        if (isWin) {
+            out.wins += 1;
+            out.months[mKey].wins += 1;
+        }
+        if (isLoss) {
+            out.losses += 1;
+            out.months[mKey].losses += 1;
+        }
+    });
+
+    const cur = out.months[fallbackMonthKey] || { wins: 0, losses: 0, matches: 0 };
+    out.monthWins = Math.max(0, Math.floor(Number(cur.wins || 0) || 0));
+    out.monthLosses = Math.max(0, Math.floor(Number(cur.losses || 0) || 0));
+    out.monthMatches = Math.max(0, Math.floor(Number(cur.matches || 0) || 0));
+    return out;
+}
+
 function applyStatsV2ResultToWalletData(wallet, result, role) {
     const w = wallet && typeof wallet === "object" ? { ...wallet } : {};
     const roundId = String(result.roundId || "");
@@ -8445,94 +8511,70 @@ function applyStatsV2ResultToWalletData(wallet, result, role) {
         ? { ...w.matchHistoryV2 }
         : {};
 
-    if (oldHistory[roundId]) {
-        return w;
-    }
+    // Nếu ván này đã có trong lịch sử thì vẫn tự sửa lại tổng statsV2 từ lịch sử,
+    // không cộng thêm lần nữa. Nhờ vậy reset app / cache sai cũng không làm tụt số.
+    const mergedHistory = oldHistory[roundId]
+        ? { ...oldHistory }
+        : { ...oldHistory, [roundId]: makeStatsV2HistoryEntry(result, role) };
 
     const now = Date.now();
     const monthKey = statsV2MonthKey(result.finishedAt || result.committedAt || now);
-
     const oldStats = w.statsV2 && typeof w.statsV2 === "object" ? { ...w.statsV2 } : {};
-    const oldMonths = oldStats.months && typeof oldStats.months === "object" ? { ...oldStats.months } : {};
-    const oldMonth = oldMonths[monthKey] && typeof oldMonths[monthKey] === "object" ? { ...oldMonths[monthKey] } : {};
-
-    const addWin = role === "winner" ? 1 : 0;
-    const addLoss = role === "loser" ? 1 : 0;
-
-    const nextWins = Math.max(0, Math.floor(statsV2SafeNum(oldStats.wins, 0))) + addWin;
-    const nextLosses = Math.max(0, Math.floor(statsV2SafeNum(oldStats.losses, 0))) + addLoss;
-    const nextMatches = Math.max(0, Math.floor(statsV2SafeNum(oldStats.matches, 0))) + 1;
-
-    const nextMonthWins = Math.max(0, Math.floor(statsV2SafeNum(oldMonth.wins, 0))) + addWin;
-    const nextMonthLosses = Math.max(0, Math.floor(statsV2SafeNum(oldMonth.losses, 0))) + addLoss;
-    const nextMonthMatches = Math.max(0, Math.floor(statsV2SafeNum(oldMonth.matches, 0))) + 1;
+    const summary = summarizeStatsV2History(mergedHistory, monthKey);
 
     w.statsV2 = {
         ...oldStats,
-        wins: nextWins,
-        losses: nextLosses,
-        matches: nextMatches,
-        totalWins: nextWins,
-        totalLosses: nextLosses,
-        monthWins: nextMonthWins,
-        monthLosses: nextMonthLosses,
-        monthMatches: nextMonthMatches,
+        wins: summary.wins,
+        losses: summary.losses,
+        matches: summary.matches,
+        totalWins: summary.wins,
+        totalLosses: summary.losses,
+        totalMatches: summary.matches,
+        monthWins: summary.monthWins,
+        monthLosses: summary.monthLosses,
+        monthMatches: summary.monthMatches,
         monthKey,
         lastResult: role === "winner" ? "win" : "loss",
         lastRoundId: roundId,
         lastRoomId: result.roomId || "",
         lastReason: result.reason || "",
         updatedAt: now,
-        source: "roundResultsV2",
-        months: {
-            ...oldMonths,
-            [monthKey]: {
-                ...oldMonth,
-                wins: nextMonthWins,
-                losses: nextMonthLosses,
-                matches: nextMonthMatches,
-                updatedAt: now
-            }
-        }
+        source: "roundResultsV2_history_rebuild",
+        months: summary.months
     };
 
-    w.matchHistoryV2 = {
-        ...oldHistory,
-        [roundId]: {
-            done: true,
-            role,
-            result: role === "winner" ? "win" : "loss",
-            roomId: result.roomId || "",
-            side: role === "winner" ? result.winnerSide : result.loserSide,
-            opponentWalletKey: role === "winner" ? result.loserWalletKey : result.winnerWalletKey,
-            reason: result.reason || "",
-            mode: result.mode || "",
-            stakePMC: Math.max(0, Math.floor(Number(result.stakePMC || 0) || 0)),
-            roundNo: result.roundNo || 0,
-            at: now
-        }
-    };
-
+    w.matchHistoryV2 = mergedHistory;
     w.updatedAt = now;
     return w;
+}
+
+async function hasStatsV2History(walletKey, roundId) {
+    walletKey = String(walletKey || "").trim();
+    roundId = String(roundId || "").trim();
+    if (!walletKey || !roundId) return false;
+    try {
+        const snap = await db.ref("wallets/" + walletKey + "/matchHistoryV2/" + roundId).once("value");
+        return !!(snap && snap.exists && snap.exists());
+    } catch (_) {
+        return false;
+    }
 }
 
 async function applyStatsV2WalletOnce(walletKey, result, role) {
     walletKey = String(walletKey || "").trim();
     if (!walletKey || !result?.roundId) return false;
 
-    let applied = false;
+    let appliedOrRebuilt = false;
     await db.ref("wallets/" + walletKey).transaction(current => {
         const before = current && typeof current === "object" ? current : {};
-        if (before.matchHistoryV2 && before.matchHistoryV2[result.roundId]) {
-            applied = false;
-            return before;
-        }
-        applied = true;
-        return applyStatsV2ResultToWalletData(before, result, role);
+        // Không dựa vào statsV2.wins/losses nữa. Luôn rebuild tổng từ matchHistoryV2.
+        // Nếu roundId đã có thì hàm chỉ sửa tổng, không cộng trùng.
+        const after = applyStatsV2ResultToWalletData(before, result, role);
+        appliedOrRebuilt = true;
+        return after;
     });
 
-    return applied;
+    return appliedOrRebuilt;
 }
 
 async function commitStatsV2FromRoundRoomOnce(room, roomId = currentRoomId) {
@@ -8543,51 +8585,48 @@ async function commitStatsV2FromRoundRoomOnce(room, roomId = currentRoomId) {
         window.__statsV2Done = window.__statsV2Done || {};
         window.__statsV2Pending = window.__statsV2Pending || {};
 
-        if (window.__statsV2Done[result.roundId]) return true;
         if (window.__statsV2Pending[result.roundId]) return false;
 
-        const markerRef = db.ref("matches/" + roomId + "/statsV2Results/" + result.roundId);
-        const markerSnap = await markerRef.once("value").catch(() => null);
-        if (markerSnap && markerSnap.exists && markerSnap.exists()) {
-            window.__statsV2Done[result.roundId] = true;
-            return true;
-        }
-
+        // Không return cứng khi marker đã tồn tại nữa.
+        // Marker có thể tồn tại nhưng ví chưa kịp ghi/ghi thiếu; gọi apply lại vẫn an toàn
+        // vì ví có matchHistoryV2/<roundId> chống cộng trùng.
         window.__statsV2Pending[result.roundId] = true;
 
         const winnerApplied = await applyStatsV2WalletOnce(result.winnerWalletKey, result, "winner");
         const loserApplied = await applyStatsV2WalletOnce(result.loserWalletKey, result, "loser");
 
+        const winnerHasHistory = await hasStatsV2History(result.winnerWalletKey, result.roundId);
+        const loserHasHistory = await hasStatsV2History(result.loserWalletKey, result.roundId);
+
         const marker = {
             done: true,
-            source: "roundResultsV2",
+            source: "roundResultsV2_history_rebuild",
             roundId: result.roundId,
             roomId: result.roomId || roomId || "",
             winnerWalletKey: result.winnerWalletKey || "",
             loserWalletKey: result.loserWalletKey || "",
             winnerSide: result.winnerSide || "",
             loserSide: result.loserSide || "",
-            winnerApplied,
-            loserApplied,
+            winnerApplied: !!winnerHasHistory,
+            loserApplied: !!loserHasHistory,
+            repairedTotals: true,
             reason: result.reason || "",
             at: firebase.database.ServerValue.TIMESTAMP
         };
 
-        // Ghi marker trong chính phòng trước. Không gộp với nhánh tổng,
-        // vì nếu Firebase Rules chặn /statsV2Results thì multi-location update
-        // sẽ fail toàn bộ và matches/<roomId>/statsV2Results cũng mất theo.
         await db.ref(`matches/${roomId}/statsV2Results/${result.roundId}`).set(marker).catch(err => {
-            console.warn("StatsV2 đã cộng ví, nhưng không ghi được marker trong phòng:", err);
+            console.warn("StatsV2 đã sửa ví, nhưng không ghi được marker trong phòng:", err);
         });
 
-        // Nhánh tổng chỉ là phụ để admin tra cứu nhanh; fail cũng không ảnh hưởng.
         await db.ref(`statsV2Results/${result.roundId}`).set(marker).catch(err => {
             console.warn("StatsV2 marker tổng bị rules chặn, bỏ qua:", err);
         });
 
-        window.__statsV2Done[result.roundId] = true;
-        console.log("Đã commit statsV2:", result.roundId, { winnerApplied, loserApplied });
-        return true;
+        if (winnerHasHistory && loserHasHistory) {
+            window.__statsV2Done[result.roundId] = true;
+        }
+        console.log("Đã commit/sửa statsV2:", result.roundId, { winnerApplied, loserApplied, winnerHasHistory, loserHasHistory });
+        return !!(winnerHasHistory && loserHasHistory);
     } catch (err) {
         console.error("commitStatsV2FromRoundRoomOnce lỗi:", err);
         return false;
