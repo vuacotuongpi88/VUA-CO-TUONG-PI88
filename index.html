@@ -5268,6 +5268,19 @@ margin-bottom: 14px;
     opacity: 0.55;
     filter: grayscale(0.4);
 }
+
+/* ===== STATS V2 HIỂN THỊ DƯỚI AVATAR TRONG TRẬN ===== */
+.player-v2-record-line {
+    margin-top: 2px;
+    color: #ffeaa7;
+    font-size: 9px;
+    font-weight: 900;
+    line-height: 1.15;
+    text-shadow: 0 0 6px rgba(0,0,0,0.9);
+}
+.player-v2-record-line .v2-win { color: #7dffb3; }
+.player-v2-record-line .v2-loss { color: #ffb3b3; }
+
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -7798,6 +7811,75 @@ function syncMyWalletCacheFromRoomPlayer(room = {}) {
         }
     }
 }
+const matchAvatarStatsV2Cache = {};
+const matchAvatarStatsV2Pending = {};
+
+function escapeMatchStatsV2Html(text = "") {
+    return String(text || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function setMatchStatsV2Line(el, stats, prefixText = "") {
+    if (!el) return;
+    const prefix = prefixText ? `<div>${escapeMatchStatsV2Html(prefixText)}</div>` : "";
+    const wins = Math.max(0, Math.floor(Number(stats?.wins || 0) || 0));
+    const losses = Math.max(0, Math.floor(Number(stats?.losses || 0) || 0));
+    const matches = Math.max(0, Math.floor(Number(stats?.matches || (wins + losses)) || 0));
+    el.innerHTML = `${prefix}<div class="player-v2-record-line">V2: <span class="v2-win">T ${wins}</span> / <span class="v2-loss">B ${losses}</span> • ${matches} ván</div>`;
+}
+
+async function readWalletStatsV2ForAvatar(walletKey) {
+    walletKey = String(walletKey || "").trim();
+    if (!walletKey) return { wins: 0, losses: 0, matches: 0 };
+
+    const cached = matchAvatarStatsV2Cache[walletKey];
+    if (cached && Date.now() - cached.at < 3000) return cached.stats;
+    if (matchAvatarStatsV2Pending[walletKey]) return cached?.stats || { wins: 0, losses: 0, matches: 0 };
+
+    matchAvatarStatsV2Pending[walletKey] = true;
+    try {
+        const snap = await db.ref("wallets/" + walletKey + "/statsV2").once("value");
+        const statsV2 = snap.val() || {};
+        const stats = {
+            wins: Math.max(0, Math.floor(readTopNumber(statsV2.wins ?? statsV2.totalWins ?? 0, 0))),
+            losses: Math.max(0, Math.floor(readTopNumber(statsV2.losses ?? statsV2.totalLosses ?? 0, 0))),
+            matches: Math.max(0, Math.floor(readTopNumber(statsV2.matches ?? statsV2.totalMatches ?? 0, 0)))
+        };
+        matchAvatarStatsV2Cache[walletKey] = { at: Date.now(), stats };
+        return stats;
+    } catch (err) {
+        console.warn("Không đọc được statsV2 avatar:", walletKey, err);
+        return cached?.stats || { wins: 0, losses: 0, matches: 0 };
+    } finally {
+        delete matchAvatarStatsV2Pending[walletKey];
+    }
+}
+
+function refreshMatchAvatarStatsV2(oppPlayer = {}, myPlayer = {}, oppPrefix = "", myPrefix = "") {
+    const topInvite = document.getElementById("player-den-invite");
+    const bottomInvite = document.getElementById("player-do-invite");
+
+    if (oppPlayer?.walletKey) {
+        readWalletStatsV2ForAvatar(oppPlayer.walletKey).then(stats => {
+            setMatchStatsV2Line(topInvite, stats, oppPrefix);
+        });
+    } else if (topInvite) {
+        setMatchStatsV2Line(topInvite, { wins: 0, losses: 0, matches: 0 }, oppPrefix);
+    }
+
+    if (myPlayer?.walletKey) {
+        readWalletStatsV2ForAvatar(myPlayer.walletKey).then(stats => {
+            setMatchStatsV2Line(bottomInvite, stats, myPrefix);
+        });
+    } else if (bottomInvite) {
+        setMatchStatsV2Line(bottomInvite, { wins: 0, losses: 0, matches: 0 }, myPrefix);
+    }
+}
+
 function renderPlayersFromRoom(room) {
     const doPlayer = room?.players?.do || {};
     const denPlayer = room?.players?.den || {};
@@ -7922,17 +8004,18 @@ if (bottomPmcBox) bottomPmcBox.innerText = formatPMC(myPmc) + " PMC";
 
     const hostUid = room?.players?.do?.uid || "";
 
-    if (topInvite) {
-        topInvite.innerText = oppPlayer?.uid === hostUid && inviteCode
-            ? ("MÃ MỜI: " + inviteCode)
-            : "";
-    }
+    const topInvitePrefix = oppPlayer?.uid === hostUid && inviteCode
+        ? ("MÃ MỜI: " + inviteCode)
+        : "";
+    const bottomInvitePrefix = myPlayer?.uid === hostUid && inviteCode
+        ? ("MÃ MỜI: " + inviteCode)
+        : "";
 
-    if (bottomInvite) {
-        bottomInvite.innerText = myPlayer?.uid === hostUid && inviteCode
-            ? ("MÃ MỜI: " + inviteCode)
-            : "";
-    }
+    if (topInvite) topInvite.innerText = topInvitePrefix;
+    if (bottomInvite) bottomInvite.innerText = bottomInvitePrefix;
+
+    // Chỉ hiển thị thành tích V2 dưới avatar, không đọc wins/losses cũ bị rác.
+    refreshMatchAvatarStatsV2(oppPlayer, myPlayer, topInvitePrefix, bottomInvitePrefix);
 }
 
 function cleanupRoomListeners() {
@@ -12589,6 +12672,17 @@ function readTopNumber(value, fallback = 0) {
     const n = Number(value);
     return Number.isFinite(n) ? n : fallback;
 }
+function readStatsV2Record(wallet = {}) {
+    const statsV2 = wallet?.statsV2 && typeof wallet.statsV2 === "object" ? wallet.statsV2 : {};
+    return {
+        wins: Math.max(0, Math.floor(readTopNumber(statsV2.wins ?? statsV2.totalWins ?? 0, 0))),
+        losses: Math.max(0, Math.floor(readTopNumber(statsV2.losses ?? statsV2.totalLosses ?? 0, 0))),
+        matches: Math.max(0, Math.floor(readTopNumber(statsV2.matches ?? statsV2.totalMatches ?? 0, 0))),
+        monthWins: Math.max(0, Math.floor(readTopNumber(statsV2.monthWins ?? 0, 0))),
+        monthLosses: Math.max(0, Math.floor(readTopNumber(statsV2.monthLosses ?? 0, 0)))
+    };
+}
+
 
 function countOwnedTopSkins(wallet = {}) {
     const owned = wallet.ownedAvatarSkins || wallet.avatarSkins || wallet.skins || {};
@@ -12613,16 +12707,10 @@ function normalizeTopWallet(walletKey, wallet = {}) {
         0
     )));
 
-    const statsV2 = wallet.statsV2 || {};
-    const wins = Math.max(0, Math.floor(readTopNumber(
-        statsV2.wins ?? statsV2.totalWins ?? 0,
-        0
-    )));
-
-    const losses = Math.max(0, Math.floor(readTopNumber(
-        statsV2.losses ?? statsV2.totalLosses ?? 0,
-        0
-    )));
+    // TOP thắng/thua chỉ đọc statsV2, không đọc wins/losses cũ bị rác.
+    const recordV2 = readStatsV2Record(wallet);
+    const wins = recordV2.wins;
+    const losses = recordV2.losses;
 
     const pmc = Math.max(0, Math.floor(readTopNumber(
         wallet.pmcBalance ?? wallet.pmc ?? wallet.balancePMC ?? 0,
@@ -12749,7 +12837,7 @@ function renderArenaTopList() {
             value = `${p.skinCount} skin`;
             sub += ` • đang dùng: ${escapeTopHtml(p.equippedSkin)}`;
         } else if (arenaTopActiveTab === "record") {
-            value = `Thắng ${p.wins} / Thua ${p.losses}`;
+            value = `V2 Thắng ${p.wins} / Thua ${p.losses}`;
         } else if (arenaTopActiveTab === "pi") {
             value = `${p.pi.toLocaleString("vi-VN", { maximumFractionDigits: 4 })} π`;
         } else if (arenaTopActiveTab === "pmc") {
