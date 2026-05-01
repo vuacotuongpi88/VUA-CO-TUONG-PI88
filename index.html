@@ -9956,34 +9956,48 @@ function runRefTransaction(ref, updater) {
 }
 
 async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
-    const ref = walletRefByKey(walletKey);
+    const safeKey = String(walletKey || makeWalletDbKey()).replace(/[.#$\[\]\/]/g, "_");
+    const ref = db.ref("wallets/" + safeKey);
+    const cleanDelta = Math.floor(Number(delta || 0));
+    if (!cleanDelta) {
+        const snap0 = await ref.once("value").catch(() => null);
+        const cur0 = snap0 && snap0.val && snap0.val();
+        return Math.floor(Number(cur0?.pmcBalance ?? 0) || 0);
+    }
 
-    const snap = await ref.once("value");
-    const safeCurrent = snap.val() && typeof snap.val() === "object" ? snap.val() : {};
+    let nextPmc = null;
+    let beforePmc = 0;
 
-    const currentPi = Number(safeCurrent.balance ?? 0) || 0;
-    const currentPmc = Math.floor(Number(safeCurrent.pmcBalance ?? 0) || 0);
-    const nextPmc = currentPmc + Math.floor(Number(delta || 0));
+    const tx = await runRefTransaction(ref, current => {
+        const safeCurrent = current && typeof current === "object" ? current : {};
+        const currentPi = Number(safeCurrent.balance ?? 0) || 0;
+        const currentPmc = Math.floor(Number(safeCurrent.pmcBalance ?? 0) || 0);
+        const next = currentPmc + cleanDelta;
+        if (next < 0) return;
 
-    if (nextPmc < 0) return null;
+        beforePmc = currentPmc;
+        nextPmc = next;
 
-    await ref.update({
-        ...safeCurrent,
-        balance: currentPi,
-        pmcBalance: nextPmc,
-        updatedAt: Date.now(),
-        name: profile.name || safeCurrent.name || localStorage.getItem("user-name-display") || "Người chơi",
-        photo: profile.photo || safeCurrent.photo || localStorage.getItem("user-photo") || "images/do_tuong.png"
+        return {
+            ...safeCurrent,
+            balance: currentPi,
+            pmcBalance: next,
+            updatedAt: Date.now(),
+            name: profile.name || safeCurrent.name || localStorage.getItem("user-name-display") || "Người chơi",
+            photo: profile.photo || safeCurrent.photo || localStorage.getItem("user-photo") || "images/do_tuong.png"
+        };
     });
 
-    console.log("PMC DIRECT UPDATE OK", {
-        walletKey,
-        delta,
-        before: currentPmc,
+    if (!tx.committed || nextPmc == null) return null;
+
+    console.log("PMC TX UPDATE OK", {
+        walletKey: safeKey,
+        delta: cleanDelta,
+        before: beforePmc,
         after: nextPmc
     });
 
-    if (walletKey === makeWalletDbKey()) {
+    if (safeKey === makeWalletDbKey()) {
         currentPmcBalance = nextPmc;
         localStorage.setItem(getPmcCacheKey(), String(nextPmc));
         updatePmcUI(nextPmc);
@@ -10325,39 +10339,33 @@ const hostStillInThisRoom =
 }
 async function maybeSettleStakeRoom(room, roomId) {
     const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
-    if (!roomId || !stake || !room?.winner) return;
+    if (!roomId || !stake || !room?.winner) return false;
 
     const doPlayer = room?.players?.do || {};
     const denPlayer = room?.players?.den || {};
     const localWalletKey = makeWalletDbKey();
 
-    // ===== HÒA =====
+    // ===== HÒA: hoàn tiền mỗi bên đúng 1 lần =====
     if (room.winner === "hoa") {
         const refundTargets = [];
 
         if (doPlayer.walletKey) {
-            refundTargets.push({
-                walletKey: doPlayer.walletKey,
-                name: doPlayer.name,
-                photo: doPlayer.photo
-            });
+            refundTargets.push({ walletKey: doPlayer.walletKey, side: "do", name: doPlayer.name, photo: doPlayer.photo });
         } else if (mySide === "do") {
             refundTargets.push({
                 walletKey: localWalletKey,
+                side: "do",
                 name: localStorage.getItem("user-name-display") || "Người chơi",
                 photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
             });
         }
 
         if (denPlayer.walletKey) {
-            refundTargets.push({
-                walletKey: denPlayer.walletKey,
-                name: denPlayer.name,
-                photo: denPlayer.photo
-            });
+            refundTargets.push({ walletKey: denPlayer.walletKey, side: "den", name: denPlayer.name, photo: denPlayer.photo });
         } else if (mySide === "den") {
             refundTargets.push({
                 walletKey: localWalletKey,
+                side: "den",
                 name: localStorage.getItem("user-name-display") || "Người chơi",
                 photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
             });
@@ -10366,227 +10374,249 @@ async function maybeSettleStakeRoom(room, roomId) {
         const uniqueTargets = [];
         const seen = new Set();
         for (const item of refundTargets) {
-            if (!item.walletKey || seen.has(item.walletKey)) continue;
-            seen.add(item.walletKey);
-            uniqueTargets.push(item);
+            const safeKey = String(item.walletKey || "").replace(/[.#$\[\]\/]/g, "_");
+            if (!safeKey || seen.has(safeKey)) continue;
+            seen.add(safeKey);
+            uniqueTargets.push({ ...item, walletKey: safeKey });
         }
 
-        // Chưa xác định đủ ví thì chưa được đóng cờ done
-        if (!uniqueTargets.length) return;
+        if (!uniqueTargets.length) return false;
 
-        const settlementRef = db.ref(`matches/${roomId}/settlement`);
-        const result = await runRefTransaction(settlementRef, current => {
-            if (current && current.done) return;
-            return {
-                done: true,
-                winner: room.winner,
-                stakePMC: stake,
-                at: Date.now(),
-                by: getCurrentPlayerProfile().uid || ""
-            };
-        });
+        const settlementRef = db.ref(`matches/${roomId}/settlement/drawRefund`);
+        const drawLock = await Promise.race([
+            runRefTransaction(settlementRef, current => {
+                if (current && current.done) return;
+                return {
+                    done: true,
+                    winner: room.winner,
+                    stakePMC: stake,
+                    at: Date.now(),
+                    by: getCurrentPlayerProfile().uid || ""
+                };
+            }),
+            new Promise(resolve => setTimeout(() => resolve({ timeout: true }), 3000))
+        ]);
 
-        if (!result.committed) return;
+        if (drawLock && drawLock.timeout) return false;
+        if (!drawLock.committed) return false;
 
         for (const item of uniqueTargets) {
-            await adjustPmcWalletByKey(item.walletKey, stake, {
+            const paid = await adjustPmcWalletByKey(item.walletKey, stake, {
                 name: item.name,
                 photo: item.photo
             });
+            if (paid != null) {
+                await db.ref(`matches/${roomId}/players/${item.side}`).update({
+                    pmcBalance: paid,
+                    updatedAt: firebase.database.ServerValue.TIMESTAMP
+                }).catch(() => {});
+            }
         }
 
+        await db.ref(`matches/${roomId}/settlement`).update({
+            paid: true,
+            paidAt: Date.now(),
+            winner: "hoa",
+            stakePMC: stake,
+            refundedPMC: stake,
+            source: "draw_refund_once"
+        }).catch(() => {});
+
         await loadWalletBalance().catch(() => {});
-        await syncMyMatchBalanceToRoomNow();
-        return;
+        await syncMyMatchBalanceToRoomNow().catch(() => {});
+        return true;
     }
 
     // ===== CÓ NGƯỜI THẮNG =====
- // ===== CÓ NGƯỜI THẮNG =====
-if (room.winner !== mySide) {
-    return;
-}
+    // FIX PMC: không phụ thuộc máy bên thắng còn online hay không.
+    // Máy nào thấy winner trước cũng có thể settle, nhưng chỉ 1 máy thắng lock winnerPaid.
+    const winnerSide = room.winner;
+    const winnerPlayer = winnerSide === "do" ? doPlayer : denPlayer;
+    const winnerWalletKey = String(
+        winnerPlayer.walletKey ||
+        winnerPlayer.walletDbKey ||
+        (winnerSide === mySide ? localWalletKey : "") ||
+        ""
+    ).replace(/[.#$\[\]\/]/g, "_");
 
-const winnerPaidRef = db.ref(`matches/${roomId}/settlement/winnerPaid`);
-const myProfile = {
-    name: localStorage.getItem("user-name-display") || "Người chơi",
-    photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-};
-const myWalletKey = localWalletKey;
-
-const winLock = await Promise.race([
-    runRefTransaction(winnerPaidRef, current => {
-        if (current && current.done) return;
-        return {
-            done: true,
-            side: mySide,
-            winner: room.winner,
-            stakePMC: stake,
+    if (!winnerWalletKey) {
+        await db.ref(`matches/${roomId}/settlement/debug`).update({
+            stage: "missing_winner_wallet_key",
             at: Date.now(),
-            uid: getCurrentPlayerProfile().uid || ""
-        };
-    }),
-    new Promise(resolve => setTimeout(() => resolve({ timeout: true }), 3000))
-]);
-
-if (winLock && winLock.timeout) {
-    return;
-}
-
-if (!winLock.committed) {
-    await loadWalletBalance().catch(() => {});
-    await syncMyMatchBalanceToRoomNow().catch(() => {});
-    return false;
-}
-
-const totalPot = stake * 2;
-const feePMC = Math.max(0, Math.floor(totalPot * 0.02));
-const winnerReceivePMC = totalPot - feePMC;
-const adminWalletKey = "pi_admin_master";
-const settleDebugRef = db.ref(`matches/${roomId}/settlement/debug`);
-
-try {
-    await settleDebugRef.update({
-        stage: "before_winner_credit",
-        at: Date.now(),
-        myWalletKey,
-        adminWalletKey,
-        totalPot,
-        feePMC,
-        winnerReceivePMC
-    });
-
-    // 1) cộng cho winner sau khi trừ phí
-    const paid = await adjustPmcWalletByKey(myWalletKey, winnerReceivePMC, myProfile);
-
-    if (paid == null) {
-        await winnerPaidRef.update({
-            done: false,
-            error: "winner_payout_failed",
-            errorAt: Date.now()
-        });
-
-        await settleDebugRef.update({
-            stage: "winner_credit_failed",
-            at: Date.now()
-        });
-
-        alert(
-            "SETTLE FAIL: cộng ví bên thắng thất bại\n" +
-            "wallet: " + myWalletKey + "\n" +
-            "winnerReceivePMC: " + winnerReceivePMC
-        );
-        return;
+            winnerSide,
+            bySide: mySide || ""
+        }).catch(() => {});
+        return false;
     }
 
-    await settleDebugRef.update({
-        stage: "after_winner_credit",
-        at: Date.now(),
-        paid
-    });
-currentPmcBalance = paid;
-localStorage.setItem(getPmcCacheKey(), String(paid));
-updatePmcUI(paid);
-refreshMyMatchBalanceBoxesNow(getPiBalance(), paid);
+    const totalPot = stake * 2;
+    const feePMC = Math.max(0, Math.floor(totalPot * 0.02));
+    const winnerReceivePMC = totalPot - feePMC;
+    const adminWalletKey = "pi_admin_master";
+    const winnerPaidRef = db.ref(`matches/${roomId}/settlement/winnerPaid`);
+    const settleDebugRef = db.ref(`matches/${roomId}/settlement/debug`);
 
-await db.ref(`matches/${roomId}/players/${mySide}`).update({
-    balance: getPiBalance(),
-    piBalance: getPiBalance(),
-    pmcBalance: paid,
-    updatedAt: firebase.database.ServerValue.TIMESTAMP
-}).catch(err => console.error("Lỗi cập nhật số dư winner vào room:", err));
-    // 2) cộng phí vào ví admin nội bộ
-    let adminPaid = null;
-
-    if (feePMC > 0) {
-        await settleDebugRef.update({
-            stage: "before_admin_credit",
-            at: Date.now()
-        });
-
-        adminPaid = await adjustPmcWalletByKey(adminWalletKey, feePMC, {
-            name: "Ví phí hệ thống",
-            photo: "images/do_tuong.png"
-        });
-
-        if (adminPaid == null) {
-            await winnerPaidRef.update({
+    const lock = await Promise.race([
+        runRefTransaction(winnerPaidRef, current => {
+            const now = Date.now();
+            if (current && current.done) return;
+            if (current && current.processing && current.at && now - Number(current.at || 0) < 12000) return;
+            return {
+                processing: true,
                 done: false,
-                error: "admin_fee_credit_failed",
+                side: winnerSide,
+                winner: winnerSide,
+                stakePMC: stake,
+                totalPot,
+                feePMC,
+                winnerReceivePMC,
+                winnerWalletKey,
+                at: now,
+                byUid: getCurrentPlayerProfile().uid || "",
+                bySide: mySide || ""
+            };
+        }),
+        new Promise(resolve => setTimeout(() => resolve({ timeout: true }), 3000))
+    ]);
+
+    if (lock && lock.timeout) return false;
+    if (!lock.committed) {
+        await loadWalletBalance().catch(() => {});
+        await syncMyMatchBalanceToRoomNow().catch(() => {});
+        return false;
+    }
+
+    try {
+        await settleDebugRef.update({
+            stage: "before_winner_credit_any_client",
+            at: Date.now(),
+            bySide: mySide || "",
+            winnerSide,
+            winnerWalletKey,
+            adminWalletKey,
+            totalPot,
+            feePMC,
+            winnerReceivePMC
+        });
+
+        const paid = await adjustPmcWalletByKey(winnerWalletKey, winnerReceivePMC, {
+            name: winnerPlayer.name || "Người thắng",
+            photo: winnerPlayer.photo || "images/do_tuong.png"
+        });
+
+        if (paid == null) {
+            await winnerPaidRef.update({
+                processing: false,
+                done: false,
+                error: "winner_payout_failed",
                 errorAt: Date.now()
             });
-
-            await settleDebugRef.update({
-                stage: "admin_credit_failed",
-                at: Date.now()
-            });
-
-            alert(
-                "SETTLE FAIL: cộng phí về ví admin thất bại\n" +
-                "adminWalletKey: " + adminWalletKey + "\n" +
-                "feePMC: " + feePMC
-            );
-            return;
+            await settleDebugRef.update({ stage: "winner_credit_failed", at: Date.now() });
+            return false;
         }
 
-        await settleDebugRef.update({
-            stage: "after_admin_credit",
-            at: Date.now(),
-            adminPaid
-        });
+        await db.ref(`matches/${roomId}/players/${winnerSide}`).update({
+            balance: Number(winnerPlayer.balance ?? winnerPlayer.piBalance ?? 0) || 0,
+            piBalance: Number(winnerPlayer.piBalance ?? winnerPlayer.balance ?? 0) || 0,
+            pmcBalance: paid,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        }).catch(err => console.error("Lỗi cập nhật số dư winner vào room:", err));
 
-        await db.ref("walletTransactions").push({
-            type: "match_fee_credit",
-            roomId,
-            walletKey: adminWalletKey,
-            feePMC,
-            winnerWalletKey: myWalletKey,
+        if (winnerWalletKey === makeWalletDbKey()) {
+            currentPmcBalance = paid;
+            localStorage.setItem(getPmcCacheKey(), String(paid));
+            updatePmcUI(paid);
+            refreshMyMatchBalanceBoxesNow(getPiBalance(), paid);
+        }
+
+        let adminPaid = null;
+        if (feePMC > 0) {
+            adminPaid = await adjustPmcWalletByKey(adminWalletKey, feePMC, {
+                name: "Ví phí hệ thống",
+                photo: "images/do_tuong.png"
+            });
+
+            if (adminPaid == null) {
+                await winnerPaidRef.update({
+                    processing: false,
+                    done: false,
+                    error: "admin_fee_credit_failed",
+                    errorAt: Date.now()
+                });
+                await settleDebugRef.update({ stage: "admin_credit_failed", at: Date.now() });
+                return false;
+            }
+
+            await db.ref("walletTransactions").push({
+                type: "match_fee_credit",
+                roomId,
+                walletKey: adminWalletKey,
+                feePMC,
+                winnerWalletKey,
+                stakePMC: stake,
+                totalPot,
+                createdAt: Date.now(),
+                status: "done"
+            }).catch(() => {});
+        }
+
+        await db.ref(`matches/${roomId}/settlement`).update({
+            paid: true,
+            paidAt: Date.now(),
+            winner: winnerSide,
             stakePMC: stake,
             totalPot,
-            createdAt: Date.now(),
-            status: "done"
+            feePMC,
+            winnerReceivePMC,
+            winnerWalletKey,
+            adminWalletKey,
+            source: "any_client_once"
+        });
+
+        await winnerPaidRef.update({
+            processing: false,
+            done: true,
+            side: winnerSide,
+            winner: winnerSide,
+            stakePMC: stake,
+            totalPot,
+            feePMC,
+            winnerReceivePMC,
+            winnerWalletKey,
+            paidAt: Date.now(),
+            byUid: getCurrentPlayerProfile().uid || "",
+            bySide: mySide || ""
         });
 
         await settleDebugRef.update({
-            stage: "after_fee_log",
-            at: Date.now()
+            stage: "done_any_client",
+            at: Date.now(),
+            paid,
+            adminPaid,
+            winnerWalletKey
         });
+
+        await loadWalletBalance().catch(() => {});
+        await syncMyMatchBalanceToRoomNow().catch(() => {});
+        return true;
+    } catch (err) {
+        console.error("SETTLE THROW:", err);
+        await winnerPaidRef.update({
+            processing: false,
+            done: false,
+            error: "thrown",
+            errorAt: Date.now(),
+            message: err?.message || String(err)
+        }).catch(() => {});
+        await settleDebugRef.update({
+            stage: "thrown",
+            at: Date.now(),
+            message: err?.message || String(err)
+        }).catch(() => {});
+        return false;
     }
-
-    await settleDebugRef.update({
-        stage: "before_settlement_update",
-        at: Date.now()
-    });
-
-    await db.ref(`matches/${roomId}/settlement`).update({
-        paid: true,
-        paidAt: Date.now(),
-        winner: room.winner,
-        stakePMC: stake,
-        totalPot,
-        feePMC,
-        winnerReceivePMC,
-        adminWalletKey
-    });
-
-    await settleDebugRef.update({
-    stage: "done",
-    at: Date.now()
-});
-
-await loadWalletBalance().catch(() => {});
-await syncMyMatchBalanceToRoomNow().catch(() => {});
-
-return true;
-} catch (err) {
-    console.error("SETTLE THROW:", err);
-
-    await settleDebugRef.update({
-        stage: "thrown",
-        at: Date.now(),
-        message: err?.message || String(err)
-    });
 }
-}
+
 async function chargeStakeForReady(roomId, side) {
     try {
         if (!roomId || !side) return { ok: false, stage: "input" };
