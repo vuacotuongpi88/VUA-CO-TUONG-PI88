@@ -8273,28 +8273,35 @@ async function commitRoundResultCoreOnce(room, roomId = currentRoomId) {
         const result = buildRoundResultCore(room, roomId);
         if (!result) return false;
 
-        window.__roundResultCoreLocalLocks = window.__roundResultCoreLocalLocks || {};
-        if (window.__roundResultCoreLocalLocks[result.roundId]) return false;
-        window.__roundResultCoreLocalLocks[result.roundId] = true;
+        // FIX LÕI: không được khóa trước rồi mới ghi result.
+        // Nếu lock đã có mà result chưa có, vẫn phải cho ghi bù lại result.
+        const roomResultRef = db.ref("matches/" + roomId + "/roundResults/" + result.roundId);
+        const roomResultSnap = await roomResultRef.once("value").catch(() => null);
+        const roomResultExists = !!(roomResultSnap && roomResultSnap.exists && roomResultSnap.exists());
 
-        const lockRef = db.ref("matches/" + roomId + "/roundCoreLocks/" + result.roundId);
-        const tx = await lockRef.transaction(current => {
-            if (current) return;
-            return {
-                locked: true,
-                at: firebase.database.ServerValue.TIMESTAMP
-            };
+        const roomUpdates = {};
+        if (!roomResultExists) {
+            roomUpdates[`matches/${roomId}/roundResults/${result.roundId}`] = result;
+        }
+        roomUpdates[`matches/${roomId}/lastRoundResultCore`] = result;
+        roomUpdates[`matches/${roomId}/roundCoreLocks/${result.roundId}`] = {
+            locked: true,
+            resultWritten: true,
+            at: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        // Ghi trong matches trước. Nhánh này cùng quyền với phòng nên không bị kẹt vì path tổng.
+        await db.ref().update(roomUpdates);
+
+        // Ghi bản tổng sau. Nếu Rules chưa cho ghi /matchHistoryCore thì không làm chết result trong matches.
+        const globalUpdates = {};
+        globalUpdates[`matchHistoryCore/${result.roundId}`] = result;
+        globalUpdates[`matchHistoryByRoom/${roomId}/${result.roundId}`] = result;
+
+        await db.ref().update(globalUpdates).catch(err => {
+            console.warn("Không ghi được nhánh tổng matchHistoryCore/matchHistoryByRoom, nhưng roundResults trong matches đã ghi OK:", err);
         });
 
-        if (!tx.committed) return false;
-
-        const updates = {};
-        updates[`matches/${roomId}/roundResults/${result.roundId}`] = result;
-        updates[`matches/${roomId}/lastRoundResultCore`] = result;
-        updates[`matchHistoryCore/${result.roundId}`] = result;
-        updates[`matchHistoryByRoom/${roomId}/${result.roundId}`] = result;
-
-        await db.ref().update(updates);
         console.log("Đã ghi lõi lịch sử ván:", result.roundId, result);
         return true;
     } catch (err) {
