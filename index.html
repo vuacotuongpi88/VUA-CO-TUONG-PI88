@@ -7370,7 +7370,7 @@ let currentRoomStatus = null;
 // ===== FIX V6: đồng hồ + kết quả phải bám Firebase, không được reset về 9:00 khi reload app =====
 let lastTimerPersistAt = 0;
 let savingTimerToRoom = false;
-let timeoutFinishLockKey = "";
+let finishRealtimeRoomLockMap = {};
 
 function safeTimerSeconds(value, fallback = 540) {
     const n = Math.floor(Number(value));
@@ -7418,15 +7418,26 @@ async function finishRealtimeRoomOnce(roomId, winnerSide, reason = "timeout") {
     if (!roomId || (winnerSide !== "do" && winnerSide !== "den")) return false;
 
     const lockKey = roomId + "|" + winnerSide + "|" + reason;
-    if (timeoutFinishLockKey === lockKey) return false;
-    timeoutFinishLockKey = lockKey;
+    const now = Date.now();
+    finishRealtimeRoomLockMap = finishRealtimeRoomLockMap || {};
+
+    // Khóa chống double-click chỉ sống vài giây.
+    // Bản cũ khóa vĩnh viễn theo roomId|winner|reason nên ván 2/ván 3 cùng phòng
+    // chiếu bí cùng kiểu sẽ bị chặn, nhìn như “chiếu pháo mà không bí”.
+    if (finishRealtimeRoomLockMap[lockKey] && now - finishRealtimeRoomLockMap[lockKey] < 3000) {
+        return false;
+    }
+    finishRealtimeRoomLockMap[lockKey] = now;
 
     try {
         const roomRef = db.ref("matches/" + roomId);
         const tx = await runRefTransaction(roomRef, current => {
             if (!current || current.winner) return;
 
-            const resultId = oneWinPointSafeKey(current.matchResultId || makeRealtimeResultId(roomId, winnerSide, reason));
+            // Luôn tạo mã kết quả mới khi winner vừa được chốt.
+            // Không tái dùng current.matchResultId vì phòng rematch có thể còn dính id ván cũ,
+            // làm matchHistoryClaimsV7 tưởng đã cộng rồi và ván đầu không lên thắng/thua.
+            const resultId = oneWinPointSafeKey(makeRealtimeResultId(roomId, winnerSide, reason));
             const fields = buildResultWalletFields(current, winnerSide);
 
             return {
@@ -7442,10 +7453,14 @@ async function finishRealtimeRoomOnce(roomId, winnerSide, reason = "timeout") {
             };
         });
 
+        if (!tx.committed) {
+            delete finishRealtimeRoomLockMap[lockKey];
+        }
+
         return !!tx.committed;
     } catch (err) {
         console.error("finishRealtimeRoomOnce lỗi:", err);
-        timeoutFinishLockKey = "";
+        delete finishRealtimeRoomLockMap[lockKey];
         return false;
     }
 }
@@ -8031,7 +8046,8 @@ async function recordMatchHistoryOnceV6(roomId, room = {}, source = "unknown", w
         if (winnerKey) {
             const winClaimRef = db.ref(`matchHistoryClaimsV7/${resultId}/win`);
             const winClaimTx = await runRefTransaction(winClaimRef, current => {
-                if (current && (current.done || current.processing)) return;
+                if (current && current.done) return;
+                if (current && current.processing && Date.now() - Number(current.at || 0) < 45000) return;
                 return {
                     processing: true,
                     roomId,
@@ -8076,7 +8092,8 @@ async function recordMatchHistoryOnceV6(roomId, room = {}, source = "unknown", w
         if (loserKey) {
             const lossClaimRef = db.ref(`matchHistoryClaimsV7/${resultId}/loss`);
             const lossClaimTx = await runRefTransaction(lossClaimRef, current => {
-                if (current && (current.done || current.processing)) return;
+                if (current && current.done) return;
+                if (current && current.processing && Date.now() - Number(current.at || 0) < 45000) return;
                 return {
                     processing: true,
                     roomId,
@@ -8279,6 +8296,7 @@ window.__lastOneWinPointClaimKeyV2 = "";
 window.__lastOneLossPointClaimKeyV2 = "";
 window.__currentVictoryKeyFromRoom = "";
 window.__currentEndGameResultKey = "";
+finishRealtimeRoomLockMap = {};
     clearInterval(interval);
     clearInterval(readyInterval);
     readyOverlayWaitingShown = false;
@@ -8503,7 +8521,8 @@ function taoMaTran() {
 
         mt[realPos.r][realPos.c] = {
             side: p.dataset.side,
-            type: p.dataset.type
+            type: p.dataset.type,
+            isUp: p.dataset.isUp === "true"
         };
     });
 
@@ -8558,13 +8577,17 @@ function drawLastMoveMarks() {
 }
 
 function isMoveSafe(pieceType, pieceSide, c1, r1, c2, r2, mt) {
+    const moving = mt?.[r1]?.[c1] || { side: pieceSide, type: pieceType, isUp: false };
     const tempTarget = mt[r2][c2];
-    mt[r2][c2] = { side: pieceSide, type: pieceType };
+
+    // Nếu quân úp đi thật thì nó lật ra ngay sau nước đó, nên khi kiểm tra tự chiếu
+    // phải tính bằng quân thật, không được giữ luật mặc định của quân úp nữa.
+    mt[r2][c2] = { ...moving, side: pieceSide, type: pieceType, isUp: false };
     mt[r1][c1] = null;
 
     const safe = !laBiChieu(pieceSide, mt);
 
-    mt[r1][c1] = { side: pieceSide, type: pieceType };
+    mt[r1][c1] = moving;
     mt[r2][c2] = tempTarget;
 
     return safe;
@@ -8607,7 +8630,12 @@ if (mt[tr][tc] && mt[tr][tc].side === side) return false;
 let luatType = type;
 // XÁC ĐỊNH LUẬT CỜ ÚP DỰA TRÊN VỊ TRÍ XUẤT PHÁT
 const pieceAtPos = getPieceAtBoardPos(c, r);
-if (isCoUp && pieceAtPos && pieceAtPos.dataset.isUp === "true") {
+const matrixPieceAtPos = mt?.[r]?.[c] || null;
+const pieceIsUp = !!(
+    (matrixPieceAtPos && matrixPieceAtPos.isUp === true) ||
+    (pieceAtPos && pieceAtPos.dataset.isUp === "true")
+);
+if (isCoUp && pieceIsUp) {
 if (r === 0 || r === 9) {
 if (c === 0 || c === 8) luatType = (side === 'do' ? '俥' : '車');
 else if (c === 1 || c === 7) luatType = (side === 'do' ? '傌' : '馬');
@@ -8661,42 +8689,78 @@ case '兵': case '卒': {
 return false;
 }
 
+function findKingPosInMatrix(side, mt) {
+    for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 9; c++) {
+            const p = mt?.[r]?.[c];
+            if (p && p.side === side && (p.type === '帥' || p.type === '將')) {
+                return { c, r };
+            }
+        }
+    }
+    return null;
+}
+
+function kingsFaceEachOtherInMatrix(mt) {
+    const doKing = findKingPosInMatrix('do', mt);
+    const denKing = findKingPosInMatrix('den', mt);
+    if (!doKing || !denKing) return false;
+    if (doKing.c !== denKing.c) return false;
+    return countV(doKing.c, doKing.r, denKing.c, denKing.r, mt) === 0;
+}
+
 function laBiChieu(side, mt) {
-let tPos = null;
-for (let r = 0; r < 10; r++) {
-for (let c = 0; c < 9; c++) {
-if (mt[r][c] && mt[r][c].side === side && (mt[r][c].type === '帥' || mt[r][c].type === '將')) {
-tPos = { c, r }; break;
-}
-}
-if (tPos) break;
-}
-if (!tPos) return false;
-for (let r = 0; r < 10; r++) {
-for (let c = 0; c < 9; c++) {
-if (mt[r][c] && mt[r][c].side !== side) {
-if (checkLuat(mt[r][c].type, mt[r][c].side, c, r, tPos.c, tPos.r, mt)) return true;
-}
-}
-}
-return false;
+    const tPos = findKingPosInMatrix(side, mt);
+    if (!tPos) return false;
+
+    // Luật cờ tướng: 2 Tướng không được đối mặt trên cùng một cột khi không có quân chắn.
+    // Thiếu đoạn này thì máy có thể tưởng còn nước đỡ pháo/đỡ chiếu, dẫn tới chiếu mà không bí.
+    if (kingsFaceEachOtherInMatrix(mt)) return true;
+
+    for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 9; c++) {
+            const p = mt?.[r]?.[c];
+            if (p && p.side !== side) {
+                if (checkLuat(p.type, p.side, c, r, tPos.c, tPos.r, mt)) return true;
+            }
+        }
+    }
+    return false;
 }
 
 function checkMate(side) {
-let mt = taoMaTran();
-for (let r1 = 0; r1 < 10; r1++) for (let c1 = 0; c1 < 9; c1++) {
-if (mt[r1][c1] && mt[r1][c1].side === side) {
-for (let r2 = 0; r2 < 10; r2++) for (let c2 = 0; c2 < 9; c2++) {
-if (checkLuat(mt[r1][c1].type, side, c1, r1, c2, r2, mt)) {
-let temp = mt[r2][c2]; mt[r2][c2] = mt[r1][c1]; mt[r1][c1] = null;
-let safe = !laBiChieu(side, mt);
-mt[r1][c1] = mt[r2][c2]; mt[r2][c2] = temp;
-if (safe) return false;
-}
-}
-}
-}
-return true;
+    const mt = taoMaTran();
+
+    // Không bị chiếu thì không phải bí.
+    if (!laBiChieu(side, mt)) return false;
+
+    for (let r1 = 0; r1 < 10; r1++) {
+        for (let c1 = 0; c1 < 9; c1++) {
+            const moving = mt?.[r1]?.[c1];
+            if (!moving || moving.side !== side) continue;
+
+            for (let r2 = 0; r2 < 10; r2++) {
+                for (let c2 = 0; c2 < 9; c2++) {
+                    if (!checkLuat(moving.type, side, c1, r1, c2, r2, mt)) continue;
+
+                    const tempTarget = mt[r2][c2];
+
+                    // Quân úp đi là lật, sau nước đỡ chiếu phải xét quân thật.
+                    mt[r2][c2] = { ...moving, isUp: false };
+                    mt[r1][c1] = null;
+
+                    const safe = !laBiChieu(side, mt);
+
+                    mt[r1][c1] = moving;
+                    mt[r2][c2] = tempTarget;
+
+                    if (safe) return false;
+                }
+            }
+        }
+    }
+
+    return true;
 }
 
 board.onclick = (e) => {
@@ -8771,7 +8835,12 @@ if (isOwnTurnPiece) {
     }
 
     let mt = taoMaTran();
-    mt[r2][c2] = { side: selectedPiece.dataset.side, type: selectedPiece.dataset.type };
+    const movingForSelfCheck = mt?.[r1]?.[c1] || {
+        side: selectedPiece.dataset.side,
+        type: selectedPiece.dataset.type,
+        isUp: selectedPiece.dataset.isUp === "true"
+    };
+    mt[r2][c2] = { ...movingForSelfCheck, isUp: false };
     mt[r1][c1] = null;
 
     if (laBiChieu(luotDi, mt)) {
@@ -9081,6 +9150,21 @@ updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIME
             updates[`matches/${roomId}/quitAt`] = null;
             updates[`matches/${roomId}/settlement`] = null;
             updates[`matches/${roomId}/refunds`] = null;
+            updates[`matches/${roomId}/matchResultId`] = null;
+            updates[`matches/${roomId}/historyResultIdV1`] = null;
+            updates[`matches/${roomId}/historyResultIdV6`] = null;
+            updates[`matches/${roomId}/historyWinDoneV6`] = null;
+            updates[`matches/${roomId}/historyLossDoneV6`] = null;
+            updates[`matches/${roomId}/resultWinnerSide`] = null;
+            updates[`matches/${roomId}/resultLoserSide`] = null;
+            updates[`matches/${roomId}/resultWinnerWalletKey`] = null;
+            updates[`matches/${roomId}/resultLoserWalletKey`] = null;
+            updates[`matches/${roomId}/resultWinnerUid`] = null;
+            updates[`matches/${roomId}/resultLoserUid`] = null;
+            updates[`matches/${roomId}/resultPlayers`] = null;
+            updates[`matches/${roomId}/timeDo`] = 540;
+            updates[`matches/${roomId}/timeDen`] = 540;
+            updates[`matches/${roomId}/readyDeadlineAt`] = null;
             updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
 
             updates[`waitingRooms/${cleanBucket}/${roomId}`] = {
@@ -11434,6 +11518,22 @@ updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIME
     updates[`matches/${roomId}/lastMoveTo`] = null;
     updates[`matches/${roomId}/winner`] = null;
     updates[`matches/${roomId}/winReason`] = null;
+    updates[`matches/${roomId}/matchResultId`] = null;
+    updates[`matches/${roomId}/historyResultIdV1`] = null;
+    updates[`matches/${roomId}/historyResultIdV6`] = null;
+    updates[`matches/${roomId}/historyWinDoneV6`] = null;
+    updates[`matches/${roomId}/historyLossDoneV6`] = null;
+    updates[`matches/${roomId}/resultWinnerSide`] = null;
+    updates[`matches/${roomId}/resultLoserSide`] = null;
+    updates[`matches/${roomId}/resultWinnerWalletKey`] = null;
+    updates[`matches/${roomId}/resultLoserWalletKey`] = null;
+    updates[`matches/${roomId}/resultWinnerUid`] = null;
+    updates[`matches/${roomId}/resultLoserUid`] = null;
+    updates[`matches/${roomId}/resultPlayers`] = null;
+    updates[`matches/${roomId}/timeDo`] = 540;
+    updates[`matches/${roomId}/timeDen`] = 540;
+    updates[`matches/${roomId}/readyDeadlineAt`] = null;
+    updates[`matches/${roomId}/settlement`] = null;
     updates[`matches/${roomId}/drawRequest`] = null;
     updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
 
@@ -11547,6 +11647,21 @@ async function handoffFinishedRoomToRemainingPlayer(roomId, room, leavingSide, r
     updates[`matches/${roomId}/quitAt`] = null;
     updates[`matches/${roomId}/settlement`] = null;
     updates[`matches/${roomId}/refunds`] = null;
+    updates[`matches/${roomId}/matchResultId`] = null;
+    updates[`matches/${roomId}/historyResultIdV1`] = null;
+    updates[`matches/${roomId}/historyResultIdV6`] = null;
+    updates[`matches/${roomId}/historyWinDoneV6`] = null;
+    updates[`matches/${roomId}/historyLossDoneV6`] = null;
+    updates[`matches/${roomId}/resultWinnerSide`] = null;
+    updates[`matches/${roomId}/resultLoserSide`] = null;
+    updates[`matches/${roomId}/resultWinnerWalletKey`] = null;
+    updates[`matches/${roomId}/resultLoserWalletKey`] = null;
+    updates[`matches/${roomId}/resultWinnerUid`] = null;
+    updates[`matches/${roomId}/resultLoserUid`] = null;
+    updates[`matches/${roomId}/resultPlayers`] = null;
+    updates[`matches/${roomId}/timeDo`] = 540;
+    updates[`matches/${roomId}/timeDen`] = 540;
+    updates[`matches/${roomId}/readyDeadlineAt`] = null;
     updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
 
     // Nếu bucket cũ khác bucket mới thì xóa waitingRooms cũ, nhưng KHÔNG xóa matches.
