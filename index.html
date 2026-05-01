@@ -9710,6 +9710,28 @@ function getLocalWalletKeySafe() {
     return String(makeWalletDbKey() || "").trim();
 }
 
+function normalizePlayerNameForCompare(value) {
+    return String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+}
+
+function getLocalNameKeysSafe() {
+    const names = [
+        localStorage.getItem("user-name-display"),
+        localStorage.getItem("currentUsername"),
+        localStorage.getItem("pi-user-name"),
+        window.__piLoggedUsername,
+        firebase.auth().currentUser?.displayName
+    ]
+        .map(normalizePlayerNameForCompare)
+        .filter(Boolean)
+        .filter(n => n !== "người chơi" && n !== "guest");
+
+    return Array.from(new Set(names));
+}
+
 function isSamePlayerAsMe(p = {}) {
     const myUid = getLocalUidSafe();
     const myWalletKey = getLocalWalletKeySafe();
@@ -9717,10 +9739,38 @@ function isSamePlayerAsMe(p = {}) {
     const pUid = String(p?.uid || "").trim();
     const pWalletKey = String(p?.walletKey || "").trim();
 
-    return (
-        (myUid && pUid && myUid === pUid) ||
-        (myWalletKey && pWalletKey && myWalletKey === pWalletKey)
+    if ((myUid && pUid && myUid === pUid) ||
+        (myWalletKey && pWalletKey && myWalletKey === pWalletKey)) {
+        return true;
+    }
+
+    // FIX V17: trên Pi/MEmu có lúc slot Đỏ/Đen lưu thiếu uid/walletKey cũ,
+    // nhưng tên/số điện thoại vẫn đúng. Nếu không bắt thêm name thì máy tự nhận sai phe,
+    // dẫn tới bấm SS bị báo "Chưa sẵn sàng được" hoặc tự nhảy sang Đen.
+    const pNames = [p?.name, p?.displayName, p?.username]
+        .map(normalizePlayerNameForCompare)
+        .filter(Boolean);
+    const myNames = getLocalNameKeysSafe();
+
+    return pNames.some(n => myNames.includes(n));
+}
+
+function hasRealPlayerSlot(p = {}) {
+    return !!(
+        p &&
+        typeof p === "object" &&
+        (
+            String(p.uid || "").trim() ||
+            String(p.walletKey || "").trim() ||
+            String(p.name || "").trim() ||
+            String(p.displayName || "").trim() ||
+            String(p.username || "").trim()
+        )
     );
+}
+
+function roomHasBothRealPlayers(room = {}) {
+    return hasRealPlayerSlot(room?.players?.do) && hasRealPlayerSlot(room?.players?.den);
 }
 
 function getMySideFromRoomSafe(room = {}) {
@@ -10277,7 +10327,17 @@ async function resolveReadySideForClick(roomId = currentRoomId) {
     const room = snap?.val?.() || null;
     const detected = room ? getMySideFromRoomSafe(room) : null;
 
-    const side = detected || mySide || null;
+    let side = detected || null;
+
+    // FIX V17: khi có snapshot phòng thì không được mù quáng fallback mySide cũ.
+    // mySide cũ có thể là Đen/Đỏ của phòng trước, làm bấm SS trừ nhầm slot rồi fail.
+    if (!side && room && (mySide === "do" || mySide === "den") && isSamePlayerAsMe(room?.players?.[mySide])) {
+        side = mySide;
+    }
+    if (!side && !room) {
+        side = mySide || null;
+    }
+
     if (side === "do" || side === "den") {
         mySide = side;
         viewSide = side;
@@ -10678,8 +10738,7 @@ renderPlayersFromRoom(room);
 updateReadyUI();
 
 const hasEnoughPlayersWaiting =
-    !!room.players?.do &&
-    !!room.players?.den &&
+    roomHasBothRealPlayers(room) &&
     room.status === "waiting" &&
     !room.winner;
 
@@ -10698,8 +10757,7 @@ if (hasEnoughPlayersWaiting) {
     const reallyMustCloseReady =
         room.status === "playing" ||
         !!room.winner ||
-        !room.players?.do ||
-        !room.players?.den;
+        !roomHasBothRealPlayers(room);
 
     if (reallyMustCloseReady) {
         closeReadyOverlay();
@@ -10723,7 +10781,7 @@ if (room.status === "playing" && !room.winner) {
 
     clearInterval(readyInterval);
 }
-const hasBothPlayersInRoom = !!room.players?.do && !!room.players?.den;
+const hasBothPlayersInRoom = roomHasBothRealPlayers(room);
 const canRenderLiveBoard =
     room.status === "playing" &&
     !room.winner &&
@@ -13467,23 +13525,26 @@ async function chargeStakeForReady(roomId, side) {
         const localProfile = getCurrentPlayerProfile();
         const sidePlayer = room?.players?.[side] || {};
 
-        // FIX V16: B/Đen có lúc players/den còn giữ walletKey cũ/lệch alias,
-        // làm bấm SS không trừ được PMC nên nhìn như nút không ăn.
-        // Nếu side này đúng là tài khoản hiện tại thì luôn ưu tiên ví thật của máy đang bấm.
+        // FIX V17: bấm SS chỉ được xử lý khi side đang bấm là side thật của máy này.
+        // Nếu dùng mySide cũ của phòng trước sẽ trừ nhầm ví/nhầm slot và transaction trả null.
+        const realSideNow = getMySideFromRoomSafe(room);
         const iOwnThisSide =
-            getMySideFromRoomSafe(room) === side ||
+            realSideNow === side ||
             sidePlayer.uid === localProfile.uid ||
             isSamePlayerAsMe(sidePlayer);
 
-        let targetWalletKey = iOwnThisSide
-            ? (localProfile.walletKey || sidePlayer.walletKey)
-            : (sidePlayer.walletKey || localProfile.walletKey);
+        if (!iOwnThisSide) {
+            console.error("READY FAIL side_mismatch", { roomId, side, realSideNow, sidePlayer, localProfile });
+            return { ok: false, stage: "side_mismatch", realSideNow };
+        }
 
-        if (iOwnThisSide && localProfile.walletKey && targetWalletKey !== localProfile.walletKey) {
+        let targetWalletKey = localProfile.walletKey || sidePlayer.walletKey;
+
+        if (localProfile.walletKey && targetWalletKey !== localProfile.walletKey) {
             targetWalletKey = localProfile.walletKey;
         }
 
-        if (iOwnThisSide && localProfile.walletKey) {
+        if (localProfile.walletKey) {
             await db.ref("matches/" + roomId + "/players/" + side).update({
                 uid: localProfile.uid || sidePlayer.uid || "",
                 walletKey: localProfile.walletKey,
@@ -13526,13 +13587,33 @@ async function chargeStakeForReady(roomId, side) {
             return { ok: false, stage: "insufficient_wallet" };
         }
 
-        const paid = await adjustPmcWalletByKey(targetWalletKey, -stake, {
+        let paid = await adjustPmcWalletByKey(targetWalletKey, -stake, {
             name: sidePlayer.name || localProfile.name || "Người chơi",
             photo: sidePlayer.photo || localProfile.photo || "images/do_tuong.png"
         });
 
+        // FIX V17: phòng vừa ghép / Pi Browser đôi khi wallet trên Firebase còn 0 hoặc chưa kịp seed,
+        // trong khi số PMC thật đang nằm ở cache local. Nếu transaction không commit thì seed lại rồi thử 1 lần.
+        if (paid == null && iOwnThisSide && targetWalletKey === localProfile.walletKey) {
+            const localCachedPmc = Math.max(0, Math.floor(Number(getPmcBalance() || localProfile.pmcBalance || 0) || 0));
+            if (localCachedPmc >= stake) {
+                await walletRefByKey(targetWalletKey).update({
+                    pmcBalance: localCachedPmc,
+                    balance: getPiBalance(),
+                    name: localProfile.name || sidePlayer.name || "Người chơi",
+                    photo: localProfile.photo || sidePlayer.photo || "images/do_tuong.png",
+                    updatedAt: Date.now()
+                }).catch(err => console.warn("READY_V17_RESEED_BEFORE_RETRY_SKIP:", err));
+
+                paid = await adjustPmcWalletByKey(targetWalletKey, -stake, {
+                    name: sidePlayer.name || localProfile.name || "Người chơi",
+                    photo: sidePlayer.photo || localProfile.photo || "images/do_tuong.png"
+                });
+            }
+        }
+
         if (paid == null) {
-            console.error("READY FAIL tx_not_committed", { targetWalletKey, targetPmc, stake });
+            console.error("READY FAIL tx_not_committed", { targetWalletKey, targetPmc, stake, side, iOwnThisSide });
             return { ok: false, stage: "tx_not_committed" };
         }
 
@@ -14595,13 +14676,22 @@ function ensureReadyOverlayForWaitingRoom(room = {}, roomId = currentRoomId) {
     const overlay = document.getElementById("ready-overlay");
     if (!overlay) return;
 
+    const realMyReadySide = getMySideFromRoomSafe(room);
     const hasEnoughPlayersWaiting =
-        !!room.players?.do &&
-        !!room.players?.den &&
+        roomHasBothRealPlayers(room) &&
         room.status === "waiting" &&
         !room.winner;
 
-    if (!hasEnoughPlayersWaiting) return;
+    // FIX V17: chỉ hiện bảng SS khi có đủ 2 người thật và máy hiện tại thật sự thuộc phòng.
+    // Chặn lỗi mới tạo phòng một mình mà tự nhảy sang Đen / tự bật SS.
+    if (!hasEnoughPlayersWaiting || !realMyReadySide) {
+        closeReadyOverlay();
+        readyOverlayRoomKey = "";
+        return;
+    }
+
+    mySide = realMyReadySide;
+    viewSide = realMyReadySide;
 
     const key = [
         roomId || "",
@@ -14733,6 +14823,8 @@ async function setReady(evt) {
                 alert("PMC không đủ để sẵn sàng ván này.");
             } else if (result.stage === "wallet_key_missing") {
                 alert("Không tìm thấy ví PMC của tài khoản này, tải lại app rồi thử lại.");
+            } else if (result.stage === "side_mismatch") {
+                alert("Máy chưa nhận đúng phe trong phòng. Thoát về sảnh rồi vào lại bàn này.");
             } else {
                 alert("Chưa sẵn sàng được, thử bấm lại lần nữa.");
             }
