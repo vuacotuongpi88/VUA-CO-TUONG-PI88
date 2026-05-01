@@ -9708,8 +9708,17 @@ function syncMyWalletCacheFromRoomPlayer(room = {}) {
 
     if (hasPmc) {
         const roomPmc = Math.max(0, Math.floor(Number(p.pmcBalance) || 0));
+        const localPmc = getPmcBalance();
 
-        if (roomPmc !== getPmcBalance()) {
+        // FIX V12: room.players/.../pmcBalance chỉ là snapshot để hiện avatar,
+        // không được dùng snapshot cũ kéo ví thật từ 24 tụt về 22.
+        // Nếu room thấp hơn cache/ví local, giữ local và ghi ngược lại room để chữa số cũ.
+        if (roomPmc < localPmc) {
+            db.ref("matches/" + currentRoomId + "/players/" + realSide).update({
+                pmcBalance: localPmc,
+                updatedAt: firebase.database.ServerValue.TIMESTAMP
+            }).catch(() => {});
+        } else if (roomPmc > localPmc) {
             currentPmcBalance = roomPmc;
             localStorage.setItem(getPmcCacheKey(), String(roomPmc));
             updatePmcUI(roomPmc);
@@ -11068,19 +11077,34 @@ async function loadWalletBalance() {
             pmcAmount = Math.floor(Number(localStorage.getItem(getPmcCacheKey()) || 0) || 0);
         }
 
+        // FIX V12: load ví chỉ được ĐỌC số dư, không được ghi ngược pmcBalance cũ lên Firebase.
+        // Trước đây có callback loadWalletBalance đọc được 22 trước khi settle cộng xong,
+        // sau đó update lại wallets/... = 22 làm UI nhảy 24 rồi tụt về 22.
+        const now = Date.now();
+        const guardUntil = Number(window.__pmcNoRollbackUntil || 0) || 0;
+        const guardFloor = Math.max(0, Math.floor(Number(window.__pmcNoRollbackFloor || 0) || 0));
+
+        if (now < guardUntil && guardFloor > pmcAmount) {
+            pmcAmount = guardFloor;
+            walletRef().update({
+                pmcBalance: guardFloor,
+                updatedAt: firebase.database.ServerValue.TIMESTAMP,
+                name: localStorage.getItem("user-name-display") || "Người chơi",
+                photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+            }).catch(err => console.error("Lỗi vá PMC chống rollback:", err));
+        } else {
+            walletRef().update({
+                updatedAt: firebase.database.ServerValue.TIMESTAMP,
+                name: localStorage.getItem("user-name-display") || "Người chơi",
+                photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+            }).catch(err => console.error("Lỗi sync profile ví:", err));
+        }
+
         currentWalletBalance = Math.max(0, piAmount);
         currentPmcBalance = Math.max(0, pmcAmount);
 
         localStorage.setItem(getBalanceCacheKey(), String(currentWalletBalance));
         localStorage.setItem(getPmcCacheKey(), String(currentPmcBalance));
-
-        await walletRef().update({
-            balance: currentWalletBalance,
-            pmcBalance: currentPmcBalance,
-            updatedAt: firebase.database.ServerValue.TIMESTAMP,
-            name: localStorage.getItem("user-name-display") || "Người chơi",
-            photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-        });
 
         updateBalanceUI(currentWalletBalance);
         updatePmcUI(currentPmcBalance);
@@ -11803,40 +11827,73 @@ function runRefTransaction(ref, updater) {
 }
 
 async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
-    const ref = walletRefByKey(walletKey);
+    const safeWalletKey = String(walletKey || makeWalletDbKey()).replace(/[.#$\[\]\/]/g, "_");
+    const ref = walletRefByKey(safeWalletKey);
+    const safeDelta = Math.floor(Number(delta || 0));
 
-    const snap = await ref.once("value");
-    const safeCurrent = snap.val() && typeof snap.val() === "object" ? snap.val() : {};
+    let beforePmc = 0;
+    let afterPmc = 0;
 
-    const currentPi = Number(safeCurrent.balance ?? 0) || 0;
-    const currentPmc = Math.floor(Number(safeCurrent.pmcBalance ?? 0) || 0);
-    const nextPmc = currentPmc + Math.floor(Number(delta || 0));
+    // FIX V12: cộng/trừ PMC phải dùng transaction.
+    // Cách cũ once() rồi update() có thể bị loadWalletBalance hoặc máy khác ghi đè,
+    // gây hiện 24 xong tụt lại 22.
+    const tx = await runRefTransaction(ref, current => {
+        const safeCurrent = current && typeof current === "object" ? current : {};
+        const currentPi = Number(safeCurrent.balance ?? 0) || 0;
+        const currentPmc = Math.floor(Number(safeCurrent.pmcBalance ?? 0) || 0);
+        const nextPmc = currentPmc + safeDelta;
 
-    if (nextPmc < 0) return null;
+        if (nextPmc < 0) return;
 
-    await ref.update({
-        ...safeCurrent,
-        balance: currentPi,
-        pmcBalance: nextPmc,
-        updatedAt: Date.now(),
-        name: profile.name || safeCurrent.name || localStorage.getItem("user-name-display") || "Người chơi",
-        photo: profile.photo || safeCurrent.photo || localStorage.getItem("user-photo") || "images/do_tuong.png"
+        beforePmc = currentPmc;
+        afterPmc = nextPmc;
+
+        return {
+            ...safeCurrent,
+            balance: currentPi,
+            pmcBalance: nextPmc,
+            updatedAt: Date.now(),
+            name: profile.name || safeCurrent.name || localStorage.getItem("user-name-display") || "Người chơi",
+            photo: profile.photo || safeCurrent.photo || localStorage.getItem("user-photo") || "images/do_tuong.png"
+        };
     });
 
-    console.log("PMC DIRECT UPDATE OK", {
-        walletKey,
-        delta,
-        before: currentPmc,
-        after: nextPmc
-    });
+    if (!tx.committed) return null;
 
-    if (walletKey === makeWalletDbKey()) {
-        currentPmcBalance = nextPmc;
-        localStorage.setItem(getPmcCacheKey(), String(nextPmc));
-        updatePmcUI(nextPmc);
+    const finalData = tx.snapshot && tx.snapshot.val && tx.snapshot.val();
+    if (finalData && typeof finalData === "object" && finalData.pmcBalance != null) {
+        afterPmc = Math.max(0, Math.floor(Number(finalData.pmcBalance) || 0));
     }
 
-    return nextPmc;
+    console.log("PMC DIRECT UPDATE OK", {
+        walletKey: safeWalletKey,
+        delta: safeDelta,
+        before: beforePmc,
+        after: afterPmc
+    });
+
+    if (safeWalletKey === makeWalletDbKey()) {
+        if (safeDelta > 0) {
+            window.__pmcNoRollbackUntil = Date.now() + 15000;
+            window.__pmcNoRollbackFloor = Math.max(
+                Math.max(0, Math.floor(Number(window.__pmcNoRollbackFloor || 0) || 0)),
+                afterPmc
+            );
+        } else if (safeDelta < 0) {
+            window.__pmcNoRollbackUntil = 0;
+            window.__pmcNoRollbackFloor = 0;
+        }
+
+        currentPmcBalance = afterPmc;
+        localStorage.setItem(getPmcCacheKey(), String(afterPmc));
+        updatePmcUI(afterPmc);
+
+        if (typeof refreshMyMatchBalanceBoxesNow === "function") {
+            refreshMyMatchBalanceBoxesNow(getPiBalance(), afterPmc);
+        }
+    }
+
+    return afterPmc;
 }
 async function settlePmcViaApi(roomId) {
     try {
@@ -11868,6 +11925,17 @@ try {
         }
 
         console.log("Settle PMC qua API OK:", data);
+if (typeof data.newPmcBalance === "number" || typeof data.pmcBalance === "number") {
+    const apiPmc = Math.max(0, Math.floor(Number(data.newPmcBalance ?? data.pmcBalance) || 0));
+    window.__pmcNoRollbackUntil = Date.now() + 15000;
+    window.__pmcNoRollbackFloor = Math.max(
+        Math.max(0, Math.floor(Number(window.__pmcNoRollbackFloor || 0) || 0)),
+        apiPmc
+    );
+    currentPmcBalance = apiPmc;
+    localStorage.setItem(getPmcCacheKey(), String(apiPmc));
+    updatePmcUI(apiPmc);
+}
 await loadWalletBalance().catch(() => {});
 await syncMyMatchBalanceToRoomNow();
     } catch (err) {
@@ -13017,6 +13085,11 @@ try {
         at: Date.now(),
         paid
     });
+window.__pmcNoRollbackUntil = Date.now() + 15000;
+window.__pmcNoRollbackFloor = Math.max(
+    Math.max(0, Math.floor(Number(window.__pmcNoRollbackFloor || 0) || 0)),
+    Math.max(0, Math.floor(Number(paid) || 0))
+);
 currentPmcBalance = paid;
 localStorage.setItem(getPmcCacheKey(), String(paid));
 updatePmcUI(paid);
