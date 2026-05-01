@@ -8273,16 +8273,28 @@ async function commitRoundResultCoreOnce(room, roomId = currentRoomId) {
         const result = buildRoundResultCore(room, roomId);
         if (!result) return false;
 
-        // FIX LÕI: không được khóa trước rồi mới ghi result.
-        // Nếu lock đã có mà result chưa có, vẫn phải cho ghi bù lại result.
+        // CHỐT CỨNG CHỐNG ĐỨNG HÌNH:
+        // Hàm này đang chạy trong listener matches/{roomId}.on("value").
+        // Nếu cứ ghi lastRoundResultCore/roundCoreLocks bằng ServerValue.TIMESTAMP mỗi snapshot,
+        // Firebase sẽ bắn snapshot mới liên tục -> Pi Browser bị đứng cứng sau chiếu bí.
+        window.__roundResultCoreDone = window.__roundResultCoreDone || {};
+        window.__roundResultCorePending = window.__roundResultCorePending || {};
+
+        if (window.__roundResultCoreDone[result.roundId]) return true;
+        if (window.__roundResultCorePending[result.roundId]) return false;
+
         const roomResultRef = db.ref("matches/" + roomId + "/roundResults/" + result.roundId);
         const roomResultSnap = await roomResultRef.once("value").catch(() => null);
-        const roomResultExists = !!(roomResultSnap && roomResultSnap.exists && roomResultSnap.exists());
+
+        if (roomResultSnap && roomResultSnap.exists && roomResultSnap.exists()) {
+            window.__roundResultCoreDone[result.roundId] = true;
+            return true;
+        }
+
+        window.__roundResultCorePending[result.roundId] = true;
 
         const roomUpdates = {};
-        if (!roomResultExists) {
-            roomUpdates[`matches/${roomId}/roundResults/${result.roundId}`] = result;
-        }
+        roomUpdates[`matches/${roomId}/roundResults/${result.roundId}`] = result;
         roomUpdates[`matches/${roomId}/lastRoundResultCore`] = result;
         roomUpdates[`matches/${roomId}/roundCoreLocks/${result.roundId}`] = {
             locked: true,
@@ -8290,10 +8302,9 @@ async function commitRoundResultCoreOnce(room, roomId = currentRoomId) {
             at: firebase.database.ServerValue.TIMESTAMP
         };
 
-        // Ghi trong matches trước. Nhánh này cùng quyền với phòng nên không bị kẹt vì path tổng.
+        // Chỉ ghi 1 lần khi result chưa tồn tại.
         await db.ref().update(roomUpdates);
 
-        // Ghi bản tổng sau. Nếu Rules chưa cho ghi /matchHistoryCore thì không làm chết result trong matches.
         const globalUpdates = {};
         globalUpdates[`matchHistoryCore/${result.roundId}`] = result;
         globalUpdates[`matchHistoryByRoom/${roomId}/${result.roundId}`] = result;
@@ -8302,11 +8313,20 @@ async function commitRoundResultCoreOnce(room, roomId = currentRoomId) {
             console.warn("Không ghi được nhánh tổng matchHistoryCore/matchHistoryByRoom, nhưng roundResults trong matches đã ghi OK:", err);
         });
 
+        window.__roundResultCoreDone[result.roundId] = true;
         console.log("Đã ghi lõi lịch sử ván:", result.roundId, result);
         return true;
     } catch (err) {
         console.error("Lỗi ghi lõi lịch sử ván:", err);
         return false;
+    } finally {
+        try {
+            const safeRoomId = roomId || currentRoomId || "";
+            const safeRoundId = room?.activeRoundId || getRoundResultCoreId(room, safeRoomId);
+            if (safeRoundId && window.__roundResultCorePending) {
+                delete window.__roundResultCorePending[safeRoundId];
+            }
+        } catch (_) {}
     }
 }
 
