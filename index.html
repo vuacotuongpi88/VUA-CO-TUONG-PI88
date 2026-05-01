@@ -5914,9 +5914,11 @@ async function tryResumeRealtimeMatch(preferredMode = null) {
 
     const isDo = room.players?.do?.uid === me.uid;
     const isDen = room.players?.den?.uid === me.uid;
+    const iAmInRoom = isDo || isDen;
     const canResume = !room.winner && (room.status === "playing" || room.status === "waiting");
+    const canShowFinishedRoom = !!room.winner && iAmInRoom;
 
-    if (!canResume || (!isDo && !isDen)) {
+    if ((!canResume && !canShowFinishedRoom) || !iAmInRoom) {
         clearActiveMatchSnapshot(saved.roomId);
         return false;
     }
@@ -7365,6 +7367,146 @@ let readyOverlayOpeningLock = false;
 let readyDeadlineAt = 0; // mốc hết giờ SS chung lấy từ Firebase
 let currentRoomStatus = null;
 
+// ===== FIX V6: đồng hồ + kết quả phải bám Firebase, không được reset về 9:00 khi reload app =====
+let lastTimerPersistAt = 0;
+let savingTimerToRoom = false;
+let timeoutFinishLockKey = "";
+
+function safeTimerSeconds(value, fallback = 540) {
+    const n = Math.floor(Number(value));
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(0, Math.min(540, n));
+}
+
+function makeRealtimeResultId(roomId, winnerSide, reason) {
+    return oneWinPointSafeKey(
+        String(roomId || "room") + "_" +
+        String(winnerSide || "winner") + "_" +
+        String(reason || "result") + "_" +
+        Date.now() + "_" +
+        Math.random().toString(36).slice(2, 8)
+    );
+}
+
+function getResultPlayersSnapshotFromRoom(room = {}) {
+    return {
+        do: room?.players?.do || room?.resultPlayers?.do || null,
+        den: room?.players?.den || room?.resultPlayers?.den || null
+    };
+}
+
+function buildResultWalletFields(room = {}, winnerSide = "") {
+    const loserSide = winnerSide === "do" ? "den" : "do";
+    const resultPlayers = getResultPlayersSnapshotFromRoom(room);
+    const winnerPlayer = resultPlayers[winnerSide] || {};
+    const loserPlayer = resultPlayers[loserSide] || {};
+
+    return {
+        resultPlayers,
+        resultWinnerSide: winnerSide,
+        resultLoserSide: loserSide,
+        resultWinnerWalletKey: winnerPlayer.walletKey || winnerPlayer.walletDbKey || winnerPlayer.uid || "",
+        resultLoserWalletKey: loserPlayer.walletKey || loserPlayer.walletDbKey || loserPlayer.uid || "",
+        resultWinnerUid: winnerPlayer.uid || "",
+        resultLoserUid: loserPlayer.uid || ""
+    };
+}
+
+async function finishRealtimeRoomOnce(roomId, winnerSide, reason = "timeout") {
+    roomId = String(roomId || "").trim();
+    winnerSide = String(winnerSide || "").trim();
+    if (!roomId || (winnerSide !== "do" && winnerSide !== "den")) return false;
+
+    const lockKey = roomId + "|" + winnerSide + "|" + reason;
+    if (timeoutFinishLockKey === lockKey) return false;
+    timeoutFinishLockKey = lockKey;
+
+    try {
+        const roomRef = db.ref("matches/" + roomId);
+        const tx = await runRefTransaction(roomRef, current => {
+            if (!current || current.winner) return;
+
+            const resultId = oneWinPointSafeKey(current.matchResultId || makeRealtimeResultId(roomId, winnerSide, reason));
+            const fields = buildResultWalletFields(current, winnerSide);
+
+            return {
+                ...current,
+                winner: winnerSide,
+                winReason: reason,
+                matchResultId: resultId,
+                ...fields,
+                timeDo: safeTimerSeconds(timeDo),
+                timeDen: safeTimerSeconds(timeDen),
+                finishedAt: firebase.database.ServerValue.TIMESTAMP,
+                updatedAt: firebase.database.ServerValue.TIMESTAMP
+            };
+        });
+
+        return !!tx.committed;
+    } catch (err) {
+        console.error("finishRealtimeRoomOnce lỗi:", err);
+        timeoutFinishLockKey = "";
+        return false;
+    }
+}
+
+function applyRoomTimersFromRoom(room = {}, force = false) {
+    const roomDo = typeof room.timeDo === "number" ? safeTimerSeconds(room.timeDo) : null;
+    const roomDen = typeof room.timeDen === "number" ? safeTimerSeconds(room.timeDen) : null;
+
+    if (roomDo == null && roomDen == null) return;
+
+    if (force || !interval || currentRoomStatus !== "playing") {
+        if (roomDo != null) timeDo = roomDo;
+        if (roomDen != null) timeDen = roomDen;
+        return;
+    }
+
+    // Trong lúc đang chạy, chỉ cho đồng hồ active tụt xuống theo Firebase, không kéo ngược lên.
+    // Nhờ vậy reload app sẽ lấy số đúng, còn snapshot trễ không làm nhảy lại 9:00.
+    if (room.turn === "do") {
+        if (roomDo != null) timeDo = Math.min(timeDo, roomDo);
+        if (roomDen != null) timeDen = roomDen;
+    } else if (room.turn === "den") {
+        if (roomDen != null) timeDen = Math.min(timeDen, roomDen);
+        if (roomDo != null) timeDo = roomDo;
+    } else {
+        if (roomDo != null) timeDo = roomDo;
+        if (roomDen != null) timeDen = roomDen;
+    }
+}
+
+async function persistLiveTimerToRoom(force = false) {
+    if (!currentRoomId || currentRoomStatus !== "playing" || isGameOver) return;
+    if (savingTimerToRoom && !force) return;
+
+    const now = Date.now();
+    if (!force && now - lastTimerPersistAt < 1200) return;
+    lastTimerPersistAt = now;
+    savingTimerToRoom = true;
+
+    try {
+        const side = luotDi === "den" ? "den" : "do";
+        const path = "matches/" + currentRoomId + "/" + (side === "do" ? "timeDo" : "timeDen");
+        const nextValue = side === "do" ? safeTimerSeconds(timeDo) : safeTimerSeconds(timeDen);
+
+        await db.ref(path).transaction(current => {
+            const cur = safeTimerSeconds(current, 540);
+            // Khi đang chơi tuyệt đối không ghi số lớn hơn, tránh reset về 9:00.
+            return Math.min(cur, nextValue);
+        }, undefined, false);
+
+        await db.ref("matches/" + currentRoomId).update({
+            timerTurn: side,
+            timerUpdatedAt: firebase.database.ServerValue.TIMESTAMP
+        }).catch(() => {});
+    } catch (err) {
+        console.error("persistLiveTimerToRoom lỗi:", err);
+    } finally {
+        savingTimerToRoom = false;
+    }
+}
+
 function formatTime(s) {
     const m = Math.floor(s / 60);
     const sec = s % 60;
@@ -7386,15 +7528,41 @@ function startTimer() {
         }
 
         if (luotDi === 'do') {
-            timeDo--;
+            timeDo = safeTimerSeconds(timeDo - 1, 0);
             if (timeDo === 30) playSnd('timeout');
             renderTimerUI();
-            if (timeDo <= 0) endGame("HẾT GIỜ", "ĐEN THẮNG");
+            persistLiveTimerToRoom(timeDo <= 0).catch(() => {});
+
+            if (timeDo <= 0) {
+                clearInterval(interval);
+                timeDo = 0;
+                renderTimerUI();
+
+                if (currentRoomId) {
+                    finishRealtimeRoomOnce(currentRoomId, "den", "timeout");
+                } else {
+                    endGame("HẾT GIỜ", "ĐEN THẮNG");
+                }
+                return;
+            }
         } else {
-            timeDen--;
+            timeDen = safeTimerSeconds(timeDen - 1, 0);
             if (timeDen === 30) playSnd('timeout');
             renderTimerUI();
-            if (timeDen <= 0) endGame("HẾT GIỜ", "ĐỎ THẮNG");
+            persistLiveTimerToRoom(timeDen <= 0).catch(() => {});
+
+            if (timeDen <= 0) {
+                clearInterval(interval);
+                timeDen = 0;
+                renderTimerUI();
+
+                if (currentRoomId) {
+                    finishRealtimeRoomOnce(currentRoomId, "do", "timeout");
+                } else {
+                    endGame("HẾT GIỜ", "ĐỎ THẮNG");
+                }
+                return;
+            }
         }
     }, 1000);
 }
@@ -7517,11 +7685,10 @@ async function addOneWinOnlyToWallet(walletKey) {
         );
 
         const currentCleanWins = oneWinPointNum(clean.wins);
-        const alreadyFixed = clean.canonicalV4 === true;
 
-        const baseWins = alreadyFixed
-            ? currentCleanWins
-            : Math.max(currentCleanWins, oldLegacyWins);
+        // FIX V6: không kéo số thắng từ field legacy nữa.
+        // Mấy field cũ từng bị cộng loạn, lấy max legacy sẽ làm 1 ván nhảy mấy chục điểm.
+        const baseWins = currentCleanWins;
 
         const nextWins = baseWins + 1;
 
@@ -7634,11 +7801,10 @@ async function addOneLossOnlyToWallet(walletKey) {
         );
 
         const currentCleanLosses = oneWinPointNum(clean.losses);
-        const alreadyFixed = clean.canonicalV4 === true;
 
-        const baseLosses = alreadyFixed
-            ? currentCleanLosses
-            : Math.max(currentCleanLosses, oldLegacyLosses);
+        // FIX V6: không kéo số thua từ field legacy nữa.
+        // Chỉ lấy oneLossOnlyV1 để mỗi ván thua chỉ +1 thật sự.
+        const baseLosses = currentCleanLosses;
 
         const nextLosses = baseLosses + 1;
 
@@ -7815,37 +7981,27 @@ async function getOrCreateHistoryResultIdV6(roomId, room = {}, winnerSide = "") 
     winnerSide = String(winnerSide || "").trim();
     if (!roomId || !winnerSide) return "";
 
-    const ref = db.ref(`matches/${roomId}/historyResultIdV6`);
+    // FIX V6: không transaction ghi historyResultIdV6 vào room nữa.
+    // Snapshot cũ của ván đã xong có thể chạy sau khi bấm Tiếp tục, nếu ghi lại vào room mới
+    // thì ván sau sẽ dính resultId cũ và bị chặn cộng lịch sử.
     const preferred = oneWinPointSafeKey(
-        room.historyResultIdV6 ||
         room.matchResultId ||
+        room.historyResultIdV6 ||
         ""
     );
+    if (preferred) return preferred;
 
-    const tx = await runRefTransaction(ref, current => {
-        if (current) return current;
-        if (preferred) return preferred;
+    const roundNo = Math.max(1, Math.floor(Number(room.roundNo || room.gameNo || 1) || 1));
+    const stamp = String(
+        room.finishedAt ||
+        room.winAt ||
+        room.settlement?.paidAt ||
+        room.updatedAt ||
+        room.createdAt ||
+        Date.now()
+    );
 
-        const roundNo = Math.max(1, Math.floor(Number(room.roundNo || room.gameNo || 1) || 1));
-        const stamp = String(
-            room.finishedAt ||
-            room.winAt ||
-            room.settlement?.paidAt ||
-            room.updatedAt ||
-            room.createdAt ||
-            Date.now()
-        );
-
-        return oneWinPointSafeKey(`${roomId}_${winnerSide}_${roundNo}_${stamp}`);
-    });
-
-    let resultId = String(tx?.snapshot?.val?.() || "").trim();
-    if (!resultId) {
-        const snap = await ref.once("value").catch(() => null);
-        resultId = String(snap?.val?.() || "").trim();
-    }
-
-    return oneWinPointSafeKey(resultId);
+    return oneWinPointSafeKey(roomId + "_" + winnerSide + "_" + roundNo + "_" + stamp);
 }
 
 async function recordMatchHistoryOnceV6(roomId, room = {}, source = "unknown", winnerKeyFromSettle = "") {
@@ -7873,9 +8029,9 @@ async function recordMatchHistoryOnceV6(roomId, room = {}, source = "unknown", w
 
         // ===== THẮNG: 1 resultId chỉ +1 đúng 1 lần =====
         if (winnerKey) {
-            const winClaimRef = db.ref(`matches/${roomId}/historyWinDoneV6`);
+            const winClaimRef = db.ref(`matchHistoryClaimsV7/${resultId}/win`);
             const winClaimTx = await runRefTransaction(winClaimRef, current => {
-                if (current && current.done) return;
+                if (current && (current.done || current.processing)) return;
                 return {
                     processing: true,
                     roomId,
@@ -7892,7 +8048,7 @@ async function recordMatchHistoryOnceV6(roomId, room = {}, source = "unknown", w
                 if (!afterWin) {
                     await winClaimRef.remove().catch(() => {});
                 } else {
-                    updatesAfter[`matches/${roomId}/historyWinDoneV6`] = {
+                    const winDonePayload = {
                         done: true,
                         roomId,
                         resultId,
@@ -7902,6 +8058,8 @@ async function recordMatchHistoryOnceV6(roomId, room = {}, source = "unknown", w
                         source,
                         at: Date.now()
                     };
+                    updatesAfter[`matches/${roomId}/historyWinDoneV6`] = winDonePayload;
+                    updatesAfter[`matchHistoryClaimsV7/${resultId}/win`] = winDonePayload;
                     updatesAfter[`matches/${roomId}/players/${winnerSide}/wins`] = afterWin.wins || 0;
                     updatesAfter[`matches/${roomId}/players/${winnerSide}/totalWins`] = afterWin.totalWins || 0;
                     updatesAfter[`matches/${roomId}/players/${winnerSide}/monthWins`] = afterWin.monthWins || 0;
@@ -7916,9 +8074,9 @@ async function recordMatchHistoryOnceV6(roomId, room = {}, source = "unknown", w
 
         // ===== THUA: cộng luôn cùng kết quả, không treo pending nữa =====
         if (loserKey) {
-            const lossClaimRef = db.ref(`matches/${roomId}/historyLossDoneV6`);
+            const lossClaimRef = db.ref(`matchHistoryClaimsV7/${resultId}/loss`);
             const lossClaimTx = await runRefTransaction(lossClaimRef, current => {
-                if (current && current.done) return;
+                if (current && (current.done || current.processing)) return;
                 return {
                     processing: true,
                     roomId,
@@ -7935,7 +8093,7 @@ async function recordMatchHistoryOnceV6(roomId, room = {}, source = "unknown", w
                 if (!afterLoss) {
                     await lossClaimRef.remove().catch(() => {});
                 } else {
-                    updatesAfter[`matches/${roomId}/historyLossDoneV6`] = {
+                    const lossDonePayload = {
                         done: true,
                         roomId,
                         resultId,
@@ -7945,6 +8103,8 @@ async function recordMatchHistoryOnceV6(roomId, room = {}, source = "unknown", w
                         source,
                         at: Date.now()
                     };
+                    updatesAfter[`matches/${roomId}/historyLossDoneV6`] = lossDonePayload;
+                    updatesAfter[`matchHistoryClaimsV7/${resultId}/loss`] = lossDonePayload;
                     updatesAfter[`matches/${roomId}/players/${loserSide}/losses`] = afterLoss.losses || 0;
                     updatesAfter[`matches/${roomId}/players/${loserSide}/totalLosses`] = afterLoss.totalLosses || 0;
                     updatesAfter[`matches/${roomId}/players/${loserSide}/monthLosses`] = afterLoss.monthLosses || 0;
@@ -8685,12 +8845,7 @@ refreshTimerRings();
                 const resultSub = `BÊN ${winnerSide === 'do' ? 'ĐỎ' : 'ĐEN'} THẮNG`;
 
                 if (currentRoomId) {
-                    db.ref("matches/" + currentRoomId).update({
-                        winner: winnerSide,
-winReason: "checkmate",
-finishedAt: firebase.database.ServerValue.TIMESTAMP,
-updatedAt: firebase.database.ServerValue.TIMESTAMP
-                    });
+                    finishRealtimeRoomOnce(currentRoomId, winnerSide, "checkmate");
                 } else {
                     endGame("CHIẾU BÍ", resultSub);
                 }
@@ -9457,12 +9612,16 @@ if (side === "den" && room.status !== "playing") {
 function syncRoomFromBoard(extra = {}) {
     if (!currentRoomId) return;
 
+    lastTimerPersistAt = Date.now();
+
     db.ref("matches/" + currentRoomId).update({
         board: exportBoardState(),
         turn: luotDi,
         isCoUp,
-        timeDo,
-        timeDen,
+        timeDo: safeTimerSeconds(timeDo),
+        timeDen: safeTimerSeconds(timeDen),
+        timerTurn: luotDi,
+        timerUpdatedAt: firebase.database.ServerValue.TIMESTAMP,
         lastMoveFrom: lastMoveFrom || null,
         lastMoveTo: lastMoveTo || null,
         updatedAt: firebase.database.ServerValue.TIMESTAMP,
@@ -9665,6 +9824,10 @@ if (!window.__shownVictoryKeys[victoryKey]) {
                 title = "ĐỐI THỦ THOÁT";
             }
 
+            if (room.winReason === "timeout") {
+                title = "HẾT GIỜ";
+            }
+
             endGame(
                 title,
                 `BÊN ${room.winner === "do" ? "ĐỎ" : "ĐEN"} THẮNG`
@@ -9779,6 +9942,7 @@ if (room.status === "playing" && !room.winner) {
 const hasBothPlayersInRoom = !!room.players?.do && !!room.players?.den;
 const canRenderLiveBoard =
     room.status === "playing" &&
+    !room.winner &&
     hasBothPlayersInRoom &&
     Array.isArray(room.board) &&
     room.board.length > 0;
@@ -9787,15 +9951,15 @@ if (!canRenderLiveBoard) {
     clearRealtimeBoardVisualOnly();
 } else {
     const newBoardHash = JSON.stringify(room.board || []);
+    const boardChanged = newBoardHash !== lastRoomBoardHash;
 
-    if (newBoardHash !== lastRoomBoardHash) {
+    if (boardChanged) {
         lastRoomBoardHash = newBoardHash;
 
         applyBoardStateFromRoom(room.board || []);
         isCoUp = !!room.isCoUp;
         luotDi = room.turn || "do";
-        timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
-        timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
+        applyRoomTimersFromRoom(room, true);
 
         timerDoEl.innerText = formatTime(timeDo);
         timerDenEl.innerText = formatTime(timeDen);
@@ -9810,6 +9974,15 @@ if (!canRenderLiveBoard) {
         }
 
         startTimer();
+    } else {
+        luotDi = room.turn || luotDi || "do";
+        applyRoomTimersFromRoom(room, false);
+        updateTurnUIOnly();
+        renderTimerUI();
+
+        if (!interval && room.status === "playing" && !room.winner) {
+            startTimer();
+        }
     }
 }
 
