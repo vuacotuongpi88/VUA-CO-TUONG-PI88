@@ -13900,8 +13900,10 @@ async function acceptRoomInvite() {
 
     const invite = activeRoomInvite;
     const me = getCurrentPlayerProfile();
+    const meFriend = getCurrentFriendProfile();
+    const stakeNeed = Math.max(0, Number(invite.stakePMC || 0));
 
-    if ((me.pmcBalance || 0) < Math.max(0, Number(invite.stakePMC || 0))) {
+    if ((me.pmcBalance || getPmcBalance() || 0) < stakeNeed) {
         alert("PMC không đủ để nhận thách đấu này.");
         return;
     }
@@ -13921,7 +13923,86 @@ async function acceptRoomInvite() {
         return;
     }
 
-    const meFriend = getCurrentFriendProfile();
+    // THÁCH ĐẤU TỪ BẢNG TOP là phòng riêng: lobbyOpen = false, không có waitingRooms.
+    // Vì vậy KHÔNG được gọi joinRoomFromLobby(), nếu không sẽ báo:
+    // "Không vào được bàn này, bàn đã đổi trạng thái."
+    if (invite.privateChallenge || invite.source === "top_challenge" || room.challengeOnly) {
+        const myWalletKey = String(meFriend.walletKey || me.walletKey || "");
+        const allowedWalletKey = String(room.challengeToWalletKey || invite.toWalletKey || "");
+
+        if (allowedWalletKey && myWalletKey && allowedWalletKey !== myWalletKey) {
+            alert("Lời mời này không phải dành cho tài khoản này.");
+            return;
+        }
+
+        const mode = room.mode || invite.mode || "co-tuong";
+        const stakePMC = Math.max(0, Math.floor(Number(room.stakePMC || invite.stakePMC || 0) || 0));
+        const denProfile = {
+            ...me,
+            side: "den",
+            pmcBalance: Math.max(0, Math.floor(Number(me.pmcBalance || getPmcBalance() || 0) || 0)),
+            balance: Math.max(0, Number(me.balance ?? getPiBalance() ?? 0) || 0),
+            piBalance: Math.max(0, Number(me.piBalance ?? me.balance ?? getPiBalance() ?? 0) || 0),
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        const denRef = db.ref("matches/" + invite.roomId + "/players/den");
+        const denJoinResult = await denRef.transaction((current) => {
+            if (current && current.uid && current.uid !== me.uid) return;
+            return denProfile;
+        }, undefined, false);
+
+        const joinedDen = denJoinResult.snapshot?.val?.() || null;
+        if (!denJoinResult.committed || !joinedDen || joinedDen.uid !== me.uid) {
+            await declineRoomInvite("room_busy");
+            alert("Phòng này đã có người khác vào trước.");
+            return;
+        }
+
+        const updates = {};
+        updates[`social/roomInvitesInbox/${meFriend.walletKey}/${invite.inviteId}`] = null;
+        updates[`social/roomInvitesSent/${invite.fromWalletKey}/${invite.inviteId}`] = {
+            ...invite,
+            status: "accepted",
+            acceptedAt: Date.now()
+        };
+        updates[`matches/${invite.roomId}/challengeOnly`] = false;
+        updates[`matches/${invite.roomId}/challengeAcceptedAt`] = firebase.database.ServerValue.TIMESTAMP;
+        updates[`matches/${invite.roomId}/lobbyOpen`] = false;
+        updates[`matches/${invite.roomId}/lobbyJoinedBy`] = me.uid || "";
+        updates[`matches/${invite.roomId}/ready/do`] = false;
+        updates[`matches/${invite.roomId}/ready/den`] = false;
+        updates[`matches/${invite.roomId}/stakeLocked/do`] = false;
+        updates[`matches/${invite.roomId}/stakeLocked/den`] = false;
+        updates[`matches/${invite.roomId}/readyDeadlineAt`] = null;
+        updates[`matches/${invite.roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+        await db.ref().update(updates);
+
+        activeRoomInvite = null;
+        renderRoomInviteOverlay();
+
+        mySide = "den";
+        viewSide = "den";
+        currentRoomId = invite.roomId;
+        currentRoomMode = mode;
+        currentRoomStakePMC = stakePMC;
+        currentRoomBucket = room.roomBucket || invite.roomBucket || makeStakeBucket(mode, stakePMC);
+        currentRoomStatus = "waiting";
+        isGameOver = false;
+        luotDi = "do";
+        timeDo = Number(room.timeDo || 540);
+        timeDen = Number(room.timeDen || 540);
+
+        saveActiveMatchSnapshot({ roomId: invite.roomId, mode, side: "den" });
+        closeArenaTopModal();
+        closeRankingModal();
+        prepareRealtimeArenaUI();
+        clearInterval(interval);
+        bindRoom(invite.roomId);
+        setPlayerPresence("arena").catch(() => {});
+        return;
+    }
+
     const updates = {};
     updates[`social/roomInvitesInbox/${meFriend.walletKey}/${invite.inviteId}`] = null;
     updates[`social/roomInvitesSent/${invite.fromWalletKey}/${invite.inviteId}`] = {
@@ -13930,7 +14011,7 @@ async function acceptRoomInvite() {
         acceptedAt: Date.now()
     };
     await db.ref().update(updates);
-    
+
     activeRoomInvite = null;
     renderRoomInviteOverlay();
     await joinRoomFromLobby(invite.roomId);
