@@ -837,9 +837,269 @@ font-size: 1rem;
         font-size: 11px;
     }
 }
+
+/* ===== LOGIN: NÚT GIỮA MÀN + 9 SÁCH NHÀ PHÁT TRIỂN ===== */
+#login-screen .welcome-login-corner {
+    top: 50% !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translate(-50%, -50%) !important;
+    align-items: center !important;
+    gap: 10px !important;
+    width: min(86vw, 280px);
+}
+
+#login-screen .welcome-login-corner button {
+    width: 100%;
+    min-width: 210px;
+    justify-content: center;
+    font-size: 14px;
+    padding: 12px 14px;
+}
+
+#pi-browser-note {
+    text-align: center !important;
+}
+
+.dev-rules-link {
+    margin-top: 2px;
+    font-size: 11px;
+    color: #ffeaa7;
+    text-decoration: underline;
+    cursor: pointer;
+    font-weight: 900;
+    text-shadow: 0 0 8px rgba(0,0,0,0.9);
+    opacity: 0.96;
+}
+
+.welcome-commit-box {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10050;
+    width: min(92vw, 720px) !important;
+    max-height: min(82vh, 680px);
+    flex: unset !important;
+}
+
+.welcome-commit-box.show {
+    display: block !important;
+}
+
+.welcome-commit-title {
+    position: relative;
+    padding-right: 34px;
+}
+
+.dev-rules-close {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #d63031;
+    color: #fff;
+    cursor: pointer;
+    font-size: 15px;
+    box-shadow: 0 0 10px rgba(214,48,49,0.45);
+}
+
+/* ===== NÚT TOP NGOÀI SẢNH ===== */
+#arena-top-btn {
+    position: fixed !important;
+    top: 16px !important;
+    right: 192px !important;
+    bottom: auto !important;
+    width: 52px !important;
+    height: 52px !important;
+    border-radius: 50% !important;
+    display: none;
+    align-items: center !important;
+    justify-content: center !important;
+    background: linear-gradient(180deg, #ffd166, #e17055) !important;
+    color: #2d1600 !important;
+    font-size: 24px !important;
+    cursor: pointer !important;
+    z-index: 13050 !important;
+    box-shadow:
+        0 0 14px rgba(255, 209, 102, 0.36),
+        0 0 16px rgba(244, 197, 66, 0.12) !important;
+    border: 1px solid rgba(255, 255, 255, 0.42) !important;
+    font-weight: 900;
+}
+
+#arena-top-btn:active {
+    transform: scale(0.94);
+}
+
+body.in-match #arena-top-btn {
+    display: none !important;
+}
+
+.top-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.82);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 26500;
+    padding: 12px;
+    box-sizing: border-box;
+}
+
+.top-modal.show {
+    display: flex;
+}
+
+.top-modal-box {
+    width: min(94vw, 760px);
+    max-height: 86vh;
+    overflow: hidden;
+    background: rgba(12, 10, 16, 0.98);
+    border: 2px solid #ffd166;
+    border-radius: 18px;
+    box-shadow: 0 0 22px rgba(255, 209, 102, 0.22), 0 0 28px rgba(0,0,0,0.8);
+}
+
+.top-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 14px;
+    background: linear-gradient(90deg, #7b2ff7, #e17055);
+    color: #fff8d6;
+    font-weight: 900;
+    letter-spacing: 1px;
+}
+
+.top-close {
+    cursor: pointer;
+    font-size: 18px;
+}
+
+.top-tabs {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 7px;
+    padding: 10px;
+    background: rgba(0,0,0,0.24);
+}
+
+.top-tab {
+    padding: 9px 6px !important;
+    border-radius: 11px !important;
+    font-size: 11px !important;
+    background: rgba(20, 18, 24, 0.96) !important;
+    color: #dfe6e9 !important;
+    border: 1px solid rgba(255, 209, 102, 0.26) !important;
+    font-weight: 900 !important;
+}
+
+.top-tab.active {
+    background: linear-gradient(180deg, #ffd166, #c99712) !important;
+    color: #241000 !important;
+    border-color: #fff8d6 !important;
+}
+
+#arena-top-list {
+    max-height: calc(86vh - 126px);
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.top-player-row {
+    display: grid;
+    grid-template-columns: 42px 42px 1fr auto;
+    gap: 8px;
+    align-items: center;
+    padding: 9px 10px;
+    margin-bottom: 8px;
+    border-radius: 13px;
+    background: rgba(255, 255, 255, 0.055);
+    border: 1px solid rgba(255, 209, 102, 0.16);
+}
+
+.top-player-rank {
+    font-size: 15px;
+    color: #ffd166;
+    font-weight: 900;
+    text-align: center;
+}
+
+.top-player-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid rgba(255, 209, 102, 0.45);
+}
+
+.top-player-name {
+    color: #fff;
+    font-size: 13px;
+    font-weight: 900;
+    line-height: 1.2;
+    word-break: break-word;
+}
+
+.top-player-sub {
+    margin-top: 2px;
+    color: #b2bec3;
+    font-size: 10px;
+    line-height: 1.2;
+}
+
+.top-player-value {
+    color: #7dffb3;
+    font-size: 12px;
+    font-weight: 900;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.top-empty {
+    padding: 18px 10px;
+    text-align: center;
+    color: #b2bec3;
+    font-size: 13px;
+}
+
+@media (max-width: 600px) {
+    #arena-top-btn {
+        top: 16px !important;
+        right: 192px !important;
+        width: 48px !important;
+        height: 48px !important;
+        font-size: 22px !important;
+    }
+
+    .top-tabs {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .top-player-row {
+        grid-template-columns: 34px 36px 1fr;
+    }
+
+    .top-player-value {
+        grid-column: 3 / 4;
+        text-align: left;
+        margin-top: -4px;
+    }
+}
+
 /* Ẩn icon nhiệm vụ + shop khi đã vào phòng / vào trận */
 body.in-match #arena-mission-btn,
-body.in-match #arena-skin-btn {
+body.in-match #arena-skin-btn,
+body.in-match #arena-top-btn {
     display: none !important;
 }
 /* Container dời qua trái */
@@ -4827,6 +5087,7 @@ margin-bottom: 14px;
     <div class="welcome-login-corner">
     <button id="welcome-google-btn" onclick="loginGoogle()" style="display:none;">ĐĂNG NHẬP GG</button>
     <button id="welcome-pi-btn" onclick="loginPi()" style="display:none;">ĐĂNG NHẬP PI</button>
+    <div class="dev-rules-link" onclick="openDeveloperRules()">9 SÁCH NHÀ PHÁT TRIỂN</div>
     <div id="pi-browser-note" style="display:none; max-width:220px; padding:8px 10px; border-radius:12px; background:rgba(0,0,0,0.72); color:#ffeaa7; font-size:11px; line-height:1.4; text-align:right; border:1px solid rgba(236,221,7,0.45);">
         Muốn đăng nhập / nạp / rút Pi, vui lòng mở app bằng Pi Browser.
     </div>
@@ -4839,7 +5100,7 @@ margin-bottom: 14px;
         </div>
 
         <div class="welcome-commit-box">
-            <div class="welcome-commit-title">9 CAM KẾT CỘNG ĐỒNG</div>
+            <div class="welcome-commit-title">9 CAM KẾT CỘNG ĐỒNG <span class="dev-rules-close" onclick="closeDeveloperRules()">✖</span></div>
 
             <div class="welcome-commit-list">
                 <div class="welcome-commit-item">
@@ -5179,6 +5440,27 @@ margin-bottom: 14px;
         <div id="ranking-list"></div>
     </div>
 </div>
+
+<div id="arena-top-modal" class="top-modal">
+    <div class="top-modal-box">
+        <div class="top-modal-header">
+            <span>BẢNG TOP CAO THỦ</span>
+            <span class="top-close" onclick="closeArenaTopModal()">✖</span>
+        </div>
+
+        <div class="top-tabs">
+            <button id="top-tab-level" class="top-tab active" onclick="switchArenaTopTab('level')">TOP LEVER</button>
+            <button id="top-tab-skin" class="top-tab" onclick="switchArenaTopTab('skin')">TOP SKIN</button>
+            <button id="top-tab-record" class="top-tab" onclick="switchArenaTopTab('record')">TOP THẮNG/THUA</button>
+            <button id="top-tab-pi" class="top-tab" onclick="switchArenaTopTab('pi')">TOP PI</button>
+            <button id="top-tab-pmc" class="top-tab" onclick="switchArenaTopTab('pmc')">TOP PMC</button>
+        </div>
+
+        <div id="arena-top-list">
+            <div class="top-empty">Đang tải bảng Top...</div>
+        </div>
+    </div>
+</div>
 <div id="game-arena" style="display: none; padding: 10px;">
 <div class="game-wrapper">
 <div id="ready-overlay">
@@ -5326,6 +5608,7 @@ margin-bottom: 14px;
     <span id="arena-friend-badge" class="friend-badge-dot">0</span>
 </div>
 <div id="arena-skin-btn" onclick="openAvatarSkinShop()">🎭</div>
+<div id="arena-top-btn" onclick="openArenaTopModal(event)">🏆</div>
 
 <div id="arena-friend-box">
     <div class="arena-friend-header">
@@ -5708,6 +5991,10 @@ renderRoomInviteOverlay();
 }
 
 function showLoginChoices() {
+    const topBtn = document.getElementById("arena-top-btn");
+    if (topBtn) topBtn.style.display = "none";
+    closeDeveloperRules();
+
     const piBtn = document.getElementById("welcome-pi-btn");
     const googleBtn = document.getElementById("welcome-google-btn");
     const piNote = document.getElementById("pi-browser-note");
@@ -5904,6 +6191,8 @@ auth.onAuthStateChanged(async user => {
         document.getElementById("user-display").style.display = "none";
         document.getElementById("home-menu").style.display = "none";
         document.getElementById("game-arena").style.display = "none";
+        const topBtn = document.getElementById("arena-top-btn");
+        if (topBtn) topBtn.style.display = "none";
         showLoginChoices();
     }
 });
@@ -5929,6 +6218,9 @@ function hideHomeUI() {
     const skinBtn = document.getElementById("arena-skin-btn");
     if (skinBtn) skinBtn.style.display = "none";
 
+    const topBtn = document.getElementById("arena-top-btn");
+    if (topBtn) topBtn.style.display = "none";
+
     const missionBadge = document.getElementById("arena-mission-badge");
     if (missionBadge) {
         missionBadge.classList.remove("show");
@@ -5949,6 +6241,9 @@ if (friendBox) friendBox.classList.remove("show");
 
     const rankingModal = document.getElementById("ranking-modal");
     if (rankingModal) rankingModal.classList.remove("show");
+
+    const topModal = document.getElementById("arena-top-modal");
+    if (topModal) topModal.classList.remove("show");
 
 }
 
@@ -5973,6 +6268,9 @@ function showHomeUI() {
 
     const skinBtn = document.getElementById("arena-skin-btn");
     if (skinBtn) skinBtn.style.display = "flex";
+
+    const topBtn = document.getElementById("arena-top-btn");
+    if (topBtn) topBtn.style.display = "flex";
 
     if (typeof refreshMissionLobbyBadgeSilently === "function") {
         refreshMissionLobbyBadgeSilently();
@@ -11456,6 +11754,208 @@ document.getElementById("match-input-popup")?.addEventListener("keypress", funct
 if (e.key === "Enter") sendMatchChat();
 });
 
+
+function openDeveloperRules() {
+    const box = document.querySelector(".welcome-commit-box");
+    if (box) box.classList.add("show");
+}
+
+function closeDeveloperRules() {
+    const box = document.querySelector(".welcome-commit-box");
+    if (box) box.classList.remove("show");
+}
+
+let arenaTopActiveTab = "level";
+let arenaTopCache = [];
+
+function escapeTopHtml(text = "") {
+    return String(text || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function readTopNumber(value, fallback = 0) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+}
+
+function countOwnedTopSkins(wallet = {}) {
+    const owned = wallet.ownedAvatarSkins || wallet.avatarSkins || wallet.skins || {};
+    if (Array.isArray(owned)) {
+        return owned.filter(Boolean).filter(id => String(id) !== "none").length;
+    }
+    if (owned && typeof owned === "object") {
+        return Object.keys(owned).filter(id => id !== "none" && owned[id]).length;
+    }
+    return wallet.avatarSkin && wallet.avatarSkin !== "none" ? 1 : 0;
+}
+
+function normalizeTopWallet(walletKey, wallet = {}) {
+    const levelMeta = wallet.levelMeta || {};
+    const level = Math.max(1, Math.floor(readTopNumber(
+        levelMeta.level ?? wallet.level ?? wallet.lever ?? 1,
+        1
+    )));
+
+    const exp = Math.max(0, Math.floor(readTopNumber(
+        levelMeta.exp ?? levelMeta.xp ?? wallet.exp ?? wallet.xp ?? 0,
+        0
+    )));
+
+    const wins = Math.max(0, Math.floor(readTopNumber(
+        levelMeta.wins ?? wallet.wins ?? wallet.totalWins ?? wallet.win ?? 0,
+        0
+    )));
+
+    const losses = Math.max(0, Math.floor(readTopNumber(
+        levelMeta.losses ?? wallet.losses ?? wallet.totalLosses ?? wallet.lose ?? wallet.loses ?? 0,
+        0
+    )));
+
+    const pmc = Math.max(0, Math.floor(readTopNumber(
+        wallet.pmcBalance ?? wallet.pmc ?? wallet.balancePMC ?? 0,
+        0
+    )));
+
+    const pi = Math.max(0, readTopNumber(
+        wallet.piBalance ?? wallet.balance ?? wallet.pi ?? 0,
+        0
+    ));
+
+    const skinCount = countOwnedTopSkins(wallet);
+
+    return {
+        walletKey,
+        name: wallet.name || wallet.displayName || wallet.username || walletKey || "Người chơi",
+        photo: wallet.photo || wallet.avatar || "images/do_tuong.png",
+        title: levelMeta.title || wallet.levelTitle || getSimpleLevelTitle(level),
+        level,
+        exp,
+        wins,
+        losses,
+        pmc,
+        pi,
+        skinCount,
+        equippedSkin: wallet.avatarSkin || "none"
+    };
+}
+
+function isSystemTopWallet(walletKey = "", wallet = {}) {
+    const key = String(walletKey || "").toLowerCase();
+    const name = String(wallet.name || wallet.username || "").toLowerCase();
+    return key.includes("admin") || key.includes("system") || key.includes("master") || name.includes("hệ thống") || name.includes("system");
+}
+
+async function loadArenaTopPlayers() {
+    const snap = await db.ref("wallets").limitToLast(250).once("value");
+    const list = [];
+
+    snap.forEach(child => {
+        const wallet = child.val() || {};
+        if (isSystemTopWallet(child.key, wallet)) return;
+        list.push(normalizeTopWallet(child.key, wallet));
+    });
+
+    arenaTopCache = list;
+    return list;
+}
+
+function getArenaTopSorted(tab) {
+    const list = arenaTopCache.slice();
+
+    if (tab === "skin") {
+        return list.sort((a, b) => (b.skinCount - a.skinCount) || (b.level - a.level) || (b.wins - a.wins));
+    }
+    if (tab === "record") {
+        return list.sort((a, b) => (b.wins - a.wins) || (a.losses - b.losses) || (b.level - a.level));
+    }
+    if (tab === "pi") {
+        return list.sort((a, b) => (b.pi - a.pi) || (b.level - a.level));
+    }
+    if (tab === "pmc") {
+        return list.sort((a, b) => (b.pmc - a.pmc) || (b.level - a.level));
+    }
+    return list.sort((a, b) => (b.level - a.level) || (b.exp - a.exp) || (b.wins - a.wins));
+}
+
+function renderArenaTopList() {
+    const listEl = document.getElementById("arena-top-list");
+    if (!listEl) return;
+
+    document.querySelectorAll(".top-tab").forEach(btn => {
+        btn.classList.toggle("active", btn.id === "top-tab-" + arenaTopActiveTab);
+    });
+
+    const list = getArenaTopSorted(arenaTopActiveTab).slice(0, 100);
+    if (!list.length) {
+        listEl.innerHTML = '<div class="top-empty">Chưa có dữ liệu Top.</div>';
+        return;
+    }
+
+    listEl.innerHTML = list.map((p, i) => {
+        let value = "";
+        let sub = `Lever ${p.level} • ${escapeTopHtml(p.title)}`;
+
+        if (arenaTopActiveTab === "skin") {
+            value = `${p.skinCount} skin`;
+            sub += ` • đang dùng: ${escapeTopHtml(p.equippedSkin)}`;
+        } else if (arenaTopActiveTab === "record") {
+            value = `Thắng ${p.wins} / Thua ${p.losses}`;
+        } else if (arenaTopActiveTab === "pi") {
+            value = `${p.pi.toLocaleString("vi-VN", { maximumFractionDigits: 4 })} π`;
+        } else if (arenaTopActiveTab === "pmc") {
+            value = `${p.pmc.toLocaleString("vi-VN")} PMC`;
+        } else {
+            value = `Lever ${p.level}`;
+            sub += ` • EXP ${p.exp.toLocaleString("vi-VN")}`;
+        }
+
+        return `
+            <div class="top-player-row">
+                <div class="top-player-rank">#${i + 1}</div>
+                <img class="top-player-avatar" src="${escapeTopHtml(p.photo)}" alt="avatar">
+                <div>
+                    <div class="top-player-name">${escapeTopHtml(p.name)}</div>
+                    <div class="top-player-sub">${sub}</div>
+                </div>
+                <div class="top-player-value">${value}</div>
+            </div>`;
+    }).join("");
+}
+
+async function openArenaTopModal(e) {
+    if (e) e.stopPropagation();
+    if (document.body.classList.contains("in-match")) return;
+
+    const modal = document.getElementById("arena-top-modal");
+    const listEl = document.getElementById("arena-top-list");
+    if (!modal || !listEl) return;
+
+    modal.classList.add("show");
+    listEl.innerHTML = '<div class="top-empty">Đang tải bảng Top...</div>';
+
+    try {
+        await loadArenaTopPlayers();
+        renderArenaTopList();
+    } catch (err) {
+        console.error("Tải bảng Top lỗi:", err);
+        listEl.innerHTML = '<div class="top-empty">Không tải được bảng Top.</div>';
+    }
+}
+
+function closeArenaTopModal() {
+    const modal = document.getElementById("arena-top-modal");
+    if (modal) modal.classList.remove("show");
+}
+
+function switchArenaTopTab(tab) {
+    arenaTopActiveTab = ["level", "skin", "record", "pi", "pmc"].includes(tab) ? tab : "level";
+    renderArenaTopList();
+}
+
 function openRankingModal(e) {
     if (e) e.stopPropagation();
     const modal = document.getElementById("ranking-modal");
@@ -14005,6 +14505,32 @@ function ensureArenaSkinButton() {
 document.addEventListener("DOMContentLoaded", ensureArenaSkinButton);
 setTimeout(ensureArenaSkinButton, 500);
 setTimeout(ensureArenaSkinButton, 1500);
+
+function ensureArenaTopButton() {
+    let btn = document.getElementById("arena-top-btn");
+
+    if (!btn) {
+        btn = document.createElement("div");
+        btn.id = "arena-top-btn";
+        btn.innerHTML = "🏆";
+        btn.onclick = openArenaTopModal;
+    }
+
+    if (btn.parentElement !== document.body) {
+        document.body.appendChild(btn);
+    }
+
+    const loginScreen = document.getElementById("login-screen");
+    const homeMenu = document.getElementById("home-menu");
+    const isLoginOpen = !!loginScreen && loginScreen.style.display !== "none";
+    const isHomeOpen = !!homeMenu && homeMenu.style.display !== "none";
+    btn.style.display = (!document.body.classList.contains("in-match") && isHomeOpen && !isLoginOpen) ? "flex" : "none";
+}
+
+document.addEventListener("DOMContentLoaded", ensureArenaTopButton);
+setTimeout(ensureArenaTopButton, 500);
+setTimeout(ensureArenaTopButton, 1500);
+
 </script>
 </body>
 
