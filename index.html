@@ -8731,7 +8731,6 @@ function hideVictoryPopup() {
 }
 
 async function playNextMatch() {
-    hideVictoryPopup();
 window.__endGameOnceKeyV3 = "";
 window.__lastOneWinPointClaimKeyV2 = "";
 window.__lastOneLossPointClaimKeyV2 = "";
@@ -8751,6 +8750,35 @@ readyDeadlineAt = 0;
 
     // Online: đánh lại với đúng người đang cùng phòng
     if (currentRoomId) {
+        const rematchGate = await waitForSettlementPaidBeforeRematch(currentRoomId, 7000);
+
+        if (!rematchGate.ok) {
+            await loadWalletBalance().catch(() => {});
+            alert("Đợi hệ thống cộng PMC ván vừa rồi xong rồi bấm TIẾP TỤC lại.");
+            return;
+        }
+
+        hideVictoryPopup();
+
+        if (rematchGate.alreadyWaiting) {
+            readyDo = false;
+            readyDen = false;
+            readyDeadlineAt = Number(rematchGate.room?.readyDeadlineAt || 0) || 0;
+            readyTime = readyDeadlineAt ? Math.max(1, getReadySecondsLeft(readyDeadlineAt)) : 30;
+            isGameOver = false;
+            selectedPiece = null;
+            lastMoveFrom = null;
+            lastMoveTo = null;
+            lastRoomBoardHash = "";
+            clearRealtimeBoardVisualOnly();
+            renderPlayersFromRoom(rematchGate.room);
+            renderTimerUI();
+            ensureReadyOverlayForWaitingRoom(rematchGate.room, currentRoomId);
+            return;
+        }
+
+        const nextReadyRoundId = makeNewReadyRoundId(currentRoomId, rematchGate.room || {});
+
         readyDo = false;
         readyDen = false;
         isGameOver = false;
@@ -8803,6 +8831,8 @@ drawRequest: null,
 settlement: null,
 refunds: null,
 readyDeadlineAt: null,
+readyRoundId: nextReadyRoundId,
+rematchPreparedAt: firebase.database.ServerValue.TIMESTAMP,
 updatedAt: firebase.database.ServerValue.TIMESTAMP
 });
 const freshSnap = await db.ref("matches/" + currentRoomId).once("value").catch(() => null);
@@ -8829,6 +8859,7 @@ if (
     }
 
     // Offline fallback
+    hideVictoryPopup();
     isGameOver = false;
     selectedPiece = null;
     luotDi = "do";
@@ -10180,16 +10211,126 @@ function syncRoomFromBoard(extra = {}) {
     });
 }
 
+
+function cleanReadyRoundKey(value = "") {
+    return String(value || "")
+        .trim()
+        .replace(/[.#$\[\]\/]/g, "_");
+}
+
+function makeNewReadyRoundId(roomId = currentRoomId, room = {}) {
+    const seed =
+        room.matchResultId ||
+        room.finishedAt ||
+        room.winAt ||
+        room.startedAt ||
+        room.updatedAt ||
+        Date.now();
+
+    return cleanReadyRoundKey(`${roomId || "room"}_ready_${seed}`);
+}
+
+function getReadyRoundIdFromRoom(roomId = currentRoomId, room = {}) {
+    return cleanReadyRoundKey(
+        room.readyRoundId ||
+        room.readyRoundKey ||
+        `${roomId || "room"}_initial`
+    );
+}
+
+function isStakeLockForReadyRound(lock, readyRoundId) {
+    if (!lock || typeof lock !== "object") return false;
+    if (lock.done !== true) return false;
+
+    const lockRoundId = cleanReadyRoundKey(lock.roundId || lock.readyRoundId || "");
+    const currentRoundId = cleanReadyRoundKey(readyRoundId || "");
+
+    return !!lockRoundId && !!currentRoundId && lockRoundId === currentRoundId;
+}
+
+async function waitForSettlementPaidBeforeRematch(roomId, maxWaitMs = 7000) {
+    const started = Date.now();
+    let latestRoom = null;
+
+    while (Date.now() - started <= maxWaitMs) {
+        const snap = await db.ref("matches/" + roomId).once("value").catch(() => null);
+        latestRoom = snap?.val?.() || null;
+
+        if (!latestRoom) return { ok: false, reason: "room_missing", room: latestRoom };
+
+        // Nếu người kia đã reset sang ván chờ rồi thì không reset lần nữa.
+        if (
+            latestRoom.status === "waiting" &&
+            !latestRoom.winner &&
+            latestRoom.players?.do &&
+            latestRoom.players?.den
+        ) {
+            return { ok: true, alreadyWaiting: true, room: latestRoom };
+        }
+
+        // Không có kết quả thì cho qua.
+        if (!latestRoom.winner) {
+            return { ok: true, room: latestRoom };
+        }
+
+        if (latestRoom.winner === "hoa") {
+            return { ok: true, room: latestRoom };
+        }
+
+        const stake = Math.max(0, Math.floor(Number(latestRoom.stakePMC || 0) || 0));
+        if (!stake) {
+            return { ok: true, room: latestRoom };
+        }
+
+        if (latestRoom?.settlement?.paid === true) {
+            return { ok: true, room: latestRoom };
+        }
+
+        // Nếu mình là bên thắng thì tự chạy settle cũ ngay tại đây.
+        // Không để người chơi bấm "Tiếp tục" xóa winner/settlement trước khi PMC được cộng.
+        if (latestRoom.winner === mySide) {
+            await maybeSettleStakeRoom(latestRoom, roomId).catch(err => {
+                console.error("SETTLE_BEFORE_REMATCH_FAIL:", err);
+            });
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 350));
+    }
+
+    const finalSnap = await db.ref("matches/" + roomId).once("value").catch(() => null);
+    latestRoom = finalSnap?.val?.() || latestRoom;
+
+    if (
+        latestRoom &&
+        latestRoom.status === "waiting" &&
+        !latestRoom.winner &&
+        latestRoom.players?.do &&
+        latestRoom.players?.den
+    ) {
+        return { ok: true, alreadyWaiting: true, room: latestRoom };
+    }
+
+    if (!latestRoom?.winner || latestRoom?.winner === "hoa" || latestRoom?.settlement?.paid === true) {
+        return { ok: true, room: latestRoom };
+    }
+
+    return { ok: false, reason: "settlement_not_paid", room: latestRoom };
+}
+
+
 async function maybeStartRoomFromHost(room, roomId = currentRoomId) {
-    if (!(room.stakeLocked?.do && room.stakeLocked?.den)) return;
     if (!roomId) return;
+    const readyRoundId = getReadyRoundIdFromRoom(roomId, room);
+    const doStakeLocked = isStakeLockForReadyRound(room.stakeLocked?.do, readyRoundId);
+    const denStakeLocked = isStakeLockForReadyRound(room.stakeLocked?.den, readyRoundId);
+
+    if (!(doStakeLocked && denStakeLocked)) return;
     if (room.status === "playing") return;
     if (mySide !== "do") return;
     if (room.status !== "waiting") return;
     if (!room.players?.do || !room.players?.den) return;
     if (!(room.ready?.do && room.ready?.den)) return;
     if (Array.isArray(room.board) && room.board.length) return;
-    if (!(room.stakeLocked?.do && room.stakeLocked?.den)) return;
 
     isCoUp = room.mode === "co-up";
     resetToStartup();
@@ -10221,6 +10362,7 @@ await waitingRoomRef.remove().catch(() => {});
         resultWinnerUid: null,
         resultLoserUid: null,
         drawRequest: null,
+        startedReadyRoundId: readyRoundId,
         ready: {
             do: false,
             den: false
@@ -10695,6 +10837,7 @@ room.players?.den
    await db.ref().update({
     [`matches/${roomId}/ready/den`]: false,
     [`matches/${roomId}/stakeLocked/den`]: false,
+    [`matches/${roomId}/readyRoundId`]: room.readyRoundId || makeNewReadyRoundId(roomId, room),
     [`matches/${roomId}/readyDeadlineAt`]: null,
 
     // Đủ 2 người rồi thì không cho hiện ngoài danh sách bàn nữa
@@ -10739,6 +10882,7 @@ async function createAndPublishWaitingRoom(me, mode, stakePMC, bucket) {
         roomBucket: bucket,
         inviteCode,
         status: "waiting",
+        readyRoundId: makeNewReadyRoundId(newRoomId),
             lobbyOpen: true,
     lobbyOwnerUid: me.uid || "",
     lobbyOwnerWalletKey: me.walletKey || "",
@@ -12068,7 +12212,9 @@ async function settleFinishedRoomBeforeOwnerHandoffV10(roomId, room = {}) {
         if (!stake) return true;
 
         const currentSettlement = room.settlement || {};
-        if (currentSettlement.paid === true || currentSettlement?.winnerPaid?.done === true) {
+        // Chỉ coi là đã settle khi paid=true.
+        // winnerPaid.done chỉ là khóa đang xử lý; nếu dọn winner lúc này sẽ mất PMC ván vừa rồi.
+        if (currentSettlement.paid === true) {
             return true;
         }
 
@@ -12238,6 +12384,7 @@ async function transferWaitingRoomHost(roomId, room, roomBucket) {
     updates[`matches/${roomId}/stakeLocked/do`] = false;
     updates[`matches/${roomId}/stakeLocked/den`] = false;
     updates[`matches/${roomId}/readyDeadlineAt`] = null;
+    updates[`matches/${roomId}/readyRoundId`] = makeNewReadyRoundId(roomId, room);
     updates[`matches/${roomId}/status`] = "waiting";
     updates[`matches/${roomId}/turn`] = "do";
     updates[`matches/${roomId}/board`] = null;
@@ -12405,6 +12552,7 @@ async function handoffFinishedRoomToRemainingPlayer(roomId, room, leavingSide, r
     updates[`matches/${roomId}/timeDo`] = 540;
     updates[`matches/${roomId}/timeDen`] = 540;
     updates[`matches/${roomId}/readyDeadlineAt`] = null;
+    updates[`matches/${roomId}/readyRoundId`] = makeNewReadyRoundId(roomId, freshRoom);
     updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
 
     // Nếu bucket cũ khác bucket mới thì xóa waitingRooms cũ, nhưng KHÔNG xóa matches.
@@ -13000,6 +13148,12 @@ async function maybeSettleStakeRoom(room, roomId) {
 
     // ===== CÓ NGƯỜI THẮNG =====
  // ===== CÓ NGƯỜI THẮNG =====
+if (room?.settlement?.paid === true) {
+    await loadWalletBalance().catch(() => {});
+    await syncMyMatchBalanceToRoomNow().catch(() => {});
+    return true;
+}
+
 if (room.winner !== mySide) {
     return;
 }
@@ -13013,7 +13167,11 @@ const myWalletKey = localWalletKey;
 
 const winLock = await Promise.race([
     runRefTransaction(winnerPaidRef, current => {
-        if (current && current.done) return;
+        if (current && current.done) {
+            const lockAge = Date.now() - Number(current.at || 0);
+            const hasRetryableError = !!current.error;
+            if (!hasRetryableError && lockAge < 20000) return;
+        }
         return {
             done: true,
             side: mySide,
@@ -13225,7 +13383,17 @@ async function chargeStakeForReady(roomId, side) {
 
         const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
         if (!stake) return { ok: true, stage: "no_stake" };
-        if (room?.stakeLocked?.[side]) return { ok: true, stage: "already_locked" };
+
+        const readyRoundId = getReadyRoundIdFromRoom(roomId, room);
+        if (!room.readyRoundId && readyRoundId) {
+            await db.ref("matches/" + roomId + "/readyRoundId").set(readyRoundId).catch(() => {});
+        }
+
+        // Chỉ coi đã khóa stake nếu lock thuộc đúng lượt SS hiện tại.
+        // Lock cũ từ ván trước không được chặn bấm SS và không được làm ván mới start thiếu tiền.
+        if (isStakeLockForReadyRound(room?.stakeLocked?.[side], readyRoundId)) {
+            return { ok: true, stage: "already_locked", readyRoundId };
+        }
 
         const localProfile = getCurrentPlayerProfile();
         const sidePlayer = room?.players?.[side] || {};
@@ -13287,6 +13455,8 @@ await db.ref("matches/" + roomId + "/stakeLocked/" + side).set({
     done: true,
     walletKey: targetWalletKey,
     stake,
+    roundId: readyRoundId,
+    readyRoundId,
     at: firebase.database.ServerValue.TIMESTAMP,
     uid: sidePlayer.uid || localProfile.uid || ""
 });
@@ -14037,6 +14207,7 @@ function closeReadyOverlay() {
     readyOverlayWaitingShown = false;
     readyOverlayRoomKey = "";
     readyOverlayOpeningLock = false;
+    window.__readyClickLock = false;
 
     clearInterval(readyInterval);
 }
@@ -14301,6 +14472,7 @@ function showReadyOverlay(mode, forceResetTime = false) {
     }
 
     readyOverlayWaitingShown = true;
+    window.__readyClickLock = false;
     overlay.style.display = "flex";
     overlay.style.pointerEvents = "auto";
 
