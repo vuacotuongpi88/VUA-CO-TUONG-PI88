@@ -8522,25 +8522,72 @@ function applyStatsV2ResultToWalletData(wallet, result, role) {
     const oldStats = w.statsV2 && typeof w.statsV2 === "object" ? { ...w.statsV2 } : {};
     const summary = summarizeStatsV2History(mergedHistory, monthKey);
 
+    // FIX V2.1: Không cho tổng V2 tụt sau khi reset app/cache.
+    // matchHistoryV2 là sổ cái chính, nhưng nếu lịch sử cục bộ bị thiếu vài ván cũ
+    // thì vẫn giữ "sàn" từ statsV2 cũ. Nhờ vậy đang 3 thắng, reset app đánh thêm
+    // sẽ không bị rebuild tụt về 1.
+    const oldMonth = oldStats.months && oldStats.months[monthKey] && typeof oldStats.months[monthKey] === "object"
+        ? oldStats.months[monthKey]
+        : {};
+    const floorWins = Math.max(
+        summary.wins,
+        Math.max(0, Math.floor(statsV2SafeNum(oldStats.wins ?? oldStats.totalWins, 0)))
+    );
+    const floorLosses = Math.max(
+        summary.losses,
+        Math.max(0, Math.floor(statsV2SafeNum(oldStats.losses ?? oldStats.totalLosses, 0)))
+    );
+    const floorMatches = Math.max(
+        summary.matches,
+        Math.max(0, Math.floor(statsV2SafeNum(oldStats.matches ?? oldStats.totalMatches, 0))),
+        floorWins + floorLosses
+    );
+    const floorMonthWins = Math.max(
+        summary.monthWins,
+        Math.max(0, Math.floor(statsV2SafeNum(oldStats.monthWins ?? oldMonth.wins, 0)))
+    );
+    const floorMonthLosses = Math.max(
+        summary.monthLosses,
+        Math.max(0, Math.floor(statsV2SafeNum(oldStats.monthLosses ?? oldMonth.losses, 0)))
+    );
+    const floorMonthMatches = Math.max(
+        summary.monthMatches,
+        Math.max(0, Math.floor(statsV2SafeNum(oldStats.monthMatches ?? oldMonth.matches, 0))),
+        floorMonthWins + floorMonthLosses
+    );
+
+    const safeMonths = {
+        ...(oldStats.months && typeof oldStats.months === "object" ? oldStats.months : {}),
+        ...summary.months,
+        [monthKey]: {
+            ...(oldStats.months && oldStats.months[monthKey] && typeof oldStats.months[monthKey] === "object" ? oldStats.months[monthKey] : {}),
+            ...(summary.months && summary.months[monthKey] && typeof summary.months[monthKey] === "object" ? summary.months[monthKey] : {}),
+            wins: floorMonthWins,
+            losses: floorMonthLosses,
+            matches: floorMonthMatches,
+            updatedAt: now
+        }
+    };
+
     w.statsV2 = {
         ...oldStats,
-        wins: summary.wins,
-        losses: summary.losses,
-        matches: summary.matches,
-        totalWins: summary.wins,
-        totalLosses: summary.losses,
-        totalMatches: summary.matches,
-        monthWins: summary.monthWins,
-        monthLosses: summary.monthLosses,
-        monthMatches: summary.monthMatches,
+        wins: floorWins,
+        losses: floorLosses,
+        matches: floorMatches,
+        totalWins: floorWins,
+        totalLosses: floorLosses,
+        totalMatches: floorMatches,
+        monthWins: floorMonthWins,
+        monthLosses: floorMonthLosses,
+        monthMatches: floorMonthMatches,
         monthKey,
         lastResult: role === "winner" ? "win" : "loss",
         lastRoundId: roundId,
         lastRoomId: result.roomId || "",
         lastReason: result.reason || "",
         updatedAt: now,
-        source: "roundResultsV2_history_rebuild",
-        months: summary.months
+        source: "roundResultsV2_history_rebuild_v2_1",
+        months: safeMonths
     };
 
     w.matchHistoryV2 = mergedHistory;
@@ -8625,6 +8672,17 @@ async function commitStatsV2FromRoundRoomOnce(room, roomId = currentRoomId) {
         if (winnerHasHistory && loserHasHistory) {
             window.__statsV2Done[result.roundId] = true;
         }
+
+        // Nếu bảng Top đang mở trên chính máy này thì tải lại ngay,
+        // tránh nhìn số cũ vì arenaTopCache còn giữ snapshot lúc mở modal.
+        try {
+            const topModal = document.getElementById("arena-top-modal");
+            if (topModal && topModal.classList.contains("show") && typeof loadArenaTopPlayers === "function" && typeof renderArenaTopList === "function") {
+                await loadArenaTopPlayers();
+                renderArenaTopList();
+            }
+        } catch (_) {}
+
         console.log("Đã commit/sửa statsV2:", result.roundId, { winnerApplied, loserApplied, winnerHasHistory, loserHasHistory });
         return !!(winnerHasHistory && loserHasHistory);
     } catch (err) {
