@@ -6084,6 +6084,7 @@ function getReadySecondsLeft(deadlineAt) {
 let currentRoomId = null;
 let currentRoomMode = null;
 let mySide = null;
+let currentRoomJoinToken = "";
 let roomValueRef = null;
 let roomChatRef = null;
 let lastRoomBoardHash = "";
@@ -6291,6 +6292,7 @@ async function tryResumeRealtimeMatch(preferredMode = null) {
         currentRoomBucket = null;
         currentRoomStatus = null;
         mySide = null;
+currentRoomJoinToken = "";
         viewSide = "do";
         readyDo = false;
         readyDen = false;
@@ -6676,6 +6678,7 @@ async function backToMenu() {
         clearActiveMatchSnapshot();
         currentRoomId = null;
         mySide = null;
+currentRoomJoinToken = "";
         viewSide = "do";
         currentRoomMode = null;
         currentRoomStakePMC = 0;
@@ -6787,6 +6790,7 @@ function renderSpectatorRoomSnapshot(room = {}, roomId = "") {
     currentRoomMode = room.mode || currentRoomMode || "co-tuong";
     currentRoomStatus = room.status || null;
     mySide = null;
+currentRoomJoinToken = "";
     viewSide = "do";
     isGameOver = !!room.winner;
 
@@ -7978,6 +7982,36 @@ function getMySideFromRoomSafe(room = {}) {
     if (isSamePlayerAsMe(room?.players?.den)) return "den";
     return null;
 }
+
+function makeRoomJoinToken(roomId = currentRoomId) {
+    const base = [
+        String(roomId || ""),
+        String(makeWalletDbKey() || ""),
+        String(Date.now()),
+        Math.random().toString(36).slice(2)
+    ].join("_");
+    return base.replace(/[.#$\[\]\/]/g, "_");
+}
+
+function sameRoomPlayerIdentity(a = {}, b = {}) {
+    const au = String(a?.uid || "").trim();
+    const bu = String(b?.uid || "").trim();
+    const aw = String(a?.walletKey || "").trim();
+    const bw = String(b?.walletKey || "").trim();
+
+    return !!(
+        (au && bu && au === bu) ||
+        (aw && bw && aw === bw)
+    );
+}
+
+function roomHasTwoDifferentPlayers(room = {}) {
+    const doPlayer = room?.players?.do || null;
+    const denPlayer = room?.players?.den || null;
+    if (!doPlayer || !denPlayer) return false;
+    if (sameRoomPlayerIdentity(doPlayer, denPlayer)) return false;
+    return true;
+}
 function syncMyWalletCacheFromRoomPlayer(room = {}) {
     const realSide = getMySideFromRoomSafe(room);
     if (!realSide) return;
@@ -8230,6 +8264,7 @@ async function leaveRealtimeMatch() {
 
 currentRoomId = null;
 mySide = null;
+currentRoomJoinToken = "";
 currentRoomMode = null;
 currentRoomStakePMC = 0;
 currentRoomBucket = null;
@@ -9069,12 +9104,19 @@ async function isRoomPlayerLiveInThisRoom(player = {}, roomId = currentRoomId) {
     const stateName = String(state.state || "");
     const stateRoomId = String(state.roomId || "");
     const updatedAt = Number(state.updatedAt || 0) || 0;
-    const stale = updatedAt && (Date.now() - updatedAt > 120000);
+    const stale = updatedAt && (Date.now() - updatedAt > 45000);
+
+    const playerJoinToken = String(player?.roomJoinToken || "").trim();
+    const stateJoinToken = String(state.roomJoinToken || "").trim();
 
     if (!online) return false;
     if (stale) return false;
     if (stateName === "home" || !stateName) return false;
-    if (stateRoomId && stateRoomId !== roomId) return false;
+    if (stateRoomId !== roomId) return false;
+
+    // Nếu player được tạo bởi bản mới có token, presence phải khớp token.
+    // Chặn tuyệt đối dữ liệu Đen cũ/room cũ còn sót làm bật SS ma.
+    if (playerJoinToken && stateJoinToken !== playerJoinToken) return false;
 
     return stateName === "arena" && stateRoomId === roomId;
 }
@@ -9114,6 +9156,33 @@ async function repairWaitingRoomGhostPlayers(room = {}, roomId = currentRoomId) 
     if (!hasDo || !hasDen) {
         closeReadyOverlay();
         return false;
+    }
+
+    // Nếu do/den trỏ về cùng 1 uid hoặc cùng 1 ví thì đây là dữ liệu phòng cũ bị dính.
+    // Giữ Đỏ làm chủ, đá Đen ma ra để không bật bảng SS khi chỉ có 1 người.
+    if (sameRoomPlayerIdentity(doPlayer, denPlayer)) {
+        const mode = room.mode || currentRoomMode || "co-tuong";
+        const stakePMC = Math.max(0, Math.floor(Number(room.stakePMC || currentRoomStakePMC || 0) || 0));
+        const bucket = room.roomBucket || currentRoomBucket || makeStakeBucket(mode, stakePMC);
+        const built = buildLobbyEntryFromHost(room, roomId, doPlayer);
+        const updates = {};
+
+        updates[`matches/${roomId}/players/den`] = null;
+        updates[`matches/${roomId}/ready/do`] = false;
+        updates[`matches/${roomId}/ready/den`] = false;
+        updates[`matches/${roomId}/stakeLocked/do`] = false;
+        updates[`matches/${roomId}/stakeLocked/den`] = false;
+        updates[`matches/${roomId}/readyDeadlineAt`] = null;
+        updates[`matches/${roomId}/lobbyOpen`] = true;
+        updates[`matches/${roomId}/lobbyOwnerUid`] = doPlayer.uid || "";
+        updates[`matches/${roomId}/lobbyOwnerWalletKey`] = doPlayer.walletKey || "";
+        updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+        updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+        updates[`waitingRooms/${bucket}/${roomId}`] = built.entry;
+
+        closeReadyOverlay();
+        await db.ref().update(updates).catch(err => console.error("Dọn Đen trùng chủ phòng lỗi:", err));
+        return true;
     }
 
     const [doLive, denLive] = await Promise.all([
@@ -9255,6 +9324,7 @@ if (iWasKickedByReadyTimeout) {
 
     currentRoomId = null;
     mySide = null;
+    currentRoomJoinToken = "";
     viewSide = "do";
     currentRoomMode = null;
     currentRoomStakePMC = 0;
@@ -9397,10 +9467,10 @@ renderPlayersFromRoom(room);
 updateReadyUI();
 
 const hasEnoughPlayersWaiting =
-    !!room.players?.do &&
-    !!room.players?.den &&
+    roomHasTwoDifferentPlayers(room) &&
     room.status === "waiting" &&
-    !room.winner;
+    !room.winner &&
+    getMySideFromRoomSafe(room);
 
 if (hasEnoughPlayersWaiting) {
     isGameOver = false;
@@ -9410,7 +9480,7 @@ if (hasEnoughPlayersWaiting) {
     renderTimerUI();
 
     // Mở bảng SS ổn định, không cho Firebase snapshot làm chớp tắt
-    ensureReadyOverlayForWaitingRoom(room, listeningRoomId);
+    await ensureReadyOverlayForWaitingRoom(room, listeningRoomId);
 } else {
     // Chỉ đóng bảng SS khi thật sự đã vào trận hoặc phòng không còn đủ người.
     // Không đóng/mở theo mấy update phụ như số dư, ready, stakeLocked.
@@ -9632,9 +9702,11 @@ room.players?.den
         return false;
     }
 
+    const joinToken = makeRoomJoinToken(roomId);
     const denProfile = {
         ...me,
         side: "den",
+        roomJoinToken: joinToken,
         pmcBalance: Math.max(0, Math.floor(Number(me.pmcBalance || getPmcBalance() || 0) || 0)),
         balance: Math.max(0, Number(me.balance ?? getPiBalance() ?? 0) || 0),
         piBalance: Math.max(0, Number(me.piBalance ?? me.balance ?? getPiBalance() ?? 0) || 0),
@@ -9677,6 +9749,7 @@ room.players?.den
 
     mySide = "den";
     viewSide = "den";
+    currentRoomJoinToken = joinToken;
     currentRoomId = roomId;
     currentRoomMode = roomMode;
     currentRoomStakePMC = roomStake;
@@ -9694,6 +9767,13 @@ async function createAndPublishWaitingRoom(me, mode, stakePMC, bucket) {
     const newRoomId = newRoomRef.key;
     const waitingRoomRef = db.ref("waitingRooms/" + bucket + "/" + newRoomId);
     const inviteCode = makeInviteCodeFromRoomId(newRoomId);
+    const joinToken = makeRoomJoinToken(newRoomId);
+    const hostProfile = {
+        ...me,
+        side: "do",
+        roomJoinToken: joinToken,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+    };
 
     await newRoomRef.set({
         mode,
@@ -9711,7 +9791,7 @@ async function createAndPublishWaitingRoom(me, mode, stakePMC, bucket) {
         timeDen: 540,
         createdAt: firebase.database.ServerValue.TIMESTAMP,
         players: {
-            do: me,
+            do: hostProfile,
             den: null
         },
         ready: {
@@ -9732,9 +9812,9 @@ async function createAndPublishWaitingRoom(me, mode, stakePMC, bucket) {
 
     await waitingRoomRef.set({
         roomId: newRoomId,
-        uid: me.uid,
-        name: me.name,
-            walletKey: me.walletKey || "",
+        uid: hostProfile.uid,
+        name: hostProfile.name,
+            walletKey: hostProfile.walletKey || "",
         mode,
         stakePMC,
         inviteCode,
@@ -9745,6 +9825,7 @@ async function createAndPublishWaitingRoom(me, mode, stakePMC, bucket) {
 
     mySide = "do";
     viewSide = "do";
+    currentRoomJoinToken = joinToken;
     currentRoomId = newRoomId;
     currentRoomMode = mode;
     currentRoomStakePMC = stakePMC;
@@ -9859,7 +9940,7 @@ for (const waiting of waitingList) {
         readyDen = !!freshRoom.ready?.den;
         window.__lastBoundRoom = freshRoom;
         window.__lastBoundRoomId = waiting.roomId;
-        showReadyOverlay(freshRoom.mode || mode);
+        await ensureReadyOverlayForWaitingRoom(freshRoom, waiting.roomId);
     } else {
         closeReadyOverlay();
         updateReadyUI();
@@ -10810,49 +10891,53 @@ function runRefTransaction(ref, updater) {
         );
     });
 }
-// BẢO MẬT VÍ PMC: Dùng Transaction kết hợp nạp số dư thật (knownPmc)
+// BẢO MẬT VÍ PMC: Chỉ transaction đúng nhánh pmcBalance, không ghi đè cả ví.
 async function adjustPmcWalletByKey(walletKey, delta, profile = {}, knownPmc = null) {
-    const ref = walletRefByKey(walletKey);
+    const safeKey = String(walletKey || makeWalletDbKey()).replace(/[.#$\[\]\/]/g, "_");
     const safeDelta = Math.floor(Number(delta || 0));
 
-    if (safeDelta === 0) return getPmcBalance();
+    if (!safeKey) return null;
+    if (safeDelta === 0) {
+        const snap = await db.ref("wallets/" + safeKey + "/pmcBalance").once("value").catch(() => null);
+        return Math.max(0, Math.floor(Number(snap?.val?.() ?? getPmcBalance() ?? 0) || 0));
+    }
 
-    // Nạp data từ server trước khi chạy Transaction
-    await ref.once("value");
+    const pmcRef = db.ref("wallets/" + safeKey + "/pmcBalance");
 
-    const result = await runRefTransaction(ref, (wallet) => {
-        wallet = wallet || {};
-        let current = Math.floor(Number(wallet.pmcBalance || 0));
+    const result = await runRefTransaction(pmcRef, (currentValue) => {
+        let current = Math.floor(Number(currentValue ?? 0) || 0);
 
-        // 🔥 THUỐC ĐẶC TRỊ LỖI VỀ 0: Nếu Firebase đưa số ảo (0) do lag cache,
-        // nhưng ta đã truyền số tiền thật (knownPmc) vào -> ÉP nó dùng số thật!
-        if (current === 0 && knownPmc !== null && knownPmc > 0) {
-            current = knownPmc;
+        // Chỉ dùng knownPmc khi node pmcBalance chưa tồn tại. Không dùng để ghi đè số 0 thật.
+        if ((currentValue === null || typeof currentValue === "undefined") && knownPmc !== null && knownPmc > 0) {
+            current = Math.floor(Number(knownPmc) || 0);
         }
 
         const nextPmc = current + safeDelta;
-        
-        // Nếu trừ tiền mà đéo đủ -> Hủy giao dịch
-        if (nextPmc < 0) return; 
 
-        wallet.pmcBalance = nextPmc;
-        wallet.updatedAt = Date.now();
-        wallet.name = profile.name || wallet.name || localStorage.getItem("user-name-display") || "Người chơi";
-        wallet.photo = profile.photo || wallet.photo || localStorage.getItem("user-photo") || "images/do_tuong.png";
+        // Trừ tiền mà không đủ thì hủy transaction, không bao giờ set về 0 lén.
+        if (nextPmc < 0) return;
 
-        return wallet;
+        return nextPmc;
     });
 
     if (!result || !result.committed) {
-        console.error("Giao dịch PMC bị hủy/lỗi!", { walletKey, delta: safeDelta });
+        console.error("Giao dịch PMC bị hủy/lỗi!", { walletKey: safeKey, delta: safeDelta });
         return null;
     }
 
-    const nextPmc = Math.max(0, Math.floor(Number(result.snapshot.val().pmcBalance || 0)));
+    const nextPmc = Math.max(0, Math.floor(Number(result.snapshot.val() || 0) || 0));
 
-    console.log("CẬP NHẬT PMC THÀNH CÔNG", { walletKey, delta: safeDelta, final: nextPmc });
+    // Metadata cập nhật riêng, lỗi metadata không được làm fail giao dịch tiền.
+    db.ref("wallets/" + safeKey).update({
+        updatedAt: Date.now(),
+        name: profile.name || localStorage.getItem("user-name-display") || "Người chơi",
+        photo: profile.photo || localStorage.getItem("user-photo") || "images/do_tuong.png",
+        walletKey: safeKey
+    }).catch(err => console.warn("Cập nhật metadata ví lỗi:", err));
 
-    if (walletKey === makeWalletDbKey()) {
+    console.log("CẬP NHẬT PMC THÀNH CÔNG", { walletKey: safeKey, delta: safeDelta, final: nextPmc });
+
+    if (safeKey === makeWalletDbKey()) {
         currentPmcBalance = nextPmc;
         localStorage.setItem(getPmcCacheKey(), String(nextPmc));
         updatePmcUI(nextPmc);
@@ -11484,19 +11569,52 @@ return true;
 }
 // XỬ LÝ KHÓA TIỀN CƯỢC KHI BẤM SẴN SÀNG
 async function chargeStakeForReady(roomId, side) {
+    let lockClaimed = false;
+    let targetWalletKey = "";
+    let stake = 0;
+
     try {
         if (!roomId || !side) return { ok: false, stage: "input_error" };
 
         const roomSnap = await db.ref("matches/" + roomId).once("value");
         const room = roomSnap.val() || {};
-        const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
-        
-        if (!stake) return { ok: true, stage: "no_stake" };
-        if (room?.stakeLocked?.[side]) return { ok: true, stage: "already_locked" };
-
         const localProfile = getCurrentPlayerProfile();
+
+        stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
+        if (!stake) return { ok: true, stage: "no_stake" };
+
+        const myDetectedSide = getMySideFromRoomSafe(room);
+        if (myDetectedSide !== side) {
+            return { ok: false, stage: "side_mismatch", myDetectedSide };
+        }
+
+        if (room.status !== "waiting" || room.winner) {
+            return { ok: false, stage: "room_not_waiting" };
+        }
+
+        if (!roomHasTwoDifferentPlayers(room)) {
+            closeReadyOverlay();
+            await repairWaitingRoomGhostPlayers(room, roomId).catch(() => {});
+            return { ok: false, stage: "not_enough_players" };
+        }
+
+        const [doLive, denLive] = await Promise.all([
+            isRoomPlayerLiveInThisRoom(room.players.do, roomId),
+            isRoomPlayerLiveInThisRoom(room.players.den, roomId)
+        ]);
+
+        if (!doLive || !denLive) {
+            closeReadyOverlay();
+            await repairWaitingRoomGhostPlayers(room, roomId).catch(() => {});
+            return { ok: false, stage: "not_enough_live_players" };
+        }
+
+        if (room?.stakeLocked?.[side]?.done || room?.stakeLocked?.[side] === true) {
+            return { ok: true, stage: "already_locked" };
+        }
+
         const sidePlayer = room?.players?.[side] || {};
-        let targetWalletKey = sidePlayer.walletKey || localProfile.walletKey;
+        targetWalletKey = sidePlayer.walletKey || localProfile.walletKey;
 
         if (sidePlayer.uid === localProfile.uid && targetWalletKey !== localProfile.walletKey) {
             targetWalletKey = localProfile.walletKey;
@@ -11507,50 +11625,102 @@ async function chargeStakeForReady(roomId, side) {
             });
         }
 
+        if (!targetWalletKey) return { ok: false, stage: "wallet_key_missing" };
+
         const safeWalletKey = String(targetWalletKey || "").replace(/[.#$\[\]\/]/g, "_");
-        
-        // Ép Firebase lấy số dư thật từ Server (bỏ qua cache)
-        const targetWalletSnap = await db.ref("wallets/" + safeWalletKey).get();
+
+        // Khóa idempotent trước khi trừ để chặn bấm 2 lần / 2 snapshot trừ lặp.
+        const lockRef = db.ref("matches/" + roomId + "/stakeLocked/" + side);
+        const lockNonce = [side, Date.now(), Math.random().toString(36).slice(2)].join("_");
+        const lockResult = await runRefTransaction(lockRef, (current) => {
+            const now = Date.now();
+            if (current && (current.done === true || current === true)) return current;
+
+            // Nếu đang có pending mới của máy khác, không giành lock.
+            // Pending quá 15 giây coi như rác do tab bị đóng giữa chừng, cho phép lấy lại.
+            if (current && current.pending === true) {
+                const at = Number(current.at || 0) || 0;
+                const stillFresh = at && (now - at < 15000);
+                if (stillFresh) return current;
+            }
+
+            return {
+                pending: true,
+                done: false,
+                nonce: lockNonce,
+                walletKey: targetWalletKey,
+                stake,
+                uid: sidePlayer.uid || localProfile.uid || "",
+                at: now
+            };
+        });
+
+        const lockValue = lockResult?.snapshot?.val?.() || null;
+        if (!lockResult?.committed) {
+            if (lockValue && (lockValue.done === true || lockValue === true)) {
+                return { ok: true, stage: "already_locked" };
+            }
+            return { ok: false, stage: "lock_busy" };
+        }
+
+        if (lockValue && lockValue.done === true) {
+            return { ok: true, stage: "already_locked" };
+        }
+
+        if (!lockValue || lockValue.nonce !== lockNonce) {
+            return { ok: false, stage: "lock_busy" };
+        }
+
+        lockClaimed = true;
+
+        // Firebase v8/WebView cũ ổn định nhất là once('value'), không dùng ref.get().
+        const targetWalletSnap = await db.ref("wallets/" + safeWalletKey).once("value");
         const targetWallet = targetWalletSnap.val() || {};
         const targetPmc = Math.max(0, Math.floor(Number(targetWallet.pmcBalance || 0) || 0));
 
-        if (!targetWalletKey) return { ok: false, stage: "wallet_key_missing" };
-
         if (targetPmc < stake) {
-            return { ok: false, stage: "insufficient_wallet" };
+            await lockRef.set(false).catch(() => {});
+            lockClaimed = false;
+            return { ok: false, stage: "insufficient_wallet", targetPmc, stake };
         }
 
-        // 🔥 TIẾN HÀNH TRỪ PMC: Truyền luôn số tiền thật "targetPmc" vào để khóa mỏ Firebase
         const paid = await adjustPmcWalletByKey(targetWalletKey, -stake, {
             name: sidePlayer.name || localProfile.name || "Người chơi",
             photo: sidePlayer.photo || localProfile.photo || "images/do_tuong.png"
         }, targetPmc);
 
-        if (paid == null) return { ok: false, stage: "tx_not_committed" };
+        if (paid == null) {
+            await lockRef.set(false).catch(() => {});
+            lockClaimed = false;
+            return { ok: false, stage: "tx_not_committed" };
+        }
 
         if (targetWalletKey === localProfile.walletKey) {
             refreshMyMatchBalanceBoxesNow(getPiBalance(), paid);
         }
 
-        // Ghi số dư mới vào Room để 2 bên cùng nhìn thấy
         await db.ref("matches/" + roomId + "/players/" + side).update({
             pmcBalance: paid,
             updatedAt: firebase.database.ServerValue.TIMESTAMP
         }).catch(() => {});
 
-        // Xác nhận khóa cược
-        await db.ref("matches/" + roomId + "/stakeLocked/" + side).set({
+        await lockRef.set({
             done: true,
+            pending: false,
             walletKey: targetWalletKey,
             stake,
             at: firebase.database.ServerValue.TIMESTAMP,
             uid: sidePlayer.uid || localProfile.uid || ""
         });
 
+        lockClaimed = false;
         return { ok: true, stage: "done", walletKey: targetWalletKey, paid };
-        
+
     } catch (err) {
         console.error("chargeStakeForReady exception:", err);
+        if (lockClaimed && roomId && side) {
+            await db.ref("matches/" + roomId + "/stakeLocked/" + side).set(false).catch(() => {});
+        }
         return { ok: false, stage: "exception", error: String(err?.message || err) };
     }
 }
@@ -12260,6 +12430,7 @@ async function failReadyAndBackHome() {
 
         currentRoomId = null;
         mySide = null;
+currentRoomJoinToken = "";
         currentRoomMode = null;
         currentRoomStakePMC = 0;
         currentRoomBucket = null;
@@ -12365,6 +12536,7 @@ async function failReadyAndBackHome() {
 
         currentRoomId = null;
         mySide = null;
+currentRoomJoinToken = "";
         currentRoomMode = null;
         currentRoomStakePMC = 0;
         currentRoomBucket = null;
@@ -12476,13 +12648,12 @@ function autoResetNextMatch() {
             roomId === currentRoomId &&
             room.status === "waiting" &&
             !room.winner &&
-            room.players?.do &&
-            room.players?.den &&
+            roomHasTwoDifferentPlayers(room) &&
             getMySideFromRoomSafe(room)
         );
 
         if (enoughPlayers) {
-            ensureReadyOverlayForWaitingRoom(room, roomId);
+            Promise.resolve(ensureReadyOverlayForWaitingRoom(room, roomId)).catch(err => console.error("Mở SS tự động lỗi:", err));
         } else {
             closeReadyOverlay();
         }
@@ -12505,8 +12676,7 @@ function showReadyOverlay(mode, forceResetTime = false) {
             guardRoomId === currentRoomId &&
             guardRoom.status === "waiting" &&
             !guardRoom.winner &&
-            guardRoom.players?.do &&
-            guardRoom.players?.den &&
+            roomHasTwoDifferentPlayers(guardRoom) &&
             getMySideFromRoomSafe(guardRoom)
         );
 
@@ -12543,21 +12713,31 @@ function showReadyOverlay(mode, forceResetTime = false) {
     startReadyCountdown();
 }
 
-function ensureReadyOverlayForWaitingRoom(room = {}, roomId = currentRoomId) {
+async function ensureReadyOverlayForWaitingRoom(room = {}, roomId = currentRoomId) {
     const overlay = document.getElementById("ready-overlay");
-    if (!overlay) return;
+    if (!overlay) return false;
 
     const hasEnoughPlayersWaiting =
-        !!room.players?.do &&
-        !!room.players?.den &&
+        roomHasTwoDifferentPlayers(room) &&
         room.status === "waiting" &&
         !room.winner &&
         getMySideFromRoomSafe(room);
 
-    // Thiếu 1 trong 2 người là đóng SS ngay, không để bảng cũ treo lại.
+    // Thiếu 1 trong 2 người thật là đóng SS ngay, không để bảng cũ treo lại.
     if (!hasEnoughPlayersWaiting) {
         closeReadyOverlay();
-        return;
+        return false;
+    }
+
+    const [doLive, denLive] = await Promise.all([
+        isRoomPlayerLiveInThisRoom(room.players.do, roomId),
+        isRoomPlayerLiveInThisRoom(room.players.den, roomId)
+    ]);
+
+    if (!doLive || !denLive) {
+        closeReadyOverlay();
+        await repairWaitingRoomGhostPlayers(room, roomId).catch(err => console.error("Dọn phòng ma trước SS lỗi:", err));
+        return false;
     }
 
     const key = [
@@ -12597,7 +12777,7 @@ function ensureReadyOverlayForWaitingRoom(room = {}, roomId = currentRoomId) {
             startReadyCountdown();
         }
 
-        return;
+        return true;
     }
 
     readyOverlayOpeningLock = false;
@@ -12608,13 +12788,13 @@ function ensureReadyOverlayForWaitingRoom(room = {}, roomId = currentRoomId) {
         readyTime <= 0;
 
     showReadyOverlay(room.mode || currentRoomMode, needResetTime);
+    return true;
 }
 
 async function setReady() {
     if (isSpectatorMode) return;
     if (!currentRoomId || !mySide) return;
 
-    // 1. Khóa tạm nút bấm ở giao diện ngay lập tức để người chơi thấy có phản hồi
     const btn = document.getElementById("ready-main-btn");
     if (btn) {
         btn.disabled = true;
@@ -12622,31 +12802,45 @@ async function setReady() {
         btn.style.opacity = "0.6";
     }
 
-    // 2. Chạy lệnh trừ tiền (Lock PMC)
-    const result = await chargeStakeForReady(currentRoomId, mySide);
+    const roomId = currentRoomId;
+    const side = mySide;
+    const result = await chargeStakeForReady(roomId, side);
 
-    // 3. Nếu trừ tiền thất bại (Đéo đủ tiền hoặc lỗi mạng)
     if (!result.ok) {
         console.error("READY FAIL:", result);
-        
-        // Mở lại nút Sẵn Sàng
+
         if (btn) {
             btn.disabled = false;
             btn.textContent = "SẴN SÀNG LẠI";
             btn.style.opacity = "1";
         }
-        
-        // Nếu do đéo đủ tiền thì văng thông báo cho nó nạp
+
         if (result.stage === "insufficient_wallet") {
-            alert("Mày không đủ PMC để sẵn sàng! Hãy nạp thêm.");
+            alert("Không đủ PMC để sẵn sàng. Cần " + formatPMC(result.stake || currentRoomStakePMC || 0) + " PMC.");
+        } else if (result.stage === "not_enough_players" || result.stage === "not_enough_live_players") {
+            alert("Phòng chưa đủ 2 người thật. Đã dọn dữ liệu phòng cũ, chờ người mới vào lại.");
         } else {
-            alert("Lỗi khóa tiền cược, hãy thử bấm lại!");
+            alert("Lỗi khóa tiền cược: " + (result.stage || "unknown") + ". Hãy thử bấm lại!");
         }
         return;
     }
 
-    // 4. Trừ tiền OK rồi thì báo Firebase là ĐÃ SẴN SÀNG
-    await db.ref("matches/" + currentRoomId + "/ready/" + mySide).set(true);
+    try {
+        await db.ref("matches/" + roomId + "/ready/" + side).set(true);
+    } catch (err) {
+        console.error("Ghi trạng thái ready lỗi, hoàn lại PMC:", err);
+        const snap = await db.ref("matches/" + roomId).once("value").catch(() => null);
+        const freshRoom = snap?.val?.() || null;
+        if (freshRoom) {
+            await maybeRefundWaitingStakePMC(roomId, freshRoom, side).catch(() => {});
+        }
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = "SẴN SÀNG LẠI";
+            btn.style.opacity = "1";
+        }
+        alert("Đã trừ PMC nhưng ghi Sẵn sàng lỗi, hệ thống đã hoàn lại nếu giao dịch có khóa. Bấm lại sau vài giây.");
+    }
 }
 async function batDauTranDau(loai) {
     const mode = loai === "up" ? "co-up" : "co-tuong";
@@ -13768,6 +13962,7 @@ async function watchTopPlayingRoom(roomId) {
     isSpectatorMode = true;
     document.body.classList.add("spectator-mode");
     mySide = null;
+currentRoomJoinToken = "";
     viewSide = "do";
     currentRoomId = roomId;
     currentRoomMode = room.mode || "co-tuong";
@@ -15045,11 +15240,13 @@ async function setPlayerPresence(state = "home") {
         const me = getCurrentFriendProfile();
         if (!me?.walletKey) return;
 
-        const stateRef = db.ref("social/playerState/" + me.walletKey);
+        const safePresenceKey = String(me.walletKey || "").replace(/[.#$\[\]\/]/g, "_");
+        const stateRef = db.ref("social/playerState/" + safePresenceKey);
         await stateRef.update({
             state,
             roomId: currentRoomId || null,
             mode: currentRoomMode || null,
+            roomJoinToken: currentRoomId ? (currentRoomJoinToken || null) : null,
             online: true,
             updatedAt: Date.now()
         });
@@ -15059,6 +15256,7 @@ async function setPlayerPresence(state = "home") {
             state: "home",
             roomId: null,
             mode: null,
+            roomJoinToken: null,
             updatedAt: firebase.database.ServerValue.TIMESTAMP
         });
     } catch (err) {
