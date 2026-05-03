@@ -10882,291 +10882,127 @@ async function maybeSettleStakeRoom(room, roomId) {
     const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
     if (!roomId || !stake || !room?.winner) return;
 
-    const doPlayer = room?.players?.do || {};
-    const denPlayer = room?.players?.den || {};
     const localWalletKey = makeWalletDbKey();
 
-    // ===== HÒA =====
+    // ===== TRƯỜNG HỢP HÒA CỜ (MẠNH THẰNG NÀO THẰNG NẤY TỰ HOÀN TIỀN) =====
     if (room.winner === "hoa") {
-        const refundTargets = [];
+        if (!mySide) return; // Khán giả thì nghỉ
 
-        if (doPlayer.walletKey) {
-            refundTargets.push({
-                walletKey: doPlayer.walletKey,
-                name: doPlayer.name,
-                photo: doPlayer.photo
-            });
-        } else if (mySide === "do") {
-            refundTargets.push({
-                walletKey: localWalletKey,
-                name: localStorage.getItem("user-name-display") || "Người chơi",
-                photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-            });
-        }
-
-        if (denPlayer.walletKey) {
-            refundTargets.push({
-                walletKey: denPlayer.walletKey,
-                name: denPlayer.name,
-                photo: denPlayer.photo
-            });
-        } else if (mySide === "den") {
-            refundTargets.push({
-                walletKey: localWalletKey,
-                name: localStorage.getItem("user-name-display") || "Người chơi",
-                photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-            });
-        }
-
-        const uniqueTargets = [];
-        const seen = new Set();
-        for (const item of refundTargets) {
-            if (!item.walletKey || seen.has(item.walletKey)) continue;
-            seen.add(item.walletKey);
-            uniqueTargets.push(item);
-        }
-
-        // Chưa xác định đủ ví thì chưa được đóng cờ done
-        if (!uniqueTargets.length) return;
-
-        const settlementRef = db.ref(`matches/${roomId}/settlement`);
-        const result = await runRefTransaction(settlementRef, current => {
+        // Ghi log để tránh 1 thằng tự hoàn tiền 2 lần
+        const refundRef = db.ref(`matches/${roomId}/settlement/refund_${mySide}`);
+        const result = await runRefTransaction(refundRef, current => {
             if (current && current.done) return;
-            return {
-                done: true,
-                winner: room.winner,
-                stakePMC: stake,
-                at: Date.now(),
-                by: getCurrentPlayerProfile().uid || ""
-            };
+            return { done: true, stakePMC: stake, at: Date.now() };
         });
 
-        if (!result.committed) return;
+        if (!result.committed) return; // Đã hoàn tiền cho mình rồi thì thôi
 
-        for (const item of uniqueTargets) {
-            await adjustPmcWalletByKey(item.walletKey, stake, {
-                name: item.name,
-                photo: item.photo
-            });
-        }
+        // Tự cộng tiền lại vào ví của chính mình (100% không bị Firebase chặn quyền)
+        await adjustPmcWalletByKey(localWalletKey, stake, {
+            name: localStorage.getItem("user-name-display") || "Người chơi",
+            photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+        });
 
         await loadWalletBalance().catch(() => {});
         await syncMyMatchBalanceToRoomNow();
         return;
     }
 
-    // ===== CÓ NGƯỜI THẮNG =====
-    // FIX PMC SAFE: chỉ sửa settle, không đụng SS/ready/stakeLocked.
-    // Bản cũ chỉ máy bên thắng mới cộng PMC; nếu máy thắng lag/rời nhanh thì ván đó không cộng.
-    // Bản này cho máy nào thấy winner cũng được quyền chốt, nhưng vẫn khóa winnerPaid để chỉ cộng 1 lần.
+    // ===== TRƯỜNG HỢP CÓ NGƯỜI THẮNG =====
     const winnerSide = String(room.winner || "").trim();
+
+    // 🔥 FIX LỖI MẤT TIỀN KHI ĐẦU HÀNG Ở ĐÂY:
+    // Thằng thua tuyệt đối KHÔNG ĐƯỢC thọc tay vào cộng tiền cho thằng thắng!
+    if (winnerSide !== mySide) {
+        console.log("Tao là người thua, nhường máy thằng thắng tự bốc tiền!");
+        return false; 
+    }
+
+    // --- TỪ DÒNG NÀY TRỞ XUỐNG CHỈ CÓ MÁY CỦA THẰNG THẮNG MỚI ĐƯỢC CHẠY ---
     const winnerPlayer = room?.players?.[winnerSide] || {};
-    const winnerWalletKey = String(
-        winnerPlayer.walletKey ||
-        winnerPlayer.walletDbKey ||
-        (winnerSide === mySide ? localWalletKey : "") ||
-        ""
-    ).trim();
+    const winnerWalletKey = localWalletKey; 
 
-    if (!winnerSide || winnerSide === "hoa" || !winnerWalletKey) {
-        console.warn("PMC settle bỏ qua vì thiếu winnerSide/winnerWalletKey", { roomId, winnerSide, winnerPlayer });
-        return false;
-    }
-
+    // Đặt lệnh xí chỗ, chống cộng 2 lần
     const winnerPaidRef = db.ref(`matches/${roomId}/settlement/winnerPaid`);
-    const winnerProfile = {
-        name: winnerPlayer.name || localStorage.getItem("user-name-display") || "Người chơi",
-        photo: winnerPlayer.photo || localStorage.getItem("user-photo") || "images/do_tuong.png"
-    };
-    const myWalletKey = winnerWalletKey;
-
-    const winLock = await Promise.race([
-        runRefTransaction(winnerPaidRef, current => {
-            if (current && current.done) return;
-            return {
-                done: true,
-                side: winnerSide,
-                winner: winnerSide,
-                stakePMC: stake,
-                at: Date.now(),
-                uid: winnerPlayer.uid || "",
-                by: getCurrentPlayerProfile().uid || "",
-                source: "safe_any_client_no_ready_touch"
-            };
-        }),
-        new Promise(resolve => setTimeout(() => resolve({ timeout: true }), 3000))
-    ]);
-
-    if (winLock && winLock.timeout) {
-        return false;
-    }
+    const winLock = await runRefTransaction(winnerPaidRef, current => {
+        if (current && current.done) return;
+        return {
+            done: true,
+            side: winnerSide,
+            winner: winnerSide,
+            stakePMC: stake,
+            at: Date.now(),
+            uid: getCurrentPlayerProfile().uid || ""
+        };
+    });
 
     if (!winLock.committed) {
         await loadWalletBalance().catch(() => {});
-        if (winnerSide === mySide) {
-            await syncMyMatchBalanceToRoomNow().catch(() => {});
-        }
+        await syncMyMatchBalanceToRoomNow().catch(() => {});
         return false;
     }
 
-const totalPot = stake * 2;
-const feePMC = Math.max(0, Math.floor(totalPot * 0.02));
-const winnerReceivePMC = totalPot - feePMC;
-const adminWalletKey = "pi_admin_master";
-const settleDebugRef = db.ref(`matches/${roomId}/settlement/debug`);
+    const totalPot = stake * 2;
+    const feePMC = Math.max(0, Math.floor(totalPot * 0.02));
+    const winnerReceivePMC = totalPot - feePMC;
+    const adminWalletKey = "pi_admin_master";
 
-try {
-    await settleDebugRef.update({
-        stage: "before_winner_credit",
-        at: Date.now(),
-        myWalletKey,
-        winnerWalletKey,
-        winnerSide,
-        settledBySide: mySide || "",
-        adminWalletKey,
-        totalPot,
-        feePMC,
-        winnerReceivePMC
-    });
-
-    // 1) cộng cho winner sau khi trừ phí
-    const paid = await adjustPmcWalletByKey(winnerWalletKey, winnerReceivePMC, winnerProfile);
-
-    if (paid == null) {
-        await winnerPaidRef.update({
-            done: false,
-            error: "winner_payout_failed",
-            errorAt: Date.now()
+    try {
+        // 1) Cộng tiền thưởng cho chính mình (Vì là ví của mình nên thao tác này trơn tru 100%)
+        const paid = await adjustPmcWalletByKey(winnerWalletKey, winnerReceivePMC, {
+            name: localStorage.getItem("user-name-display") || "Người chơi",
+            photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
         });
 
-        await settleDebugRef.update({
-            stage: "winner_credit_failed",
-            at: Date.now()
-        });
-
-        alert(
-            "SETTLE FAIL: cộng ví bên thắng thất bại\n" +
-            "wallet: " + myWalletKey + "\n" +
-            "winnerReceivePMC: " + winnerReceivePMC
-        );
-        return;
-    }
-
-    await settleDebugRef.update({
-        stage: "after_winner_credit",
-        at: Date.now(),
-        paid
-    });
-if (winnerWalletKey === makeWalletDbKey()) {
-    currentPmcBalance = paid;
-    localStorage.setItem(getPmcCacheKey(), String(paid));
-    updatePmcUI(paid);
-    refreshMyMatchBalanceBoxesNow(getPiBalance(), paid);
-}
-
-// Chỉ cập nhật ô số dư của bên thắng trong room. Không đụng ready/stakeLocked/SS.
-await db.ref(`matches/${roomId}/players/${winnerSide}`).update({
-    balance: Number(winnerPlayer.balance ?? winnerPlayer.piBalance ?? 0) || 0,
-    piBalance: Number(winnerPlayer.piBalance ?? winnerPlayer.balance ?? 0) || 0,
-    pmcBalance: paid,
-    updatedAt: firebase.database.ServerValue.TIMESTAMP
-}).catch(err => console.error("Lỗi cập nhật số dư winner vào room:", err));
-    // 2) cộng phí vào ví admin nội bộ
-    let adminPaid = null;
-
-    if (feePMC > 0) {
-        await settleDebugRef.update({
-            stage: "before_admin_credit",
-            at: Date.now()
-        });
-
-        adminPaid = await adjustPmcWalletByKey(adminWalletKey, feePMC, {
-            name: "Ví phí hệ thống",
-            photo: "images/do_tuong.png"
-        });
-
-        if (adminPaid == null) {
-            await winnerPaidRef.update({
-                done: false,
-                error: "admin_fee_credit_failed",
-                errorAt: Date.now()
-            });
-
-            await settleDebugRef.update({
-                stage: "admin_credit_failed",
-                at: Date.now()
-            });
-
-            alert(
-                "SETTLE FAIL: cộng phí về ví admin thất bại\n" +
-                "adminWalletKey: " + adminWalletKey + "\n" +
-                "feePMC: " + feePMC
-            );
+        if (paid == null) {
+            console.error("Lỗi cộng ví người thắng");
             return;
         }
 
-        await settleDebugRef.update({
-            stage: "after_admin_credit",
-            at: Date.now(),
-            adminPaid
-        });
+        currentPmcBalance = paid;
+        localStorage.setItem(getPmcCacheKey(), String(paid));
+        updatePmcUI(paid);
+        refreshMyMatchBalanceBoxesNow(getPiBalance(), paid);
 
-        await db.ref("walletTransactions").push({
-            type: "match_fee_credit",
-            roomId,
-            walletKey: adminWalletKey,
-            feePMC,
-            winnerWalletKey: winnerWalletKey,
+        // Cập nhật số dư hiện trên bàn cờ luôn
+        await db.ref(`matches/${roomId}/players/${winnerSide}`).update({
+            pmcBalance: paid,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        }).catch(()=>{});
+
+        // 2) Trích % cho Admin (Bọc Try/Catch để lỡ Firebase chặn ghi ví Admin thì mày vẫn nhận đc tiền)
+        if (feePMC > 0) {
+            try {
+                await adjustPmcWalletByKey(adminWalletKey, feePMC, { name: "Ví phí hệ thống", photo: "images/do_tuong.png" });
+                await db.ref("walletTransactions").push({
+                    type: "match_fee_credit", roomId, walletKey: adminWalletKey,
+                    feePMC, winnerWalletKey, stakePMC: stake, totalPot,
+                    createdAt: Date.now(), status: "done"
+                });
+            } catch (adminErr) {
+                console.warn("Bỏ qua lỗi cộng phí admin (kệ mẹ admin, tiền vào túi mình là được):", adminErr);
+            }
+        }
+
+        // 3) Báo cáo lên phòng là đã chia tiền xong
+        await db.ref(`matches/${roomId}/settlement`).update({
+            paid: true,
+            paidAt: Date.now(),
+            winner: winnerSide,
             stakePMC: stake,
             totalPot,
-            createdAt: Date.now(),
-            status: "done"
+            feePMC,
+            winnerReceivePMC,
+            adminWalletKey
         });
 
-        await settleDebugRef.update({
-            stage: "after_fee_log",
-            at: Date.now()
-        });
+        await loadWalletBalance().catch(() => {});
+        await syncMyMatchBalanceToRoomNow().catch(() => {});
+
+        return true;
+    } catch (err) {
+        console.error("LỖI CHIA TIỀN TRONG TRY CATCH:", err);
     }
-
-    await settleDebugRef.update({
-        stage: "before_settlement_update",
-        at: Date.now()
-    });
-
-    await db.ref(`matches/${roomId}/settlement`).update({
-        paid: true,
-        paidAt: Date.now(),
-        winner: room.winner,
-        stakePMC: stake,
-        totalPot,
-        feePMC,
-        winnerReceivePMC,
-        adminWalletKey
-    });
-
-    await settleDebugRef.update({
-    stage: "done_safe_any_client_no_ready_touch",
-    at: Date.now(),
-    winnerWalletKey,
-    winnerSide
-});
-
-await loadWalletBalance().catch(() => {});
-if (winnerSide === mySide) {
-    await syncMyMatchBalanceToRoomNow().catch(() => {});
-}
-
-return true;
-} catch (err) {
-    console.error("SETTLE THROW:", err);
-
-    await settleDebugRef.update({
-        stage: "thrown",
-        at: Date.now(),
-        message: err?.message || String(err)
-    });
-}
 }
 async function chargeStakeForReady(roomId, side) {
     try {
