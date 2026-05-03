@@ -13986,7 +13986,9 @@ function bindLobbyRoomList() {
         lobbyRoomListRef.off();
     }
 
-    lobbyRoomListRef = db.ref("matches").orderByChild("createdAt").limitToLast(50);
+    lobbyRoomListRef = db.ref("matches")
+        .orderByChild("createdAt")
+        .limitToLast(50);
 
     const mySeq = ++lobbyBindSeq;
 
@@ -13994,18 +13996,30 @@ function bindLobbyRoomList() {
         const roomList = [];
         const cleanupJobs = [];
 
-        if (isGhostLobbyRoom(room)) {
-    return;
-}
+        snap.forEach(child => {
+            const room = child.val() || {};
+            room.id = child.key;
+
+            if (isGhostLobbyRoom(room)) {
+                cleanupJobs.push(cleanupGhostLobbyRoom(child.key, room));
+                return;
+            }
+
+            if (shouldShowLobbyRoom(room)) {
+                roomList.push(room);
+            }
+        });
 
         if (cleanupJobs.length) {
             Promise.allSettled(cleanupJobs).catch(() => {});
         }
 
-        // Nếu bindLobbyRoomList bị gọi nhiều lần, chỉ lần mới nhất được render.
         if (mySeq !== lobbyBindSeq) return;
 
-        roomList.sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+        roomList.sort((a, b) =>
+            Number(b.createdAt || 0) - Number(a.createdAt || 0)
+        );
+
         renderLobbyRoomList(roomList);
     });
 
