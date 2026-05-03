@@ -8341,17 +8341,14 @@ function buildRoundResultCore(room, roomId) {
     const loserPlayer = loserSide === "do" ? red : (loserSide === "den" ? black : null);
     const moveCount = Math.max(0, Math.floor(Number(room.moveCount || 0) || 0));
     const statusWasPlaying = room.status === "playing" || room.status === "finished" || !!room.startedAt || !!room.activeRoundId;
-    // SỬA LẠI ĐIỀU KIỆN LƯU KẾT QUẢ
-    // Luôn tính kết quả nếu có người thắng rõ ràng (bao gồm cả do đầu hàng/bỏ chạy),
-    // bất kể số nước đi. Chỉ yêu cầu moveCount >= 1 nếu là kết quả HÒA.
+    
+    // 🔥 ĐÃ GỠ BỎ HOÀN TOÀN ĐIỀU KIỆN CHỐNG SPAM (moveCount >= 1)
+    // Cứ có kết quả là hợp lệ 100%, đéo cần biết đi mấy nước, cộng PMC tẹt ga!
     const validForStats = !!(
         hasBothPlayers &&
         statusWasPlaying &&
         winnerSide &&
-        (
-            (winnerSide !== "hoa" && winnerPlayer?.uid) || // Có người thắng hợp lệ
-            (winnerSide === "hoa" && moveCount >= 1)     // Hòa thì phải đánh ít nhất 1 nước (tùy chọn)
-        )
+        (winnerSide === "hoa" || winnerPlayer?.uid)
     );
 
     return {
@@ -8383,7 +8380,6 @@ function buildRoundResultCore(room, roomId) {
         committedAt: firebase.database.ServerValue.TIMESTAMP
     };
 }
-
 async function commitRoundResultCoreOnce(room, roomId = currentRoomId) {
     try {
         const result = buildRoundResultCore(room, roomId);
