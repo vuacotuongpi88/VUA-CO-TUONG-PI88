@@ -10431,23 +10431,26 @@ function runRefTransaction(ref, updater) {
     });
 }
 
-// BẢO MẬT TUYỆT ĐỐI VÍ PMC: Dùng Transaction để lấy số dư thật từ Server
-// Chống triệt để lỗi "ảo giác" tụt về 0 và chặn đứng cộng láo +2, +3.
+// BẢO MẬT TUYỆT ĐỐI VÍ PMC: Chống lag +2, +3 và fix lỗi đơ nút Sẵn Sàng
 async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
     const ref = walletRefByKey(walletKey);
     const safeDelta = Math.floor(Number(delta || 0));
 
     if (safeDelta === 0) return getPmcBalance();
 
+    // 🔥 FIX TRÍ MẠNG Ở ĐÂY: Ép Firebase tải số dư thật về cache điện thoại trước.
+    // Đéo cho nó tính nhẩm bằng 0 nữa, giải quyết triệt để lỗi không bấm được nút Sẵn Sàng!
+    await ref.once("value");
+
     const result = await runRefTransaction(ref, (wallet) => {
         // Khởi tạo nếu ví chưa có gì
         wallet = wallet || {};
         
-        // ĐỌC CHÍNH XÁC SỐ TIỀN HIỆN TẠI TRÊN SERVER ĐỂ TÍNH TOÁN
+        // ĐỌC CHÍNH XÁC SỐ TIỀN THẬT ĐỂ TÍNH TOÁN
         const currentPmc = Math.max(0, Math.floor(Number(wallet.pmcBalance || 0)));
         const nextPmc = currentPmc + safeDelta;
 
-        // BẢO MẬT: Nếu trừ tiền (SS) mà không đủ tiền thì HỦY GIAO DỊCH ngay
+        // Nếu trừ tiền (cược) mà đéo đủ thì mới thực sự hủy giao dịch
         if (nextPmc < 0) return; 
 
         // Ghi lại số dư mới và cập nhật thông tin
@@ -10456,10 +10459,10 @@ async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
         wallet.name = profile.name || wallet.name || localStorage.getItem("user-name-display") || "Người chơi";
         wallet.photo = profile.photo || wallet.photo || localStorage.getItem("user-photo") || "images/do_tuong.png";
 
-        return wallet; // Trả về để Server chốt lưu
+        return wallet; // Trả về để Server chốt lưu an toàn
     });
 
-    // Nếu giao dịch bị hủy (do không đủ PMC) hoặc lỗi mạng
+    // Nếu giao dịch bị hủy (đéo đủ tiền) hoặc rớt mạng
     if (!result || !result.committed) {
         console.error("Giao dịch PMC bị hủy hoặc không đủ số dư!", { walletKey, delta: safeDelta });
         return null; 
@@ -10470,7 +10473,7 @@ async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
 
     console.log("PMC TRANSACTION THÀNH CÔNG", { walletKey, delta: safeDelta, after: nextPmc });
 
-    // Cập nhật lại giao diện và Cache cục bộ
+    // Cập nhật lại giao diện
     if (walletKey === makeWalletDbKey()) {
         currentPmcBalance = nextPmc;
         localStorage.setItem(getPmcCacheKey(), String(nextPmc));
