@@ -10534,30 +10534,48 @@ function runRefTransaction(ref, updater) {
         );
     });
 }
-
-// BẢO MẬT VÍ PMC: Chống lag, chống sai số dư
-async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
+// BẢO MẬT VÍ PMC: Dùng Transaction kết hợp nạp số dư thật (knownPmc)
+async function adjustPmcWalletByKey(walletKey, delta, profile = {}, knownPmc = null) {
     const ref = walletRefByKey(walletKey);
     const safeDelta = Math.floor(Number(delta || 0));
 
     if (safeDelta === 0) return getPmcBalance();
 
-    // 1. Dùng lệnh "Increment" đẩy thẳng lên Server. 
-    await ref.update({
-        pmcBalance: firebase.database.ServerValue.increment(safeDelta),
-        updatedAt: Date.now(),
-        name: profile.name || localStorage.getItem("user-name-display") || "Người chơi",
-        photo: profile.photo || localStorage.getItem("user-photo") || "images/do_tuong.png"
+    // Nạp data từ server trước khi chạy Transaction
+    await ref.once("value");
+
+    const result = await runRefTransaction(ref, (wallet) => {
+        wallet = wallet || {};
+        let current = Math.floor(Number(wallet.pmcBalance || 0));
+
+        // 🔥 THUỐC ĐẶC TRỊ LỖI VỀ 0: Nếu Firebase đưa số ảo (0) do lag cache,
+        // nhưng ta đã truyền số tiền thật (knownPmc) vào -> ÉP nó dùng số thật!
+        if (current === 0 && knownPmc !== null && knownPmc > 0) {
+            current = knownPmc;
+        }
+
+        const nextPmc = current + safeDelta;
+        
+        // Nếu trừ tiền mà đéo đủ -> Hủy giao dịch
+        if (nextPmc < 0) return; 
+
+        wallet.pmcBalance = nextPmc;
+        wallet.updatedAt = Date.now();
+        wallet.name = profile.name || wallet.name || localStorage.getItem("user-name-display") || "Người chơi";
+        wallet.photo = profile.photo || wallet.photo || localStorage.getItem("user-photo") || "images/do_tuong.png";
+
+        return wallet;
     });
 
-    // 2. Chờ Server xác nhận và trả về SỐ DƯ MỚI NHẤT
-    // Phải dùng .get() thay vì .once("value") để ép Firebase bỏ qua cache cục bộ bị lỗi 0đ
-    const snap = await ref.get(); 
-    const nextPmc = Math.max(0, Math.floor(Number(snap.val()?.pmcBalance || 0)));
+    if (!result || !result.committed) {
+        console.error("Giao dịch PMC bị hủy/lỗi!", { walletKey, delta: safeDelta });
+        return null;
+    }
+
+    const nextPmc = Math.max(0, Math.floor(Number(result.snapshot.val().pmcBalance || 0)));
 
     console.log("CẬP NHẬT PMC THÀNH CÔNG", { walletKey, delta: safeDelta, final: nextPmc });
 
-    // 3. Đổi số dư tức thì trên màn hình
     if (walletKey === makeWalletDbKey()) {
         currentPmcBalance = nextPmc;
         localStorage.setItem(getPmcCacheKey(), String(nextPmc));
