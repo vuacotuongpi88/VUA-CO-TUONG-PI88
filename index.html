@@ -11106,22 +11106,26 @@ return true;
 }
 async function chargeStakeForReady(roomId, side) {
     try {
-        if (!roomId || !side) return { ok: false, stage: "input" };
+        if (!roomId || !side) return { ok: false, stage: "input_error" };
 
         const roomSnap = await db.ref("matches/" + roomId).once("value");
         const room = roomSnap.val() || {};
 
         const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
+        
+        // Ván 0 đồng -> Sẵn sàng luôn, đéo cần trừ tiền
         if (!stake) return { ok: true, stage: "no_stake" };
+        
+        // Đã khóa tiền rồi -> Không trừ nữa
         if (room?.stakeLocked?.[side]) return { ok: true, stage: "already_locked" };
 
         const localProfile = getCurrentPlayerProfile();
         const sidePlayer = room?.players?.[side] || {};
         let targetWalletKey = sidePlayer.walletKey || localProfile.walletKey;
 
+        // Nếu thông tin ví bị lệch, cập nhật lại cho chuẩn trước khi trừ tiền
         if (sidePlayer.uid === localProfile.uid && targetWalletKey !== localProfile.walletKey) {
             targetWalletKey = localProfile.walletKey;
-
             await db.ref("matches/" + roomId + "/players/" + side).update({
                 walletKey: localProfile.walletKey,
                 name: localProfile.name,
@@ -11130,63 +11134,58 @@ async function chargeStakeForReady(roomId, side) {
         }
 
         const safeWalletKey = String(targetWalletKey || "").replace(/[.#$\[\]\/]/g, "_");
+        
+        // KIỂM TRA SỐ DƯ HIỆN TẠI (Trực tiếp từ DB để đảm bảo độ trễ = 0)
         const targetWalletSnap = await db.ref("wallets/" + safeWalletKey).once("value");
         const targetWallet = targetWalletSnap.val() || {};
         const targetPmc = Math.max(0, Math.floor(Number(targetWallet.pmcBalance || 0) || 0));
 
         if (!targetWalletKey) {
-            console.error("READY FAIL wallet_key_missing", { roomId, side });
             return { ok: false, stage: "wallet_key_missing" };
         }
 
+        // BẢO MẬT: Chặn ngay nếu đéo đủ PMC
         if (targetPmc < stake) {
-            console.error("READY FAIL insufficient_wallet", { targetWalletKey, targetPmc, stake });
             return { ok: false, stage: "insufficient_wallet" };
         }
 
+        // TIẾN HÀNH TRỪ PMC (Hàm này xài Transaction nên tuyệt đối an toàn)
         const paid = await adjustPmcWalletByKey(targetWalletKey, -stake, {
             name: sidePlayer.name || localProfile.name || "Người chơi",
             photo: sidePlayer.photo || localProfile.photo || "images/do_tuong.png"
         });
 
+        // Nếu Transaction bị fail (Bị hủy hoặc rớt mạng)
         if (paid == null) {
-            console.error("READY FAIL tx_not_committed", { targetWalletKey, targetPmc, stake });
             return { ok: false, stage: "tx_not_committed" };
         }
 
-       if (targetWalletKey === localProfile.walletKey) {
-    currentPmcBalance = paid;
-    localStorage.setItem(getPmcCacheKey(), String(paid));
-    updatePmcUI(paid);
-    refreshMyMatchBalanceBoxesNow(getPiBalance(), paid);
-} else {
-    await loadWalletBalance().catch(() => {});
-}
+        // Đồng bộ lên UI ngay lập tức
+        if (targetWalletKey === localProfile.walletKey) {
+            currentPmcBalance = paid;
+            localStorage.setItem(getPmcCacheKey(), String(paid));
+            updatePmcUI(paid);
+            refreshMyMatchBalanceBoxesNow(getPiBalance(), paid);
+        } else {
+            await loadWalletBalance().catch(() => {});
+        }
 
-// Cập nhật luôn số dư trong room để avatar trong trận đổi liền
-await db.ref("matches/" + roomId + "/players/" + side).update({
-    balance: getPiBalance(),
-    piBalance: getPiBalance(),
-    pmcBalance: paid,
-    updatedAt: firebase.database.ServerValue.TIMESTAMP
-}).catch(err => console.error("Lỗi cập nhật PMC trong room sau SS:", err));
-
-await db.ref("matches/" + roomId + "/stakeLocked/" + side).set({
-    done: true,
-    walletKey: targetWalletKey,
-    stake,
-    at: firebase.database.ServerValue.TIMESTAMP,
-    uid: sidePlayer.uid || localProfile.uid || ""
-});
+        // Báo cho Server biết "Tao đã đóng tiền, khóa lại dùm tao"
+        await db.ref("matches/" + roomId + "/stakeLocked/" + side).set({
+            done: true,
+            walletKey: targetWalletKey,
+            stake,
+            at: firebase.database.ServerValue.TIMESTAMP,
+            uid: sidePlayer.uid || localProfile.uid || ""
+        });
 
         return { ok: true, stage: "done", walletKey: targetWalletKey, paid };
+        
     } catch (err) {
         console.error("chargeStakeForReady exception:", err);
-        alert("Lỗi trừ PMC, thử lại.");
         return { ok: false, stage: "exception", error: String(err?.message || err) };
     }
 }
-
 let withdrawAmountResolve = null;
 async function ensurePiSdkReady() {
   if (!window.Pi) {
@@ -12213,17 +12212,40 @@ async function setReady() {
     if (isSpectatorMode) return;
     if (!currentRoomId || !mySide) return;
 
+    // 1. Khóa tạm nút bấm ở giao diện ngay lập tức để người chơi thấy có phản hồi
+    const btn = document.getElementById("ready-main-btn");
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = "ĐANG KHÓA TIỀN...";
+        btn.style.opacity = "0.6";
+    }
+
+    // 2. Chạy lệnh trừ tiền (Lock PMC)
     const result = await chargeStakeForReady(currentRoomId, mySide);
 
+    // 3. Nếu trừ tiền thất bại (Đéo đủ tiền hoặc lỗi mạng)
     if (!result.ok) {
-        // không alert thêm ở đây nữa
         console.error("READY FAIL:", result);
+        
+        // Mở lại nút Sẵn Sàng
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = "SẴN SÀNG LẠI";
+            btn.style.opacity = "1";
+        }
+        
+        // Nếu do đéo đủ tiền thì văng thông báo cho nó nạp
+        if (result.stage === "insufficient_wallet") {
+            alert("Mày không đủ PMC để sẵn sàng! Hãy nạp thêm.");
+        } else {
+            alert("Lỗi khóa tiền cược, hãy thử bấm lại!");
+        }
         return;
     }
 
+    // 4. Trừ tiền OK rồi thì báo Firebase là ĐÃ SẴN SÀNG
     await db.ref("matches/" + currentRoomId + "/ready/" + mySide).set(true);
 }
-
 async function batDauTranDau(loai) {
     const mode = loai === "up" ? "co-up" : "co-tuong";
     openStakeRoomModal(mode);
