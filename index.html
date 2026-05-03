@@ -9776,20 +9776,34 @@ function refreshMyMatchBalanceBoxesNow(piAmount = getPiBalance(), pmcAmount = ge
     }
 }
 
+// ĐỒNG BỘ TIỀN LÊN AVATAR TRONG PHÒNG BẰNG SỐ THẬT SERVER
 async function syncMyMatchBalanceToRoomNow() {
     if (!currentRoomId || !mySide) return;
 
-    const piAmount = getPiBalance();
-    const pmcAmount = getPmcBalance();
+    const walletKey = makeWalletDbKey();
+    if (!walletKey) return;
 
-    refreshMyMatchBalanceBoxesNow(piAmount, pmcAmount);
+    try {
+        // Ép lấy SỐ THẬT TỪ SERVER, đéo tin tưởng Cache điện thoại
+        const snap = await db.ref("wallets/" + walletKey).get();
+        const liveData = snap.val() || {};
+        
+        const piAmount = Number(liveData.balance || 0);
+        const pmcAmount = Math.max(0, Math.floor(Number(liveData.pmcBalance || 0)));
 
-    await db.ref("matches/" + currentRoomId + "/players/" + mySide).update({
-        balance: piAmount,
-        piBalance: piAmount,
-        pmcBalance: pmcAmount,
-        updatedAt: firebase.database.ServerValue.TIMESTAMP
-    }).catch(err => console.error("Lỗi sync số dư vào phòng:", err));
+        // Cập nhật giao diện cục bộ
+        refreshMyMatchBalanceBoxesNow(piAmount, pmcAmount);
+        
+        // Đồng bộ lên thông tin phòng để đối thủ cũng thấy
+        await db.ref("matches/" + currentRoomId + "/players/" + mySide).update({
+            balance: piAmount,
+            piBalance: piAmount,
+            pmcBalance: pmcAmount,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+    } catch (err) {
+        console.error("Lỗi sync số dư thật vào phòng:", err);
+    }
 }
 function setPmcBalance(amount) {
     const safeAmount = Math.max(0, Math.floor(Number(amount) || 0));
@@ -10437,15 +10451,14 @@ function runRefTransaction(ref, updater) {
     });
 }
 
-// BẢO MẬT VÍ PMC VÀ CHỐNG ĐƠ NÚT SẴN SÀNG
-async function adjustPmcWalletByKey(walletKey, delta, profile = {}, knownCurrentPmc = null) {
+// BẢO MẬT VÍ PMC: Chống lag, chống sai số dư
+async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
     const ref = walletRefByKey(walletKey);
     const safeDelta = Math.floor(Number(delta || 0));
 
     if (safeDelta === 0) return getPmcBalance();
 
-    // 1. Dùng lệnh "Increment" đẩy thẳng lên Server. Server khóa sổ và tự cộng/trừ 
-    // Chống lag 100%, chống hack spam lệnh +2 +3.
+    // 1. Dùng lệnh "Increment" đẩy thẳng lên Server. 
     await ref.update({
         pmcBalance: firebase.database.ServerValue.increment(safeDelta),
         updatedAt: Date.now(),
@@ -10453,15 +10466,10 @@ async function adjustPmcWalletByKey(walletKey, delta, profile = {}, knownCurrent
         photo: profile.photo || localStorage.getItem("user-photo") || "images/do_tuong.png"
     });
 
-    // 2. Tính số dư nội bộ để Update lên giao diện màn hình
-    // Đéo đọc Cache Firebase nữa để chống lỗi ảo giác hiển thị 0 PMC
-    let nextPmc;
-    if (knownCurrentPmc !== null) {
-        nextPmc = Math.max(0, knownCurrentPmc + safeDelta);
-    } else {
-        const snap = await ref.once("value");
-        nextPmc = Math.max(0, Math.floor(Number(snap.val()?.pmcBalance || 0)));
-    }
+    // 2. Chờ Server xác nhận và trả về SỐ DƯ MỚI NHẤT
+    // Phải dùng .get() thay vì .once("value") để ép Firebase bỏ qua cache cục bộ bị lỗi 0đ
+    const snap = await ref.get(); 
+    const nextPmc = Math.max(0, Math.floor(Number(snap.val()?.pmcBalance || 0)));
 
     console.log("CẬP NHẬT PMC THÀNH CÔNG", { walletKey, delta: safeDelta, final: nextPmc });
 
@@ -11123,32 +11131,28 @@ async function chargeStakeForReady(roomId, side) {
 
         const safeWalletKey = String(targetWalletKey || "").replace(/[.#$\[\]\/]/g, "_");
         
-        // BẢO MẬT: Lấy chuẩn SỐ DƯ THẬT hiện tại từ Server về để check
         const targetWalletSnap = await db.ref("wallets/" + safeWalletKey).once("value");
         const targetWallet = targetWalletSnap.val() || {};
         const targetPmc = Math.max(0, Math.floor(Number(targetWallet.pmcBalance || 0) || 0));
 
         if (!targetWalletKey) return { ok: false, stage: "wallet_key_missing" };
 
-        // Đéo đủ tiền thì chặn luôn từ vòng gửi xe
         if (targetPmc < stake) {
             return { ok: false, stage: "insufficient_wallet" };
         }
 
-        // TIẾN HÀNH TRỪ PMC (Truyền số dư thật "targetPmc" vào để nó khỏi bị ngáo cache)
+        // TIẾN HÀNH TRỪ PMC (Không còn biến targetPmc ở cuối nữa)
         const paid = await adjustPmcWalletByKey(targetWalletKey, -stake, {
             name: sidePlayer.name || localProfile.name || "Người chơi",
             photo: sidePlayer.photo || localProfile.photo || "images/do_tuong.png"
-        }, targetPmc);
+        });
 
         if (paid == null) return { ok: false, stage: "tx_not_committed" };
 
-        // Đồng bộ lên 2 ô thông tin Avartar trong trận ngay lập tức
         if (targetWalletKey === localProfile.walletKey) {
             refreshMyMatchBalanceBoxesNow(getPiBalance(), paid);
         }
 
-        // Cập nhật số tiền vào phòng và khóa cược
         await db.ref("matches/" + roomId + "/players/" + side).update({
             pmcBalance: paid,
             updatedAt: firebase.database.ServerValue.TIMESTAMP
