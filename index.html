@@ -8630,8 +8630,8 @@ async function hasStatsV2History(walletKey, roundId) {
     }
 }
 
-// ===== FIREBASE TRANSACTION CHUẨN =====
-// Không tính toán lại từ đầu, LUÔN LUÔN cộng dồn (+1)
+// ===== FIREBASE TRANSACTION CHUẨN V4 =====
+// Đã fix lỗi reset về 1 khi reload app (KHÔNG HỦY TRANSACTION KHI NULL)
 async function applyStatsV2WalletOnce(walletKey, result, role) {
     walletKey = String(walletKey || "").trim();
     if (!walletKey || !result?.roundId) return false;
@@ -8646,42 +8646,45 @@ async function applyStatsV2WalletOnce(walletKey, result, role) {
     let applied = false;
 
     await walletRef.transaction((wallet) => {
-        // Nếu user chưa tồn tại, bỏ qua (để firebase init sau) hoặc cấp node cơ bản
-        if (!wallet) return wallet;
+        // 🔥 FIX TRÍ MẠNG Ở ĐÂY: Không return nếu null, phải khởi tạo object để Firebase chịu lưu lên server
+        wallet = wallet || {};
 
-        // ===== INIT THEO SPEC =====
+        // 1. INIT CẤU TRÚC
         wallet.statsV2 = wallet.statsV2 || {};
         wallet.statsByMonth = wallet.statsByMonth || {};
         wallet.matchHistoryV2 = wallet.matchHistoryV2 || {};
 
-        // 🛑 QUAN TRỌNG: Check tồn tại trận đánh (Chống bị gọi +2 lần do lag)
+        // 2. CHỐNG CỘNG TRÙNG VÁN (Firebase nháy lệnh 2 lần cũng không bị +2 ảo)
         if (wallet.matchHistoryV2[result.roundId]) {
-            return; // Đã ghi ván này rồi, abort transaction (không ghi đè)
+            return; // Ván này đã ghi rồi, thoát an toàn
         }
 
-        wallet.statsV2.totalWins = wallet.statsV2.totalWins || 0;
-        wallet.statsV2.totalLosses = wallet.statsV2.totalLosses || 0;
-        wallet.statsV2.totalMatches = wallet.statsV2.totalMatches || 0;
+        // Đồng bộ cả 2 trường wins và totalWins để UI cũ/mới đều đọc đúng
+        const currentWins = Math.max(wallet.statsV2.wins || 0, wallet.statsV2.totalWins || 0);
+        const currentLosses = Math.max(wallet.statsV2.losses || 0, wallet.statsV2.totalLosses || 0);
+        const currentMatches = Math.max(wallet.statsV2.matches || 0, wallet.statsV2.totalMatches || 0, currentWins + currentLosses);
 
         if (!wallet.statsByMonth[monthKey]) {
             wallet.statsByMonth[monthKey] = { wins: 0, losses: 0, matches: 0, updatedAt: now };
         }
-
         const month = wallet.statsByMonth[monthKey];
 
-        // ===== UPDATE CỘNG DỒN (+1) =====
-        wallet.statsV2.totalMatches += 1;
+        // 3. CỘNG DỒN (+1) CHUẨN XÁC
+        wallet.statsV2.matches = currentMatches + 1;
+        wallet.statsV2.totalMatches = currentMatches + 1;
         month.matches += 1;
 
         if (isWin) {
-            wallet.statsV2.totalWins += 1;
+            wallet.statsV2.wins = currentWins + 1;
+            wallet.statsV2.totalWins = currentWins + 1;
             month.wins += 1;
         } else {
-            wallet.statsV2.totalLosses += 1;
+            wallet.statsV2.losses = currentLosses + 1;
+            wallet.statsV2.totalLosses = currentLosses + 1;
             month.losses += 1;
         }
 
-        // ===== LƯU LỊCH SỬ TỪNG TRẬN ĐỂ HIỂN THỊ (A với B, C, D...) =====
+        // 4. LƯU LỊCH SỬ VÁN ĐỂ THEO DÕI
         wallet.matchHistoryV2[result.roundId] = {
             roomId: roomId,
             result: isWin ? "win" : "loss",
@@ -8693,17 +8696,21 @@ async function applyStatsV2WalletOnce(walletKey, result, role) {
             at: now
         };
 
-        // ===== META INFO =====
+        // 5. CẬP NHẬT TRẠNG THÁI CUỐI
         wallet.statsV2.updatedAt = now;
         month.updatedAt = now;
+        wallet.statsV2.monthKey = monthKey;
 
         wallet.statsV2.lastResult = isWin ? "win" : "loss";
         wallet.statsV2.lastReason = reason;
         wallet.statsV2.lastRoomId = roomId;
         wallet.statsV2.lastRoundId = result.roundId;
+        wallet.statsV2.source = "transaction_fixed_v4";
 
         applied = true;
-        return wallet; // Return dữ liệu để Firebase lock và update an toàn
+        
+        // Trả về dữ liệu để Firebase lock và đẩy lên database
+        return wallet; 
     });
 
     return applied;
