@@ -10534,55 +10534,55 @@ function runRefTransaction(ref, updater) {
         );
     });
 }
-// BẢO MẬT VÍ PMC LÕI KÉP: Chống lag +2, chống rớt về 0.
+// BẢO MẬT VÍ PMC: Ép lấy số thật từ Server, chống Firebase tự hủy giao dịch
 async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
-    const safeWalletKey = String(walletKey || "").replace(/[.#$\[\]\/]/g, "_");
-    const ref = db.ref("wallets/" + safeWalletKey);
+    const ref = walletRefByKey(walletKey);
     const safeDelta = Math.floor(Number(delta || 0));
 
     if (safeDelta === 0) return getPmcBalance();
 
-    // Dùng Promise bọc Transaction để bắt kết quả chính xác 100% từ Server
-    return new Promise((resolve) => {
-        ref.transaction((wallet) => {
-            wallet = wallet || {};
-            
-            // Lấy số dư hiện tại trên server
-            const currentPmc = Math.max(0, Math.floor(Number(wallet.pmcBalance || 0)));
-            const nextPmc = currentPmc + safeDelta;
+    // 🔥 BÍ QUYẾT TỐI THƯỢNG Ở ĐÂY: Dùng lệnh GET ép nó tải số dư thật từ Server về Cache!
+    // Không có dòng này, nó sẽ lấy số 0 ra tính nhẩm -> Âm tiền -> Tự hủy lệnh Sẵn Sàng!
+    await ref.get();
 
-            // BẢO MẬT: Nếu cược mà đéo đủ tiền -> Hủy giao dịch (Return undefine để từ chối)
-            if (nextPmc < 0) return;
+    // Chạy Transaction bảo mật như bình thường
+    const result = await runRefTransaction(ref, (wallet) => {
+        wallet = wallet || {};
+        
+        // Lúc này số wallet.pmcBalance đã là số thật trên server
+        const currentPmc = Math.max(0, Math.floor(Number(wallet.pmcBalance || 0)));
+        const nextPmc = currentPmc + safeDelta;
 
-            // Cập nhật số liệu mới
-            wallet.pmcBalance = nextPmc;
-            wallet.updatedAt = firebase.database.ServerValue.TIMESTAMP;
-            wallet.name = profile.name || wallet.name || localStorage.getItem("user-name-display") || "Người chơi";
-            wallet.photo = profile.photo || wallet.photo || localStorage.getItem("user-photo") || "images/do_tuong.png";
+        // Nếu thực sự đéo đủ tiền trên Server thì mới hủy
+        if (nextPmc < 0) return;
 
-            return wallet; // Cho phép Firebase ghi lên Server
-        }, (error, committed, snapshot) => {
-            // Nếu giao dịch thất bại (rớt mạng hoặc không đủ PMC)
-            if (error || !committed) {
-                console.error("Giao dịch PMC thất bại / Hủy bỏ do không đủ tiền:", error);
-                resolve(null);
-                return;
-            }
+        wallet.pmcBalance = nextPmc;
+        wallet.updatedAt = firebase.database.ServerValue.TIMESTAMP;
+        wallet.name = profile.name || wallet.name || localStorage.getItem("user-name-display") || "Người chơi";
+        wallet.photo = profile.photo || wallet.photo || localStorage.getItem("user-photo") || "images/do_tuong.png";
 
-            // 🔥 BẮT SỐ THẬT: Lấy chính xác số tiền cuối cùng Server đã chốt (đéo sợ ngáo cache)
-            const finalPmc = Math.max(0, Math.floor(Number(snapshot.val().pmcBalance || 0)));
-
-            // Nếu là ví của mình, Cập nhật giao diện mướt rượt
-            if (safeWalletKey === makeWalletDbKey()) {
-                currentPmcBalance = finalPmc;
-                localStorage.setItem(getPmcCacheKey(), String(finalPmc));
-                updatePmcUI(finalPmc);
-            }
-
-            resolve(finalPmc); // Trả về số tiền chuẩn đét cho hàm Sẵn Sàng
-
-        }, false); // 🔥 BÍ QUYẾT TỐI THƯỢNG Ở ĐÂY: Chữ "false" này cấm Firebase tự tính nhẩm ở điện thoại, bắt buộc phải chờ Server chốt số thật!
+        return wallet; // Trả về để Server chốt lưu
     });
+
+    // Nếu giao dịch thực sự bị hủy do rớt mạng hoặc hết tiền
+    if (!result || !result.committed) {
+        console.error("Giao dịch PMC bị hủy!", { walletKey, delta: safeDelta });
+        return null;
+    }
+
+    // Lấy số dư chuẩn đét đã được Server duyệt
+    const nextPmc = Math.max(0, Math.floor(Number(result.snapshot.val().pmcBalance || 0)));
+
+    console.log("CẬP NHẬT PMC THÀNH CÔNG", { walletKey, delta: safeDelta, final: nextPmc });
+
+    // Đồng bộ vào màn hình người chơi cho mượt
+    if (walletKey === makeWalletDbKey()) {
+        currentPmcBalance = nextPmc;
+        localStorage.setItem(getPmcCacheKey(), String(nextPmc));
+        updatePmcUI(nextPmc);
+    }
+
+    return nextPmc;
 }
 async function settlePmcViaApi(roomId) {
     try {
