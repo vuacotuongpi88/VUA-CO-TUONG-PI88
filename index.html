@@ -10431,30 +10431,46 @@ function runRefTransaction(ref, updater) {
     });
 }
 
-// BẢO MẬT: Dùng increment nguyên tử, chống mọi thể loại lag/nháy lệnh +2 +3
+// BẢO MẬT TUYỆT ĐỐI VÍ PMC: Dùng Transaction để lấy số dư thật từ Server
+// Chống triệt để lỗi "ảo giác" tụt về 0 và chặn đứng cộng láo +2, +3.
 async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
     const ref = walletRefByKey(walletKey);
     const safeDelta = Math.floor(Number(delta || 0));
 
     if (safeDelta === 0) return getPmcBalance();
 
-    // Lệnh increment() sẽ giao toàn quyền cho Server Firebase tính toán,
-    // bất kể mạng lag nhấp nháy, Server cũng chỉ cộng chuẩn số delta.
-    await ref.update({
-        pmcBalance: firebase.database.ServerValue.increment(safeDelta),
-        updatedAt: firebase.database.ServerValue.TIMESTAMP,
-        name: profile.name || localStorage.getItem("user-name-display") || "Người chơi",
-        photo: profile.photo || localStorage.getItem("user-photo") || "images/do_tuong.png"
+    const result = await runRefTransaction(ref, (wallet) => {
+        // Khởi tạo nếu ví chưa có gì
+        wallet = wallet || {};
+        
+        // ĐỌC CHÍNH XÁC SỐ TIỀN HIỆN TẠI TRÊN SERVER ĐỂ TÍNH TOÁN
+        const currentPmc = Math.max(0, Math.floor(Number(wallet.pmcBalance || 0)));
+        const nextPmc = currentPmc + safeDelta;
+
+        // BẢO MẬT: Nếu trừ tiền (SS) mà không đủ tiền thì HỦY GIAO DỊCH ngay
+        if (nextPmc < 0) return; 
+
+        // Ghi lại số dư mới và cập nhật thông tin
+        wallet.pmcBalance = nextPmc;
+        wallet.updatedAt = Date.now();
+        wallet.name = profile.name || wallet.name || localStorage.getItem("user-name-display") || "Người chơi";
+        wallet.photo = profile.photo || wallet.photo || localStorage.getItem("user-photo") || "images/do_tuong.png";
+
+        return wallet; // Trả về để Server chốt lưu
     });
 
-    // Sau khi Server cộng xong, lấy số dư MỚI NHẤT về để hiển thị UI
-    const snap = await ref.once("value");
-    const safeCurrent = snap.val() || {};
-    const nextPmc = Math.max(0, Math.floor(Number(safeCurrent.pmcBalance || 0)));
+    // Nếu giao dịch bị hủy (do không đủ PMC) hoặc lỗi mạng
+    if (!result || !result.committed) {
+        console.error("Giao dịch PMC bị hủy hoặc không đủ số dư!", { walletKey, delta: safeDelta });
+        return null; 
+    }
 
-    console.log("PMC SAFE UPDATE OK", { walletKey, delta: safeDelta, after: nextPmc });
+    // Lấy số dư chuẩn đã được Server duyệt để hiển thị
+    const nextPmc = Math.max(0, Math.floor(Number(result.snapshot.val().pmcBalance || 0)));
 
-    // Chỉ cập nhật UI nếu wallet này là của chính người đang dùng app
+    console.log("PMC TRANSACTION THÀNH CÔNG", { walletKey, delta: safeDelta, after: nextPmc });
+
+    // Cập nhật lại giao diện và Cache cục bộ
     if (walletKey === makeWalletDbKey()) {
         currentPmcBalance = nextPmc;
         localStorage.setItem(getPmcCacheKey(), String(nextPmc));
