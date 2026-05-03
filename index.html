@@ -6906,7 +6906,6 @@ async function playNextMatch() {
     if (sounds.bgm) sounds.bgm.pause();
     if (sounds.heartbeat) sounds.heartbeat.pause();
 
-    // Online: đánh lại với đúng người đang cùng phòng
     if (currentRoomId) {
         readyDo = false;
         readyDen = false;
@@ -6916,11 +6915,9 @@ async function playNextMatch() {
         lastMoveTo = null;
         lastRoomBoardHash = "";
 
-        // Xóa quân ván cũ ngay tại máy đang bấm TIẾP TỤC.
         clearRealtimeBoardVisualOnly();
 
         // 🔥 BẢO MẬT: CHỜ TIỀN CỘNG XONG MỚI ĐƯỢC RESET PHÒNG
-        // Dùng tên biến checkRoom để đéo bị trùng với biến freshRoom ở dưới
         const checkSnap = await db.ref("matches/" + currentRoomId).once("value");
         let checkRoom = checkSnap.val() || {};
         const stake = Math.max(0, Math.floor(Number(checkRoom.stakePMC || 0) || 0));
@@ -6963,24 +6960,25 @@ async function playNextMatch() {
             updatedAt: firebase.database.ServerValue.TIMESTAMP
         });
 
-        const freshSnap = await db.ref("matches/" + currentRoomId).once("value").catch(() => null);
-        const freshRoom = freshSnap?.val?.();
+        // Chỉ khai báo biến freshRoom 1 lần ở đây để kiểm tra lại trạng thái
+        const finalSnap = await db.ref("matches/" + currentRoomId).once("value").catch(() => null);
+        const finalRoom = finalSnap?.val?.();
 
         if (
-            freshRoom &&
-            freshRoom.status === "waiting" &&
-            !freshRoom.winner &&
-            freshRoom.players?.do &&
-            freshRoom.players?.den
+            finalRoom &&
+            finalRoom.status === "waiting" &&
+            !finalRoom.winner &&
+            finalRoom.players?.do &&
+            finalRoom.players?.den
         ) {
             readyDo = false;
             readyDen = false;
             isGameOver = false;
             selectedPiece = null;
 
-            renderPlayersFromRoom(freshRoom);
+            renderPlayersFromRoom(finalRoom);
             renderTimerUI();
-            ensureReadyOverlayForWaitingRoom(freshRoom, currentRoomId);
+            ensureReadyOverlayForWaitingRoom(finalRoom, currentRoomId);
         }
         return;
     }
@@ -10435,7 +10433,8 @@ async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
 
     if (safeDelta === 0) return getPmcBalance();
 
-    // Lệnh increment() sẽ giao toàn quyền cho Server Firebase tính toán
+    // Lệnh increment() sẽ giao toàn quyền cho Server Firebase tính toán,
+    // bất kể mạng lag nhấp nháy, Server cũng chỉ cộng chuẩn số delta.
     await ref.update({
         pmcBalance: firebase.database.ServerValue.increment(safeDelta),
         updatedAt: firebase.database.ServerValue.TIMESTAMP,
@@ -10443,13 +10442,14 @@ async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
         photo: profile.photo || localStorage.getItem("user-photo") || "images/do_tuong.png"
     });
 
-    // Sau khi Server cộng xong, lấy số dư mới nhất về cập nhật giao diện
+    // Sau khi Server cộng xong, lấy số dư MỚI NHẤT về để hiển thị UI
     const snap = await ref.once("value");
     const safeCurrent = snap.val() || {};
     const nextPmc = Math.max(0, Math.floor(Number(safeCurrent.pmcBalance || 0)));
 
     console.log("PMC SAFE UPDATE OK", { walletKey, delta: safeDelta, after: nextPmc });
 
+    // Chỉ cập nhật UI nếu wallet này là của chính người đang dùng app
     if (walletKey === makeWalletDbKey()) {
         currentPmcBalance = nextPmc;
         localStorage.setItem(getPmcCacheKey(), String(nextPmc));
