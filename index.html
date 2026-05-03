@@ -11233,7 +11233,8 @@ async function chargeStakeForReady(roomId, side) {
 
         const safeWalletKey = String(targetWalletKey || "").replace(/[.#$\[\]\/]/g, "_");
         
-        const targetWalletSnap = await db.ref("wallets/" + safeWalletKey).once("value");
+        // Ép Firebase lấy số dư thật từ Server (bỏ qua cache)
+        const targetWalletSnap = await db.ref("wallets/" + safeWalletKey).get();
         const targetWallet = targetWalletSnap.val() || {};
         const targetPmc = Math.max(0, Math.floor(Number(targetWallet.pmcBalance || 0) || 0));
 
@@ -11243,11 +11244,11 @@ async function chargeStakeForReady(roomId, side) {
             return { ok: false, stage: "insufficient_wallet" };
         }
 
-        // TIẾN HÀNH TRỪ PMC (Không còn biến targetPmc ở cuối nữa)
+        // 🔥 TIẾN HÀNH TRỪ PMC: Truyền luôn số tiền thật "targetPmc" vào để khóa mỏ Firebase
         const paid = await adjustPmcWalletByKey(targetWalletKey, -stake, {
             name: sidePlayer.name || localProfile.name || "Người chơi",
             photo: sidePlayer.photo || localProfile.photo || "images/do_tuong.png"
-        });
+        }, targetPmc);
 
         if (paid == null) return { ok: false, stage: "tx_not_committed" };
 
@@ -11255,11 +11256,13 @@ async function chargeStakeForReady(roomId, side) {
             refreshMyMatchBalanceBoxesNow(getPiBalance(), paid);
         }
 
+        // Ghi số dư mới vào Room để 2 bên cùng nhìn thấy
         await db.ref("matches/" + roomId + "/players/" + side).update({
             pmcBalance: paid,
             updatedAt: firebase.database.ServerValue.TIMESTAMP
         }).catch(() => {});
 
+        // Xác nhận khóa cược
         await db.ref("matches/" + roomId + "/stakeLocked/" + side).set({
             done: true,
             walletKey: targetWalletKey,
