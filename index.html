@@ -8092,9 +8092,9 @@ function cleanupRoomListeners() {
         isSpectatorMode = false;
     }
 }
-// HÀM RÚT LUI VÀ BÀN GIAO PHÒNG (FIX LỖI KẸT BẢNG SẴN SÀNG CỦA B)
+// HÀM RÚT LUI VÀ BÀN GIAO PHÒNG (FIX LỖI MẤT PMC KHI ĐẦU HÀNG RỒI THOÁT NHANH)
 async function leaveRealtimeMatch() {
-    const roomId = currentRoomId; // Dùng lại phòng cũ, đéo tạo mới nữa!
+    const roomId = currentRoomId; 
     const side = mySide;
     const mode = currentRoomMode;
 
@@ -8114,14 +8114,36 @@ async function leaveRealtimeMatch() {
     if (!roomId || !side) return;
 
     try {
-        const roomSnap = await db.ref("matches/" + roomId).once("value");
-        const room = roomSnap.val() || {};
+        let roomSnap = await db.ref("matches/" + roomId).once("value");
+        let room = roomSnap.val() || {};
+
+        // 🔥 FIX TRÍ MẠNG Ở ĐÂY: NẾU ĐÃ CÓ KẾT QUẢ MÀ CHƯA CHIA TIỀN XONG -> BẮT BUỘC CHỜ RỒI MỚI ĐƯỢC RỜI/DỌN PHÒNG!
+        const stake = Math.max(0, Math.floor(Number(room.stakePMC || 0) || 0));
+        if (room.winner && room.winner !== "hoa" && stake > 0) {
+            if (room.settlement?.paid !== true) {
+                console.log("Đang chờ Firebase trả thưởng PMC trước khi dọn phòng...");
+                await new Promise((resolve) => {
+                    const paidRef = db.ref("matches/" + roomId + "/settlement/paid");
+                    const timeout = setTimeout(() => { paidRef.off(); resolve(); }, 4000); 
+                    paidRef.on("value", (snap) => {
+                        if (snap.val() === true) {
+                            clearTimeout(timeout);
+                            paidRef.off();
+                            resolve();
+                        }
+                    });
+                });
+                // Đọc lại state mới nhất sau khi chờ tiền về ví đối thủ
+                roomSnap = await db.ref("matches/" + roomId).once("value");
+                room = roomSnap.val() || {};
+            }
+        }
 
         const otherSide = side === "do" ? "den" : "do";
         const otherPlayer = room.players?.[otherSide];
         const stillPlaying = room.status === "playing";
 
-        // NẾU ĐANG ĐÁNH MÀ CHẠY -> XỬ THUA VÀ ĐÓNG CỬA PHÒNG
+        // NẾU ĐANG ĐÁNH MÀ CHẠY NGANG (CHƯA CÓ KẾT QUẢ) -> XỬ THUA VÀ ĐÓNG CỬA PHÒNG
         if (stillPlaying && otherPlayer && !room.winner) {
             const updates = {};
             updates[`matches/${roomId}/winner`] = otherSide;
@@ -8138,7 +8160,7 @@ async function leaveRealtimeMatch() {
             return; 
         }
 
-        // Hoàn tiền nếu phòng đang ở sảnh
+        // Hoàn tiền nếu phòng đang ở sảnh chờ
         await maybeRefundWaitingStakePMC(roomId, room, side).catch(()=>{});
 
         const cleanMode = room.mode || mode || "co-tuong";
@@ -8153,7 +8175,7 @@ async function leaveRealtimeMatch() {
             return;
         }
 
-        // ĐỐI THỦ CÒN ĐÓ -> NHƯỜNG LUÔN PHÒNG ĐANG CÓ CHO NÓ, ÉP TẮT BẢNG SẴN SÀNG!
+        // ĐỐI THỦ CÒN ĐÓ -> NHƯỜNG LUÔN PHÒNG ĐANG CÓ CHO NÓ
         const updates = {};
         
         // Mình cút khỏi ghế
@@ -8164,7 +8186,7 @@ async function leaveRealtimeMatch() {
         // Bốc thằng kia lên làm chủ (Đỏ) nếu nó đang ở Đen
         if (otherSide === "den") {
             updates[`matches/${roomId}/players/do`] = { ...otherPlayer, side: "do", updatedAt: firebase.database.ServerValue.TIMESTAMP };
-            updates[`matches/${roomId}/players/den`] = null; // Xóa sổ người Đen để dập tắt bảng Sẵn Sàng
+            updates[`matches/${roomId}/players/den`] = null; 
             updates[`matches/${roomId}/ready/do`] = false;
             updates[`matches/${roomId}/ready/den`] = false;
             updates[`matches/${roomId}/stakeLocked/do`] = false;
@@ -8179,12 +8201,15 @@ async function leaveRealtimeMatch() {
         updates[`matches/${roomId}/lobbyHeartbeatAt`] = firebase.database.ServerValue.TIMESTAMP;
         updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
         
+        // Reset dọn phòng cho ván mới
         updates[`matches/${roomId}/status`] = "waiting";
         updates[`matches/${roomId}/turn`] = "do";
         updates[`matches/${roomId}/board`] = null;
         updates[`matches/${roomId}/winner`] = null;
         updates[`matches/${roomId}/winReason`] = null;
-        updates[`matches/${roomId}/readyDeadlineAt`] = null; // 🔥 Đập chết cái đồng hồ đếm ngược
+        updates[`matches/${roomId}/settlement`] = null; 
+        updates[`matches/${roomId}/refunds`] = null;
+        updates[`matches/${roomId}/readyDeadlineAt`] = null; 
         updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
 
         updates[`waitingRooms/${cleanBucket}/${roomId}`] = {
