@@ -6179,6 +6179,76 @@ function prepareRealtimeArenaUI() {
     renderRoomInviteOverlay();
 }
 
+async function cleanupStaleWaitingResumeRoom(saved = {}, room = {}, me = {}) {
+    const roomId = saved?.roomId || "";
+    if (!roomId || !room || room.status !== "waiting") return;
+
+    const stakePMC = Math.max(0, Math.floor(Number(room.stakePMC || 0) || 0));
+    const mode = room.mode || saved.mode || currentRoomMode || "co-tuong";
+    const bucket = room.roomBucket || makeStakeBucket(mode, stakePMC);
+    const inviteCode = String(room.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
+
+    const isDo = isSamePlayerAsMe(room.players?.do) || (me?.uid && room.players?.do?.uid === me.uid);
+    const isDen = isSamePlayerAsMe(room.players?.den) || (me?.uid && room.players?.den?.uid === me.uid);
+
+    // Nếu máy này từng là B/Đen ở phòng chờ cũ, xả ghế Đen ra khỏi phòng.
+    // Đây là nguyên nhân làm vào game mới nhưng vẫn hiện bảng SS "ĐEN SẴN SÀNG".
+    if (isDen) {
+        await maybeRefundWaitingStakePMC(roomId, room, "den").catch(err => {
+            console.error("Hoàn PMC khi dọn phòng chờ Đen cũ lỗi:", err);
+        });
+
+        const host = room.players?.do || {};
+        const updates = {};
+        updates[`matches/${roomId}/players/den`] = null;
+        updates[`matches/${roomId}/ready/den`] = false;
+        updates[`matches/${roomId}/stakeLocked/den`] = false;
+        updates[`matches/${roomId}/readyDeadlineAt`] = null;
+        updates[`matches/${roomId}/status`] = "waiting";
+        updates[`matches/${roomId}/lobbyOpen`] = true;
+        updates[`matches/${roomId}/lobbyOwnerUid`] = host.uid || "";
+        updates[`matches/${roomId}/lobbyOwnerWalletKey`] = host.walletKey || "";
+        updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+        updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+        if (host.uid || host.walletKey) {
+            updates[`waitingRooms/${bucket}/${roomId}`] = {
+                roomId,
+                uid: host.uid || "",
+                name: host.name || "Chủ phòng",
+                walletKey: host.walletKey || "",
+                mode,
+                stakePMC,
+                inviteCode,
+                createdAt: Date.now(),
+                claimedBy: null,
+                claimedAt: null
+            };
+        }
+
+        await db.ref().update(updates).catch(err => {
+            console.error("Dọn ghế Đen khỏi phòng chờ cũ lỗi:", err);
+        });
+
+        return;
+    }
+
+    // Nếu máy này từng là A/Đỏ và phòng chờ cũ chưa có ai, xóa phòng rác của chính nó.
+    // Không xóa phòng đang có Đen để tránh đá nhầm người chơi thật.
+    if (isDo && !room.players?.den) {
+        await maybeRefundWaitingStakePMC(roomId, room, "do").catch(err => {
+            console.error("Hoàn PMC khi xóa phòng chờ Đỏ cũ lỗi:", err);
+        });
+
+        const updates = {};
+        updates[`matches/${roomId}`] = null;
+        updates[`waitingRooms/${bucket}/${roomId}`] = null;
+        await db.ref().update(updates).catch(err => {
+            console.error("Xóa phòng chờ rác của Đỏ lỗi:", err);
+        });
+    }
+}
+
 async function tryResumeRealtimeMatch(preferredMode = null) {
     const saved = readActiveMatchSnapshot();
     if (!saved || !saved.roomId) return false;
@@ -6193,23 +6263,55 @@ async function tryResumeRealtimeMatch(preferredMode = null) {
     }
 
     if (preferredMode && room.mode && room.mode !== preferredMode) {
+        clearActiveMatchSnapshot(saved.roomId);
         return false;
     }
 
-    const isDo = room.players?.do?.uid === me.uid;
-    const isDen = room.players?.den?.uid === me.uid;
-    const canResume = !room.winner && (room.status === "playing" || room.status === "waiting");
+    const isDo = isSamePlayerAsMe(room.players?.do) || room.players?.do?.uid === me.uid;
+    const isDen = isSamePlayerAsMe(room.players?.den) || room.players?.den?.uid === me.uid;
 
-    if (!canResume || (!isDo && !isDen)) {
+    if (!isDo && !isDen) {
+        clearActiveMatchSnapshot(saved.roomId);
+        return false;
+    }
+
+    // FIX CỨNG: Không tự kéo người chơi vào lại phòng CHỜ cũ.
+    // Chỉ resume khi ván đang đánh thật sự. Phòng waiting cũ chính là nguồn lỗi
+    // "vừa vào đã hiện SS bên Đen" dù người chơi tưởng đang tạo phòng mới.
+    if (room.status === "waiting" || room.winner) {
+        clearActiveMatchSnapshot(saved.roomId);
+        await cleanupStaleWaitingResumeRoom(saved, room, me).catch(err => {
+            console.error("Dọn phòng chờ cũ khi resume lỗi:", err);
+        });
+
+        closeReadyOverlay();
+        currentRoomId = null;
+        currentRoomMode = null;
+        currentRoomStakePMC = 0;
+        currentRoomBucket = null;
+        currentRoomStatus = null;
+        mySide = null;
+        viewSide = "do";
+        readyDo = false;
+        readyDen = false;
+        readyDeadlineAt = 0;
+        readyTime = 30;
+        return false;
+    }
+
+    const canResume = !room.winner && room.status === "playing";
+
+    if (!canResume) {
         clearActiveMatchSnapshot(saved.roomId);
         return false;
     }
 
     mySide = isDo ? "do" : "den";
+    viewSide = mySide;
     currentRoomId = saved.roomId;
     currentRoomMode = room.mode || saved.mode || preferredMode || null;
     currentRoomStakePMC = Math.max(0, Math.floor(Number(room.stakePMC || 0) || 0));
-currentRoomBucket = room.roomBucket || makeStakeBucket(currentRoomMode, currentRoomStakePMC);
+    currentRoomBucket = room.roomBucket || makeStakeBucket(currentRoomMode, currentRoomStakePMC);
 
     saveActiveMatchSnapshot({
         roomId: saved.roomId,
@@ -7814,11 +7916,7 @@ currentRoomStakePMC = cleanStake;
 currentRoomBucket = cleanBucket;
 currentRoomStatus = "waiting";
 
-saveActiveMatchSnapshot({
-    roomId,
-    mode: cleanMode,
-    side: "do"
-});
+clearActiveMatchSnapshot(roomId);
 
             clearRealtimeBoardVisualOnly();
             hideVictoryPopup();
@@ -9039,12 +9137,14 @@ if (typeof applyBoardPerspective === "function") {
         readyDo = !!room.ready?.do;
         readyDen = !!room.ready?.den;
 
-        if (mySide) {
+        if (mySide && room.status === "playing" && !room.winner) {
             saveActiveMatchSnapshot({
                 roomId: listeningRoomId,
                 mode: currentRoomMode,
                 side: mySide
             });
+        } else if (room.status === "waiting" || room.winner) {
+            clearActiveMatchSnapshot(listeningRoomId);
         }
 
         let didSettleWinnerNow = false;
@@ -9414,11 +9514,7 @@ room.players?.den
     currentRoomStakePMC = roomStake;
     currentRoomBucket = room?.roomBucket || makeStakeBucket(roomMode, roomStake);
 
-    saveActiveMatchSnapshot({
-        roomId,
-        mode: roomMode,
-        side: "den"
-    });
+    clearActiveMatchSnapshot(roomId);
 
     bindRoom(roomId);
     return true;
@@ -9479,15 +9575,28 @@ async function createAndPublishWaitingRoom(me, mode, stakePMC, bucket) {
     });
 
     mySide = "do";
+    viewSide = "do";
     currentRoomId = newRoomId;
     currentRoomMode = mode;
     currentRoomStakePMC = stakePMC;
+    currentRoomBucket = bucket;
+    currentRoomStatus = "waiting";
 
-    saveActiveMatchSnapshot({ roomId: newRoomId, mode, side: "do" });
+    readyDo = false;
+    readyDen = false;
+    readyDeadlineAt = 0;
+    readyTime = 30;
+    readyOverlayWaitingShown = false;
+    readyOverlayRoomKey = "";
+    readyOverlayOpeningLock = false;
+
+    clearActiveMatchSnapshot(newRoomId);
+    closeReadyOverlay();
     bindRoom(newRoomId);
     return true;
 }
 async function joinOrCreateRealtimeMatch(mode, stakePMC = 0) {
+    // Chỉ resume ván đang đánh. Phòng chờ/SS cũ sẽ bị xả để tránh dính phe Đen cũ.
     if (await tryResumeRealtimeMatch(mode)) return;
 
     const safeStake = Math.max(0, Math.floor(Number(stakePMC) || 0));
@@ -13397,7 +13506,7 @@ async function confirmTopChallengeInvite() {
         currentRoomMode = mode;
         currentRoomStakePMC = stakePMC;
         currentRoomBucket = roomInfo.bucket;
-        saveActiveMatchSnapshot({ roomId: roomInfo.roomId, mode, side: "do" });
+        clearActiveMatchSnapshot(roomInfo.roomId);
         bindRoom(roomInfo.roomId);
         setPlayerPresence("arena").catch(() => {});
 
@@ -15119,7 +15228,7 @@ async function acceptRoomInvite() {
         timeDo = Number(room.timeDo || 540);
         timeDen = Number(room.timeDen || 540);
 
-        saveActiveMatchSnapshot({ roomId: invite.roomId, mode, side: "den" });
+        clearActiveMatchSnapshot(invite.roomId);
         closeArenaTopModal();
         closeRankingModal();
         prepareRealtimeArenaUI();
