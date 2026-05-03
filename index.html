@@ -8502,91 +8502,114 @@ function summarizeStatsV2History(history = {}, fallbackMonthKey = statsV2MonthKe
     return out;
 }
 
+// ===== HOTFIX STATS V2 V3: không rebuild đè tổng, chỉ cộng dồn an toàn =====
+function statsV2ClampInt(value, fallback = 0) {
+    const n = Number(value);
+    const safe = Number.isFinite(n) ? n : fallback;
+    return Math.max(0, Math.floor(safe || 0));
+}
+
+function statsV2ReadTotals(stats = {}) {
+    const s = stats && typeof stats === "object" ? stats : {};
+    const wins = statsV2ClampInt(s.wins ?? s.totalWins ?? 0);
+    const losses = statsV2ClampInt(s.losses ?? s.totalLosses ?? 0);
+    const matches = Math.max(
+        statsV2ClampInt(s.matches ?? s.totalMatches ?? 0),
+        wins + losses
+    );
+    return { wins, losses, matches };
+}
+
+function statsV2ReadMonth(stats = {}, monthKey = statsV2MonthKey()) {
+    const s = stats && typeof stats === "object" ? stats : {};
+    const monthObj = s.months && s.months[monthKey] && typeof s.months[monthKey] === "object"
+        ? s.months[monthKey]
+        : {};
+    const wins = statsV2ClampInt(monthObj.wins ?? s.monthWins ?? 0);
+    const losses = statsV2ClampInt(monthObj.losses ?? s.monthLosses ?? 0);
+    const matches = Math.max(
+        statsV2ClampInt(monthObj.matches ?? s.monthMatches ?? 0),
+        wins + losses
+    );
+    return { wins, losses, matches };
+}
+
 function applyStatsV2ResultToWalletData(wallet, result, role) {
     const w = wallet && typeof wallet === "object" ? { ...wallet } : {};
-    const roundId = String(result.roundId || "");
+    const roundId = String(result?.roundId || "").trim();
     if (!roundId) return w;
 
+    const normalizedRole = String(role || "").toLowerCase();
+    const isWinner = normalizedRole === "winner";
+    const isLoser = normalizedRole === "loser";
+    if (!isWinner && !isLoser) return w;
+
+    const now = Date.now();
+    const monthKey = statsV2MonthKey(result.finishedAt || result.committedAt || result.startedAt || now);
+    const oldStats = w.statsV2 && typeof w.statsV2 === "object" ? { ...w.statsV2 } : {};
     const oldHistory = w.matchHistoryV2 && typeof w.matchHistoryV2 === "object"
         ? { ...w.matchHistoryV2 }
         : {};
 
-    // Nếu ván này đã có trong lịch sử thì vẫn tự sửa lại tổng statsV2 từ lịch sử,
-    // không cộng thêm lần nữa. Nhờ vậy reset app / cache sai cũng không làm tụt số.
-    const mergedHistory = oldHistory[roundId]
-        ? { ...oldHistory }
-        : { ...oldHistory, [roundId]: makeStatsV2HistoryEntry(result, role) };
+    // roundId là khóa chống cộng trùng. App reset/mở lại listener bao nhiêu lần cũng không + lại ván cũ.
+    const alreadyCounted = !!oldHistory[roundId];
+    const historyEntry = oldHistory[roundId]
+        ? { ...oldHistory[roundId] }
+        : makeStatsV2HistoryEntry(result, normalizedRole);
+    const mergedHistory = { ...oldHistory, [roundId]: historyEntry };
 
-    const now = Date.now();
-    const monthKey = statsV2MonthKey(result.finishedAt || result.committedAt || now);
-    const oldStats = w.statsV2 && typeof w.statsV2 === "object" ? { ...w.statsV2 } : {};
-    const summary = summarizeStatsV2History(mergedHistory, monthKey);
+    const oldTotals = statsV2ReadTotals(oldStats);
+    const oldMonth = statsV2ReadMonth(oldStats, monthKey);
 
-    // FIX V2.1: Không cho tổng V2 tụt sau khi reset app/cache.
-    // matchHistoryV2 là sổ cái chính, nhưng nếu lịch sử cục bộ bị thiếu vài ván cũ
-    // thì vẫn giữ "sàn" từ statsV2 cũ. Nhờ vậy đang 3 thắng, reset app đánh thêm
-    // sẽ không bị rebuild tụt về 1.
-    const oldMonth = oldStats.months && oldStats.months[monthKey] && typeof oldStats.months[monthKey] === "object"
-        ? oldStats.months[monthKey]
-        : {};
-    const floorWins = Math.max(
-        summary.wins,
-        Math.max(0, Math.floor(statsV2SafeNum(oldStats.wins ?? oldStats.totalWins, 0)))
-    );
-    const floorLosses = Math.max(
-        summary.losses,
-        Math.max(0, Math.floor(statsV2SafeNum(oldStats.losses ?? oldStats.totalLosses, 0)))
-    );
-    const floorMatches = Math.max(
-        summary.matches,
-        Math.max(0, Math.floor(statsV2SafeNum(oldStats.matches ?? oldStats.totalMatches, 0))),
-        floorWins + floorLosses
-    );
-    const floorMonthWins = Math.max(
-        summary.monthWins,
-        Math.max(0, Math.floor(statsV2SafeNum(oldStats.monthWins ?? oldMonth.wins, 0)))
-    );
-    const floorMonthLosses = Math.max(
-        summary.monthLosses,
-        Math.max(0, Math.floor(statsV2SafeNum(oldStats.monthLosses ?? oldMonth.losses, 0)))
-    );
-    const floorMonthMatches = Math.max(
-        summary.monthMatches,
-        Math.max(0, Math.floor(statsV2SafeNum(oldStats.monthMatches ?? oldMonth.matches, 0))),
-        floorMonthWins + floorMonthLosses
-    );
+    const addMatch = alreadyCounted ? 0 : 1;
+    const addWin = !alreadyCounted && isWinner ? 1 : 0;
+    const addLoss = !alreadyCounted && isLoser ? 1 : 0;
 
+    // Chỉ dùng history làm "sàn sửa lỗi" nếu stats cũ bị thiếu, tuyệt đối không cho rebuild kéo số xuống.
+    const historyFloor = summarizeStatsV2History(mergedHistory, monthKey);
+
+    const finalWins = Math.max(oldTotals.wins + addWin, historyFloor.wins);
+    const finalLosses = Math.max(oldTotals.losses + addLoss, historyFloor.losses);
+    const finalMatches = Math.max(oldTotals.matches + addMatch, historyFloor.matches, finalWins + finalLosses);
+
+    const finalMonthWins = Math.max(oldMonth.wins + addWin, historyFloor.monthWins);
+    const finalMonthLosses = Math.max(oldMonth.losses + addLoss, historyFloor.monthLosses);
+    const finalMonthMatches = Math.max(oldMonth.matches + addMatch, historyFloor.monthMatches, finalMonthWins + finalMonthLosses);
+
+    const oldMonths = oldStats.months && typeof oldStats.months === "object" ? oldStats.months : {};
+    const oldThisMonth = oldMonths[monthKey] && typeof oldMonths[monthKey] === "object" ? oldMonths[monthKey] : {};
     const safeMonths = {
-        ...(oldStats.months && typeof oldStats.months === "object" ? oldStats.months : {}),
-        ...summary.months,
+        ...oldMonths,
+        ...(historyFloor.months && typeof historyFloor.months === "object" ? historyFloor.months : {}),
         [monthKey]: {
-            ...(oldStats.months && oldStats.months[monthKey] && typeof oldStats.months[monthKey] === "object" ? oldStats.months[monthKey] : {}),
-            ...(summary.months && summary.months[monthKey] && typeof summary.months[monthKey] === "object" ? summary.months[monthKey] : {}),
-            wins: floorMonthWins,
-            losses: floorMonthLosses,
-            matches: floorMonthMatches,
+            ...oldThisMonth,
+            ...(historyFloor.months && historyFloor.months[monthKey] && typeof historyFloor.months[monthKey] === "object" ? historyFloor.months[monthKey] : {}),
+            wins: finalMonthWins,
+            losses: finalMonthLosses,
+            matches: finalMonthMatches,
             updatedAt: now
         }
     };
 
     w.statsV2 = {
         ...oldStats,
-        wins: floorWins,
-        losses: floorLosses,
-        matches: floorMatches,
-        totalWins: floorWins,
-        totalLosses: floorLosses,
-        totalMatches: floorMatches,
-        monthWins: floorMonthWins,
-        monthLosses: floorMonthLosses,
-        monthMatches: floorMonthMatches,
+        wins: finalWins,
+        losses: finalLosses,
+        matches: finalMatches,
+        totalWins: finalWins,
+        totalLosses: finalLosses,
+        totalMatches: finalMatches,
+        monthWins: finalMonthWins,
+        monthLosses: finalMonthLosses,
+        monthMatches: finalMonthMatches,
         monthKey,
-        lastResult: role === "winner" ? "win" : "loss",
+        lastResult: isWinner ? "win" : "loss",
         lastRoundId: roundId,
         lastRoomId: result.roomId || "",
         lastReason: result.reason || "",
+        lastAlreadyCounted: alreadyCounted,
         updatedAt: now,
-        source: "roundResultsV2_history_rebuild_v2_1",
+        source: "statsV2_endgame_incremental_v3_no_rebuild",
         months: safeMonths
     };
 
@@ -8614,8 +8637,8 @@ async function applyStatsV2WalletOnce(walletKey, result, role) {
     let appliedOrRebuilt = false;
     await db.ref("wallets/" + walletKey).transaction(current => {
         const before = current && typeof current === "object" ? current : {};
-        // Không dựa vào statsV2.wins/losses nữa. Luôn rebuild tổng từ matchHistoryV2.
-        // Nếu roundId đã có thì hàm chỉ sửa tổng, không cộng trùng.
+        // Giao dịch atomic: đọc statsV2 cũ trong Firebase rồi mới cộng.
+        // matchHistoryV2/<roundId> là khóa chống cộng trùng, không rebuild đè tổng xuống.
         const after = applyStatsV2ResultToWalletData(before, result, role);
         appliedOrRebuilt = true;
         return after;
@@ -8647,7 +8670,7 @@ async function commitStatsV2FromRoundRoomOnce(room, roomId = currentRoomId) {
 
         const marker = {
             done: true,
-            source: "roundResultsV2_history_rebuild",
+            source: "statsV2_endgame_incremental_v3_no_rebuild",
             roundId: result.roundId,
             roomId: result.roomId || roomId || "",
             winnerWalletKey: result.winnerWalletKey || "",
