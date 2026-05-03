@@ -6900,6 +6900,7 @@ function hideVictoryPopup() {
     wrap.style.pointerEvents = "none";
 }
 // HÀM TIẾP TỤC VÁN MỚI: Tạo phòng mới tinh nếu đối thủ đã chạy mất dép
+// HÀM TIẾP TỤC VÁN MỚI: Ôm luôn phòng cũ nếu đối thủ chạy mất dép
 async function playNextMatch() {
     hideVictoryPopup();
     clearInterval(interval);
@@ -6924,8 +6925,8 @@ async function playNextMatch() {
 
         clearRealtimeBoardVisualOnly();
 
-        const oldRoomId = currentRoomId;
-        const checkSnap = await db.ref("matches/" + oldRoomId).once("value");
+        const roomId = currentRoomId; // KHÔNG ĐỔI ROOM ID NỮA
+        const checkSnap = await db.ref("matches/" + roomId).once("value");
         let checkRoom = checkSnap.val() || {};
         const stake = Math.max(0, Math.floor(Number(checkRoom.stakePMC || 0) || 0));
 
@@ -6933,7 +6934,7 @@ async function playNextMatch() {
             if (checkRoom.settlement?.paid !== true) {
                 console.log("Đang chờ Firebase trả thưởng PMC...");
                 await new Promise((resolve) => {
-                    const paidRef = db.ref("matches/" + oldRoomId + "/settlement/paid");
+                    const paidRef = db.ref("matches/" + roomId + "/settlement/paid");
                     const timeout = setTimeout(() => { paidRef.off(); resolve(); }, 4000); 
                     paidRef.on("value", (snap) => {
                         if (snap.val() === true) {
@@ -6946,57 +6947,77 @@ async function playNextMatch() {
             }
         }
 
-        const latestSnap = await db.ref("matches/" + oldRoomId).once("value");
+        const latestSnap = await db.ref("matches/" + roomId).once("value");
         checkRoom = latestSnap.val() || checkRoom;
 
         const otherSide = mySide === "do" ? "den" : "do";
         const otherPlayerLeft = !checkRoom.players?.[otherSide] || checkRoom.winReason === "bochay" || checkRoom.quitSide === otherSide;
 
-        // ĐỐI THỦ CHẠY RỒI -> TẠO PHÒNG MỚI ĐỂ TRÁNH BỊ HÀM DỌN RÁC QUÉT NHẦM
+        // ĐỐI THỦ ĐÃ CHẠY -> ÔM PHÒNG CŨ THÀNH CHỦ MỚI
         if (otherPlayerLeft) {
-            console.log("Đối thủ đã thoát, tạo phòng mới làm chủ!");
+            console.log("Đối thủ đã thoát, ôm phòng làm chủ mới!");
             const cleanMode = checkRoom.mode || currentRoomMode || "co-tuong";
             const cleanStake = Math.max(0, Math.floor(Number(checkRoom.stakePMC || 0) || 0));
             const cleanBucket = checkRoom.roomBucket || currentRoomBucket || makeStakeBucket(cleanMode, cleanStake);
-            const cleanInviteCode = String(checkRoom.inviteCode || makeInviteCodeFromRoomId(oldRoomId)).toUpperCase();
+            const cleanInviteCode = String(checkRoom.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
             
             const me = checkRoom.players?.[mySide] || getCurrentPlayerProfile();
 
-            // Xóa phòng cũ khỏi danh sách
-            await db.ref("waitingRooms/" + cleanBucket + "/" + oldRoomId).remove().catch(()=>{});
+            const updates = {};
+            updates[`matches/${roomId}/players/do`] = { ...me, side: "do", updatedAt: firebase.database.ServerValue.TIMESTAMP };
+            updates[`matches/${roomId}/players/den`] = null; 
+            updates[`matches/${roomId}/hostUid`] = me.uid || "";
+            updates[`matches/${roomId}/hostWalletKey`] = me.walletKey || "";
             
-            // Tạo phòng mới
-            const newRoomRef = db.ref("matches").push();
-            const newRoomId = newRoomRef.key;
+            updates[`matches/${roomId}/lobbyOpen`] = true;
+            updates[`matches/${roomId}/lobbyOwnerUid`] = me.uid || "";
+            updates[`matches/${roomId}/lobbyOwnerWalletKey`] = me.walletKey || "";
+            updates[`matches/${roomId}/lobbyHeartbeatAt`] = firebase.database.ServerValue.TIMESTAMP;
+            updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+            
+            updates[`matches/${roomId}/status`] = "waiting";
+            updates[`matches/${roomId}/turn`] = "do";
+            updates[`matches/${roomId}/board`] = null;
+            updates[`matches/${roomId}/timeDo`] = 540;
+            updates[`matches/${roomId}/timeDen`] = 540;
+            updates[`matches/${roomId}/lastMoveFrom`] = null;
+            updates[`matches/${roomId}/lastMoveTo`] = null;
+            updates[`matches/${roomId}/winner`] = null;
+            updates[`matches/${roomId}/winReason`] = null;
+            updates[`matches/${roomId}/drawRequest`] = null;
+            updates[`matches/${roomId}/quitSide`] = null;
+            updates[`matches/${roomId}/quitUid`] = null;
+            updates[`matches/${roomId}/quitAt`] = null;
+            updates[`matches/${roomId}/settlement`] = null;
+            updates[`matches/${roomId}/refunds`] = null;
+            
+            updates[`matches/${roomId}/ready/do`] = false;
+            updates[`matches/${roomId}/ready/den`] = false;
+            updates[`matches/${roomId}/stakeLocked/do`] = false;
+            updates[`matches/${roomId}/stakeLocked/den`] = false;
+            updates[`matches/${roomId}/readyDeadlineAt`] = null; // Tắt đếm ngược
+            updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
 
-            await newRoomRef.set({
-                mode: cleanMode, stakePMC: cleanStake, roomBucket: cleanBucket, inviteCode: cleanInviteCode,
-                status: "waiting", lobbyOpen: true, lobbyOwnerUid: me.uid || "", lobbyOwnerWalletKey: me.walletKey || "",
-                lobbyHeartbeatAt: Date.now(), lobbyUpdatedAt: firebase.database.ServerValue.TIMESTAMP,
-                turn: "do", isCoUp: cleanMode === "co-up", timeDo: 540, timeDen: 540,
-                createdAt: firebase.database.ServerValue.TIMESTAMP,
-                players: { do: { ...me, side: "do", updatedAt: firebase.database.ServerValue.TIMESTAMP }, den: null },
-                ready: { do: false, den: false }, stakeLocked: { do: false, den: false },
-                board: null, lastMoveFrom: null, lastMoveTo: null, winner: null, winReason: null, drawRequest: null
-            });
+            updates[`waitingRooms/${cleanBucket}/${roomId}`] = {
+                roomId: roomId,
+                uid: me.uid || "",
+                walletKey: me.walletKey || "",
+                name: me.name || "Người chơi",
+                mode: cleanMode,
+                stakePMC: cleanStake,
+                inviteCode: cleanInviteCode, 
+                createdAt: Date.now(),
+                claimedBy: null,
+                claimedAt: null
+            };
 
-            // Đưa phòng mới ra sảnh
-            await db.ref("waitingRooms/" + cleanBucket + "/" + newRoomId).set({
-                roomId: newRoomId, uid: me.uid || "", walletKey: me.walletKey || "", name: me.name || "Người chơi",
-                mode: cleanMode, stakePMC: cleanStake, inviteCode: cleanInviteCode,
-                createdAt: Date.now(), claimedBy: null, claimedAt: null
-            });
-
-            // Cập nhật lại UI máy mày thành Chủ phòng mới
-            cleanupRoomListeners(); // Ngắt kết nối phòng cũ
+            await db.ref().update(updates);
+            
             mySide = "do";
             viewSide = "do";
             currentRoomMode = cleanMode;
             currentRoomStakePMC = cleanStake;
             currentRoomBucket = cleanBucket;
-            
-            // Lắng nghe phòng mới
-            bindRoom(newRoomId); 
             
             closeReadyOverlay();
             renderTimerUI();
@@ -8071,13 +8092,13 @@ function cleanupRoomListeners() {
         isSpectatorMode = false;
     }
 }
-// HÀM RÚT LUI VÀ BÀN GIAO PHÒNG (FIX LỖI TÀNG HÌNH DO DỌN PHÒNG ẢO)
+// HÀM RÚT LUI VÀ BÀN GIAO PHÒNG (FIX LỖI KẸT BẢNG SẴN SÀNG CỦA B)
 async function leaveRealtimeMatch() {
-    const oldRoomId = currentRoomId;
+    const roomId = currentRoomId; // Dùng lại phòng cũ, đéo tạo mới nữa!
     const side = mySide;
     const mode = currentRoomMode;
 
-    clearActiveMatchSnapshot(oldRoomId);
+    clearActiveMatchSnapshot(roomId);
     cleanupRoomListeners();
 
     const roomBucket = currentRoomBucket;
@@ -8090,101 +8111,84 @@ async function leaveRealtimeMatch() {
 
     await setPlayerPresence("home").catch(()=>{});
 
-    if (!oldRoomId || !side) return;
+    if (!roomId || !side) return;
 
     try {
-        const roomSnap = await db.ref("matches/" + oldRoomId).once("value");
-        const oldRoom = roomSnap.val() || {};
+        const roomSnap = await db.ref("matches/" + roomId).once("value");
+        const room = roomSnap.val() || {};
 
         const otherSide = side === "do" ? "den" : "do";
-        const otherPlayer = oldRoom.players?.[otherSide];
-        const stillPlaying = oldRoom.status === "playing";
+        const otherPlayer = room.players?.[otherSide];
+        const stillPlaying = room.status === "playing";
 
         // NẾU ĐANG ĐÁNH MÀ CHẠY -> XỬ THUA VÀ ĐÓNG CỬA PHÒNG
-        if (stillPlaying && otherPlayer && !oldRoom.winner) {
+        if (stillPlaying && otherPlayer && !room.winner) {
             const updates = {};
-            updates[`matches/${oldRoomId}/winner`] = otherSide;
-            updates[`matches/${oldRoomId}/winReason`] = "bochay";
-            updates[`matches/${oldRoomId}/finishedAt`] = firebase.database.ServerValue.TIMESTAMP;
-            updates[`matches/${oldRoomId}/quitSide`] = side;
-            updates[`matches/${oldRoomId}/status`] = "finished";
-            updates[`matches/${oldRoomId}/lobbyOpen`] = false;
-            updates[`matches/${oldRoomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+            updates[`matches/${roomId}/winner`] = otherSide;
+            updates[`matches/${roomId}/winReason`] = "bochay";
+            updates[`matches/${roomId}/finishedAt`] = firebase.database.ServerValue.TIMESTAMP;
+            updates[`matches/${roomId}/quitSide`] = side;
+            updates[`matches/${roomId}/status`] = "finished";
+            updates[`matches/${roomId}/lobbyOpen`] = false;
+            updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
             
-            if (roomBucket) updates[`waitingRooms/${roomBucket}/${oldRoomId}`] = null;
+            if (roomBucket) updates[`waitingRooms/${roomBucket}/${roomId}`] = null;
             
             await db.ref().update(updates);
             return; 
         }
 
         // Hoàn tiền nếu phòng đang ở sảnh
-        await maybeRefundWaitingStakePMC(oldRoomId, oldRoom, side).catch(()=>{});
+        await maybeRefundWaitingStakePMC(roomId, room, side).catch(()=>{});
 
-        const oldBucket = oldRoom.roomBucket || makeStakeBucket(oldRoom.mode, oldRoom.stakePMC);
+        const cleanMode = room.mode || mode || "co-tuong";
+        const cleanStake = Math.max(0, Math.floor(Number(room.stakePMC || 0)));
+        const cleanBucket = room.roomBucket || roomBucket || makeStakeBucket(cleanMode, cleanStake);
+        const cleanInviteCode = String(room.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
 
-        // NẾU CHỈ CÓ 1 MÌNH -> DỌN LUÔN PHÒNG CŨ ĐÓ
+        // NẾU CHỈ CÓ 1 MÌNH -> DỌN LUÔN PHÒNG
         if (!otherPlayer) {
-            await db.ref("waitingRooms/" + oldBucket + "/" + oldRoomId).remove().catch(()=>{});
-            await db.ref("matches/" + oldRoomId).remove().catch(()=>{});
+            await db.ref("waitingRooms/" + cleanBucket + "/" + roomId).remove().catch(()=>{});
+            await db.ref("matches/" + roomId).remove().catch(()=>{});
             return;
         }
 
-        // ĐỐI THỦ CÒN ĐÓ -> TẠO PHÒNG MỚI TINH CHO NÓ LÀM CHỦ, XÓA PHÒNG CŨ!
-        const cleanMode = oldRoom.mode || mode || "co-tuong";
-        const cleanStake = Math.max(0, Math.floor(Number(oldRoom.stakePMC || 0)));
-        const cleanBucket = oldRoom.roomBucket || roomBucket || makeStakeBucket(cleanMode, cleanStake);
-        const cleanInviteCode = String(oldRoom.inviteCode || makeInviteCodeFromRoomId(oldRoomId)).toUpperCase();
-
-        // Xóa phòng cũ khỏi sảnh chờ để tránh rác
-        await db.ref("waitingRooms/" + oldBucket + "/" + oldRoomId).remove().catch(()=>{});
+        // ĐỐI THỦ CÒN ĐÓ -> NHƯỜNG LUÔN PHÒNG ĐANG CÓ CHO NÓ, ÉP TẮT BẢNG SẴN SÀNG!
+        const updates = {};
         
-        // Đóng phòng cũ lại (ẩn hoàn toàn)
-        await db.ref("matches/" + oldRoomId).update({
-            lobbyOpen: false,
-            status: "finished",
-            quitSide: side,
-            updatedAt: firebase.database.ServerValue.TIMESTAMP
-        });
+        // Mình cút khỏi ghế
+        updates[`matches/${roomId}/players/${side}`] = null;
+        updates[`matches/${roomId}/ready/${side}`] = false;
+        updates[`matches/${roomId}/stakeLocked/${side}`] = false;
 
-        // TẠO PHÒNG MỚI CHO THẰNG KIA LÀM CHỦ
-        const newRoomRef = db.ref("matches").push();
-        const newRoomId = newRoomRef.key;
+        // Bốc thằng kia lên làm chủ (Đỏ) nếu nó đang ở Đen
+        if (otherSide === "den") {
+            updates[`matches/${roomId}/players/do`] = { ...otherPlayer, side: "do", updatedAt: firebase.database.ServerValue.TIMESTAMP };
+            updates[`matches/${roomId}/players/den`] = null; // Xóa sổ người Đen để dập tắt bảng Sẵn Sàng
+            updates[`matches/${roomId}/ready/do`] = false;
+            updates[`matches/${roomId}/ready/den`] = false;
+            updates[`matches/${roomId}/stakeLocked/do`] = false;
+            updates[`matches/${roomId}/stakeLocked/den`] = false;
+        }
 
-        const newRoomData = {
-            mode: cleanMode,
-            stakePMC: cleanStake,
-            roomBucket: cleanBucket,
-            inviteCode: cleanInviteCode, // Kế thừa mã mời cũ để C, D vẫn vào được
-            status: "waiting",
-            lobbyOpen: true,
-            lobbyOwnerUid: otherPlayer.uid || "",
-            lobbyOwnerWalletKey: otherPlayer.walletKey || "",
-            lobbyHeartbeatAt: Date.now(),
-            lobbyUpdatedAt: firebase.database.ServerValue.TIMESTAMP,
-            turn: "do",
-            isCoUp: cleanMode === "co-up",
-            timeDo: 540,
-            timeDen: 540,
-            createdAt: firebase.database.ServerValue.TIMESTAMP,
-            players: {
-                do: { ...otherPlayer, side: "do", updatedAt: firebase.database.ServerValue.TIMESTAMP },
-                den: null
-            },
-            ready: { do: false, den: false },
-            stakeLocked: { do: false, den: false },
-            board: null,
-            lastMoveFrom: null,
-            lastMoveTo: null,
-            winner: null,
-            winReason: null,
-            drawRequest: null
-        };
+        updates[`matches/${roomId}/hostUid`] = otherPlayer.uid || "";
+        updates[`matches/${roomId}/hostWalletKey`] = otherPlayer.walletKey || "";
+        updates[`matches/${roomId}/lobbyOpen`] = true;
+        updates[`matches/${roomId}/lobbyOwnerUid`] = otherPlayer.uid || "";
+        updates[`matches/${roomId}/lobbyOwnerWalletKey`] = otherPlayer.walletKey || "";
+        updates[`matches/${roomId}/lobbyHeartbeatAt`] = firebase.database.ServerValue.TIMESTAMP;
+        updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+        
+        updates[`matches/${roomId}/status`] = "waiting";
+        updates[`matches/${roomId}/turn`] = "do";
+        updates[`matches/${roomId}/board`] = null;
+        updates[`matches/${roomId}/winner`] = null;
+        updates[`matches/${roomId}/winReason`] = null;
+        updates[`matches/${roomId}/readyDeadlineAt`] = null; // 🔥 Đập chết cái đồng hồ đếm ngược
+        updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
 
-        await newRoomRef.set(newRoomData);
-
-        // Đẩy phòng mới ra sảnh chờ
-        await db.ref("waitingRooms/" + cleanBucket + "/" + newRoomId).set({
-            roomId: newRoomId,
+        updates[`waitingRooms/${cleanBucket}/${roomId}`] = {
+            roomId: roomId,
             uid: otherPlayer.uid || "",
             walletKey: otherPlayer.walletKey || "",
             name: otherPlayer.name || "Người chơi",
@@ -8194,18 +8198,9 @@ async function leaveRealtimeMatch() {
             createdAt: Date.now(),
             claimedBy: null,
             claimedAt: null
-        });
-// Báo cho máy thằng B biết là nó đã bị chuyển hộ khẩu sang phòng mới
-        await db.ref("social/playerState/" + (otherPlayer.walletKey || "")).update({
-            roomId: newRoomId,
-            updatedAt: firebase.database.ServerValue.TIMESTAMP
-        }).catch(()=>{});
+        };
 
-        // 🔥 THUỐC KÍCH TIM CHO THẰNG B: 
-        // Bơm một nhịp tim giả danh B ngay lập tức để Firebase biết B còn sống!
-        await db.ref("matches/" + newRoomId).update({
-            lobbyHeartbeatAt: firebase.database.ServerValue.TIMESTAMP
-        }).catch(()=>{});
+        await db.ref().update(updates);
 
     } catch (err) {
         console.error("Rời phòng bị lỗi:", err);
