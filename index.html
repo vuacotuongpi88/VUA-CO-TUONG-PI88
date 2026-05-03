@@ -6893,7 +6893,7 @@ function hideVictoryPopup() {
     wrap.style.pointerEvents = "none";
 }
 
-// HÀM RESET PHÒNG SAU KHI VÁN ĐẤU KẾT THÚC
+// HÀM RESET PHÒNG VÀ XỬ LÝ LỖI KẸT PHÒNG KHI ĐỐI THỦ BỎ CHẠY
 async function playNextMatch() {
     hideVictoryPopup();
     clearInterval(interval);
@@ -6922,22 +6922,13 @@ async function playNextMatch() {
         let checkRoom = checkSnap.val() || {};
         const stake = Math.max(0, Math.floor(Number(checkRoom.stakePMC || 0) || 0));
 
-        // 🔥 TỐI ƯU SIÊU TỐC ĐỘ CHỐNG LAG MÁY THẰNG THẮNG
+        // 🔥 CHỜ FIREBASE TRẢ PMC XONG MỚI RESET (Tránh mất tiền)
         if (checkRoom.winner && checkRoom.winner !== "hoa" && stake > 0) {
             if (checkRoom.settlement?.paid !== true) {
                 console.log("Đang chờ Firebase trả thưởng PMC...");
-                
-                // Dùng Listener nghe ngầm thay vì dùng vòng lặp spam sập mạng
                 await new Promise((resolve) => {
                     const paidRef = db.ref("matches/" + currentRoomId + "/settlement/paid");
-                    
-                    // Chờ tối đa 4 giây, nếu mạng lag quá tự cho qua luôn đéo để kẹt UI
-                    const timeout = setTimeout(() => {
-                        paidRef.off();
-                        resolve();
-                    }, 4000); 
-
-                    // Khi Server báo trả thưởng xong (true) -> Mở bảng SS ngay lập tức!
+                    const timeout = setTimeout(() => { paidRef.off(); resolve(); }, 4000); 
                     paidRef.on("value", (snap) => {
                         if (snap.val() === true) {
                             clearTimeout(timeout);
@@ -6949,17 +6940,100 @@ async function playNextMatch() {
             }
         }
 
-        // Reset phòng cho ván mới
+        // Đọc lại Data lần nữa cho chắc ăn sau khi đợi tiền
+        const latestSnap = await db.ref("matches/" + currentRoomId).once("value");
+        checkRoom = latestSnap.val() || checkRoom;
+
+        const otherSide = mySide === "do" ? "den" : "do";
+        
+        // KIỂM TRA XEM ĐỐI THỦ CÒN NGỒI ĐÓ HAY ĐÃ BỎ CHẠY?
+        const otherPlayerLeft = 
+            !checkRoom.players?.[otherSide] || 
+            checkRoom.winReason === "bochay" || 
+            checkRoom.quitSide === otherSide;
+
+        // 💥 TRƯỜNG HỢP 1: ĐỐI THỦ ĐÃ THOÁT -> MÀY LÊN LÀM CHỦ PHÒNG, MỞ CỬA CHO NGƯỜI KHÁC VÀO!
+        if (otherPlayerLeft) {
+            console.log("Đối thủ đã thoát, ôm phòng làm chủ mới!");
+            const cleanMode = checkRoom.mode || currentRoomMode || "co-tuong";
+            const cleanStake = Math.max(0, Math.floor(Number(checkRoom.stakePMC || 0) || 0));
+            const cleanBucket = checkRoom.roomBucket || currentRoomBucket || makeStakeBucket(cleanMode, cleanStake);
+            const inviteCode = String(checkRoom.inviteCode || makeInviteCodeFromRoomId(currentRoomId)).toUpperCase();
+            
+            const me = checkRoom.players?.[mySide] || getCurrentPlayerProfile();
+
+            const updates = {};
+            // Chuyển mày lên phe Đỏ (Host)
+            updates[`matches/${currentRoomId}/players/do`] = { ...me, side: "do", updatedAt: firebase.database.ServerValue.TIMESTAMP };
+            updates[`matches/${currentRoomId}/players/den`] = null; // Đá thằng kia ra chuồng gà
+            updates[`matches/${currentRoomId}/hostUid`] = me.uid || "";
+            updates[`matches/${currentRoomId}/hostWalletKey`] = me.walletKey || "";
+            
+            // Mở toang cửa phòng
+            updates[`matches/${currentRoomId}/lobbyOpen`] = true;
+            updates[`matches/${currentRoomId}/lobbyOwnerUid`] = me.uid || "";
+            updates[`matches/${currentRoomId}/lobbyOwnerWalletKey`] = me.walletKey || "";
+            updates[`matches/${currentRoomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+            
+            // Reset sạch sẽ bàn cờ
+            updates[`matches/${currentRoomId}/status`] = "waiting";
+            updates[`matches/${currentRoomId}/turn`] = "do";
+            updates[`matches/${currentRoomId}/board`] = null;
+            updates[`matches/${currentRoomId}/timeDo`] = 540;
+            updates[`matches/${currentRoomId}/timeDen`] = 540;
+            updates[`matches/${currentRoomId}/lastMoveFrom`] = null;
+            updates[`matches/${currentRoomId}/lastMoveTo`] = null;
+            updates[`matches/${currentRoomId}/winner`] = null;
+            updates[`matches/${currentRoomId}/winReason`] = null;
+            updates[`matches/${currentRoomId}/drawRequest`] = null;
+            updates[`matches/${currentRoomId}/quitSide`] = null;
+            updates[`matches/${currentRoomId}/quitUid`] = null;
+            updates[`matches/${currentRoomId}/quitAt`] = null;
+            updates[`matches/${currentRoomId}/settlement`] = null;
+            updates[`matches/${currentRoomId}/refunds`] = null;
+            
+            updates[`matches/${currentRoomId}/ready/do`] = false;
+            updates[`matches/${currentRoomId}/ready/den`] = false;
+            updates[`matches/${currentRoomId}/stakeLocked/do`] = false;
+            updates[`matches/${currentRoomId}/stakeLocked/den`] = false;
+            updates[`matches/${currentRoomId}/readyDeadlineAt`] = null;
+            updates[`matches/${currentRoomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+            // Treo bảng ngoài sảnh cho C D F vào
+            updates[`waitingRooms/${cleanBucket}/${currentRoomId}`] = {
+                roomId: currentRoomId,
+                uid: me.uid || "",
+                walletKey: me.walletKey || "",
+                name: me.name || "Người chơi",
+                mode: cleanMode,
+                stakePMC: cleanStake,
+                inviteCode,
+                createdAt: Date.now(),
+                claimedBy: null,
+                claimedAt: null
+            };
+
+            await db.ref().update(updates);
+            
+            // Cập nhật lại UI máy mày thành Chủ phòng
+            mySide = "do";
+            viewSide = "do";
+            currentRoomMode = cleanMode;
+            currentRoomStakePMC = cleanStake;
+            currentRoomBucket = cleanBucket;
+            
+            // Ép TẮT cái bảng Sẵn Sàng khốn nạn đó đi!
+            closeReadyOverlay();
+            renderTimerUI();
+            updateReadyUI();
+            return;
+        }
+
+        // 💥 TRƯỜNG HỢP 2: ĐỐI THỦ VẪN CÒN ĐÓ -> RESET BÌNH THƯỜNG CHO VÁN MỚI
         await db.ref("matches/" + currentRoomId).update({
             status: "waiting",
-            ready: {
-                do: false,
-                den: false
-            },
-            stakeLocked: {
-                do: false,
-                den: false
-            },
+            ready: { do: false, den: false },
+            stakeLocked: { do: false, den: false },
             board: null,
             turn: "do",
             timeDo: 540,
@@ -6997,7 +7071,7 @@ async function playNextMatch() {
         return;
     }
 
-    // Offline fallback
+    // Offline fallback (Giữ nguyên)
     isGameOver = false;
     selectedPiece = null;
     luotDi = "do";
