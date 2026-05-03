@@ -9600,12 +9600,18 @@ function getAccountKey() {
     const piName = localStorage.getItem("pi-user-name");
     if (piName) return `pi_${piName.trim().toLowerCase()}`;
 
-    const guestName =
-        localStorage.getItem("currentUsername") ||
-        localStorage.getItem("user-name-display") ||
-        "guest";
+    // NẾU LÀ GUEST: Kiểm tra xem đã có guest_uid lưu trước đó chưa
+    let guestUid = localStorage.getItem("guest_uid");
+    
+    // Nếu chưa có, tạo một cái mới cố định cho thiết bị/trình duyệt này
+    if (!guestUid) {
+        // Tạo một chuỗi ngẫu nhiên làm ID cố định
+        const randomString = Math.random().toString(36).substring(2, 10);
+        guestUid = `guest_${randomString}_${Date.now()}`;
+        localStorage.setItem("guest_uid", guestUid);
+    }
 
-    return `guest_${guestName.trim().toLowerCase().replace(/\s+/g, "_")}`;
+    return guestUid;
 }
 
 function makeWalletDbKey() {
