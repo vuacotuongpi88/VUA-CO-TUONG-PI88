@@ -12132,18 +12132,21 @@ const key = [
     Number(room.readyDeadlineAt || 0)
 ].join("|");
 
-    // Nếu phòng chưa có mốc hết giờ SS thì tạo 1 lần trên Firebase.
-    // Cả A và B sẽ đọc cùng readyDeadlineAt này.
-    if (!Number(room.readyDeadlineAt || 0)) {
+// 🔥 FIX LỖI VÀO PHÒNG BỊ HẾT GIỜ: Kể cả có deadline mà là của ván cũ (đã qua) thì ép tạo 30s mới!
+    const now = readyNowMs();
+    const currentDeadline = Number(room.readyDeadlineAt || 0);
+
+    if (!currentDeadline || currentDeadline <= now) {
         db.ref("matches/" + roomId + "/readyDeadlineAt").transaction((current) => {
-            if (current) return current;
+            // Chỉ giữ lại nếu đang có 1 deadline hợp lệ trong tương lai
+            if (current && current > now) return current;
             return readyNowMs() + 30000;
         }, undefined, false);
 
         return;
     }
 
-    readyDeadlineAt = Number(room.readyDeadlineAt || 0);
+    readyDeadlineAt = currentDeadline;
     readyTime = getReadySecondsLeft(readyDeadlineAt);
 
     const oldKey = readyOverlayRoomKey || "";
