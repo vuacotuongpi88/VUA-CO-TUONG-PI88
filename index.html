@@ -9195,6 +9195,8 @@ function makeInviteCodeFromRoomId(roomId = "") {
     return clean.slice(-8);
 }
 
+// HÀM DỌN PHÒNG CHỜ CŨ CỦA MÌNH
+// Đã fix lỗi: Tuyệt đối không được đóng cái phòng mà mình đang ngồi bên trong!
 async function closeMyOtherOpenWaitingRooms(keepRoomId = null) {
     try {
         const me = getCurrentPlayerProfile();
@@ -9202,6 +9204,9 @@ async function closeMyOtherOpenWaitingRooms(keepRoomId = null) {
         const myWalletKey = String(me?.walletKey || makeWalletDbKey() || "");
 
         if (!myUid && !myWalletKey) return;
+
+        // Ép lấy thêm cái currentRoomId hiện tại để bảo vệ phòng đang ngồi
+        const safeKeepRoomId = keepRoomId || currentRoomId || null;
 
         const snap = await db.ref("matches")
             .orderByChild("createdAt")
@@ -9214,7 +9219,11 @@ async function closeMyOtherOpenWaitingRooms(keepRoomId = null) {
             const roomId = child.key;
             const room = child.val() || {};
 
-            if (!roomId || (keepRoomId && roomId === keepRoomId)) return;
+            if (!roomId) return;
+            
+            // BẢO VỆ TUYỆT ĐỐI: Không được chạm vào phòng mình đang muốn giữ, HOẶC phòng mình đang ngồi trong đó!
+            if (safeKeepRoomId && roomId === safeKeepRoomId) return;
+
             if (room.winner || room.status !== "waiting" || room.lobbyOpen !== true) return;
 
             // Phòng đã có khách thì không động vào, tránh phá phòng đang chuẩn bị SS.
@@ -9224,13 +9233,17 @@ async function closeMyOtherOpenWaitingRooms(keepRoomId = null) {
             const ownerUid = String(room.lobbyOwnerUid || host.uid || "");
             const ownerWalletKey = String(room.lobbyOwnerWalletKey || host.walletKey || "");
 
+            // Xác định xem phòng này có phải của mình làm chủ không
             const mine =
                 (myUid && ownerUid && ownerUid === myUid) ||
-                (myWalletKey && ownerWalletKey && ownerWalletKey === myWalletKey);
+                (myWalletKey && ownerWalletKey && ownerWalletKey === myWalletKey) ||
+                (myUid && host.uid && host.uid === myUid); // Đề phòng lỗi thiếu ownerUid
 
             if (!mine) return;
 
-            const bucket = getRoomBucketSafe(room);
+            const bucket = room.roomBucket || makeStakeBucket(room.mode, room.stakePMC);
+            
+            // Xóa sổ cái phòng cũ này đi
             updates[`matches/${roomId}/lobbyOpen`] = false;
             updates[`matches/${roomId}/lobbyClosedReason`] = "duplicate_host_room";
             updates[`matches/${roomId}/lobbyClosedAt`] = firebase.database.ServerValue.TIMESTAMP;
@@ -9244,6 +9257,7 @@ async function closeMyOtherOpenWaitingRooms(keepRoomId = null) {
 
         if (Object.keys(updates).length) {
             await db.ref().update(updates);
+            console.log("Đã dọn dẹp các phòng chờ ảo cũ của mầy.");
         }
     } catch (err) {
         console.error("Dọn phòng chờ cũ của chính mình lỗi:", err);
