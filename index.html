@@ -13011,7 +13011,7 @@ function renderArenaTopList() {
         return;
     }
 
-    listEl.innerHTML = list.map((p, i) => {
+listEl.innerHTML = list.map((p, i) => {
         let value = "";
         let sub = `Lever ${p.level} • ${escapeTopHtml(p.title)}`;
 
@@ -13019,7 +13019,10 @@ function renderArenaTopList() {
             value = `${p.skinCount} skin`;
             sub += ` • đang dùng: ${escapeTopHtml(p.equippedSkin)}`;
         } else if (arenaTopActiveTab === "record") {
-            value = `V2 Thắng ${p.wins} / Thua ${p.losses}`;
+            // 🔥 SỬA CHỖ NÀY: Thắng >= 1 chữ Xanh, Thua >= 1 chữ Đỏ
+            let winHtml = p.wins >= 1 ? `<span style="color: #55efc4;">Thắng ${p.wins}</span>` : `Thắng ${p.wins}`;
+            let lossHtml = p.losses >= 1 ? `<span style="color: #ff7675;">Thua ${p.losses}</span>` : `Thua ${p.losses}`;
+            value = `V2 ${winHtml} / ${lossHtml}`;
         } else if (arenaTopActiveTab === "pi") {
             value = `${p.pi.toLocaleString("vi-VN", { maximumFractionDigits: 4 })} π`;
         } else if (arenaTopActiveTab === "pmc") {
@@ -13042,9 +13045,14 @@ function renderArenaTopList() {
             statusHtml += ` <span class="top-status-chip home">● ĐANG RẢNH</span>`;
         }
 
-        const challengeBtn = isMe
-            ? `<button class="top-challenge-btn" disabled style="opacity:.45;">LÀ MẦY</button>`
-            : `<button class="top-challenge-btn" onclick="openTopChallengeModal('${escapeTopHtml(p.walletKey)}')">THÁCH ĐẤU</button>`;
+        // 🔥 SỬA CHỖ NÀY: Ai Offline là ẩn mất dạng nút THÁCH ĐẤU luôn
+        let challengeBtn = "";
+        if (isMe) {
+            challengeBtn = `<button class="top-challenge-btn" disabled style="opacity:.45;">LÀ MẦY</button>`;
+        } else if (p.online) {
+            // Chỉ ai Đang rảnh hoặc Đang đấu (còn Online) mới hiện nút
+            challengeBtn = `<button class="top-challenge-btn" onclick="openTopChallengeModal('${escapeTopHtml(p.walletKey)}')">THÁCH ĐẤU</button>`;
+        }
 
         const watchBtn = isPlaying
             ? `<button class="top-watch-btn" onclick="watchTopPlayingRoom('${escapeTopHtml(p.liveRoomId)}')">👁️ XEM (${Number(p.viewerCount || 0)})</button>`
