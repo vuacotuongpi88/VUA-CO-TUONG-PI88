@@ -6898,10 +6898,10 @@ async function playNextMatch() {
     clearInterval(interval);
     clearInterval(readyInterval);
     readyOverlayWaitingShown = false;
-readyOverlayRoomKey = "";
-readyOverlayOpeningLock = false;
-readyTime = 30;
-readyDeadlineAt = 0;
+    readyOverlayRoomKey = "";
+    readyOverlayOpeningLock = false;
+    readyTime = 30;
+    readyDeadlineAt = 0;
 
     if (sounds.bgm) sounds.bgm.pause();
     if (sounds.heartbeat) sounds.heartbeat.pause();
@@ -6912,58 +6912,76 @@ readyDeadlineAt = 0;
         readyDen = false;
         isGameOver = false;
         selectedPiece = null;
-lastMoveFrom = null;
-lastMoveTo = null;
-lastRoomBoardHash = "";
+        lastMoveFrom = null;
+        lastMoveTo = null;
+        lastRoomBoardHash = "";
 
-// Xóa quân ván cũ ngay tại máy đang bấm TIẾP TỤC.
-// Không chờ Firebase trả snapshot về nữa.
-clearRealtimeBoardVisualOnly();
+        // Xóa quân ván cũ ngay tại máy đang bấm TIẾP TỤC.
+        clearRealtimeBoardVisualOnly();
 
-await db.ref("matches/" + currentRoomId).update({
-    status: "waiting",
-    ready: {
-        do: false,
-        den: false
-    },
-    stakeLocked: {
-        do: false,
-        den: false
-    },
-    board: null,
-    turn: "do",
-    timeDo: 540,
-    timeDen: 540,
-    lastMoveFrom: null,
-    lastMoveTo: null,
-    winner: null,
-    winReason: null,
-    drawRequest: null,
-    settlement: null,
-refunds: null,
-readyDeadlineAt: null,
-updatedAt: firebase.database.ServerValue.TIMESTAMP
-});
-const freshSnap = await db.ref("matches/" + currentRoomId).once("value").catch(() => null);
-const freshRoom = freshSnap?.val?.();
+        // 🔥 BẢO MẬT: CHỜ TIỀN CỘNG XONG MỚI ĐƯỢC RESET PHÒNG
+        // Dùng tên biến checkRoom để đéo bị trùng với biến freshRoom ở dưới
+        const checkSnap = await db.ref("matches/" + currentRoomId).once("value");
+        let checkRoom = checkSnap.val() || {};
+        const stake = Math.max(0, Math.floor(Number(checkRoom.stakePMC || 0) || 0));
 
-if (
-    freshRoom &&
-    freshRoom.status === "waiting" &&
-    !freshRoom.winner &&
-    freshRoom.players?.do &&
-    freshRoom.players?.den
-) {
-    readyDo = false;
-    readyDen = false;
-    isGameOver = false;
-    selectedPiece = null;
+        if (checkRoom.winner && checkRoom.winner !== "hoa" && stake > 0) {
+            if (checkRoom.settlement?.paid !== true) {
+                console.log("Đang chờ Firebase trả thưởng PMC xong mới reset...");
+                for (let i = 0; i < 20; i++) {
+                    await new Promise(resolve => setTimeout(resolve, 250));
+                    const latest = await db.ref("matches/" + currentRoomId).once("value").catch(() => null);
+                    checkRoom = latest?.val?.() || checkRoom;
+                    if (checkRoom.settlement?.paid === true) break;
+                }
+            }
+        }
 
-    renderPlayersFromRoom(freshRoom);
-    renderTimerUI();
-    ensureReadyOverlayForWaitingRoom(freshRoom, currentRoomId);
-}
-        // bindRoom() sẽ tự show lại bản SS cho cả 2 bên
+        // Reset phòng cho ván mới
+        await db.ref("matches/" + currentRoomId).update({
+            status: "waiting",
+            ready: {
+                do: false,
+                den: false
+            },
+            stakeLocked: {
+                do: false,
+                den: false
+            },
+            board: null,
+            turn: "do",
+            timeDo: 540,
+            timeDen: 540,
+            lastMoveFrom: null,
+            lastMoveTo: null,
+            winner: null,
+            winReason: null,
+            drawRequest: null,
+            settlement: null,
+            refunds: null,
+            readyDeadlineAt: null,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+
+        const freshSnap = await db.ref("matches/" + currentRoomId).once("value").catch(() => null);
+        const freshRoom = freshSnap?.val?.();
+
+        if (
+            freshRoom &&
+            freshRoom.status === "waiting" &&
+            !freshRoom.winner &&
+            freshRoom.players?.do &&
+            freshRoom.players?.den
+        ) {
+            readyDo = false;
+            readyDen = false;
+            isGameOver = false;
+            selectedPiece = null;
+
+            renderPlayersFromRoom(freshRoom);
+            renderTimerUI();
+            ensureReadyOverlayForWaitingRoom(freshRoom, currentRoomId);
+        }
         return;
     }
 
@@ -10410,34 +10428,27 @@ function runRefTransaction(ref, updater) {
     });
 }
 
+// BẢO MẬT: Dùng increment nguyên tử, chống mọi thể loại lag/nháy lệnh +2 +3
 async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
     const ref = walletRefByKey(walletKey);
+    const safeDelta = Math.floor(Number(delta || 0));
 
-    const snap = await ref.once("value");
-    const safeCurrent = snap.val() && typeof snap.val() === "object" ? snap.val() : {};
+    if (safeDelta === 0) return getPmcBalance();
 
-    const currentPi = Number(safeCurrent.balance ?? 0) || 0;
-    const currentPmc = Math.floor(Number(safeCurrent.pmcBalance ?? 0) || 0);
-    const nextPmc = currentPmc + Math.floor(Number(delta || 0));
-
-    if (nextPmc < 0) return null;
-
-    // 🔥 ĐÃ XÓA DÒNG TỘI ĐỒ ...safeCurrent
-    // Giờ nó chỉ update đúng PMC, KHÔNG BAO GIỜ chạm vào hay ghi đè StatsV2 nữa
+    // Lệnh increment() sẽ giao toàn quyền cho Server Firebase tính toán
     await ref.update({
-        balance: currentPi,
-        pmcBalance: nextPmc,
-        updatedAt: Date.now(),
-        name: profile.name || safeCurrent.name || localStorage.getItem("user-name-display") || "Người chơi",
-        photo: profile.photo || safeCurrent.photo || localStorage.getItem("user-photo") || "images/do_tuong.png"
+        pmcBalance: firebase.database.ServerValue.increment(safeDelta),
+        updatedAt: firebase.database.ServerValue.TIMESTAMP,
+        name: profile.name || localStorage.getItem("user-name-display") || "Người chơi",
+        photo: profile.photo || localStorage.getItem("user-photo") || "images/do_tuong.png"
     });
 
-    console.log("PMC DIRECT UPDATE OK", {
-        walletKey,
-        delta,
-        before: currentPmc,
-        after: nextPmc
-    });
+    // Sau khi Server cộng xong, lấy số dư mới nhất về cập nhật giao diện
+    const snap = await ref.once("value");
+    const safeCurrent = snap.val() || {};
+    const nextPmc = Math.max(0, Math.floor(Number(safeCurrent.pmcBalance || 0)));
+
+    console.log("PMC SAFE UPDATE OK", { walletKey, delta: safeDelta, after: nextPmc });
 
     if (walletKey === makeWalletDbKey()) {
         currentPmcBalance = nextPmc;
