@@ -8155,7 +8155,7 @@ if (stillPlaying && otherPlayerExists && !room.winner) {
     updates[`matches/${roomId}/lastMoveTo`] = null;
     updates[`matches/${roomId}/drawRequest`] = null;
 
-    updates[`matches/${roomId}/players/${side}`] = null;
+    updates[`matches/${roomId}/ready/${side}`] = false;
     updates[`matches/${roomId}/stakeLocked/${side}`] = false;
     updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
 
