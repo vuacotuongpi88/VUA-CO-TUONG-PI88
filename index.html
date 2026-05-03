@@ -7885,35 +7885,14 @@ function syncMyWalletCacheFromRoomPlayer(room = {}) {
     if (!realSide) return;
 
     const p = room?.players?.[realSide] || {};
-
-    // Chặn tuyệt đối vụ lấy nhầm ví đối thủ.
     if (!isSamePlayerAsMe(p)) return;
 
     mySide = realSide;
     viewSide = realSide;
 
-    const hasPmc = p.pmcBalance !== undefined && p.pmcBalance !== null && p.pmcBalance !== "";
-    const hasPi = (p.piBalance ?? p.balance) !== undefined && (p.piBalance ?? p.balance) !== null && (p.piBalance ?? p.balance) !== "";
-
-    if (hasPmc) {
-        const roomPmc = Math.max(0, Math.floor(Number(p.pmcBalance) || 0));
-
-        if (roomPmc !== getPmcBalance()) {
-            currentPmcBalance = roomPmc;
-            localStorage.setItem(getPmcCacheKey(), String(roomPmc));
-            updatePmcUI(roomPmc);
-        }
-    }
-
-    if (hasPi) {
-        const roomPi = Math.max(0, Number(p.piBalance ?? p.balance) || 0);
-
-        if (roomPi !== getPiBalance()) {
-            currentWalletBalance = roomPi;
-            localStorage.setItem(getBalanceCacheKey(), String(roomPi));
-            updateBalanceUI(roomPi);
-        }
-    }
+    // TUYỆT ĐỐI KHÔNG lấy room.players.pmcBalance ghi ngược vào localStorage.
+    // Room chỉ là dữ liệu hiển thị, ví thật phải đọc từ wallets/<makeWalletDbKey()>.
+    return;
 }
 const matchAvatarStatsV2Cache = {};
 const matchAvatarStatsV2Pending = {};
@@ -9868,17 +9847,35 @@ async function syncMyMatchBalanceToRoomNow() {
     if (!walletKey) return;
 
     try {
-        // Ép lấy SỐ THẬT TỪ SERVER, đéo tin tưởng Cache điện thoại
-        const snap = await db.ref("wallets/" + walletKey).get();
-        const liveData = snap.val() || {};
-        
-        const piAmount = Number(liveData.balance || 0);
-        const pmcAmount = Math.max(0, Math.floor(Number(liveData.pmcBalance || 0)));
+        const snap = await walletRefByKey(walletKey).once("value");
 
-        // Cập nhật giao diện cục bộ
+        // CẤM lấy ví rỗng rồi ghi 0 ngược vào room
+        if (!snap.exists()) {
+            console.warn("syncMyMatchBalanceToRoomNow: ví không tồn tại, bỏ qua để tránh ghi PMC = 0", walletKey);
+            return;
+        }
+
+        const liveData = snap.val() || {};
+
+        // CẤM thiếu pmcBalance mà ép thành 0
+        if (liveData.pmcBalance === undefined || liveData.pmcBalance === null) {
+            console.warn("syncMyMatchBalanceToRoomNow: ví thiếu pmcBalance, bỏ qua", walletKey, liveData);
+            return;
+        }
+
+        const piAmount = Math.max(0, Number(liveData.balance ?? getPiBalance()) || 0);
+        const pmcAmount = Math.max(0, Math.floor(Number(liveData.pmcBalance) || 0));
+
+        currentWalletBalance = piAmount;
+        currentPmcBalance = pmcAmount;
+
+        localStorage.setItem(getBalanceCacheKey(), String(piAmount));
+        localStorage.setItem(getPmcCacheKey(), String(pmcAmount));
+
+        updateBalanceUI(piAmount);
+        updatePmcUI(pmcAmount);
         refreshMyMatchBalanceBoxesNow(piAmount, pmcAmount);
-        
-        // Đồng bộ lên thông tin phòng để đối thủ cũng thấy
+
         await db.ref("matches/" + currentRoomId + "/players/" + mySide).update({
             balance: piAmount,
             piBalance: piAmount,
@@ -10534,48 +10531,48 @@ function runRefTransaction(ref, updater) {
         );
     });
 }
-// BẢO MẬT VÍ PMC: Ép lấy số thật từ Server, chống Firebase tự hủy giao dịch
-async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
+// BẢO MẬT VÍ PMC: Dùng Transaction kết hợp nạp số dư thật (knownPmc)
+async function adjustPmcWalletByKey(walletKey, delta, profile = {}, knownPmc = null) {
     const ref = walletRefByKey(walletKey);
     const safeDelta = Math.floor(Number(delta || 0));
 
     if (safeDelta === 0) return getPmcBalance();
 
-    // 🔥 BÍ QUYẾT TỐI THƯỢNG Ở ĐÂY: Dùng lệnh GET ép nó tải số dư thật từ Server về Cache!
-    // Không có dòng này, nó sẽ lấy số 0 ra tính nhẩm -> Âm tiền -> Tự hủy lệnh Sẵn Sàng!
-    await ref.get();
+    // Nạp data từ server trước khi chạy Transaction
+    await ref.once("value");
 
-    // Chạy Transaction bảo mật như bình thường
     const result = await runRefTransaction(ref, (wallet) => {
         wallet = wallet || {};
-        
-        // Lúc này số wallet.pmcBalance đã là số thật trên server
-        const currentPmc = Math.max(0, Math.floor(Number(wallet.pmcBalance || 0)));
-        const nextPmc = currentPmc + safeDelta;
+        let current = Math.floor(Number(wallet.pmcBalance || 0));
 
-        // Nếu thực sự đéo đủ tiền trên Server thì mới hủy
-        if (nextPmc < 0) return;
+        // 🔥 THUỐC ĐẶC TRỊ LỖI VỀ 0: Nếu Firebase đưa số ảo (0) do lag cache,
+        // nhưng ta đã truyền số tiền thật (knownPmc) vào -> ÉP nó dùng số thật!
+        if (current === 0 && knownPmc !== null && knownPmc > 0) {
+            current = knownPmc;
+        }
+
+        const nextPmc = current + safeDelta;
+        
+        // Nếu trừ tiền mà đéo đủ -> Hủy giao dịch
+        if (nextPmc < 0) return; 
 
         wallet.pmcBalance = nextPmc;
-        wallet.updatedAt = firebase.database.ServerValue.TIMESTAMP;
+        wallet.updatedAt = Date.now();
         wallet.name = profile.name || wallet.name || localStorage.getItem("user-name-display") || "Người chơi";
         wallet.photo = profile.photo || wallet.photo || localStorage.getItem("user-photo") || "images/do_tuong.png";
 
-        return wallet; // Trả về để Server chốt lưu
+        return wallet;
     });
 
-    // Nếu giao dịch thực sự bị hủy do rớt mạng hoặc hết tiền
     if (!result || !result.committed) {
-        console.error("Giao dịch PMC bị hủy!", { walletKey, delta: safeDelta });
+        console.error("Giao dịch PMC bị hủy/lỗi!", { walletKey, delta: safeDelta });
         return null;
     }
 
-    // Lấy số dư chuẩn đét đã được Server duyệt
     const nextPmc = Math.max(0, Math.floor(Number(result.snapshot.val().pmcBalance || 0)));
 
     console.log("CẬP NHẬT PMC THÀNH CÔNG", { walletKey, delta: safeDelta, final: nextPmc });
 
-    // Đồng bộ vào màn hình người chơi cho mượt
     if (walletKey === makeWalletDbKey()) {
         currentPmcBalance = nextPmc;
         localStorage.setItem(getPmcCacheKey(), String(nextPmc));
@@ -12857,13 +12854,7 @@ async function confirmStakeSelection() {
     let livePmc = 0;
 
     try {
-        const currentUser = firebase.auth().currentUser;
-        const walletKey =
-            currentUser?.uid ||
-            localStorage.getItem("uid") ||
-            localStorage.getItem("walletKey") ||
-            localStorage.getItem("currentUserUid") ||
-            (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "");
+       const walletKey = makeWalletDbKey();
 
         if (!walletKey) {
             isJoiningStakeRoom = false;
