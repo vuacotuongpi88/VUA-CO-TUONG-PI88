@@ -6893,6 +6893,7 @@ function hideVictoryPopup() {
     wrap.style.pointerEvents = "none";
 }
 
+// HÀM RESET PHÒNG SAU KHI VÁN ĐẤU KẾT THÚC
 async function playNextMatch() {
     hideVictoryPopup();
     clearInterval(interval);
@@ -6917,20 +6918,34 @@ async function playNextMatch() {
 
         clearRealtimeBoardVisualOnly();
 
-        // 🔥 BẢO MẬT: CHỜ TIỀN CỘNG XONG MỚI ĐƯỢC RESET PHÒNG
         const checkSnap = await db.ref("matches/" + currentRoomId).once("value");
         let checkRoom = checkSnap.val() || {};
         const stake = Math.max(0, Math.floor(Number(checkRoom.stakePMC || 0) || 0));
 
+        // 🔥 TỐI ƯU SIÊU TỐC ĐỘ CHỐNG LAG MÁY THẰNG THẮNG
         if (checkRoom.winner && checkRoom.winner !== "hoa" && stake > 0) {
             if (checkRoom.settlement?.paid !== true) {
-                console.log("Đang chờ Firebase trả thưởng PMC xong mới reset...");
-                for (let i = 0; i < 20; i++) {
-                    await new Promise(resolve => setTimeout(resolve, 250));
-                    const latest = await db.ref("matches/" + currentRoomId).once("value").catch(() => null);
-                    checkRoom = latest?.val?.() || checkRoom;
-                    if (checkRoom.settlement?.paid === true) break;
-                }
+                console.log("Đang chờ Firebase trả thưởng PMC...");
+                
+                // Dùng Listener nghe ngầm thay vì dùng vòng lặp spam sập mạng
+                await new Promise((resolve) => {
+                    const paidRef = db.ref("matches/" + currentRoomId + "/settlement/paid");
+                    
+                    // Chờ tối đa 4 giây, nếu mạng lag quá tự cho qua luôn đéo để kẹt UI
+                    const timeout = setTimeout(() => {
+                        paidRef.off();
+                        resolve();
+                    }, 4000); 
+
+                    // Khi Server báo trả thưởng xong (true) -> Mở bảng SS ngay lập tức!
+                    paidRef.on("value", (snap) => {
+                        if (snap.val() === true) {
+                            clearTimeout(timeout);
+                            paidRef.off();
+                            resolve();
+                        }
+                    });
+                });
             }
         }
 
@@ -6960,7 +6975,6 @@ async function playNextMatch() {
             updatedAt: firebase.database.ServerValue.TIMESTAMP
         });
 
-        // Chỉ khai báo biến freshRoom 1 lần ở đây để kiểm tra lại trạng thái
         const finalSnap = await db.ref("matches/" + currentRoomId).once("value").catch(() => null);
         const finalRoom = finalSnap?.val?.();
 
