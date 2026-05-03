@@ -13796,7 +13796,7 @@ let lobbyCleanupInFlight = false;
 // Nếu host tắt app / rớt mạng / tạo nhiều phòng rồi bỏ đó, phòng sẽ tự ẩn và bị đóng lobby.
 const LOBBY_WAITING_STALE_MS = 90 * 1000;
 const LOBBY_PLAYING_STALE_MS = 2 * 60 * 60 * 1000;
-const LOBBY_CLEAN_SCAN_LIMIT = 120;
+const LOBBY_CLEAN_SCAN_LIMIT = 30;
 
 function syncLobbyRoomTabs(roomList = []) {
     const coTuongCount = roomList.filter(room => (room?.mode || "co-tuong") !== "co-up").length;
@@ -13997,8 +13997,12 @@ async function cleanupGhostLobbyRoom(roomId, room = {}) {
         console.error("Dọn phòng ảo lobby lỗi:", err);
     }
 }
+let lastCleanupAt = 0;
 
 async function cleanupGhostLobbyRoomsOnce() {
+    const now = Date.now();
+    if (now - lastCleanupAt < 8000) return;
+    lastCleanupAt = now;
     if (lobbyCleanupInFlight) return;
     lobbyCleanupInFlight = true;
 
@@ -16299,7 +16303,9 @@ function ensureArenaTopButton() {
 document.addEventListener("DOMContentLoaded", ensureArenaTopButton);
 setTimeout(ensureArenaTopButton, 500);
 setTimeout(ensureArenaTopButton, 1500);
-
+setInterval(() => {
+    cleanupGhostLobbyRoomsOnce();
+}, 12000);
 </script>
 </body>
 
