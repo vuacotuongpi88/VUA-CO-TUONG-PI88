@@ -14041,21 +14041,9 @@ function bindLobbyRoomList() {
         const roomList = [];
         const cleanupJobs = [];
 
-        snap.forEach(child => {
-            const room = child.val() || {};
-
-            if (isGhostLobbyRoom(room)) {
-                cleanupJobs.push(cleanupGhostLobbyRoom(child.key, room));
-                return;
-            }
-
-            if (!shouldShowLobbyRoom(room)) return;
-
-            roomList.push({
-                id: child.key,
-                ...room
-            });
-        });
+        if (isGhostLobbyRoom(room)) {
+    return;
+}
 
         if (cleanupJobs.length) {
             Promise.allSettled(cleanupJobs).catch(() => {});
