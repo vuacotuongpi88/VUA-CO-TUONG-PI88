@@ -13982,6 +13982,12 @@ async function cleanupGhostLobbyRoomsOnce() {
 }
 
 function bindLobbyRoomList() {
+
+    // tránh bind nhiều lần
+    if (lobbyBound) return;
+    lobbyBound = true;
+
+    // clear listener cũ
     if (lobbyRoomListRef) {
         lobbyRoomListRef.off();
     }
@@ -13990,40 +13996,25 @@ function bindLobbyRoomList() {
         .orderByChild("createdAt")
         .limitToLast(50);
 
-    const mySeq = ++lobbyBindSeq;
-
     lobbyRoomListRef.on("value", snap => {
+
         const roomList = [];
-        const cleanupJobs = [];
 
         snap.forEach(child => {
-            const room = child.val() || {};
+            const room = child.val();
+
+            if (!room) return;
+
             room.id = child.key;
 
-            if (isGhostLobbyRoom(room)) {
-                cleanupJobs.push(cleanupGhostLobbyRoom(child.key, room));
-                return;
-            }
-
-            if (shouldShowLobbyRoom(room)) {
+            // chỉ hiện room hợp lệ
+            if (room.status !== "ended") {
                 roomList.push(room);
             }
         });
 
-        if (cleanupJobs.length) {
-            Promise.allSettled(cleanupJobs).catch(() => {});
-        }
-
-        if (mySeq !== lobbyBindSeq) return;
-
-        roomList.sort((a, b) =>
-            Number(b.createdAt || 0) - Number(a.createdAt || 0)
-        );
-
         renderLobbyRoomList(roomList);
     });
-
-    cleanupGhostLobbyRoomsOnce().catch(() => {});
 }
 let friendListRef = null;
 let friendRequestRef = null;
