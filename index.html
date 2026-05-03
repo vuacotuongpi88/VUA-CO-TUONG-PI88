@@ -13344,29 +13344,76 @@ async function watchTopPlayingRoom(roomId) {
     await setPlayerPresence("spectating").catch(() => {});
 }
 
+let arenaTopUpdateTimer = null;
+let lastTopFetchTime = 0;  // Lưu thời gian lần cuối tải data
+let isFetchingTop = false; // Cờ khóa chống tải chồng chéo
+
+// Hàm Tải Top an toàn (Có khóa chống Spam)
+async function safeFetchAndRenderTop() {
+    // Nếu mạng chậm, đang tải dở chưa xong thì hủy lệnh này, đéo cho chạy đè lên nhau
+    if (isFetchingTop) return; 
+    
+    isFetchingTop = true;
+    try {
+        await loadArenaTopPlayers(); // Hàm kéo data từ Firebase của mày
+        lastTopFetchTime = Date.now(); // Lưu lại mốc thời gian vừa kéo xong
+        renderArenaTopList(); 
+    } catch (err) {
+        console.error("Lỗi tải Top:", err);
+        const listEl = document.getElementById("arena-top-list");
+        if (listEl) listEl.innerHTML = '<div class="top-empty">Không tải được bảng Top.</div>';
+    } finally {
+        isFetchingTop = false; // Tải xong thì mở khóa
+    }
+}
+
 async function openArenaTopModal(e) {
     if (e) e.stopPropagation();
     if (document.body.classList.contains("in-match")) return;
-
+    
     const modal = document.getElementById("arena-top-modal");
-    const listEl = document.getElementById("arena-top-list");
-    if (!modal || !listEl) return;
-
+    if (!modal) return;
+    
     modal.classList.add("show");
-    listEl.innerHTML = '<div class="top-empty">Đang tải bảng Top...</div>';
 
-    try {
-        await loadArenaTopPlayers();
+    // Đóng các menu khác cho gọn (nếu mầy có dùng hàm closeProfileMenu thì gọi)
+    document.querySelectorAll(".profile-menu").forEach(m => m.classList.remove("show"));
+
+    const now = Date.now();
+    const listEl = document.getElementById("arena-top-list");
+
+    // 🔥 LỚP BẢO VỆ CACHE: Nếu vừa tải xong chưa quá 30s (30000ms), lôi đồ cũ ra xài luôn, ĐÉO tải lại!
+    if (now - lastTopFetchTime < 30000 && arenaTopCache.length > 0) {
         renderArenaTopList();
-    } catch (err) {
-        console.error("Tải bảng Top lỗi:", err);
-        listEl.innerHTML = '<div class="top-empty">Không tải được bảng Top.</div>';
+    } else {
+        // Còn nếu quá 30s hoặc mới vô game chưa có data, thì báo "Đang tải" và gọi Firebase
+        if (listEl && arenaTopCache.length === 0) listEl.innerHTML = '<div class="top-empty">Đang tải bảng Top...</div>';
+        await safeFetchAndRenderTop();
     }
+
+    // Dọn Timer cũ trước khi cài Timer mới
+    if (arenaTopUpdateTimer) clearInterval(arenaTopUpdateTimer);
+
+    // 🔥 TIMER TỰ ĐỘNG CẬP NHẬT: Quét mỗi 30 giây (30000ms)
+    arenaTopUpdateTimer = setInterval(() => {
+        if (modal && modal.classList.contains("show")) {
+            safeFetchAndRenderTop();
+        } else {
+            clearInterval(arenaTopUpdateTimer);
+            arenaTopUpdateTimer = null;
+        }
+    }, 30000); 
 }
 
 function closeArenaTopModal() {
     const modal = document.getElementById("arena-top-modal");
     if (modal) modal.classList.remove("show");
+
+    // 🛑 ĐÓNG BẢNG TOP LÀ RÚT ĐIỆN TIMER NGAY
+    if (arenaTopUpdateTimer) {
+        clearInterval(arenaTopUpdateTimer);
+        arenaTopUpdateTimer = null;
+    }
 }
 
 function switchArenaTopTab(tab) {
