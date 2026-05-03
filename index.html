@@ -8968,15 +8968,26 @@ if (room.winner) {
         }
     }
 // A/B bỏ chạy ngang khi đang đánh:
-// gọi lịch bàn giao NGAY trước khi settle để không bị uiVersion return chặn mất.
-if (
-    room.winReason === "bochay" &&
-    room.winner === mySide
-) {
-    scheduleResetWinnerRoomAfterPaid(room, listeningRoomId);
-}
+            if (room.winReason === "bochay" && room.winner === mySide) {
+                scheduleResetWinnerRoomAfterPaid(room, listeningRoomId);
+            }
 // 🔥 BỎ CHỮ AWAIT: Gọi chia tiền chạy ngầm, luồng UI chạy tiếp bật bảng SS luôn!
         maybeSettleStakeRoom(room, listeningRoomId).catch(err => console.error("Settle lỗi:", err));
+
+        // 🔥 FIX GIAO DIỆN KHÔNG CỘNG TIỀN KHI ĐẦU HÀNG/CHIẾU BÍ:
+        // Bắt tín hiệu "đã trả thưởng xong" từ Firebase để ép máy tải lại ví!
+        if (room.settlement && room.settlement.paid === true) {
+            const syncKey = `__wallet_synced_${listeningRoomId}_${room.winner}`;
+            if (!window[syncKey]) {
+                window[syncKey] = true;
+                setTimeout(() => {
+                    console.log("💰 Firebase báo chia tiền xong, tải lại ví mới nhất!");
+                    loadWalletBalance().then(() => {
+                        if (mySide) syncMyMatchBalanceToRoomNow();
+                    });
+                }, 800); // Đợi 800ms cho chắc ăn Firebase đã lưu xong xuôi
+            }
+        }
 
         // Tách riêng khối bàn giao phòng sau bỏ chạy.
         if (
@@ -8985,7 +8996,24 @@ if (
         ) {
             scheduleResetWinnerRoomAfterPaid(room, listeningRoomId);
         }
-    } // Đóng ngoặc của cái if (room.winner) ở tít trên
+
+            // 🔥 FIX TRÍ MẠNG LỖI ĐẦU HÀNG ĐÉO CỘNG TIỀN:
+            // Khi máy người thua chia tiền xong, nó báo "paid = true" lên Firebase.
+            // Máy người thắng thấy chữ "paid = true" thì lập tức load lại ví mới nhất!
+            if (room.settlement?.paid === true || room.settlement?.done === true) {
+                const syncKey = `__wallet_synced_${listeningRoomId}_${room.winner}`;
+                if (!window[syncKey]) {
+                    window[syncKey] = true;
+                    setTimeout(() => {
+                        console.log("Firebase báo đã chia tiền xong, tải lại ví mới nhất!");
+                        loadWalletBalance().then(() => {
+                            if (mySide) syncMyMatchBalanceToRoomNow();
+                        });
+                    }, 800); // Chờ 800ms cho Firebase ghi DB dứt điểm
+                }
+            }
+
+        } // Đóng ngoặc của cái if (room.winner) ở tít trên
     
     // Khi chưa có winner thì đồng bộ ví bình thường. 
     if (!room.winner) {
