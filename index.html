@@ -10432,8 +10432,9 @@ async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
 
     if (nextPmc < 0) return null;
 
+    // 🔥 ĐÃ XÓA DÒNG TỘI ĐỒ ...safeCurrent
+    // Giờ nó chỉ update đúng PMC, KHÔNG BAO GIỜ chạm vào hay ghi đè StatsV2 nữa
     await ref.update({
-        ...safeCurrent,
         balance: currentPi,
         pmcBalance: nextPmc,
         updatedAt: Date.now(),
