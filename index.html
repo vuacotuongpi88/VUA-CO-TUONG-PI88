@@ -6220,6 +6220,12 @@ currentRoomBucket = room.roomBucket || makeStakeBucket(currentRoomMode, currentR
 
     prepareRealtimeArenaUI();
     bindRoom(saved.roomId);
+
+    // 🔥 KHI B TỰ PHỤC HỒI/NHẬN PHÒNG MỚI, ÉP NÓ TỰ BƠM NHỊP TIM LIÊN TỤC
+    if (mySide === "do") {
+        touchCurrentLobbyHeartbeat();
+    }
+
     return true;
 }
 
@@ -8189,11 +8195,16 @@ async function leaveRealtimeMatch() {
             claimedBy: null,
             claimedAt: null
         });
-
-        // Báo cho máy thằng B biết là nó đã bị chuyển hộ khẩu sang phòng mới
+// Báo cho máy thằng B biết là nó đã bị chuyển hộ khẩu sang phòng mới
         await db.ref("social/playerState/" + (otherPlayer.walletKey || "")).update({
             roomId: newRoomId,
             updatedAt: firebase.database.ServerValue.TIMESTAMP
+        }).catch(()=>{});
+
+        // 🔥 THUỐC KÍCH TIM CHO THẰNG B: 
+        // Bơm một nhịp tim giả danh B ngay lập tức để Firebase biết B còn sống!
+        await db.ref("matches/" + newRoomId).update({
+            lobbyHeartbeatAt: firebase.database.ServerValue.TIMESTAMP
         }).catch(()=>{});
 
     } catch (err) {
@@ -16233,9 +16244,19 @@ function ensureArenaTopButton() {
 document.addEventListener("DOMContentLoaded", ensureArenaTopButton);
 setTimeout(ensureArenaTopButton, 500);
 setTimeout(ensureArenaTopButton, 1500);
+// HỆ THỐNG TIM MẠCH (CHỐNG BỆNH TÀNG HÌNH DO NGỦ GẬT)
 setInterval(() => {
-    cleanupGhostLobbyRoomsOnce();
-}, 12000);
+    // 1. Nếu đang ở sảnh chờ mà là chủ phòng (Phe Đỏ), thì 10 giây phải đập tim 1 lần
+    if (currentRoomId && mySide === "do" && currentRoomStatus === "waiting") {
+        touchCurrentLobbyHeartbeat().catch(() => {});
+    }
+    
+    // 2. Chạy cái dọn rác của mầy (đã bịt mỏ không cho dọn phòng đang sống)
+    if (typeof cleanupGhostLobbyRoomsOnce === "function") {
+        cleanupGhostLobbyRoomsOnce();
+    }
+}, 10000); 
+// Đổi mẹ thành 10 giây đi, 12 giây dọn rác nó nhạy quá nó hốt nhầm!
 </script>
 </body>
 
