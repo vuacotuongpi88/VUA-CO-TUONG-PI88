@@ -9280,8 +9280,8 @@ async function touchCurrentLobbyHeartbeat() {
 
         if (!isHost) return;
 
-        await roomRef.update({
-            lobbyHeartbeatAt: Date.now(),
+       await roomRef.update({
+            lobbyHeartbeatAt: firebase.database.ServerValue.TIMESTAMP, // 🔥 FIX: Bơm nhịp tim bằng giờ Server
             lobbyOwnerUid: myUid || room.lobbyOwnerUid || "",
             lobbyOwnerWalletKey: myWalletKey || room.lobbyOwnerWalletKey || ""
         });
@@ -13867,7 +13867,7 @@ function getRoomBucketSafe(room = {}) {
 }
 
 function isGhostLobbyRoom(room = {}) {
-    const now = Date.now();
+    const now = readyNowMs(); // 🔥 FIX: Lấy giờ chuẩn của máy chủ, đéo xài giờ local nữa
     const status = String(room.status || "");
     const hasDo = !!room?.players?.do;
     const hasDen = !!room?.players?.den;
@@ -13896,7 +13896,6 @@ function isGhostLobbyRoom(room = {}) {
 
     return false;
 }
-
 function isRoomHostMe(room = {}) {
     const myUid = getLocalUidSafe();
     const myWalletKey = getLocalWalletKeySafe();
@@ -13982,10 +13981,9 @@ async function cleanupGhostLobbyRoomsOnce() {
 }
 
 function bindLobbyRoomList() {
-
     // tránh bind nhiều lần
-    if (lobbyBound) return;
-    lobbyBound = true;
+    if (typeof window.lobbyBound !== "undefined" && window.lobbyBound) return;
+    window.lobbyBound = true;
 
     // clear listener cũ
     if (lobbyRoomListRef) {
@@ -13997,18 +13995,16 @@ function bindLobbyRoomList() {
         .limitToLast(50);
 
     lobbyRoomListRef.on("value", snap => {
-
         const roomList = [];
 
         snap.forEach(child => {
             const room = child.val();
-
             if (!room) return;
 
             room.id = child.key;
 
-            // chỉ hiện room hợp lệ
-            if (room.status !== "ended") {
+            // 🔥 FIX: Dùng đúng hàm lọc mày đã viết để chặn rác/ẩn phòng của chính mình
+            if (shouldShowLobbyRoom(room)) {
                 roomList.push(room);
             }
         });
