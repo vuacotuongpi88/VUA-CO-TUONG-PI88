@@ -10534,55 +10534,55 @@ function runRefTransaction(ref, updater) {
         );
     });
 }
-// BẢO MẬT VÍ PMC: Dùng Transaction kết hợp nạp số dư thật (knownPmc)
-async function adjustPmcWalletByKey(walletKey, delta, profile = {}, knownPmc = null) {
-    const ref = walletRefByKey(walletKey);
+// BẢO MẬT VÍ PMC LÕI KÉP: Chống lag +2, chống rớt về 0.
+async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
+    const safeWalletKey = String(walletKey || "").replace(/[.#$\[\]\/]/g, "_");
+    const ref = db.ref("wallets/" + safeWalletKey);
     const safeDelta = Math.floor(Number(delta || 0));
 
     if (safeDelta === 0) return getPmcBalance();
 
-    // Nạp data từ server trước khi chạy Transaction
-    await ref.once("value");
+    // Dùng Promise bọc Transaction để bắt kết quả chính xác 100% từ Server
+    return new Promise((resolve) => {
+        ref.transaction((wallet) => {
+            wallet = wallet || {};
+            
+            // Lấy số dư hiện tại trên server
+            const currentPmc = Math.max(0, Math.floor(Number(wallet.pmcBalance || 0)));
+            const nextPmc = currentPmc + safeDelta;
 
-    const result = await runRefTransaction(ref, (wallet) => {
-        wallet = wallet || {};
-        let current = Math.floor(Number(wallet.pmcBalance || 0));
+            // BẢO MẬT: Nếu cược mà đéo đủ tiền -> Hủy giao dịch (Return undefine để từ chối)
+            if (nextPmc < 0) return;
 
-        // 🔥 THUỐC ĐẶC TRỊ LỖI VỀ 0: Nếu Firebase đưa số ảo (0) do lag cache,
-        // nhưng ta đã truyền số tiền thật (knownPmc) vào -> ÉP nó dùng số thật!
-        if (current === 0 && knownPmc !== null && knownPmc > 0) {
-            current = knownPmc;
-        }
+            // Cập nhật số liệu mới
+            wallet.pmcBalance = nextPmc;
+            wallet.updatedAt = firebase.database.ServerValue.TIMESTAMP;
+            wallet.name = profile.name || wallet.name || localStorage.getItem("user-name-display") || "Người chơi";
+            wallet.photo = profile.photo || wallet.photo || localStorage.getItem("user-photo") || "images/do_tuong.png";
 
-        const nextPmc = current + safeDelta;
-        
-        // Nếu trừ tiền mà đéo đủ -> Hủy giao dịch
-        if (nextPmc < 0) return; 
+            return wallet; // Cho phép Firebase ghi lên Server
+        }, (error, committed, snapshot) => {
+            // Nếu giao dịch thất bại (rớt mạng hoặc không đủ PMC)
+            if (error || !committed) {
+                console.error("Giao dịch PMC thất bại / Hủy bỏ do không đủ tiền:", error);
+                resolve(null);
+                return;
+            }
 
-        wallet.pmcBalance = nextPmc;
-        wallet.updatedAt = Date.now();
-        wallet.name = profile.name || wallet.name || localStorage.getItem("user-name-display") || "Người chơi";
-        wallet.photo = profile.photo || wallet.photo || localStorage.getItem("user-photo") || "images/do_tuong.png";
+            // 🔥 BẮT SỐ THẬT: Lấy chính xác số tiền cuối cùng Server đã chốt (đéo sợ ngáo cache)
+            const finalPmc = Math.max(0, Math.floor(Number(snapshot.val().pmcBalance || 0)));
 
-        return wallet;
+            // Nếu là ví của mình, Cập nhật giao diện mướt rượt
+            if (safeWalletKey === makeWalletDbKey()) {
+                currentPmcBalance = finalPmc;
+                localStorage.setItem(getPmcCacheKey(), String(finalPmc));
+                updatePmcUI(finalPmc);
+            }
+
+            resolve(finalPmc); // Trả về số tiền chuẩn đét cho hàm Sẵn Sàng
+
+        }, false); // 🔥 BÍ QUYẾT TỐI THƯỢNG Ở ĐÂY: Chữ "false" này cấm Firebase tự tính nhẩm ở điện thoại, bắt buộc phải chờ Server chốt số thật!
     });
-
-    if (!result || !result.committed) {
-        console.error("Giao dịch PMC bị hủy/lỗi!", { walletKey, delta: safeDelta });
-        return null;
-    }
-
-    const nextPmc = Math.max(0, Math.floor(Number(result.snapshot.val().pmcBalance || 0)));
-
-    console.log("CẬP NHẬT PMC THÀNH CÔNG", { walletKey, delta: safeDelta, final: nextPmc });
-
-    if (walletKey === makeWalletDbKey()) {
-        currentPmcBalance = nextPmc;
-        localStorage.setItem(getPmcCacheKey(), String(nextPmc));
-        updatePmcUI(nextPmc);
-    }
-
-    return nextPmc;
 }
 async function settlePmcViaApi(roomId) {
     try {
