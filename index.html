@@ -6899,7 +6899,7 @@ function hideVictoryPopup() {
     wrap.style.transform = "translate(-50%, -50%) scale(0)";
     wrap.style.pointerEvents = "none";
 }
-// HÀM TIẾP TỤC VÁN MỚI (FIX TỐC ĐỘ & CHỐNG KẸT NÚT SS)
+// 🔥 FIX LỖI KẸT NÚT TIẾP TỤC: MẠNH MÁY THẰNG NÀO BẤM LÀ TỰ DỌN BÀN, ĐÉO ĐỢI NHAU NỮA!
 async function playNextMatch() {
     hideVictoryPopup();
     clearInterval(interval);
@@ -6913,156 +6913,59 @@ async function playNextMatch() {
     if (sounds.bgm) sounds.bgm.pause();
     if (sounds.heartbeat) sounds.heartbeat.pause();
 
-    if (currentRoomId) {
-        readyDo = false;
-        readyDen = false;
-        isGameOver = false;
-        selectedPiece = null;
-        lastMoveFrom = null;
-        lastMoveTo = null;
-        lastRoomBoardHash = "";
-
-        clearRealtimeBoardVisualOnly();
-
-        const roomId = currentRoomId; 
-        const checkSnap = await db.ref("matches/" + roomId).once("value");
-        let checkRoom = checkSnap.val() || {};
-        const stake = Math.max(0, Math.floor(Number(checkRoom.stakePMC || 0) || 0));
-
-        // 🔥 TỐI ƯU 1: CHỈ THẰNG THUA MỚI PHẢI ĐỢI CHÚT XÍU ĐỂ DB CỘNG TIỀN CHO THẰNG THẮNG.
-        // Thằng thắng đéo phải đợi, bấm phát mở phòng luôn cho lẹ!
-        if (checkRoom.winner && checkRoom.winner !== "hoa" && checkRoom.winner !== mySide && stake > 0) {
-            if (checkRoom.settlement?.paid !== true) {
-                await new Promise((resolve) => {
-                    const paidRef = db.ref("matches/" + roomId + "/settlement/paid");
-                    const timeout = setTimeout(() => { paidRef.off(); resolve(); }, 2000); // Giảm xuống 2s cho mượt
-                    paidRef.on("value", (snap) => {
-                        if (snap.val() === true) {
-                            clearTimeout(timeout);
-                            paidRef.off();
-                            resolve();
-                        }
-                    });
-                });
-            }
-            await loadWalletBalance().catch(()=>{});
-        } else if (checkRoom.winner === mySide) {
-            // Thằng thắng thì chỉ chớp nhẹ load ví
-            await loadWalletBalance().catch(()=>{});
-        }
-
-        const latestSnap = await db.ref("matches/" + roomId).once("value");
-        checkRoom = latestSnap.val() || checkRoom;
-
-        const otherSide = mySide === "do" ? "den" : "do";
-        const otherPlayerLeft = !checkRoom.players?.[otherSide] || checkRoom.winReason === "bochay" || checkRoom.quitSide === otherSide;
-
-        // ĐỐI THỦ ĐÃ CHẠY -> ÔM PHÒNG CŨ THÀNH CHỦ MỚI
-        if (otherPlayerLeft) {
-            console.log("Đối thủ đã thoát, ôm phòng làm chủ mới!");
-            const cleanMode = checkRoom.mode || currentRoomMode || "co-tuong";
-            const cleanStake = Math.max(0, Math.floor(Number(checkRoom.stakePMC || 0) || 0));
-            const cleanBucket = checkRoom.roomBucket || currentRoomBucket || makeStakeBucket(cleanMode, cleanStake);
-            const cleanInviteCode = String(checkRoom.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
-            
-            const me = checkRoom.players?.[mySide] || getCurrentPlayerProfile();
-
-            const updates = {};
-            updates[`matches/${roomId}/players/do`] = { ...me, side: "do", updatedAt: firebase.database.ServerValue.TIMESTAMP };
-            updates[`matches/${roomId}/players/den`] = null; 
-            updates[`matches/${roomId}/hostUid`] = me.uid || "";
-            updates[`matches/${roomId}/hostWalletKey`] = me.walletKey || "";
-            
-            updates[`matches/${roomId}/lobbyOpen`] = true;
-            updates[`matches/${roomId}/lobbyOwnerUid`] = me.uid || "";
-            updates[`matches/${roomId}/lobbyOwnerWalletKey`] = me.walletKey || "";
-            updates[`matches/${roomId}/lobbyHeartbeatAt`] = firebase.database.ServerValue.TIMESTAMP;
-            updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
-            
-            updates[`matches/${roomId}/status`] = "waiting";
-            updates[`matches/${roomId}/turn`] = "do";
-            updates[`matches/${roomId}/board`] = null;
-            updates[`matches/${roomId}/timeDo`] = 540;
-            updates[`matches/${roomId}/timeDen`] = 540;
-            updates[`matches/${roomId}/lastMoveFrom`] = null;
-            updates[`matches/${roomId}/lastMoveTo`] = null;
-            updates[`matches/${roomId}/winner`] = null;
-            updates[`matches/${roomId}/winReason`] = null;
-            updates[`matches/${roomId}/drawRequest`] = null;
-            updates[`matches/${roomId}/quitSide`] = null;
-            updates[`matches/${roomId}/quitUid`] = null;
-            updates[`matches/${roomId}/quitAt`] = null;
-            updates[`matches/${roomId}/settlement`] = null;
-            updates[`matches/${roomId}/refunds`] = null;
-            
-            updates[`matches/${roomId}/ready/do`] = false;
-            updates[`matches/${roomId}/ready/den`] = false;
-            updates[`matches/${roomId}/stakeLocked/do`] = false;
-            updates[`matches/${roomId}/stakeLocked/den`] = false;
-            updates[`matches/${roomId}/readyDeadlineAt`] = null; 
-            updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
-
-            updates[`waitingRooms/${cleanBucket}/${roomId}`] = {
-                roomId: roomId,
-                uid: me.uid || "",
-                walletKey: me.walletKey || "",
-                name: me.name || "Người chơi",
-                mode: cleanMode,
-                stakePMC: cleanStake,
-                inviteCode: cleanInviteCode, 
-                createdAt: Date.now(),
-                claimedBy: null,
-                claimedAt: null
-            };
-
-            await db.ref().update(updates);
-            
-            mySide = "do";
-            viewSide = "do";
-            currentRoomMode = cleanMode;
-            currentRoomStakePMC = cleanStake;
-            currentRoomBucket = cleanBucket;
-            
-            closeReadyOverlay();
-            renderTimerUI();
-            updateReadyUI();
-            return;
-        } else {
-            // ĐỐI THỦ CÒN ĐÓ -> RESET BÌNH THƯỜNG CHO VÁN MỚI
-            // 🔥 TỐI ƯU 2 (CHỐNG KẸT NÚT SS): Chỉ cho phép CHỦ PHÒNG (Đỏ) dọn dẹp Data ván mới!
-            // Bên Đen không được update để tránh ghi đè làm kẹt biến Ready của Firebase.
-            if (mySide === "do") {
-                await db.ref("matches/" + currentRoomId).update({
-                    status: "waiting", ready: { do: false, den: false }, stakeLocked: { do: false, den: false },
-                    board: null, turn: "do", timeDo: 540, timeDen: 540, lastMoveFrom: null, lastMoveTo: null,
-                    winner: null, winReason: null, drawRequest: null, settlement: null, refunds: null,
-                    readyDeadlineAt: null, updatedAt: firebase.database.ServerValue.TIMESTAMP
-                });
-            }
-        }
-
-        const finalSnap = await db.ref("matches/" + currentRoomId).once("value").catch(() => null);
-        const finalRoom = finalSnap?.val?.();
-
-        if (finalRoom && finalRoom.status === "waiting" && !finalRoom.winner && finalRoom.players?.do && finalRoom.players?.den) {
-            readyDo = false; readyDen = false; isGameOver = false; selectedPiece = null;
-            renderPlayersFromRoom(finalRoom); renderTimerUI(); ensureReadyOverlayForWaitingRoom(finalRoom, currentRoomId);
-        }
+    if (!currentRoomId) {
+        resetToStartup();
         return;
     }
 
-    // Offline fallback 
-    isGameOver = false; selectedPiece = null; luotDi = "do"; timeDo = 9 * 60; timeDen = 9 * 60;
-    timerDoEl.innerText = formatTime(timeDo); timerDenEl.innerText = formatTime(timeDen);
-    document.getElementById("turn-box").innerText = "Lượt: ĐỎ";
-    document.querySelectorAll(".piece").forEach(p => p.remove());
-    document.querySelectorAll(".move-hint, .move-hint-capture, .last-move-from, .last-move-to").forEach(el => el.remove());
-    if (typeof setupBoard === "function") setupBoard();
-    else if (typeof khoiTaoBanCo === "function") khoiTaoBanCo();
-    else if (typeof taoBanCo === "function") taoBanCo();
-    else { location.reload(); return; }
-    if (sounds.bgm) { sounds.bgm.currentTime = 0; sounds.bgm.play().catch(() => {}); }
-    startTimer();
+    const roomId = currentRoomId;
+    clearRealtimeBoardVisualOnly();
+
+    const snap = await db.ref("matches/" + roomId).once("value");
+    const room = snap.val() || {};
+
+    // NẾU BÀN CHƯA DỌN (TỨC LÀ CÒN DÍNH KẾT QUẢ WINNER HOẶC FINISHED)
+    // Thằng nào bấm Tiếp tục trước thì thằng đó thay mặt hệ thống dọn bàn luôn!
+    if (room.winner || room.status === "finished") {
+        const stake = Math.max(0, Math.floor(Number(room.stakePMC || 0)));
+        
+        // Trừ hao 1.5 giây cho Firebase nó phát tiền cho thằng thắng xong xuôi
+        if (room.winner !== "hoa" && stake > 0 && room.settlement?.paid !== true) {
+            console.log("Đợi chút cho tiền về ví rồi mới dọn bàn...");
+            await new Promise(res => setTimeout(res, 1500));
+        }
+
+        // RESET SẠCH SẼ FIREBASE VỀ TRẠNG THÁI WAITING
+        await db.ref("matches/" + roomId).update({
+            status: "waiting",
+            turn: "do",
+            board: null,
+            winner: null,
+            winReason: null,
+            drawRequest: null,
+            settlement: null,
+            refunds: null,
+            readyDeadlineAt: null,
+            lastMoveFrom: null,
+            lastMoveTo: null,
+            "ready/do": false,
+            "ready/den": false,
+            "stakeLocked/do": false,
+            "stakeLocked/den": false,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+    }
+
+    // Load lại ví cho chắc cốp
+    await loadWalletBalance().catch(()=>{});
+
+    readyDo = false;
+    readyDen = false;
+    isGameOver = false;
+    selectedPiece = null;
+
+    // Ép giao diện mở bảng Sẵn Sàng ngay lập tức
+    showReadyOverlay(currentRoomMode || "co-tuong", true);
 }
 function exitAfterMatch() {
     hideVictoryPopup();
@@ -11012,6 +10915,7 @@ async function maybeSettleStakeRoom(room, roomId) {
         console.error("LỖI CHIA TIỀN TRONG TRY CATCH:", err);
     }
 }
+// 🔥 FIX LỖI ẢO TƯỞNG THIẾU PMC: ÉP LẤY ĐÚNG VÍ CỦA THẰNG ĐANG BẤM ĐIỆN THOẠI!
 async function chargeStakeForReady(roomId, side) {
     try {
         if (!roomId || !side) return { ok: false, stage: "input" };
@@ -11024,77 +10928,57 @@ async function chargeStakeForReady(roomId, side) {
         if (room?.stakeLocked?.[side]) return { ok: true, stage: "already_locked" };
 
         const localProfile = getCurrentPlayerProfile();
-        const sidePlayer = room?.players?.[side] || {};
-        let targetWalletKey = sidePlayer.walletKey || localProfile.walletKey;
+        // Ép buộc dùng mã ví chuẩn của máy hiện tại, đéo tin tưởng dữ liệu cũ trên phòng nữa!
+        const targetWalletKey = localProfile.walletKey;
 
-        if (sidePlayer.uid === localProfile.uid && targetWalletKey !== localProfile.walletKey) {
-            targetWalletKey = localProfile.walletKey;
-
-            await db.ref("matches/" + roomId + "/players/" + side).update({
-                walletKey: localProfile.walletKey,
-                name: localProfile.name,
-                photo: localProfile.photo
-            });
-        }
+        // Cập nhật ngay lập tức mã ví đúng lên phòng
+        await db.ref("matches/" + roomId + "/players/" + side).update({
+            walletKey: localProfile.walletKey,
+            name: localProfile.name,
+            photo: localProfile.photo,
+            uid: localProfile.uid || ""
+        });
 
         const safeWalletKey = String(targetWalletKey || "").replace(/[.#$\[\]\/]/g, "_");
         const targetWalletSnap = await db.ref("wallets/" + safeWalletKey).once("value");
         const targetWallet = targetWalletSnap.val() || {};
         const targetPmc = Math.max(0, Math.floor(Number(targetWallet.pmcBalance || 0) || 0));
 
-        if (!targetWalletKey) {
-            console.error("READY FAIL wallet_key_missing", { roomId, side });
-            return { ok: false, stage: "wallet_key_missing" };
-        }
-
-        if (targetPmc < stake) {
-            console.error("READY FAIL insufficient_wallet", { targetWalletKey, targetPmc, stake });
-            return { ok: false, stage: "insufficient_wallet" };
-        }
+        if (!targetWalletKey) return { ok: false, stage: "wallet_key_missing" };
+        if (targetPmc < stake) return { ok: false, stage: "insufficient_wallet" };
 
         const paid = await adjustPmcWalletByKey(targetWalletKey, -stake, {
-            name: sidePlayer.name || localProfile.name || "Người chơi",
-            photo: sidePlayer.photo || localProfile.photo || "images/do_tuong.png"
+            name: localProfile.name || "Người chơi",
+            photo: localProfile.photo || "images/do_tuong.png"
         });
 
-        if (paid == null) {
-            console.error("READY FAIL tx_not_committed", { targetWalletKey, targetPmc, stake });
-            return { ok: false, stage: "tx_not_committed" };
-        }
+        if (paid == null) return { ok: false, stage: "tx_not_committed" };
 
-       if (targetWalletKey === localProfile.walletKey) {
-    currentPmcBalance = paid;
-    localStorage.setItem(getPmcCacheKey(), String(paid));
-    updatePmcUI(paid);
-    refreshMyMatchBalanceBoxesNow(getPiBalance(), paid);
-} else {
-    await loadWalletBalance().catch(() => {});
-}
+        // Trừ xong cập nhật UI ngay tắp lự
+        currentPmcBalance = paid;
+        localStorage.setItem(getPmcCacheKey(), String(paid));
+        updatePmcUI(paid);
+        refreshMyMatchBalanceBoxesNow(getPiBalance(), paid);
 
-// Cập nhật luôn số dư trong room để avatar trong trận đổi liền
-await db.ref("matches/" + roomId + "/players/" + side).update({
-    balance: getPiBalance(),
-    piBalance: getPiBalance(),
-    pmcBalance: paid,
-    updatedAt: firebase.database.ServerValue.TIMESTAMP
-}).catch(err => console.error("Lỗi cập nhật PMC trong room sau SS:", err));
+        await db.ref("matches/" + roomId + "/players/" + side).update({
+            pmcBalance: paid,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        }).catch(()=>{});
 
-await db.ref("matches/" + roomId + "/stakeLocked/" + side).set({
-    done: true,
-    walletKey: targetWalletKey,
-    stake,
-    at: firebase.database.ServerValue.TIMESTAMP,
-    uid: sidePlayer.uid || localProfile.uid || ""
-});
+        await db.ref("matches/" + roomId + "/stakeLocked/" + side).set({
+            done: true,
+            walletKey: targetWalletKey,
+            stake,
+            at: firebase.database.ServerValue.TIMESTAMP,
+            uid: localProfile.uid || ""
+        });
 
         return { ok: true, stage: "done", walletKey: targetWalletKey, paid };
     } catch (err) {
-        console.error("chargeStakeForReady exception:", err);
-        alert("Lỗi trừ PMC, thử lại.");
-        return { ok: false, stage: "exception", error: String(err?.message || err) };
+        console.error("chargeStakeForReady error:", err);
+        return { ok: false, stage: "exception", error: String(err) };
     }
 }
-
 let withdrawAmountResolve = null;
 async function ensurePiSdkReady() {
   if (!window.Pi) {
