@@ -8630,21 +8630,83 @@ async function hasStatsV2History(walletKey, roundId) {
     }
 }
 
+// ===== FIREBASE TRANSACTION CHUẨN =====
+// Không tính toán lại từ đầu, LUÔN LUÔN cộng dồn (+1)
 async function applyStatsV2WalletOnce(walletKey, result, role) {
     walletKey = String(walletKey || "").trim();
     if (!walletKey || !result?.roundId) return false;
 
-    let appliedOrRebuilt = false;
-    await db.ref("wallets/" + walletKey).transaction(current => {
-        const before = current && typeof current === "object" ? current : {};
-        // Giao dịch atomic: đọc statsV2 cũ trong Firebase rồi mới cộng.
-        // matchHistoryV2/<roundId> là khóa chống cộng trùng, không rebuild đè tổng xuống.
-        const after = applyStatsV2ResultToWalletData(before, result, role);
-        appliedOrRebuilt = true;
-        return after;
+    const walletRef = db.ref("wallets/" + walletKey);
+    const now = Date.now();
+    const monthKey = new Date().toISOString().slice(0, 7); // YYYY-MM
+    const isWin = (role === "winner");
+    const reason = result.reason || "";
+    const roomId = result.roomId || "";
+
+    let applied = false;
+
+    await walletRef.transaction((wallet) => {
+        // Nếu user chưa tồn tại, bỏ qua (để firebase init sau) hoặc cấp node cơ bản
+        if (!wallet) return wallet;
+
+        // ===== INIT THEO SPEC =====
+        wallet.statsV2 = wallet.statsV2 || {};
+        wallet.statsByMonth = wallet.statsByMonth || {};
+        wallet.matchHistoryV2 = wallet.matchHistoryV2 || {};
+
+        // 🛑 QUAN TRỌNG: Check tồn tại trận đánh (Chống bị gọi +2 lần do lag)
+        if (wallet.matchHistoryV2[result.roundId]) {
+            return; // Đã ghi ván này rồi, abort transaction (không ghi đè)
+        }
+
+        wallet.statsV2.totalWins = wallet.statsV2.totalWins || 0;
+        wallet.statsV2.totalLosses = wallet.statsV2.totalLosses || 0;
+        wallet.statsV2.totalMatches = wallet.statsV2.totalMatches || 0;
+
+        if (!wallet.statsByMonth[monthKey]) {
+            wallet.statsByMonth[monthKey] = { wins: 0, losses: 0, matches: 0, updatedAt: now };
+        }
+
+        const month = wallet.statsByMonth[monthKey];
+
+        // ===== UPDATE CỘNG DỒN (+1) =====
+        wallet.statsV2.totalMatches += 1;
+        month.matches += 1;
+
+        if (isWin) {
+            wallet.statsV2.totalWins += 1;
+            month.wins += 1;
+        } else {
+            wallet.statsV2.totalLosses += 1;
+            month.losses += 1;
+        }
+
+        // ===== LƯU LỊCH SỬ TỪNG TRẬN ĐỂ HIỂN THỊ (A với B, C, D...) =====
+        wallet.matchHistoryV2[result.roundId] = {
+            roomId: roomId,
+            result: isWin ? "win" : "loss",
+            role: role,
+            reason: reason,
+            opponentWalletKey: isWin ? result.loserWalletKey : result.winnerWalletKey,
+            mode: result.mode || "co-tuong",
+            stakePMC: result.stakePMC || 0,
+            at: now
+        };
+
+        // ===== META INFO =====
+        wallet.statsV2.updatedAt = now;
+        month.updatedAt = now;
+
+        wallet.statsV2.lastResult = isWin ? "win" : "loss";
+        wallet.statsV2.lastReason = reason;
+        wallet.statsV2.lastRoomId = roomId;
+        wallet.statsV2.lastRoundId = result.roundId;
+
+        applied = true;
+        return wallet; // Return dữ liệu để Firebase lock và update an toàn
     });
 
-    return appliedOrRebuilt;
+    return applied;
 }
 
 async function commitStatsV2FromRoundRoomOnce(room, roomId = currentRoomId) {
