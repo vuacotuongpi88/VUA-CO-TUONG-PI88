@@ -6175,6 +6175,7 @@ function prepareRealtimeArenaUI() {
     }
 
     setPlayerPresence("arena");
+    touchCurrentLobbyHeartbeat().catch(() => {});
     closeArenaFriendBox();
     renderRoomInviteOverlay();
 }
@@ -7660,6 +7661,7 @@ updates[`matches/${roomId}/hostWalletKey`] = winnerPlayer.walletKey || "";
 updates[`matches/${roomId}/lobbyOpen`] = true;
 updates[`matches/${roomId}/lobbyOwnerUid`] = winnerPlayer.uid || "";
 updates[`matches/${roomId}/lobbyOwnerWalletKey`] = winnerPlayer.walletKey || "";
+updates[`matches/${roomId}/lobbyHeartbeatAt`] = firebase.database.ServerValue.TIMESTAMP;
 updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
 
             updates[`matches/${roomId}/status`] = "waiting";
@@ -8225,6 +8227,7 @@ if (side === "den" && room.status !== "playing") {
     updates[`matches/${roomId}/lobbyOpen`] = true;
     updates[`matches/${roomId}/lobbyOwnerUid`] = host.uid || "";
     updates[`matches/${roomId}/lobbyOwnerWalletKey`] = host.walletKey || "";
+    updates[`matches/${roomId}/lobbyHeartbeatAt`] = firebase.database.ServerValue.TIMESTAMP;
 
     // Reset SS để người mới vào tính lại 30 giây
     updates[`matches/${roomId}/ready/do`] = false;
@@ -9247,6 +9250,93 @@ function makeInviteCodeFromRoomId(roomId = "") {
     return clean.slice(-8);
 }
 
+async function closeMyOtherOpenWaitingRooms(keepRoomId = null) {
+    try {
+        const me = getCurrentPlayerProfile();
+        const myUid = String(me?.uid || "");
+        const myWalletKey = String(me?.walletKey || makeWalletDbKey() || "");
+
+        if (!myUid && !myWalletKey) return;
+
+        const snap = await db.ref("matches")
+            .orderByChild("createdAt")
+            .limitToLast(120)
+            .once("value");
+
+        const updates = {};
+
+        snap.forEach(child => {
+            const roomId = child.key;
+            const room = child.val() || {};
+
+            if (!roomId || (keepRoomId && roomId === keepRoomId)) return;
+            if (room.winner || room.status !== "waiting" || room.lobbyOpen !== true) return;
+
+            // Phòng đã có khách thì không động vào, tránh phá phòng đang chuẩn bị SS.
+            if (room.players?.den) return;
+
+            const host = room.players?.do || {};
+            const ownerUid = String(room.lobbyOwnerUid || host.uid || "");
+            const ownerWalletKey = String(room.lobbyOwnerWalletKey || host.walletKey || "");
+
+            const mine =
+                (myUid && ownerUid && ownerUid === myUid) ||
+                (myWalletKey && ownerWalletKey && ownerWalletKey === myWalletKey);
+
+            if (!mine) return;
+
+            const bucket = getRoomBucketSafe(room);
+            updates[`matches/${roomId}/lobbyOpen`] = false;
+            updates[`matches/${roomId}/lobbyClosedReason`] = "duplicate_host_room";
+            updates[`matches/${roomId}/lobbyClosedAt`] = firebase.database.ServerValue.TIMESTAMP;
+            updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+            updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+            if (bucket) {
+                updates[`waitingRooms/${bucket}/${roomId}`] = null;
+            }
+        });
+
+        if (Object.keys(updates).length) {
+            await db.ref().update(updates);
+        }
+    } catch (err) {
+        console.error("Dọn phòng chờ cũ của chính mình lỗi:", err);
+    }
+}
+
+async function touchCurrentLobbyHeartbeat() {
+    try {
+        if (!currentRoomId || mySide !== "do") return;
+
+        const me = getCurrentPlayerProfile();
+        const myUid = String(me?.uid || "");
+        const myWalletKey = String(me?.walletKey || makeWalletDbKey() || "");
+
+        const roomRef = db.ref("matches/" + currentRoomId);
+        const snap = await roomRef.once("value");
+        const room = snap.val() || null;
+
+        // Cực quan trọng: không update mù, nếu không Firebase sẽ tạo lại node matches đã bị xóa.
+        if (!room || room.winner || room.status !== "waiting" || room.lobbyOpen !== true || room.players?.den) return;
+
+        const host = room.players?.do || {};
+        const isHost =
+            (myUid && host.uid && String(host.uid) === myUid) ||
+            (myWalletKey && host.walletKey && String(host.walletKey) === myWalletKey);
+
+        if (!isHost) return;
+
+        await roomRef.update({
+            lobbyHeartbeatAt: Date.now(),
+            lobbyOwnerUid: myUid || room.lobbyOwnerUid || "",
+            lobbyOwnerWalletKey: myWalletKey || room.lobbyOwnerWalletKey || ""
+        });
+    } catch (err) {
+        console.error("Cập nhật heartbeat phòng chờ lỗi:", err);
+    }
+}
+
 async function joinExistingWaitingRoom(waitingRoomRef, roomId, me, mode, stakePMC) {
     roomId = String(roomId || "").trim();
     if (!roomId || !me?.uid) return false;
@@ -9264,6 +9354,7 @@ async function joinExistingWaitingRoom(waitingRoomRef, roomId, me, mode, stakePM
         roomMode !== mode ||
         room.winner ||
         room.status !== "waiting" ||
+isGhostLobbyRoom(room) ||
 room.lobbyOpen !== true ||
 !room.players?.do ||
 room.players?.den
@@ -9341,6 +9432,10 @@ room.players?.den
 }
 
 async function createAndPublishWaitingRoom(me, mode, stakePMC, bucket) {
+    // Mỗi tài khoản chỉ được mở 1 phòng chờ công khai.
+    // Tạo phòng mới thì đóng các phòng chờ cũ để không sinh phòng ảo.
+    await closeMyOtherOpenWaitingRooms().catch(err => console.error("Dọn phòng cũ trước khi tạo phòng mới lỗi:", err));
+
     const newRoomRef = db.ref("matches").push();
     const newRoomId = newRoomRef.key;
     const waitingRoomRef = db.ref("waitingRooms/" + bucket + "/" + newRoomId);
@@ -9352,10 +9447,11 @@ async function createAndPublishWaitingRoom(me, mode, stakePMC, bucket) {
         roomBucket: bucket,
         inviteCode,
         status: "waiting",
-            lobbyOpen: true,
-    lobbyOwnerUid: me.uid || "",
-    lobbyOwnerWalletKey: me.walletKey || "",
-    lobbyUpdatedAt: firebase.database.ServerValue.TIMESTAMP,
+        lobbyOpen: true,
+        lobbyOwnerUid: me.uid || "",
+        lobbyOwnerWalletKey: me.walletKey || "",
+        lobbyHeartbeatAt: Date.now(),
+        lobbyUpdatedAt: firebase.database.ServerValue.TIMESTAMP,
         turn: "do",
         isCoUp: mode === "co-up",
         timeDo: 540,
@@ -10585,6 +10681,7 @@ updates[`matches/${roomId}/hostWalletKey`] = newHost.walletKey || "";
 updates[`matches/${roomId}/lobbyOpen`] = true;
 updates[`matches/${roomId}/lobbyOwnerUid`] = newHost.uid || "";
 updates[`matches/${roomId}/lobbyOwnerWalletKey`] = newHost.walletKey || "";
+updates[`matches/${roomId}/lobbyHeartbeatAt`] = firebase.database.ServerValue.TIMESTAMP;
 updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
 
     // Reset trạng thái chờ cho sạch
@@ -10689,6 +10786,7 @@ async function handoffFinishedRoomToRemainingPlayer(roomId, room, leavingSide, r
     updates[`matches/${roomId}/lobbyOpen`] = true;
     updates[`matches/${roomId}/lobbyOwnerUid`] = newHost.uid || "";
     updates[`matches/${roomId}/lobbyOwnerWalletKey`] = newHost.walletKey || "";
+    updates[`matches/${roomId}/lobbyHeartbeatAt`] = firebase.database.ServerValue.TIMESTAMP;
     updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
 
     // Dọn ván cũ, nhưng không đụng ví PMC.
@@ -11891,6 +11989,7 @@ async function failReadyAndBackHome() {
         updates[`matches/${roomId}/lobbyOpen`] = true;
         updates[`matches/${roomId}/lobbyOwnerUid`] = room.players?.do?.uid || "";
         updates[`matches/${roomId}/lobbyOwnerWalletKey`] = room.players?.do?.walletKey || "";
+        updates[`matches/${roomId}/lobbyHeartbeatAt`] = firebase.database.ServerValue.TIMESTAMP;
         updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
         updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
 
@@ -11935,6 +12034,7 @@ async function failReadyAndBackHome() {
             updates[`matches/${roomId}/readyDeadlineAt`] = null;
             updates[`matches/${roomId}/status`] = "waiting";
             updates[`matches/${roomId}/lobbyOpen`] = true;
+            updates[`matches/${roomId}/lobbyHeartbeatAt`] = firebase.database.ServerValue.TIMESTAMP;
             updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
             updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
 
@@ -13174,6 +13274,8 @@ async function publishChallengeRoomToLobby(roomId, invite = {}) {
     const room = roomSnap?.val?.() || null;
     if (!room || room.winner || room.status !== "waiting" || room.players?.den || !room.players?.do) return;
 
+    await closeMyOtherOpenWaitingRooms(roomId).catch(err => console.error("Dọn phòng cũ trước khi mở thách đấu ra lobby lỗi:", err));
+
     const mode = room.mode || invite.mode || "co-tuong";
     const stakePMC = Math.max(0, Math.floor(Number(room.stakePMC || invite.stakePMC || 0) || 0));
     const bucket = room.roomBucket || invite.roomBucket || makeStakeBucket(mode, stakePMC);
@@ -13186,6 +13288,7 @@ async function publishChallengeRoomToLobby(roomId, invite = {}) {
         [`matches/${roomId}/readyDeadlineAt`]: null,
         [`matches/${roomId}/ready/do`]: false,
         [`matches/${roomId}/ready/den`]: false,
+        [`matches/${roomId}/lobbyHeartbeatAt`]: firebase.database.ServerValue.TIMESTAMP,
         [`matches/${roomId}/lobbyUpdatedAt`]: firebase.database.ServerValue.TIMESTAMP,
         [`matches/${roomId}/updatedAt`]: firebase.database.ServerValue.TIMESTAMP,
         [`waitingRooms/${bucket}/${roomId}`]: {
@@ -13450,7 +13553,7 @@ function getRoomLobbyState(room) {
 function canJoinLobbyRoom(room) {
     const hasDo = !!room?.players?.do;
     const hasDen = !!room?.players?.den;
-    return !room?.winner && room?.status === "waiting" && hasDo && !hasDen;
+    return room?.lobbyOpen === true && !isGhostLobbyRoom(room) && !room?.winner && room?.status === "waiting" && hasDo && !hasDen;
 }
 
 async function joinRoomFromLobby(roomId) {
@@ -13463,6 +13566,13 @@ async function joinRoomFromLobby(roomId) {
 
         if (!room) {
             alert("Bàn này không còn.");
+            bindLobbyRoomList();
+            return;
+        }
+
+        if (isGhostLobbyRoom(room) || room.lobbyOpen !== true) {
+            await cleanupGhostLobbyRoom(roomId, room).catch(() => {});
+            alert("Bàn này là phòng cũ/phòng ảo, đã dọn khỏi danh sách.");
             bindLobbyRoomList();
             return;
         }
@@ -13679,6 +13789,14 @@ async function joinRoomByInviteCode() {
 let activeLobbyRoomTab = "co-tuong";
 let latestLobbyRoomList = [];
 let lobbyRoomListRef = null;
+let lobbyBindSeq = 0;
+let lobbyCleanupInFlight = false;
+
+// HOTFIX PHÒNG ẢO: phòng chờ phải có heartbeat sống.
+// Nếu host tắt app / rớt mạng / tạo nhiều phòng rồi bỏ đó, phòng sẽ tự ẩn và bị đóng lobby.
+const LOBBY_WAITING_STALE_MS = 90 * 1000;
+const LOBBY_PLAYING_STALE_MS = 2 * 60 * 60 * 1000;
+const LOBBY_CLEAN_SCAN_LIMIT = 120;
 
 function syncLobbyRoomTabs(roomList = []) {
     const coTuongCount = roomList.filter(room => (room?.mode || "co-tuong") !== "co-up").length;
@@ -13756,8 +13874,30 @@ function renderLobbyRoomList(roomList) {
 
     syncLobbyRoomTabs(latestLobbyRoomList);
 }
+function readRoomTimeValue(value) {
+    const n = Number(value || 0);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function isPendingServerTimestamp(value) {
+    return value && typeof value === "object";
+}
+
 function getRoomTimeMs(room = {}) {
-    return Number(room.updatedAt || room.createdAt || 0) || 0;
+    return readRoomTimeValue(room.updatedAt) || readRoomTimeValue(room.createdAt);
+}
+
+function getLobbyAliveTimeMs(room = {}) {
+    if (isPendingServerTimestamp(room.lobbyHeartbeatAt) || isPendingServerTimestamp(room.lobbyUpdatedAt)) {
+        return Date.now();
+    }
+
+    return (
+        readRoomTimeValue(room.lobbyHeartbeatAt) ||
+        readRoomTimeValue(room.lobbyUpdatedAt) ||
+        readRoomTimeValue(room.updatedAt) ||
+        readRoomTimeValue(room.createdAt)
+    );
 }
 
 function getRoomBucketSafe(room = {}) {
@@ -13781,19 +13921,23 @@ function isGhostLobbyRoom(room = {}) {
     const t = getRoomTimeMs(room);
     const age = t ? now - t : 999999999;
 
-    // Không có chủ bàn thì là rác
+    // Không có chủ bàn thì là rác.
     if (!hasDo) return true;
 
-    // Đã có kết quả thì không cần nằm trong danh sách bàn nữa
-    if (room.winner || status === "finished" || status === "ended") return true;
+    // Đã có kết quả thì không cần nằm trong danh sách bàn nữa.
+    if (room.winner || status === "finished" || status === "ended" || status === "abandoned") return true;
 
-    // Phòng chờ quá 15 phút chưa có người vào thì coi là phòng ảo
-    if (status === "waiting" && !hasDen && age > 15 * 60 * 1000) {
-        return true;
+    // Chỉ xử lý rác đối với phòng chờ công khai chưa có khách.
+    if (status === "waiting" && room.lobbyOpen === true && !hasDen) {
+        const aliveAt = getLobbyAliveTimeMs(room);
+        const aliveAge = aliveAt ? now - aliveAt : 999999999;
+
+        // Host không bắn heartbeat nữa => phòng ảo / phòng cũ.
+        if (aliveAge > LOBBY_WAITING_STALE_MS) return true;
     }
 
-    // Phòng đang chơi mà treo quá 2 tiếng thì dọn rác
-    if (status === "playing" && age > 2 * 60 * 60 * 1000) {
+    // Phòng đang chơi mà treo quá lâu thì không cho lẫn vào lobby.
+    if (status === "playing" && age > LOBBY_PLAYING_STALE_MS) {
         return true;
     }
 
@@ -13818,7 +13962,6 @@ function shouldShowLobbyRoom(room = {}) {
 
     if (isGhostLobbyRoom(room)) return false;
 
-    // Tách riêng khối danh sách bàn:
     // Chỉ phòng nào chủ động mở lobbyOpen mới được hiện.
     if (room.lobbyOpen !== true) return false;
 
@@ -13829,15 +13972,58 @@ function shouldShowLobbyRoom(room = {}) {
 }
 
 async function cleanupGhostLobbyRoom(roomId, room = {}) {
-    // KHÔNG xóa matches ở client nữa.
-    // Nếu xóa matches khi room vừa có winner, bên thắng/thua sẽ bị lệch popup.
-    return;
+    try {
+        if (!roomId || !isGhostLobbyRoom(room)) return;
+
+        const updates = {};
+        const bucket = getRoomBucketSafe(room);
+
+        // Không xóa matches nữa để tránh lệch popup/thống kê. Chỉ đóng lobby và gỡ waitingRooms.
+        updates[`matches/${roomId}/lobbyOpen`] = false;
+        updates[`matches/${roomId}/lobbyClosedReason`] = room.winner ? "finished" : "ghost_or_stale";
+        updates[`matches/${roomId}/lobbyClosedAt`] = firebase.database.ServerValue.TIMESTAMP;
+        updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+        if (room.status === "waiting" && !room?.players?.den && !room.winner) {
+            updates[`matches/${roomId}/status`] = "abandoned";
+        }
+
+        if (bucket) {
+            updates[`waitingRooms/${bucket}/${roomId}`] = null;
+        }
+
+        await db.ref().update(updates);
+    } catch (err) {
+        console.error("Dọn phòng ảo lobby lỗi:", err);
+    }
 }
 
 async function cleanupGhostLobbyRoomsOnce() {
-    // Tạm tắt dọn phòng ảo tự động để không ảnh hưởng trận đang chơi.
-    return;
+    if (lobbyCleanupInFlight) return;
+    lobbyCleanupInFlight = true;
+
+    try {
+        const snap = await db.ref("matches")
+            .orderByChild("createdAt")
+            .limitToLast(LOBBY_CLEAN_SCAN_LIMIT)
+            .once("value");
+
+        const jobs = [];
+        snap.forEach(child => {
+            const room = child.val() || {};
+            if (isGhostLobbyRoom(room)) {
+                jobs.push(cleanupGhostLobbyRoom(child.key, room));
+            }
+        });
+
+        if (jobs.length) await Promise.allSettled(jobs);
+    } catch (err) {
+        console.error("Quét dọn phòng ảo lỗi:", err);
+    } finally {
+        lobbyCleanupInFlight = false;
+    }
 }
+
 function bindLobbyRoomList() {
     if (lobbyRoomListRef) {
         lobbyRoomListRef.off();
@@ -13845,12 +14031,21 @@ function bindLobbyRoomList() {
 
     lobbyRoomListRef = db.ref("matches").orderByChild("createdAt").limitToLast(50);
 
+    const mySeq = ++lobbyBindSeq;
+
     lobbyRoomListRef.on("value", snap => {
         const roomList = [];
+        const cleanupJobs = [];
 
         snap.forEach(child => {
             const room = child.val() || {};
-if (!shouldShowLobbyRoom(room)) return;
+
+            if (isGhostLobbyRoom(room)) {
+                cleanupJobs.push(cleanupGhostLobbyRoom(child.key, room));
+                return;
+            }
+
+            if (!shouldShowLobbyRoom(room)) return;
 
             roomList.push({
                 id: child.key,
@@ -13858,9 +14053,18 @@ if (!shouldShowLobbyRoom(room)) return;
             });
         });
 
+        if (cleanupJobs.length) {
+            Promise.allSettled(cleanupJobs).catch(() => {});
+        }
+
+        // Nếu bindLobbyRoomList bị gọi nhiều lần, chỉ lần mới nhất được render.
+        if (mySeq !== lobbyBindSeq) return;
+
         roomList.sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
         renderLobbyRoomList(roomList);
     });
+
+    cleanupGhostLobbyRoomsOnce().catch(() => {});
 }
 let friendListRef = null;
 let friendRequestRef = null;
@@ -14612,10 +14816,15 @@ async function setPlayerPresence(state = "home") {
 
 function startPresenceHeartbeat() {
     clearInterval(presenceHeartbeatTimer);
-    presenceHeartbeatTimer = setInterval(() => {
+
+    const beat = () => {
         const state = currentRoomId ? (isSpectatorMode ? "spectating" : "arena") : "home";
         setPlayerPresence(state).catch(() => {});
-    }, 30000);
+        touchCurrentLobbyHeartbeat().catch(() => {});
+    };
+
+    beat();
+    presenceHeartbeatTimer = setInterval(beat, 15000);
 }
 
 window.addEventListener("beforeunload", () => {
