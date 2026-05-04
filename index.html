@@ -9873,7 +9873,11 @@ async function loadWalletBalance() {
 
         // 🔥 THÊM ĐOẠN NÀY VÀO: ĐỂ THANH EXP CẬP NHẬT ĐÚNG CẤP LÚC MỚI VÀO GAME
         if (typeof window.updateExpBarUI === 'function') {
-            window.updateExpBarUI(data.exp || 0);
+            // FIX: ĐÓNG BĂNG THANH EXP TRONG TRẬN! 
+            // Chỉ cập nhật UI nếu mầy đang ở Sảnh (không có EXP chờ cộng dồn)
+            if (!window.pendingSessionEXP || window.pendingSessionEXP === 0) {
+                window.updateExpBarUI(data.exp || 0);
+            }
         }
 
         return { pi: currentWalletBalance, pmc: currentPmcBalance };
