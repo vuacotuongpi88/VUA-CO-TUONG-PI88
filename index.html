@@ -16519,23 +16519,32 @@ window.applyPendingExpToDatabase = async function() {
     const userRef = db.ref("wallets/" + walletKey);
     
     try {
-        const snap = await userRef.once("value");
-        const current = snap.val() || {};
+        let finalNewExp = 0;
+        let finalNewLevel = 1;
 
-        let oldExp = Number(current.exp || 0);
-        let newExp = Math.max(0, oldExp + window.pendingSessionEXP);
-        let newLevel = window.getLevelFromExp(newExp);
+        // 🔥 FIX TRÍ MẠNG Ở ĐÂY: Dùng Transaction thay vì once("value") 
+        // Ép Firebase đọc số EXP mới nhất từ Server, cấm dùng cache ảo chống giật lùi.
+        await userRef.transaction((current) => {
+            if (!current) current = {};
+            
+            let oldExp = Number(current.exp || 0);
+            let newExp = Math.max(0, oldExp + window.pendingSessionEXP);
+            
+            current.exp = newExp;
+            current.level = window.getLevelFromExp(newExp);
+            
+            // Lấy số liệu chuẩn để đá ra ngoài cho UI chạy hiệu ứng
+            finalNewExp = newExp;
+            finalNewLevel = current.level;
+            
+            return current;
+        });
 
-        // 🔥 LƯU TẠM SỐ EXP MỚI, CHƯA CHO THANH EXP CHẠY VỘI
-        window.finalNewExpToAnimate = newExp; 
+        // 🔥 LƯU TẠM SỐ EXP MỚI CHUẨN XÁC, CHƯA CHO THANH EXP CHẠY VỘI
+        window.finalNewExpToAnimate = finalNewExp; 
 
         // CHỈ HIỆN BẢNG BÁO CÁO THÔI
-        window.showExpSummary(newLevel);
-
-        await userRef.update({
-            exp: newExp,
-            level: newLevel
-        });
+        window.showExpSummary(finalNewLevel);
 
     } catch (err) {
         console.error("Lỗi lưu EXP:", err);
