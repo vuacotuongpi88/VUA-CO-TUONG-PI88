@@ -6725,8 +6725,10 @@ function selectGame(mode) {
     document.getElementById("game-arena").style.display = "block";
 }
 
-async function processExit() {
-    hideVictoryPopup();
+// --- BỘ NÚT THOÁT CHUẨN CHỈ, CHỐNG ĐƠ MÁY ---
+
+// Hàm này chuyên dùng để dọn dẹp hậu trường và cút ra sảnh
+async function processExitToLobby() {
     if (isSpectatorMode) {
         cleanupRoomListeners();
         clearActiveMatchSnapshot();
@@ -6737,10 +6739,17 @@ async function processExit() {
         currentRoomStakePMC = 0;
         currentRoomBucket = null;
         currentRoomStatus = null;
-    } else {
-        await leaveRealtimeMatch();
+        await setPlayerPresence("home").catch(() => {});
+        showHomeUI();
+        document.getElementById("game-arena").style.display = "none";
+        clearInterval(interval);
+        clearInterval(readyInterval);
+        document.body.classList.remove("spectator-mode");
+        isSpectatorMode = false;
+        return;
     }
-    
+
+    await leaveRealtimeMatch();
     await setPlayerPresence("home").catch(() => {});
     showHomeUI();
     closeArenaFriendBox();
@@ -6758,51 +6767,50 @@ async function processExit() {
     if (chatContent) {
         chatContent.innerHTML = '<p style="color:#55efc4;">Hệ thống: Vào việc đi mậy!</p>';
     }
-    
-    if (isSpectatorMode) {
-        document.body.classList.remove("spectator-mode");
-        isSpectatorMode = false;
-    }
 }
 
 async function backToMenu() {
-    // NẾU LÀ KHÁN GIẢ THÌ THOÁT LUÔN ĐÉO CÓ EXP
+    // 1. NẾU LÀ KHÁN GIẢ THÌ THOÁT LUÔN ĐÉO CÓ BÁO CÁO EXP
     if (isSpectatorMode) {
-        await processExit();
+        await processExitToLobby();
         return;
     }
 
-    // NẾU ĐANG CHƠI GIỮA CHỪNG MÀ BẤM THOÁT (BỎ CHẠY) THÌ HỎI LẠI CHO CHẮC
+    // 2. NẾU ĐANG ĐÁNH GIỮA CHỪNG MÀ BẤM THOÁT -> HỎI XÁC NHẬN
+    // (Chặn cái confirm ngu học này khi ván cờ ĐÃ KẾT THÚC để chống đơ máy)
     if (!isGameOver) {
-        if (!confirm("Thoát ván đấu này?")) return;
+        if (!confirm("Thoát ván đấu này? Mày sẽ bị xử thua đó!")) return;
     }
 
-    // NẾU CÓ EXP CHƯA NHẬN -> MỞ BẢNG BÁO CÁO TRƯỚC, CHỜ BẤM XÁC NHẬN MỚI THOÁT
+    // 3. DỌN BẢNG CHIẾU BÍ LẬP TỨC
+    hideVictoryPopup(); 
+
+    // 4. KIỂM TRA XEM CÓ EXP CHƯA NHẬN KHÔNG
     if (window.pendingSessionEXP && window.pendingSessionEXP !== 0) {
-        hideVictoryPopup(); // Cất cái bảng Đỏ/Đen Thắng đi cho gọn
-        
-        // Mượn tạm hàm đóng bảng cũ để nhét thêm lệnh "thoát ra sảnh" vào
+        // Đổi ruột hàm đóng bảng Báo Cáo EXP để nó tự ra sảnh
         const oldClose = window.closeExpSummary;
-        
         window.closeExpSummary = async function() {
-            oldClose(); // Chạy hàm gốc (hiện hạt exp bay bay, lên cấp...)
-            window.closeExpSummary = oldClose; // Trả lại hàm gốc cho lần sau
+            oldClose(); // Chạy hiệu ứng bay hạt, lên cấp...
+            window.closeExpSummary = oldClose; // Trả lại như cũ
             
-            // Đợi 1.5 giây cho hiệu ứng bay bay hoàn tất rồi mới cút ra sảnh
+            // Đợi 1.5 giây cho hạt EXP bay xong rồi mới cút ra sảnh
             setTimeout(async () => {
-                await processExit();
+                await processExitToLobby();
             }, 1500); 
         };
 
-        // Kích hoạt việc lưu EXP (nó sẽ tự tính toán và mở bảng Báo Cáo lên)
+        // Gọi hàm lưu EXP -> Tự động bật bảng Thống kê lên
         if (typeof window.applyPendingExpToDatabase === 'function') {
             window.applyPendingExpToDatabase();
         }
-        return; // Ngắt luồng ở đây, không xuống dưới nữa. Phần ra sảnh nằm trong setTimeout ở trên rồi.
+    } else {
+        // NẾU KHÔNG CÓ EXP THÌ THOÁT THẲNG RA SẢNH LUÔN
+        await processExitToLobby();
     }
+}
 
-    // NẾU ĐÉO CÓ EXP NÀO (VÍ DỤ VỪA VÀO BÀN RỒI THOÁT RA NGAY) THÌ RA SẢNH LUÔN
-    await processExit();
+function exitAfterMatch() {
+    backToMenu(); // Chạy thẳng vào logic an toàn ở trên
 }
 function shuffle(array) {
 let currentIndex = array.length, randomIndex;
