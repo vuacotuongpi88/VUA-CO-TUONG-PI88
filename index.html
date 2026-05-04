@@ -15501,9 +15501,10 @@ document.addEventListener("click", function(e) {
     color: #b2bec3;
     line-height: 1.45;
 }
+/* Dòng 15450 */
 .mission-top-tabs {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr)); /* Sửa số 4 thành số 5 ở đây */
     gap: 10px;
     margin-bottom: 14px;
 }
@@ -15766,7 +15767,23 @@ document.addEventListener("click", function(e) {
             <div class="mission-summary-note" id="mission-stats-note">Càng đông bạn hữu, quỹ cộng đồng càng đã.</div>
           </div>
         </div>
+<!-- Dòng 15715: Thay thế cụm mission-top-tabs bằng đoạn này -->
+<div class="mission-top-tabs" id="mission-top-tabs">
+    <button class="mission-top-tab active" data-tab="day" onclick="switchMissionTab('day')">Ngày</button>
+    <button class="mission-top-tab" data-tab="week" onclick="switchMissionTab('week')">Tuần</button>
+    <button class="mission-top-tab" data-tab="month" onclick="switchMissionTab('month')">Tháng</button>
+    <button class="mission-top-tab" data-tab="referral" onclick="switchMissionTab('referral')">Mời bạn</button>
+    <!-- MỚI THÊM: Tab Cấp độ -->
+    <button class="mission-top-tab" data-tab="level" onclick="switchMissionTab('level'); renderLevelRewards();">Cấp độ</button>
+</div>
 
+<!-- Dòng 15722: Thêm cái pane cấp độ vào dưới các pane khác -->
+<div id="mission-pane-day" class="mission-pane show"><div class="mission-pane-grid"></div></div>
+<div id="mission-pane-week" class="mission-pane"><div class="mission-pane-grid"></div></div>
+<div id="mission-pane-month" class="mission-pane"><div class="mission-pane-grid"></div></div>
+<div id="mission-pane-referral" class="mission-pane"><div class="mission-pane-grid"></div></div>
+<!-- MỚI THÊM: Khu vực hiển thị Rương -->
+<div id="mission-pane-level" class="mission-pane"><div class="mission-pane-grid" id="level-reward-list"></div></div>
         <div class="mission-top-tabs" id="mission-top-tabs">
           <button class="mission-top-tab active" data-tab="day" onclick="switchMissionTab('day')">Ngày</button>
           <button class="mission-top-tab" data-tab="week" onclick="switchMissionTab('week')">Tuần</button>
@@ -16182,6 +16199,135 @@ function updateExpBarUI(totalExp) {
     const text = document.getElementById("exp-text-float");
     if(fill) fill.style.width = pct + "%";
     if(text) text.innerText = `CẤP ${currentLevel} • ${Math.floor(currentLevelProgress)} / ${expForNextLevel} EXP`;
+}
+// Cấu hình các mốc Rương
+const LEVEL_MILESTONES = [
+    { level: 10, name: 'Rương Tân Thủ', desc: 'Mở ngẫu nhiên 2 - 20 PMC' },
+    { level: 20, name: 'Rương Kỳ Thủ', desc: 'Mở ngẫu nhiên 4 - 40 PMC' },
+    { level: 30, name: 'Rương Đồng + Skin', desc: 'Thưởng ngẫu nhiên PMC & Mở khóa Skin Đồng', skinId: 'bronze' },
+    { level: 60, name: 'Rương Bạch Kim + Skin', desc: 'Thưởng ngẫu nhiên PMC & Mở khóa Skin Ngọc', skinId: 'jade' },
+    { level: 90, name: 'Rương Kim Cương', desc: 'Thưởng ngẫu nhiên PMC (x5 giá trị)' },
+    { level: 120, name: 'Rương Rồng + Skin', desc: 'Thưởng ngẫu nhiên PMC & Mở khóa Skin Long Vương', skinId: 'dragon' },
+    { level: 180, name: 'Rương Tối Thượng', desc: 'Thưởng ngẫu nhiên PMC & Mở khóa Skin Phượng Hoàng', skinId: 'phoenix' }
+];
+
+async function renderLevelRewards() {
+    const listEl = document.getElementById("level-reward-list");
+    if (!listEl) return;
+
+    listEl.innerHTML = '<div style="color:#55efc4; text-align:center; grid-column: 1/-1;">Đang tải rương...</div>';
+
+    // Lấy cấp độ từ Firebase
+    const walletKey = makeWalletDbKey();
+    const snap = await db.ref("wallets/" + walletKey).once("value");
+    const userData = snap.val() || {};
+    const currentLevel = userData.level || 1;
+    const claimedLevels = userData.claimedLevels || {}; 
+
+    listEl.innerHTML = LEVEL_MILESTONES.map(m => {
+        const isClaimed = !!claimedLevels[m.level];
+        const isReady = currentLevel >= m.level && !isClaimed;
+        const isLocked = currentLevel < m.level;
+
+        let btnClass = "mission-claim-btn";
+        let btnText = "CHƯA ĐẠT";
+        let badgeClass = "locked";
+        let badgeText = "Cần Cấp " + m.level;
+        let onclick = "";
+
+        if (isClaimed) {
+            btnText = "ĐÃ MỞ";
+            btnClass += " claimed";
+            badgeClass = "claimed";
+            badgeText = "Đã nhận";
+        } else if (isReady) {
+            btnText = "MỞ RƯƠNG";
+            btnClass += " ready";
+            badgeClass = "ready";
+            badgeText = "Sẵn sàng";
+            // Gọi hàm mở rương kèm hiệu ứng nổ tiền
+            onclick = `onclick="claimLevelChest(${m.level}, this)"`;
+        }
+
+        let progressPct = Math.min(100, (currentLevel / m.level) * 100).toFixed(0);
+        if (isClaimed) progressPct = 100;
+
+        return `
+        <div class="mission-card">
+            <div class="mission-card-head">
+                <div>
+                    <div class="mission-card-title" style="color:${isReady ? '#f4c542' : '#fff8d6'}">${m.name}</div>
+                    <div class="mission-card-desc">${m.desc}</div>
+                </div>
+                <div class="mission-card-badge ${badgeClass}">${badgeText}</div>
+            </div>
+            <div class="mission-card-progress-line">
+                <span>Tiến độ: Cấp ${currentLevel}/${m.level}</span>
+                <span>${progressPct}%</span>
+            </div>
+            <div class="mission-card-progress-bar">
+                <div class="mission-card-progress-fill" style="width:${progressPct}%; background:${isReady ? 'linear-gradient(90deg, #f1c40f, #e67e22)' : ''}"></div>
+            </div>
+            <div class="mission-card-footer">
+                <button class="${btnClass}" ${onclick} ${isLocked || isClaimed ? "disabled" : ""}>${btnText}</button>
+            </div>
+        </div>`;
+    }).join("");
+}
+async function claimLevelChest(targetLevel, btnElement) {
+    if (btnElement) {
+        btnElement.disabled = true;
+        btnElement.innerText = "ĐANG MỞ...";
+    }
+
+    const milestone = LEVEL_MILESTONES.find(m => m.level === targetLevel);
+    if (!milestone) return;
+
+    // Logic tính thưởng ngẫu nhiên (Tỉ lệ 80% ra số nhỏ, 20% ra số lớn)
+    let min = 0, max = 0;
+    if (targetLevel === 10) { min = 2; max = 20; }
+    else if (targetLevel === 20) { min = 4; max = 40; }
+    else { min = targetLevel; max = targetLevel * 3; } // Công thức chung cho cấp cao
+
+    let isLucky = Math.random() < 0.2; // 20% xui rủi
+    let rewardPMC = 0;
+    
+    if (isLucky) {
+        rewardPMC = Math.floor(Math.random() * (max - (max/2) + 1)) + Math.floor(max/2); // Nửa trên
+    } else {
+        rewardPMC = Math.floor(Math.random() * ((max/2) - min + 1)) + min; // Nửa dưới
+    }
+
+    const walletKey = makeWalletDbKey();
+    const userRef = db.ref("wallets/" + walletKey);
+
+    await userRef.transaction((current) => {
+        if (!current) return current;
+        current.claimedLevels = current.claimedLevels || {};
+        
+        // Block mầy bấm 2 lần
+        if (current.claimedLevels[targetLevel]) return; 
+
+        // Ghi nhận đã mở rương này
+        current.claimedLevels[targetLevel] = true;
+        
+        // Cộng PMC
+        current.pmcBalance = (current.pmcBalance || 0) + rewardPMC;
+
+        // Nếu mốc đó có tặng kèm skin thì bỏ vô túi skin luôn
+        if (milestone.skinId) {
+            current.ownedAvatarSkins = current.ownedAvatarSkins || { none: true };
+            current.ownedAvatarSkins[milestone.skinId] = true;
+        }
+        return current;
+    });
+
+    // Mở rương thành công thì báo chớp nháy
+    alert(`🎉 MỞ RƯƠNG THÀNH CÔNG!\n\nBạn nhận được: ${rewardPMC} PMC${milestone.skinId ? `\n🎁 Kèm theo Skin: ${milestone.name} (Đã thêm vào mục Hồ Sơ)` : ''}`);
+    
+    // Cập nhật lại ví ở màn hình chính và tải lại bảng rương
+    loadWalletBalance();
+    renderLevelRewards();
 }
 </script>
 </body>
