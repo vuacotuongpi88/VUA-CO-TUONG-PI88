@@ -16525,7 +16525,10 @@ window.applyPendingExpToDatabase = async function() {
         let newExp = Math.max(0, oldExp + window.pendingSessionEXP);
         let newLevel = window.getLevelFromExp(newExp);
 
-        // HIỂN THỊ BẢNG BÁO CÁO TRƯỚC KHI LƯU
+        // 🔥 LƯU TẠM SỐ EXP MỚI, CHƯA CHO THANH EXP CHẠY VỘI
+        window.finalNewExpToAnimate = newExp; 
+
+        // CHỈ HIỆN BẢNG BÁO CÁO THÔI
         window.showExpSummary(newLevel);
 
         await userRef.update({
@@ -16533,14 +16536,6 @@ window.applyPendingExpToDatabase = async function() {
             level: newLevel
         });
 
-        window.spawnExpEffect(window.pendingSessionEXP > 0);
-        
-        // Reset lại để cày mẻ mới
-        window.pendingSessionEXP = 0; 
-        window.sessionWins = 0;
-        window.sessionLosses = 0;
-        
-        window.updateExpBarUI(newExp); 
     } catch (err) {
         console.error("Lỗi lưu EXP:", err);
     }
@@ -16574,6 +16569,24 @@ window.showExpSummary = function(currentLevel) {
 window.closeExpSummary = function() {
     const modal = document.getElementById('exp-summary-modal');
     if(modal) modal.classList.remove('show');
+
+    // 🔥 KHI BẤM NÚT XÁC NHẬN -> MỚI NỔ HIỆU ỨNG VÀ CHẠY THANH EXP
+    if (window.finalNewExpToAnimate !== undefined) {
+        // Nổ cục lửa rớt xuống
+        window.spawnExpEffect(window.pendingSessionEXP > 0);
+        
+        // Kéo thanh EXP lên
+        window.updateExpBarUI(window.finalNewExpToAnimate); 
+        
+        // Chạy xong hết rồi mới reset mẻ cày
+        window.pendingSessionEXP = 0; 
+        window.sessionWins = 0;
+        window.sessionLosses = 0;
+        window.finalNewExpToAnimate = undefined;
+
+        // Load lại ví hiển thị cho mượt
+        loadWalletBalance();
+    }
 };
 
 window.spawnExpEffect = function(isWin) {
