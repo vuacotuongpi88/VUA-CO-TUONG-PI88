@@ -7134,26 +7134,13 @@ function showExitCountdown(action) {
         }
     }, 1000);
 }
-let pendingExitAfterExp = false; 
-let pendingExitActionType = ''; // Biến mới để nhớ mày đang bấm nút nào
-
-// 1. NÚT TIẾP TỤC SAU KHI XONG VÁN
+// 1. NÚT TIẾP TỤC SAU KHI XONG VÁN (ĐÉO DÍNH DÁNG TỚI EXP)
 function playNextMatch() {
-    hideVictoryPopup(); // Bắt buộc phải tắt bảng kết quả đi
-
-    if (window.pendingSessionEXP && window.pendingSessionEXP !== 0) {
-        pendingExitAfterExp = true; 
-        pendingExitActionType = 'tieptuc'; // Lưu lại là đang muốn tiếp tục
-        if (typeof window.applyPendingExpToDatabase === 'function') {
-            window.applyPendingExpToDatabase();
-        }
-    } else {
-        executePlayNextMatch();
-    }
+    hideVictoryPopup(); // Tắt cái bảng Chiến Thắng đi
+    executePlayNextMatch(); // Chạy thẳng vô dọn bàn
 }
 
 async function executePlayNextMatch() {
-    hideVictoryPopup(); // Gọi thêm cho chắc ăn
     clearInterval(interval);
     clearInterval(readyInterval);
     readyOverlayWaitingShown = false;
@@ -7170,23 +7157,23 @@ async function executePlayNextMatch() {
         return;
     }
 
+    // Dọn bàn trên màn hình NGAY LẬP TỨC
     clearRealtimeBoardVisualOnly();
 
     readyDo = false;
     readyDen = false;
-    // QUAN TRỌNG: Không set isGameOver = false ở đây! 
-    // Giữ nguyên là true để UI nó hiện chữ "ĐANG CHIA THƯỞNG..."
+    isGameOver = false; 
     selectedPiece = null;
 
     loadWalletBalance().catch(()=>{});
 
-    // Ép mở bảng Sẵn Sàng ngay lập tức (thêm tham số thứ 3 là true)
+    // Mở bảng Sẵn Sàng lên ngay lập tức (forceShow = true)
     showReadyOverlay(currentRoomMode || "co-tuong", true, true);
     updateReadyUI();
 }
 
 // ----------------------------------------------------
-// 2. NÚT THOÁT TRẬN
+// 2. NÚT THOÁT TRẬN (LÚC NÀY MỚI LÔI EXP RA TÍNH)
 async function backToMenu() {
     if (isSpectatorMode) {
         showExitCountdown('thoat');
@@ -7199,9 +7186,8 @@ async function backToMenu() {
 
     hideVictoryPopup();
 
+    // CHỈ KHI BẤM THOÁT MỚI GỌI BẢNG BÁO CÁO EXP
     if (window.pendingSessionEXP && window.pendingSessionEXP !== 0) {
-        pendingExitAfterExp = true; 
-        pendingExitActionType = 'thoat'; // Lưu lại là đang muốn thoát
         if (typeof window.applyPendingExpToDatabase === 'function') {
             window.applyPendingExpToDatabase();
         }
@@ -7210,6 +7196,44 @@ async function backToMenu() {
     }
 }
 
+async function executeBackToMenu() {
+    document.getElementById("game-arena").style.display = "none";
+    showHomeUI();
+    closeArenaFriendBox();
+    renderRoomInviteOverlay();
+
+    if (isSpectatorMode) {
+        cleanupRoomListeners();
+        clearActiveMatchSnapshot();
+        currentRoomId = null;
+        mySide = null;
+        viewSide = "do";
+        currentRoomMode = null;
+        currentRoomStakePMC = 0;
+        currentRoomBucket = null;
+        currentRoomStatus = null;
+        setPlayerPresence("home").catch(() => {});
+        document.body.classList.remove("spectator-mode");
+        isSpectatorMode = false;
+    } else {
+        await leaveRealtimeMatch();
+        await setPlayerPresence("home").catch(() => {});
+    }
+
+    clearInterval(interval);
+    clearInterval(readyInterval);
+    sounds.bgm.pause();
+    sounds.heartbeat.pause();
+
+    const chatContent = document.getElementById("match-content-popup");
+    if (chatContent) {
+        chatContent.innerHTML = '<p style="color:#55efc4;">Hệ thống: Vào việc đi mậy!</p>';
+    }
+}
+
+function exitAfterMatch() {
+    backToMenu();
+}
 async function executeBackToMenu() {
     document.getElementById("game-arena").style.display = "none";
     showHomeUI();
@@ -9348,13 +9372,11 @@ if (hasEnoughPlayersWaiting) {
     // Mở bảng SS ổn định, không cho Firebase snapshot làm chớp tắt
     ensureReadyOverlayForWaitingRoom(room, listeningRoomId);
 } else {
-    // Chỉ đóng bảng SS khi thật sự đã vào trận hoặc phòng không còn đủ người.
-    // Không đóng/mở theo mấy update phụ như số dư, ready, stakeLocked.
+    // 🔥 SỬA LỖI ĐƠ MÀN HÌNH Ở ĐÂY:
+    // Tuyệt đối không được tắt bảng Sẵn Sàng nếu Firebase đang vướng room.winner (đang chia thưởng)
     const reallyMustCloseReady =
-        room.status === "playing" ||
-        !!room.winner ||
-        !room.players?.do ||
-        !room.players?.den;
+        (room.status === "playing" && !room.winner) || // Thật sự bắt đầu ván mới
+        (!room.players?.do && !room.players?.den);     // Phòng trống trơn đéo còn ai
 
     if (reallyMustCloseReady) {
         closeReadyOverlay();
@@ -9363,7 +9385,6 @@ if (hasEnoughPlayersWaiting) {
 
     renderTimerUI();
 }
-
 if (room.status === "playing" && !room.winner) {
     readyOverlayWaitingShown = false;
     readyOverlayRoomKey = "";
@@ -11997,8 +12018,7 @@ function updateReadyUI() {
     const room = window.__lastBoundRoom || {};
     
   // NẾU VÁN VỪA XONG MÀ CHƯA DỌN FIREBASE XONG (ĐANG CHIA TIỀN)
-    // SỬA Ở ĐÂY: Thêm chữ isGameOver vào để thằng Thắng bấm "Tiếp tục" nó lơ mẹ vụ chờ tiền luôn!
-    if (room.winner && room.status !== "waiting" && isGameOver) {
+    if (room.winner && room.status !== "waiting") {
         btn.className = ""; 
         btn.style.background = "#636e72";
         btn.style.color = "#dfe6e9";
@@ -16815,7 +16835,6 @@ window.closeExpSummary = function() {
     const modal = document.getElementById('exp-summary-modal');
     if(modal) modal.classList.remove('show');
 
-    // NẾU CÓ EXP CHỜ NHẬN
     if (window.finalNewExpToAnimate !== undefined) {
         window.spawnExpEffect(window.pendingSessionEXP > 0);
         window.updateExpBarUI(window.finalNewExpToAnimate); 
@@ -16827,35 +16846,13 @@ window.closeExpSummary = function() {
 
         loadWalletBalance().catch(()=>{});
 
-        // NẾU NÃY BẤM NÚT NÀO THÌ XỬ LÝ THEO LUỒNG ĐÓ
-        if (typeof pendingExitAfterExp !== 'undefined' && pendingExitAfterExp) {
-            pendingExitAfterExp = false; 
-            
-            if (pendingExitActionType === 'tieptuc') {
-                // ĐỢI HẠT BAY 1.5S XONG LÀ MỞ BẢNG SS LUÔN, KHÔNG BẬT BẢNG ĐẾM 5 GIÂY LÀM LÔZ GÌ NỮA!
-                setTimeout(() => {
-                    executePlayNextMatch();
-                }, 1500); 
-            } else {
-                // CHỈ THOÁT TRẬN MỚI CẦN BẬT BẢNG ĐẾM 5 GIÂY ẢO TƯỞNG CỦA MẦY LÊN
-                setTimeout(() => {
-                    if (typeof showExitCountdown === 'function') showExitCountdown('thoat');
-                }, 1500);
-            }
-        }
-    } 
-    // NẾU KHÔNG CÓ EXP MÀ BẢNG BÁO CÁO BỊ BẬT VÌ LỖI GÌ ĐÓ (HOẶC VÁN HÒA, THUA KÉO DÀI)
-    else {
-        if (typeof pendingExitAfterExp !== 'undefined' && pendingExitAfterExp) {
-            pendingExitAfterExp = false;
-            
-            if (pendingExitActionType === 'tieptuc') {
-                // GỌI THẲNG LUÔN, KHÔNG CHỜ
-                executePlayNextMatch();
-            } else {
-                if (typeof showExitCountdown === 'function') showExitCountdown('thoat');
-            }
-        }
+        // Đợi hạt bay 1.5 giây xong thì gọi đếm 5 giây rồi văng ra sảnh
+        setTimeout(() => {
+            if (typeof showExitCountdown === 'function') showExitCountdown('thoat');
+        }, 1500); 
+    } else {
+        // Có lỗi đéo có hạt thì đếm 5 giây luôn
+        if (typeof showExitCountdown === 'function') showExitCountdown('thoat');
     }
 };
 
