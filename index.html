@@ -5319,6 +5319,88 @@ margin-bottom: 14px;
     z-index: 20000;
     box-shadow: 0 0 15px #ff3bd4;
 }
+/* --- BẢNG BÁO CÁO KẾT QUẢ KHI RA SẢNH --- */
+#exp-summary-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 25000;
+    backdrop-filter: blur(5px);
+}
+
+#exp-summary-modal.show {
+    display: flex;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.exp-summary-box {
+    background: linear-gradient(180deg, #1f1f1f, #0a0a0a);
+    border: 2px solid #55efc4;
+    border-radius: 20px;
+    padding: 25px;
+    width: min(90vw, 380px);
+    text-align: center;
+    box-shadow: 0 0 30px rgba(85, 239, 196, 0.4);
+    transform: translateY(-50px);
+    animation: slideDown 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.exp-summary-title {
+    color: #ffd166;
+    font-size: 24px;
+    font-weight: 900;
+    margin-bottom: 20px;
+    letter-spacing: 2px;
+    text-shadow: 0 0 10px rgba(255, 209, 102, 0.5);
+}
+
+.exp-summary-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 15px;
+    font-size: 16px;
+    border-bottom: 1px dashed #333;
+    padding-bottom: 5px;
+}
+
+.exp-summary-row span:first-child {
+    color: #b2bec3;
+    font-weight: bold;
+}
+
+.exp-summary-row span:last-child {
+    color: #fff;
+    font-weight: 900;
+}
+
+.val-win { color: #55efc4 !important; }
+.val-loss { color: #ff7675 !important; }
+.val-exp { color: #fd79a8 !important; font-size: 20px;}
+
+.exp-summary-btn {
+    margin-top: 20px;
+    background: linear-gradient(180deg, #00c38a, #008f67);
+    color: #fff;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 900;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0, 195, 138, 0.4);
+    transition: 0.2s;
+}
+
+.exp-summary-btn:active {
+    transform: scale(0.95);
+}
+
+@keyframes slideDown {
+    to { transform: translateY(0); }
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -5349,6 +5431,34 @@ margin-bottom: 14px;
         <div id="rename-notice" style="color:#ffeaa7; font-size:12px; min-height:18px; margin-bottom:12px;"></div>
 
         <button onclick="saveProfile()" style="width:100%;">LƯU HỒ SƠ</button>
+    </div>
+</div>
+<!-- Popup Báo Cáo EXP -->
+<div id="exp-summary-modal">
+    <div class="exp-summary-box">
+        <div class="exp-summary-title">TỔNG KẾT TRẬN CHIẾN</div>
+        
+        <div class="exp-summary-row">
+            <span>Tổng số ván đã đánh:</span>
+            <span id="summary-total-match">0</span>
+        </div>
+        <div class="exp-summary-row">
+            <span>Thắng:</span>
+            <span id="summary-win" class="val-win">0</span>
+        </div>
+        <div class="exp-summary-row">
+            <span>Thua:</span>
+            <span id="summary-loss" class="val-loss">0</span>
+        </div>
+        <div class="exp-summary-row" style="border-bottom: none; margin-top: 10px;">
+            <span>TỔNG EXP:</span>
+            <span id="summary-exp" class="val-exp">+0</span>
+        </div>
+        <div class="exp-summary-row" style="border-bottom: none; justify-content: center;">
+             <span id="summary-level" style="color: #ffd166; font-size: 18px;">Cấp hiện tại: 1</span>
+        </div>
+
+        <button class="exp-summary-btn" onclick="closeExpSummary()">XÁC NHẬN</button>
     </div>
 </div>
 <div id="avatar-skin-shop-modal" class="modal" style="display:none;">
@@ -16366,8 +16476,10 @@ async function claimLevelChest(targetLevel, btnElement) {
     loadWalletBalance();
     renderLevelRewards();
 }
-// --- BỘ NÃO LOGIC LUYỆN CẤP LŨY TIẾN V2 (BAO LỖI ĐỎ) ---
+// --- BỘ NÃO LOGIC LUYỆN CẤP LŨY TIẾN V3 (CÓ BÁO CÁO) ---
 window.pendingSessionEXP = 0; 
+window.sessionWins = 0;
+window.sessionLosses = 0;
 
 window.getTotalExpForLevel = function(level) {
     return (level * (level - 1) / 2) * 100; 
@@ -16380,21 +16492,28 @@ window.getLevelFromExp = function(totalExp) {
 
 window.getExpByResult = function(result) {
     if (result === 'win') {
+        window.sessionWins++; // Lưu ngầm số ván thắng
         const dailyCount = Number(localStorage.getItem('daily_matches_mc') || 0);
         let gain = Math.max(2, 30 - (dailyCount * 2.5));
         localStorage.setItem('daily_matches_mc', dailyCount + 1);
         return Math.floor(gain);
     }
-    return -5; // Thua bị trừ 5 điểm
+    window.sessionLosses++; // Lưu ngầm số ván thua
+    return -5; 
 };
 
 window.applyPendingExpToDatabase = async function() {
-    if (!window.pendingSessionEXP || window.pendingSessionEXP === 0) return;
+    // Không có EXP thì đéo làm gì cả
+    if (!window.pendingSessionEXP || window.pendingSessionEXP === 0) {
+        window.sessionWins = 0;
+        window.sessionLosses = 0;
+        return; 
+    }
+
     const walletKey = makeWalletDbKey();
     const userRef = db.ref("wallets/" + walletKey);
     
     try {
-        // Đổi transaction thành once + update để né đụng độ với hàm StatsV2 của mầy
         const snap = await userRef.once("value");
         const current = snap.val() || {};
 
@@ -16402,18 +16521,55 @@ window.applyPendingExpToDatabase = async function() {
         let newExp = Math.max(0, oldExp + window.pendingSessionEXP);
         let newLevel = window.getLevelFromExp(newExp);
 
+        // HIỂN THỊ BẢNG BÁO CÁO TRƯỚC KHI LƯU
+        window.showExpSummary(newLevel);
+
         await userRef.update({
             exp: newExp,
             level: newLevel
         });
 
         window.spawnExpEffect(window.pendingSessionEXP > 0);
-        window.pendingSessionEXP = 0; // Trả về 0 sau khi lưu thành công
+        
+        // Reset lại để cày mẻ mới
+        window.pendingSessionEXP = 0; 
+        window.sessionWins = 0;
+        window.sessionLosses = 0;
         
         window.updateExpBarUI(newExp); 
     } catch (err) {
         console.error("Lỗi lưu EXP:", err);
     }
+};
+
+window.showExpSummary = function(currentLevel) {
+    const modal = document.getElementById('exp-summary-modal');
+    if(!modal) return;
+
+    const totalMatches = window.sessionWins + window.sessionLosses;
+    const expSymbol = window.pendingSessionEXP > 0 ? '+' : '';
+
+    document.getElementById('summary-total-match').innerText = totalMatches;
+    document.getElementById('summary-win').innerText = window.sessionWins;
+    document.getElementById('summary-loss').innerText = window.sessionLosses;
+    
+    const expEl = document.getElementById('summary-exp');
+    expEl.innerText = expSymbol + window.pendingSessionEXP;
+    // Đổi màu tùy thắng thua tổng
+    if(window.pendingSessionEXP > 0) {
+        expEl.className = "val-win";
+    } else {
+        expEl.className = "val-loss";
+    }
+
+    document.getElementById('summary-level').innerText = `Cấp hiện tại: ${currentLevel}`;
+
+    modal.classList.add('show');
+};
+
+window.closeExpSummary = function() {
+    const modal = document.getElementById('exp-summary-modal');
+    if(modal) modal.classList.remove('show');
 };
 
 window.spawnExpEffect = function(isWin) {
