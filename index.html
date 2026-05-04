@@ -6780,13 +6780,13 @@ async function backToMenu() {
         if (!confirm("Thoát ván đấu này? Mày sẽ bị xử thua đó!")) return;
     }
 
-    // 3. ÉP CHUYỂN GIAO DIỆN RA SẢNH NGAY LẬP TỨC (Chống đơ màn hình)
+    // 3. ÉP CHUYỂN GIAO DIỆN RA SẢNH NGAY LẬP TỨC (Xóa sạch mọi độ trễ)
     document.getElementById("game-arena").style.display = "none";
     showHomeUI();
     closeArenaFriendBox();
     renderRoomInviteOverlay();
 
-    // 4. HIỆN BẢNG CỘNG EXP VÀO GIỮA MÀN HÌNH SẢNH LUÔN CHO NGẦU
+    // 4. CÓ ĐIỂM EXP THÌ BẬT BẢNG BÁO CÁO (Nó sẽ đè lên màn hình sảnh chờ)
     if (window.pendingSessionEXP && window.pendingSessionEXP !== 0) {
         if (typeof window.applyPendingExpToDatabase === 'function') {
             window.applyPendingExpToDatabase();
@@ -6805,19 +6805,17 @@ async function backToMenu() {
         currentRoomBucket = null;
         currentRoomStatus = null;
         setPlayerPresence("home").catch(() => {});
-        clearInterval(interval);
-        clearInterval(readyInterval);
         document.body.classList.remove("spectator-mode");
         isSpectatorMode = false;
-        return;
+    } 
+    // 6. THOÁT ĐỐI VỚI NGƯỜI CHƠI (Để lệnh dọn phòng chạy ngầm đằng sau)
+    else {
+        leaveRealtimeMatch().then(() => {
+            setPlayerPresence("home").catch(() => {});
+        });
     }
 
-    // 6. THOÁT ĐỐI VỚI NGƯỜI CHƠI (Xóa chữ 'await' để nó ngầm dọn Firebase, không làm lag giao diện)
-    leaveRealtimeMatch().then(() => {
-        setPlayerPresence("home").catch(() => {});
-    });
-
-    // 7. TẮT ĐỒNG HỒ VÀ NHẠC
+    // 7. DỌN RÁC: TẮT ĐỒNG HỒ VÀ NHẠC
     clearInterval(interval);
     clearInterval(readyInterval);
     sounds.bgm.pause();
