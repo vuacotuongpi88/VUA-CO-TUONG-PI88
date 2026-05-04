@@ -9873,9 +9873,11 @@ async function loadWalletBalance() {
 
         // 🔥 THÊM ĐOẠN NÀY VÀO: ĐỂ THANH EXP CẬP NHẬT ĐÚNG CẤP LÚC MỚI VÀO GAME
         if (typeof window.updateExpBarUI === 'function') {
-            // FIX: ĐÓNG BĂNG THANH EXP TRONG TRẬN VÀ LÚC VỪA CỘNG ĐIỂM!
-            if ((!window.pendingSessionEXP || window.pendingSessionEXP === 0) && !window.__blockExpUpdateFromFirebase) {
+            // FIX TRIỆT ĐỂ: Chỉ tải EXP đúng 1 lần lúc mới vào game.
+            // Cấm tải đè lung tung trong lúc chơi để chống giật lùi!
+            if (!window.__expBarInitialized) {
                 window.updateExpBarUI(data.exp || 0);
+                window.__expBarInitialized = true;
             }
         }
 
@@ -16569,24 +16571,19 @@ window.closeExpSummary = function() {
     const modal = document.getElementById('exp-summary-modal');
     if(modal) modal.classList.remove('show');
 
+    // 🔥 KHI BẤM NÚT XÁC NHẬN -> MỚI NỔ HIỆU ỨNG VÀ CHẠY THANH EXP
     if (window.finalNewExpToAnimate !== undefined) {
         window.spawnExpEffect(window.pendingSessionEXP > 0);
         window.updateExpBarUI(window.finalNewExpToAnimate); 
         
+        // Chạy xong hết rồi mới reset mẻ cày
         window.pendingSessionEXP = 0; 
         window.sessionWins = 0;
         window.sessionLosses = 0;
         window.finalNewExpToAnimate = undefined;
 
-        // 🔥 FIX LỖI TỤT THANH EXP: 
-        // Thay vì gọi loadWalletBalance() ngay lập tức, ta sẽ khóa nó lại trong 2 giây
-        // để Firebase kịp lưu điểm mới, tránh tải nhầm điểm cũ đập ngược lại giao diện.
-        window.__blockExpUpdateFromFirebase = true;
+        // Load lại ví hiển thị cho mượt (Giờ an toàn tuyệt đối, đéo lo bị đè EXP nữa)
         loadWalletBalance().catch(()=>{});
-        
-        setTimeout(() => {
-            window.__blockExpUpdateFromFirebase = false;
-        }, 2000);
     }
 };
 
