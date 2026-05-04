@@ -5280,7 +5280,45 @@ margin-bottom: 14px;
 }
 .player-v2-record-line .v2-win { color: #7dffb3; }
 .player-v2-record-line .v2-loss { color: #ffb3b3; }
-
+/* --- HỆ THỐNG LEVEL & EXP CHUẨN --- */
+#exp-bar-container {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 8px;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 15000;
+}
+#exp-bar-fill {
+    width: 0%; 
+    height: 100%;
+    background: linear-gradient(90deg, #7b2ff7, #ff3bd4, #f4c542);
+    box-shadow: 0 0 15px #7b2ff7;
+    transition: width 0.8s ease-out;
+}
+#exp-text-float {
+    position: fixed;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    font-weight: 900;
+    color: #ffeaa7;
+    text-shadow: 2px 2px 4px #000;
+    pointer-events: none;
+    z-index: 15001;
+    letter-spacing: 1px;
+}
+.exp-particle {
+    position: fixed;
+    width: 20px;
+    height: 20px;
+    background: radial-gradient(circle, #ff3bd4, #7b2ff7);
+    border-radius: 50%;
+    z-index: 20000;
+    box-shadow: 0 0 15px #ff3bd4;
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -5288,6 +5326,8 @@ margin-bottom: 14px;
 </script>
 </head>
 <body>
+    <div id="exp-bar-container"><div id="exp-bar-fill"></div></div>
+<div id="exp-text-float">CẤP 1: 0/100 EXP</div>
 <div id="edit-profile-modal" class="modal" style="display:none;">
     <div class="modal-content">
         <span class="close" onclick="closeEditProfile()">&times;</span>
@@ -6576,6 +6616,11 @@ function selectGame(mode) {
 }
 
 async function backToMenu() {
+    // Gọi lệnh cộng dồn EXP ngay khi người chơi bấm thoát phòng
+    if (typeof applyPendingExpToDatabase === 'function') {
+        applyPendingExpToDatabase();
+    }
+    
     if (isSpectatorMode) {
         cleanupRoomListeners();
         clearActiveMatchSnapshot();
@@ -6846,6 +6891,16 @@ function endGame(main, sub) {
     isGameOver = true;
     clearInterval(interval);
     clearInterval(readyInterval);
+
+    // --- CHÈN ĐOẠN NÀY VÀO ---
+    if (!isSpectatorMode) {
+        if (sub.includes("THẮNG")) {
+            pendingSessionEXP += getExpByResult('win');
+        } else if (sub.includes("THUA")) {
+            pendingSessionEXP += getExpByResult('loss');
+        }
+    }
+    // ------------------------
 
     if (sounds.bgm) sounds.bgm.pause();
     if (sounds.heartbeat) sounds.heartbeat.pause();
@@ -16058,6 +16113,77 @@ setInterval(() => {
 }, 10000); 
 // Đổi mẹ thành 10 giây đi, 12 giây dọn rác nó nhạy quá nó hốt nhầm!
 </script>
+// --- LOGIC LUYỆN CẤP LŨY TIẾN MC ---
+let pendingSessionEXP = 0; 
+
+function getTotalExpForLevel(level) {
+    return (level * (level - 1) / 2) * 100; 
+}
+
+function getLevelFromExp(totalExp) {
+    let level = Math.floor((1 + Math.sqrt(1 + 8 * totalExp / 100)) / 2);
+    return Math.min(180, level);
+}
+
+function getExpByResult(result) {
+    if (result === 'win') {
+        const dailyCount = Number(localStorage.getItem('daily_matches_mc') || 0);
+        let gain = Math.max(2, 30 - (dailyCount * 2.5));
+        localStorage.setItem('daily_matches_mc', dailyCount + 1);
+        return Math.floor(gain);
+    }
+    return -5; // Thua trừ 5
+}
+
+async function applyPendingExpToDatabase() {
+    if (pendingSessionEXP === 0) return;
+    const walletKey = makeWalletDbKey();
+    const userRef = db.ref("wallets/" + walletKey);
+    
+    await userRef.transaction((current) => {
+        if (!current) return current;
+        let oldExp = Number(current.exp || 0);
+        let newExp = Math.max(0, oldExp + pendingSessionEXP);
+        current.exp = newExp;
+        current.level = getLevelFromExp(newExp);
+        return current;
+    });
+
+    spawnExpEffect(pendingSessionEXP > 0);
+    pendingSessionEXP = 0;
+    // Tải lại ví và cập nhật thanh EXP ngay lập tức
+    loadWalletBalance().then(data => {
+        if(data && data.exp !== undefined) updateExpBarUI(data.exp);
+    });
+}
+
+function spawnExpEffect(isWin) {
+    const particle = document.createElement("div");
+    particle.className = "exp-particle";
+    particle.style.left = "50%";
+    particle.style.top = "50%";
+    if(!isWin) particle.style.background = "linear-gradient(#ff4757, #ff6b81)"; 
+    document.body.appendChild(particle);
+
+    particle.animate([
+        { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 },
+        { transform: `translate(${(Math.random()-0.5)*300}px, 600px) scale(0.5)`, opacity: 0 }
+    ], { duration: 1500, easing: 'ease-in-out' }).onfinish = () => particle.remove();
+}
+
+function updateExpBarUI(totalExp) {
+    const exp = Number(totalExp || 0);
+    let currentLevel = getLevelFromExp(exp);
+    let expStartOfLevel = getTotalExpForLevel(currentLevel);
+    let expForNextLevel = currentLevel * 100; 
+    let currentLevelProgress = exp - expStartOfLevel;
+    let pct = Math.min(100, Math.max(0, (currentLevelProgress / expForNextLevel) * 100));
+    
+    const fill = document.getElementById("exp-bar-fill");
+    const text = document.getElementById("exp-text-float");
+    if(fill) fill.style.width = pct + "%";
+    if(text) text.innerText = `CẤP ${currentLevel} • ${Math.floor(currentLevelProgress)} / ${expForNextLevel} EXP`;
+}
 </body>
 
 </html>
