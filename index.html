@@ -6725,14 +6725,9 @@ function selectGame(mode) {
     document.getElementById("game-arena").style.display = "block";
 }
 
-async function backToMenu() {
-    // XÓA CHỮ await ĐI ĐỂ NÓ CHẠY NGẦM, ĐÉO BỊ ĐỨNG HÌNH NỮA
-    if (typeof window.applyPendingExpToDatabase === 'function') {
-        window.applyPendingExpToDatabase();
-    }
-    
+async function processExit() {
+    hideVictoryPopup();
     if (isSpectatorMode) {
-// ... (giữ nguyên ở dưới)
         cleanupRoomListeners();
         clearActiveMatchSnapshot();
         currentRoomId = null;
@@ -6742,18 +6737,11 @@ async function backToMenu() {
         currentRoomStakePMC = 0;
         currentRoomBucket = null;
         currentRoomStatus = null;
-        await setPlayerPresence("home").catch(() => {});
-        showHomeUI();
-        document.getElementById("game-arena").style.display = "none";
-        clearInterval(interval);
-        clearInterval(readyInterval);
-        return;
+    } else {
+        await leaveRealtimeMatch();
     }
-
-    if (!confirm("Thoát ván đấu này?")) return;
-
-    await leaveRealtimeMatch();
-    await setPlayerPresence("home");
+    
+    await setPlayerPresence("home").catch(() => {});
     showHomeUI();
     closeArenaFriendBox();
     renderRoomInviteOverlay();
@@ -6770,6 +6758,51 @@ async function backToMenu() {
     if (chatContent) {
         chatContent.innerHTML = '<p style="color:#55efc4;">Hệ thống: Vào việc đi mậy!</p>';
     }
+    
+    if (isSpectatorMode) {
+        document.body.classList.remove("spectator-mode");
+        isSpectatorMode = false;
+    }
+}
+
+async function backToMenu() {
+    // NẾU LÀ KHÁN GIẢ THÌ THOÁT LUÔN ĐÉO CÓ EXP
+    if (isSpectatorMode) {
+        await processExit();
+        return;
+    }
+
+    // NẾU ĐANG CHƠI GIỮA CHỪNG MÀ BẤM THOÁT (BỎ CHẠY) THÌ HỎI LẠI CHO CHẮC
+    if (!isGameOver) {
+        if (!confirm("Thoát ván đấu này?")) return;
+    }
+
+    // NẾU CÓ EXP CHƯA NHẬN -> MỞ BẢNG BÁO CÁO TRƯỚC, CHỜ BẤM XÁC NHẬN MỚI THOÁT
+    if (window.pendingSessionEXP && window.pendingSessionEXP !== 0) {
+        hideVictoryPopup(); // Cất cái bảng Đỏ/Đen Thắng đi cho gọn
+        
+        // Mượn tạm hàm đóng bảng cũ để nhét thêm lệnh "thoát ra sảnh" vào
+        const oldClose = window.closeExpSummary;
+        
+        window.closeExpSummary = async function() {
+            oldClose(); // Chạy hàm gốc (hiện hạt exp bay bay, lên cấp...)
+            window.closeExpSummary = oldClose; // Trả lại hàm gốc cho lần sau
+            
+            // Đợi 1.5 giây cho hiệu ứng bay bay hoàn tất rồi mới cút ra sảnh
+            setTimeout(async () => {
+                await processExit();
+            }, 1500); 
+        };
+
+        // Kích hoạt việc lưu EXP (nó sẽ tự tính toán và mở bảng Báo Cáo lên)
+        if (typeof window.applyPendingExpToDatabase === 'function') {
+            window.applyPendingExpToDatabase();
+        }
+        return; // Ngắt luồng ở đây, không xuống dưới nữa. Phần ra sảnh nằm trong setTimeout ở trên rồi.
+    }
+
+    // NẾU ĐÉO CÓ EXP NÀO (VÍ DỤ VỪA VÀO BÀN RỒI THOÁT RA NGAY) THÌ RA SẢNH LUÔN
+    await processExit();
 }
 function shuffle(array) {
 let currentIndex = array.length, randomIndex;
