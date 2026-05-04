@@ -6617,11 +6617,12 @@ function selectGame(mode) {
 
 async function backToMenu() {
     // Gọi lệnh cộng dồn EXP ngay khi người chơi bấm thoát phòng
-    if (typeof applyPendingExpToDatabase === 'function') {
-        applyPendingExpToDatabase();
+    if (typeof window.applyPendingExpToDatabase === 'function') {
+        window.applyPendingExpToDatabase();
     }
     
     if (isSpectatorMode) {
+//... (Giữ nguyên đoạn dưới của mầy)
         cleanupRoomListeners();
         clearActiveMatchSnapshot();
         currentRoomId = null;
@@ -6957,6 +6958,11 @@ function hideVictoryPopup() {
 }
 // 🔥 FIX LỖI KẸT NÚT TIẾP TỤC: MẠNH MÁY THẰNG NÀO BẤM LÀ TỰ DỌN BÀN, ĐÉO ĐỢI NHAU NỮA!
 async function playNextMatch() {
+    // KHI BẤM TIẾP TỤC -> ĐẨY EXP CỦA VÁN VỪA XONG LÊN MẠNG
+    if (typeof window.applyPendingExpToDatabase === 'function') {
+        window.applyPendingExpToDatabase();
+    }
+
     hideVictoryPopup();
     clearInterval(interval);
     clearInterval(readyInterval);
@@ -9756,6 +9762,12 @@ async function loadWalletBalance() {
 
         updateBalanceUI(currentWalletBalance);
         updatePmcUI(currentPmcBalance);
+
+        // 🔥 THÊM ĐOẠN NÀY VÀO: ĐỂ THANH EXP CẬP NHẬT ĐÚNG CẤP LÚC MỚI VÀO GAME
+        if (typeof window.updateExpBarUI === 'function') {
+            window.updateExpBarUI(data.exp || 0);
+        }
+
         return { pi: currentWalletBalance, pmc: currentPmcBalance };
     } catch (err) {
         console.error("Lỗi load ví:", err);
