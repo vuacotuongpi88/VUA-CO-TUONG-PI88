@@ -16200,18 +16200,17 @@ function updateExpBarUI(totalExp) {
     if(fill) fill.style.width = pct + "%";
     if(text) text.innerText = `CẤP ${currentLevel} • ${Math.floor(currentLevelProgress)} / ${expForNextLevel} EXP`;
 }
-// 1. Cập nhật thêm thuộc tính 'icon' chứa link ảnh vào từng mốc
+// CẬP NHẬT: Thứ bậc rương chuẩn - Tím là VIP nhất
 const LEVEL_MILESTONES = [
-    { level: 10, name: 'Rương Tân Thủ', desc: 'Mở ngẫu nhiên 2 - 20 PMC', icon: 'images/ruong_dong.png' },
-    { level: 20, name: 'Rương Kỳ Thủ', desc: 'Mở ngẫu nhiên 4 - 40 PMC', icon: 'images/ruong_bac.png' },
-    { level: 30, name: 'Rương Đồng + Skin', desc: 'Thưởng ngẫu nhiên PMC & Mở khóa Skin Đồng', skinId: 'bronze', icon: 'images/avatar_frames/bronze-crown.png' },
-    { level: 60, name: 'Rương Bạch Kim + Skin', desc: 'Thưởng ngẫu nhiên PMC & Mở khóa Skin Ngọc', skinId: 'jade', icon: 'images/avatar_frames/jade-flower.png' },
-    { level: 90, name: 'Rương Kim Cương', desc: 'Thưởng ngẫu nhiên PMC (x5 giá trị)', icon: 'images/ruong_vang.png' },
-    { level: 120, name: 'Rương Rồng + Skin', desc: 'Thưởng ngẫu nhiên PMC & Mở khóa Skin Long Vương', skinId: 'dragon', icon: 'images/avatar_frames/dragon-frame.png' },
-    { level: 180, name: 'Rương Tối Thượng', desc: 'Thưởng ngẫu nhiên PMC & Mở khóa Skin Phượng Hoàng', skinId: 'phoenix', icon: 'images/avatar_frames/phoenix-frame.png' }
+    { level: 10, name: 'Rương Đồng', desc: 'Mở ngẫu nhiên 2 - 20 PMC', icon: 'images/ruong_dong.png', chestStyle: 'linear-gradient(135deg, #cd7f32, #8e4a23)', shadow: '#cd7f32' },
+    { level: 20, name: 'Rương Bạc', desc: 'Mở ngẫu nhiên 4 - 40 PMC', icon: 'images/ruong_bac.png', chestStyle: 'linear-gradient(135deg, #bdc3c7, #7f8c8d)', shadow: '#bdc3c7' },
+    { level: 30, name: 'Rương Vàng + Skin', desc: 'Thưởng PMC & Mở khóa Skin Đồng', skinId: 'bronze', icon: 'images/avatar_frames/bronze-crown.png', chestStyle: 'linear-gradient(135deg, #f1c40f, #e67e22)', shadow: '#f1c40f' },
+    { level: 60, name: 'Rương Bạch Kim + Skin', desc: 'Thưởng PMC & Mở khóa Skin Ngọc', skinId: 'jade', icon: 'images/avatar_frames/jade-flower.png', chestStyle: 'linear-gradient(135deg, #00b894, #0984e3)', shadow: '#00b894' },
+    { level: 90, name: 'Rương Kim Cương', desc: 'Thưởng ngẫu nhiên PMC (x5 giá trị)', icon: 'images/ruong_kim_cuong.png', chestStyle: 'linear-gradient(135deg, #74b9ff, #0984e3)', shadow: '#74b9ff' },
+    { level: 120, name: 'Rương Đỏ + Skin', desc: 'Thưởng PMC & Mở khóa Skin Long Vương', skinId: 'dragon', icon: 'images/avatar_frames/dragon-frame.png', chestStyle: 'linear-gradient(135deg, #ff4757, #c0392b)', shadow: '#ff4757' },
+    { level: 180, name: 'Rương Tím VIP + Skin', desc: 'Thưởng PMC KHỦNG & Skin Phượng Hoàng', skinId: 'phoenix', icon: 'images/avatar_frames/phoenix-frame.png', chestStyle: 'linear-gradient(135deg, #a55eea, #6c5ce7)', shadow: '#a55eea' }
 ];
 
-// 2. Chèn thẻ <img> vào giao diện
 async function renderLevelRewards() {
     const listEl = document.getElementById("level-reward-list");
     if (!listEl) return;
@@ -16251,13 +16250,18 @@ async function renderLevelRewards() {
         let progressPct = Math.min(100, (currentLevel / m.level) * 100).toFixed(0);
         if (isClaimed) progressPct = 100;
 
+        // VẼ RƯƠNG BẰNG CSS TẠM THỜI
+        let tempChestHtml = `
+            <div style="width: 46px; height: 46px; border-radius: 10px; background: ${m.chestStyle}; box-shadow: 0 0 12px ${m.shadow}; display: flex; align-items: center; justify-content: center; position: relative; border: 2px solid rgba(255,255,255,0.4);">
+                <div style="width: 16px; height: 10px; background: #fff; border-radius: 3px; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.3);"></div>
+            </div>
+        `;
+
         return `
         <div class="mission-card">
-            <!-- ĐÃ SỬA CHỖ NÀY: Thêm display: flex và thẻ <img> -->
             <div class="mission-card-head" style="display: flex; align-items: center; gap: 12px;">
-                
-                <!-- Hiển thị Icon Rương / Skin -->
-                <div style="width: 50px; height: 50px; flex-shrink: 0; background: rgba(0,0,0,0.5); border-radius: 12px; border: 1px solid #55efc4; display: flex; align-items: center; justify-content: center; overflow: hidden; box-shadow: 0 0 10px rgba(85, 239, 196, 0.2);">
+                <!-- Icon Avatar/Skin trên góc -->
+                <div style="width: 45px; height: 45px; flex-shrink: 0; background: rgba(0,0,0,0.5); border-radius: 12px; border: 1px solid #55efc4; display: flex; align-items: center; justify-content: center; overflow: hidden; box-shadow: 0 0 10px rgba(85, 239, 196, 0.2);">
                     <img src="${m.icon}" alt="reward" style="width: 100%; height: 100%; object-fit: contain; transform: scale(1.1);" onerror="this.src='images/do_tuong.png'">
                 </div>
 
@@ -16276,9 +16280,23 @@ async function renderLevelRewards() {
             <div class="mission-card-progress-bar">
                 <div class="mission-card-progress-fill" style="width:${progressPct}%; background:${isReady ? 'linear-gradient(90deg, #f1c40f, #e67e22)' : ''}"></div>
             </div>
-            <div class="mission-card-footer">
-                <button class="${btnClass}" ${onclick} ${isLocked || isClaimed ? "disabled" : ""} style="width:100%;">${btnText}</button>
+            
+            <!-- ĐÃ SỬA CHỖ NÀY: CHIA LÀM 2 Ô -->
+            <div class="mission-card-footer" style="display: flex; gap: 12px; align-items: stretch; margin-top: 14px;">
+                
+                <!-- Ô BÊN TRÁI: RƯƠNG -->
+                <div style="flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); border-radius: 12px; padding: 0 10px; border: 1px dashed rgba(85, 239, 196, 0.3);">
+                    
+                    ${tempChestHtml} 
+                    <!-- SAU NÀY CÓ ẢNH THẬT THÌ MẦY XÓA BIẾN \${tempChestHtml} Ở TRÊN ĐI, RỒI NHÉT THẺ NÀY VÀO: -->
+                    <!-- <img src="images/ruong_cap_${m.level}.png" style="width: 46px; height: 46px; object-fit: contain;"> -->
+                
+                </div>
+
+                <!-- Ô BÊN PHẢI: NÚT NHẬN -->
+                <button class="${btnClass}" ${onclick} ${isLocked || isClaimed ? "disabled" : ""} style="flex: 1; margin: 0; min-height: 48px;">${btnText}</button>
             </div>
+
         </div>`;
     }).join("");
 }
