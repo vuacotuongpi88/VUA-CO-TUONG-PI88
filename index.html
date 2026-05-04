@@ -6616,13 +6616,13 @@ function selectGame(mode) {
 }
 
 async function backToMenu() {
-    // THÊM CHỮ AWAIT VÀO ĐÂY NÈ MẬY
+    // XÓA CHỮ await ĐI ĐỂ NÓ CHẠY NGẦM, ĐÉO BỊ ĐỨNG HÌNH NỮA
     if (typeof window.applyPendingExpToDatabase === 'function') {
-        await window.applyPendingExpToDatabase();
+        window.applyPendingExpToDatabase();
     }
     
     if (isSpectatorMode) {
-// ... giữ nguyên phần dưới
+// ... (giữ nguyên ở dưới)
         cleanupRoomListeners();
         clearActiveMatchSnapshot();
         currentRoomId = null;
@@ -6958,9 +6958,9 @@ function hideVictoryPopup() {
 }
 // 🔥 FIX LỖI KẸT NÚT TIẾP TỤC: MẠNH MÁY THẰNG NÀO BẤM LÀ TỰ DỌN BÀN, ĐÉO ĐỢI NHAU NỮA!
 async function playNextMatch() {
-    // THÊM CHỮ AWAIT VÀO ĐÂY NỮA
+    // XÓA CHỮ await ĐI
     if (typeof window.applyPendingExpToDatabase === 'function') {
-        await window.applyPendingExpToDatabase();
+        window.applyPendingExpToDatabase();
     }
 
     hideVictoryPopup();
