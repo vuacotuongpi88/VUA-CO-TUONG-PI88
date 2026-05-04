@@ -16200,24 +16200,24 @@ function updateExpBarUI(totalExp) {
     if(fill) fill.style.width = pct + "%";
     if(text) text.innerText = `CẤP ${currentLevel} • ${Math.floor(currentLevelProgress)} / ${expForNextLevel} EXP`;
 }
-// Cấu hình các mốc Rương
+// 1. Cập nhật thêm thuộc tính 'icon' chứa link ảnh vào từng mốc
 const LEVEL_MILESTONES = [
-    { level: 10, name: 'Rương Tân Thủ', desc: 'Mở ngẫu nhiên 2 - 20 PMC' },
-    { level: 20, name: 'Rương Kỳ Thủ', desc: 'Mở ngẫu nhiên 4 - 40 PMC' },
-    { level: 30, name: 'Rương Đồng + Skin', desc: 'Thưởng ngẫu nhiên PMC & Mở khóa Skin Đồng', skinId: 'bronze' },
-    { level: 60, name: 'Rương Bạch Kim + Skin', desc: 'Thưởng ngẫu nhiên PMC & Mở khóa Skin Ngọc', skinId: 'jade' },
-    { level: 90, name: 'Rương Kim Cương', desc: 'Thưởng ngẫu nhiên PMC (x5 giá trị)' },
-    { level: 120, name: 'Rương Rồng + Skin', desc: 'Thưởng ngẫu nhiên PMC & Mở khóa Skin Long Vương', skinId: 'dragon' },
-    { level: 180, name: 'Rương Tối Thượng', desc: 'Thưởng ngẫu nhiên PMC & Mở khóa Skin Phượng Hoàng', skinId: 'phoenix' }
+    { level: 10, name: 'Rương Tân Thủ', desc: 'Mở ngẫu nhiên 2 - 20 PMC', icon: 'images/ruong_dong.png' },
+    { level: 20, name: 'Rương Kỳ Thủ', desc: 'Mở ngẫu nhiên 4 - 40 PMC', icon: 'images/ruong_bac.png' },
+    { level: 30, name: 'Rương Đồng + Skin', desc: 'Thưởng ngẫu nhiên PMC & Mở khóa Skin Đồng', skinId: 'bronze', icon: 'images/avatar_frames/bronze-crown.png' },
+    { level: 60, name: 'Rương Bạch Kim + Skin', desc: 'Thưởng ngẫu nhiên PMC & Mở khóa Skin Ngọc', skinId: 'jade', icon: 'images/avatar_frames/jade-flower.png' },
+    { level: 90, name: 'Rương Kim Cương', desc: 'Thưởng ngẫu nhiên PMC (x5 giá trị)', icon: 'images/ruong_vang.png' },
+    { level: 120, name: 'Rương Rồng + Skin', desc: 'Thưởng ngẫu nhiên PMC & Mở khóa Skin Long Vương', skinId: 'dragon', icon: 'images/avatar_frames/dragon-frame.png' },
+    { level: 180, name: 'Rương Tối Thượng', desc: 'Thưởng ngẫu nhiên PMC & Mở khóa Skin Phượng Hoàng', skinId: 'phoenix', icon: 'images/avatar_frames/phoenix-frame.png' }
 ];
 
+// 2. Chèn thẻ <img> vào giao diện
 async function renderLevelRewards() {
     const listEl = document.getElementById("level-reward-list");
     if (!listEl) return;
 
     listEl.innerHTML = '<div style="color:#55efc4; text-align:center; grid-column: 1/-1;">Đang tải rương...</div>';
 
-    // Lấy cấp độ từ Firebase
     const walletKey = makeWalletDbKey();
     const snap = await db.ref("wallets/" + walletKey).once("value");
     const userData = snap.val() || {};
@@ -16245,7 +16245,6 @@ async function renderLevelRewards() {
             btnClass += " ready";
             badgeClass = "ready";
             badgeText = "Sẵn sàng";
-            // Gọi hàm mở rương kèm hiệu ứng nổ tiền
             onclick = `onclick="claimLevelChest(${m.level}, this)"`;
         }
 
@@ -16254,13 +16253,22 @@ async function renderLevelRewards() {
 
         return `
         <div class="mission-card">
-            <div class="mission-card-head">
-                <div>
+            <!-- ĐÃ SỬA CHỖ NÀY: Thêm display: flex và thẻ <img> -->
+            <div class="mission-card-head" style="display: flex; align-items: center; gap: 12px;">
+                
+                <!-- Hiển thị Icon Rương / Skin -->
+                <div style="width: 50px; height: 50px; flex-shrink: 0; background: rgba(0,0,0,0.5); border-radius: 12px; border: 1px solid #55efc4; display: flex; align-items: center; justify-content: center; overflow: hidden; box-shadow: 0 0 10px rgba(85, 239, 196, 0.2);">
+                    <img src="${m.icon}" alt="reward" style="width: 100%; height: 100%; object-fit: contain; transform: scale(1.1);" onerror="this.src='images/do_tuong.png'">
+                </div>
+
+                <div style="flex: 1;">
                     <div class="mission-card-title" style="color:${isReady ? '#f4c542' : '#fff8d6'}">${m.name}</div>
                     <div class="mission-card-desc">${m.desc}</div>
                 </div>
-                <div class="mission-card-badge ${badgeClass}">${badgeText}</div>
+                
+                <div class="mission-card-badge ${badgeClass}" style="flex-shrink: 0;">${badgeText}</div>
             </div>
+
             <div class="mission-card-progress-line">
                 <span>Tiến độ: Cấp ${currentLevel}/${m.level}</span>
                 <span>${progressPct}%</span>
@@ -16269,7 +16277,7 @@ async function renderLevelRewards() {
                 <div class="mission-card-progress-fill" style="width:${progressPct}%; background:${isReady ? 'linear-gradient(90deg, #f1c40f, #e67e22)' : ''}"></div>
             </div>
             <div class="mission-card-footer">
-                <button class="${btnClass}" ${onclick} ${isLocked || isClaimed ? "disabled" : ""}>${btnText}</button>
+                <button class="${btnClass}" ${onclick} ${isLocked || isClaimed ? "disabled" : ""} style="width:100%;">${btnText}</button>
             </div>
         </div>`;
     }).join("");
