@@ -6888,19 +6888,20 @@ function refreshTimerRings() {
 
 
 function endGame(main, sub) {
-    isGameOver = true;
+isGameOver = true;
     clearInterval(interval);
     clearInterval(readyInterval);
 
-    // --- CHÈN ĐOẠN NÀY VÀO ---
-    if (!isSpectatorMode) {
-        if (sub.includes("THẮNG")) {
-            pendingSessionEXP += getExpByResult('win');
-        } else if (sub.includes("THUA")) {
-            pendingSessionEXP += getExpByResult('loss');
+    // --- XÓA CÁI LỖI ĐI VÀ DÁN ĐOẠN NÀY VÀO ---
+    if (!isSpectatorMode && sub.includes("THẮNG")) {
+        let winnerSide = sub.includes("ĐỎ") ? "do" : "den";
+        if (mySide === winnerSide) {
+            window.pendingSessionEXP = (window.pendingSessionEXP || 0) + window.getExpByResult('win'); 
+        } else {
+            window.pendingSessionEXP = (window.pendingSessionEXP || 0) + window.getExpByResult('loss'); 
         }
     }
-    // ------------------------
+    // ------------------------------------------
 
     if (sounds.bgm) sounds.bgm.pause();
     if (sounds.heartbeat) sounds.heartbeat.pause();
@@ -16355,6 +16356,79 @@ async function claimLevelChest(targetLevel, btnElement) {
     loadWalletBalance();
     renderLevelRewards();
 }
+// --- BỘ NÃO LOGIC LUYỆN CẤP LŨY TIẾN V2 (BAO LỖI ĐỎ) ---
+window.pendingSessionEXP = 0; 
+
+window.getTotalExpForLevel = function(level) {
+    return (level * (level - 1) / 2) * 100; 
+};
+
+window.getLevelFromExp = function(totalExp) {
+    let level = Math.floor((1 + Math.sqrt(1 + 8 * totalExp / 100)) / 2);
+    return Math.min(180, level);
+};
+
+window.getExpByResult = function(result) {
+    if (result === 'win') {
+        const dailyCount = Number(localStorage.getItem('daily_matches_mc') || 0);
+        let gain = Math.max(2, 30 - (dailyCount * 2.5));
+        localStorage.setItem('daily_matches_mc', dailyCount + 1);
+        return Math.floor(gain);
+    }
+    return -5; // Thua bị trừ 5 điểm
+};
+
+window.applyPendingExpToDatabase = async function() {
+    if (!window.pendingSessionEXP || window.pendingSessionEXP === 0) return;
+    const walletKey = makeWalletDbKey();
+    const userRef = db.ref("wallets/" + walletKey);
+    
+    let finalExp = 0;
+    await userRef.transaction((current) => {
+        current = current || {}; // Cứu cánh nếu ví chưa có data
+        let oldExp = Number(current.exp || 0);
+        let newExp = Math.max(0, oldExp + window.pendingSessionEXP);
+        
+        current.exp = newExp;
+        current.level = window.getLevelFromExp(newExp);
+        finalExp = newExp; 
+        
+        return current;
+    });
+
+    window.spawnExpEffect(window.pendingSessionEXP > 0);
+    window.pendingSessionEXP = 0; // Trả về 0 sau khi lưu
+    
+    window.updateExpBarUI(finalExp); 
+};
+
+window.spawnExpEffect = function(isWin) {
+    const particle = document.createElement("div");
+    particle.className = "exp-particle";
+    particle.style.left = "50%";
+    particle.style.top = "50%";
+    if(!isWin) particle.style.background = "linear-gradient(#ff4757, #ff6b81)"; 
+    document.body.appendChild(particle);
+
+    particle.animate([
+        { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 },
+        { transform: `translate(${(Math.random()-0.5)*300}px, 600px) scale(0.5)`, opacity: 0 }
+    ], { duration: 1500, easing: 'ease-in-out' }).onfinish = () => particle.remove();
+};
+
+window.updateExpBarUI = function(totalExp) {
+    const exp = Number(totalExp || 0);
+    let currentLevel = window.getLevelFromExp(exp);
+    let expStartOfLevel = window.getTotalExpForLevel(currentLevel);
+    let expForNextLevel = currentLevel * 100; 
+    let currentLevelProgress = exp - expStartOfLevel;
+    let pct = Math.min(100, Math.max(0, (currentLevelProgress / expForNextLevel) * 100));
+    
+    const fill = document.getElementById("exp-bar-fill");
+    const text = document.getElementById("exp-text-float");
+    if(fill) fill.style.width = pct + "%";
+    if(text) text.innerText = `CẤP ${currentLevel} • ${Math.floor(currentLevelProgress)} / ${expForNextLevel} EXP`;
+};
 </script>
 </body>
 
