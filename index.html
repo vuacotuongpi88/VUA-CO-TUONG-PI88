@@ -7134,12 +7134,14 @@ function showExitCountdown(action) {
         }
     }, 1000);
 }
-// HÀM 1: BẤM NÚT TIẾP TỤC SAU KHI XONG VÁN
+let pendingExitAfterExp = false; // Cờ đánh dấu đang muốn thoát sau khi xem EXP
+
+// 1. NÚT TIẾP TỤC SAU KHI XONG VÁN (SIÊU TỐC)
 function playNextMatch() {
-    showExitCountdown('tieptuc'); // Bật đếm ngược 5 giây
+    // Ép vô ván luôn, dẹp cái đếm 5 giây đi cho lẹ!
+    executePlayNextMatch(); 
 }
 
-// Ruột xử lý thực sự của nút Tiếp Tục (chạy sau khi đếm 5s xong)
 async function executePlayNextMatch() {
     clearInterval(interval);
     clearInterval(readyInterval);
@@ -7157,22 +7159,25 @@ async function executePlayNextMatch() {
         return;
     }
 
-    // Tối ưu tốc độ: Chỉ dọn bàn cờ trên màn hình hiển thị
-    // Việc clear Firebase nhường cho scheduleResetWinnerRoomAfterPaid nó chạy ngầm
+    // Dọn bàn trên màn hình NGAY LẬP TỨC
     clearRealtimeBoardVisualOnly();
 
     readyDo = false;
     readyDen = false;
-    isGameOver = false;
+    isGameOver = false; // Ép gỡ game over để UI đéo khóa chữ "Đang chia thưởng"
     selectedPiece = null;
+    currentRoomStatus = "waiting"; // Ép local state thành waiting ngay lập tức
 
-    // Ép bật bảng Sẵn Sàng ngay lập tức cho khỏi chờ
+    // Việc dọn DB trên Firebase cứ kệ mẹ cho hàm scheduleResetWinnerRoomAfterPaid nó chạy ngầm.
+    loadWalletBalance().catch(()=>{});
+
+    // Mở bảng Sẵn Sàng ngay lập tức
     showReadyOverlay(currentRoomMode || "co-tuong", true);
-    updateReadyUI(); // Gọi update để UI tự phán đoán "Đang chia thưởng"
+    updateReadyUI();
 }
 
 // ----------------------------------------------------
-// HÀM 2: BẤM NÚT THOÁT TRẬN 
+// 2. NÚT THOÁT TRẬN (KẾT HỢP EXP VÀ CHỜ 5 GIÂY)
 async function backToMenu() {
     if (isSpectatorMode) {
         showExitCountdown('thoat');
@@ -7187,28 +7192,16 @@ async function backToMenu() {
 
     // NẾU CÓ EXP CHƯA NHẬN -> MỞ BẢNG BÁO CÁO TRƯỚC
     if (window.pendingSessionEXP && window.pendingSessionEXP !== 0) {
-        const oldClose = window.closeExpSummary;
-        window.closeExpSummary = function() {
-            oldClose(); // Chạy hàm gốc (hiện hạt exp bay bay)
-            window.closeExpSummary = oldClose; // Trả hàm gốc lại
-            
-            // Đợi 1.5 giây cho hạt EXP rớt vô thanh xong rồi mới bật đếm 5s
-            setTimeout(() => {
-                showExitCountdown('thoat');
-            }, 1500); 
-        };
-
-        // Gọi hàm lưu EXP -> Tự động bật bảng Thống kê lên
+        pendingExitAfterExp = true; // Cắm cờ để lát nữa tắt bảng EXP nó biết đường gọi đếm 5s
         if (typeof window.applyPendingExpToDatabase === 'function') {
             window.applyPendingExpToDatabase();
         }
     } else {
-        // Đéo có EXP (ví dụ chưa đánh đã thoát) thì đếm 5s luôn
+        // Đéo có EXP thì gọi đếm 5 giây luôn
         showExitCountdown('thoat');
     }
 }
 
-// Ruột xử lý thực sự của nút Thoát Trận (chạy sau khi đếm 5s xong)
 async function executeBackToMenu() {
     document.getElementById("game-arena").style.display = "none";
     showHomeUI();
@@ -7245,10 +7238,6 @@ async function executeBackToMenu() {
 }
 
 function exitAfterMatch() {
-    backToMenu();
-}
-function exitAfterMatch() {
-    hideVictoryPopup();
     backToMenu();
 }
 function getViewSide() {
@@ -11901,8 +11890,9 @@ function updateReadyUI() {
 
     const room = window.__lastBoundRoom || {};
     
-    // NẾU VÁN VỪA XONG MÀ CHƯA DỌN FIREBASE XONG (ĐANG CHIA TIỀN)
-    if (room.winner && room.status !== "waiting") {
+  // NẾU VÁN VỪA XONG MÀ CHƯA DỌN FIREBASE XONG (ĐANG CHIA TIỀN)
+    // SỬA Ở ĐÂY: Thêm chữ isGameOver vào để thằng Thắng bấm "Tiếp tục" nó lơ mẹ vụ chờ tiền luôn!
+    if (room.winner && room.status !== "waiting" && isGameOver) {
         btn.className = ""; 
         btn.style.background = "#636e72";
         btn.style.color = "#dfe6e9";
@@ -11914,7 +11904,6 @@ function updateReadyUI() {
         if (countdownEl) countdownEl.textContent = "--";
         return;
     }
-
     // NẾU TRONG PHÒNG CHỈ CÓ 1 MÌNH
     const isAlone = (!room.players?.do || !room.players?.den);
     if (isAlone) {
@@ -16727,14 +16716,26 @@ window.closeExpSummary = function() {
         window.spawnExpEffect(window.pendingSessionEXP > 0);
         window.updateExpBarUI(window.finalNewExpToAnimate); 
         
-        // Chạy xong hết rồi mới reset mẻ cày
         window.pendingSessionEXP = 0; 
         window.sessionWins = 0;
         window.sessionLosses = 0;
         window.finalNewExpToAnimate = undefined;
 
-        // Load lại ví hiển thị cho mượt (Giờ an toàn tuyệt đối, đéo lo bị đè EXP nữa)
         loadWalletBalance().catch(()=>{});
+
+        // NẾU CÓ CẮM CỜ THOÁT TRẬN -> CHỜ HẠT BAY XONG MỚI BẬT ĐẾM 5 GIÂY
+        if (typeof pendingExitAfterExp !== 'undefined' && pendingExitAfterExp) {
+            pendingExitAfterExp = false; 
+            setTimeout(() => {
+                if (typeof showExitCountdown === 'function') showExitCountdown('thoat');
+            }, 1500); // 1.5 giây cho hạt rớt vô lỗ
+        }
+    } else {
+        // NẾU LỖI ĐÉO CÓ EXP MÀ VẪN BẤM XÁC NHẬN THÌ CŨNG ĐẾM LUÔN CHO CHẮC
+        if (typeof pendingExitAfterExp !== 'undefined' && pendingExitAfterExp) {
+            pendingExitAfterExp = false;
+            if (typeof showExitCountdown === 'function') showExitCountdown('thoat');
+        }
     }
 };
 
