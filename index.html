@@ -6769,63 +6769,6 @@ async function processExitToLobby() {
     }
 }
 
-async function backToMenu() {
-    // 1. DỌN BẢNG CHIẾU BÍ VÀ BẢNG SẴN SÀNG NGAY TỨC THÌ
-    hideVictoryPopup();
-    const overlay = document.getElementById("ready-overlay");
-    if (overlay) overlay.style.display = "none";
-
-    // 2. CHỈ HỎI XÁC NHẬN NẾU ĐANG ĐÁNH DỞ. Đánh xong rồi thì im lặng cho thoát!
-    if (!isGameOver && currentRoomStatus === 'playing' && !isSpectatorMode) {
-        if (!confirm("Thoát ván đấu này? Mày sẽ bị xử thua đó!")) return;
-    }
-
-    // 3. ÉP CHUYỂN GIAO DIỆN RA SẢNH NGAY LẬP TỨC (Xóa sạch mọi độ trễ)
-    document.getElementById("game-arena").style.display = "none";
-    showHomeUI();
-    closeArenaFriendBox();
-    renderRoomInviteOverlay();
-
-    // 4. CÓ ĐIỂM EXP THÌ BẬT BẢNG BÁO CÁO (Nó sẽ đè lên màn hình sảnh chờ)
-    if (window.pendingSessionEXP && window.pendingSessionEXP !== 0) {
-        if (typeof window.applyPendingExpToDatabase === 'function') {
-            window.applyPendingExpToDatabase();
-        }
-    }
-
-    // 5. THOÁT ĐỐI VỚI KHÁN GIẢ
-    if (isSpectatorMode) {
-        cleanupRoomListeners();
-        clearActiveMatchSnapshot();
-        currentRoomId = null;
-        mySide = null;
-        viewSide = "do";
-        currentRoomMode = null;
-        currentRoomStakePMC = 0;
-        currentRoomBucket = null;
-        currentRoomStatus = null;
-        setPlayerPresence("home").catch(() => {});
-        document.body.classList.remove("spectator-mode");
-        isSpectatorMode = false;
-    } 
-    // 6. THOÁT ĐỐI VỚI NGƯỜI CHƠI (Để lệnh dọn phòng chạy ngầm đằng sau)
-    else {
-        leaveRealtimeMatch().then(() => {
-            setPlayerPresence("home").catch(() => {});
-        });
-    }
-
-    // 7. DỌN RÁC: TẮT ĐỒNG HỒ VÀ NHẠC
-    clearInterval(interval);
-    clearInterval(readyInterval);
-    sounds.bgm.pause();
-    sounds.heartbeat.pause();
-
-    const chatContent = document.getElementById("match-content-popup");
-    if (chatContent) {
-        chatContent.innerHTML = '<p style="color:#55efc4;">Hệ thống: Vào việc đi mậy!</p>';
-    }
-}
 function exitAfterMatch() {
     backToMenu(); // Chạy thẳng vào logic an toàn ở trên
 }
@@ -7124,12 +7067,82 @@ function hideVictoryPopup() {
     wrap.style.transform = "translate(-50%, -50%) scale(0)";
     wrap.style.pointerEvents = "none";
 }
-// 🔥 FIX LỖI KẸT NÚT TIẾP TỤC: MẠNH MÁY THẰNG NÀO BẤM LÀ TỰ DỌN BÀN, ĐÉO ĐỢI NHAU NỮA!
-async function playNextMatch() {
-    // Tao kiêu mầy XÓA SẠCH cái đoạn window.applyPendingExpToDatabase() ở đây đi!
-    // Xóa xong thì khi bấm Tiếp Tục nó chỉ dọn bàn thôi, EXP thắng/thua được cộng dồn ngầm.
+// --- BỘ ĐẾM NGƯỢC 5 GIÂY CHỐNG LAG ---
+let exitCountdownTimer = null;
+let pendingExitAction = null; 
 
+function showExitCountdown(action) {
+    // Ẩn mấy cái popup đi cho gọn
     hideVictoryPopup();
+    const overlay = document.getElementById("ready-overlay");
+    if (overlay) overlay.style.display = "none";
+    
+    pendingExitAction = action;
+    const modal = document.getElementById('exit-countdown-modal');
+    const numEl = document.getElementById('exit-countdown-number');
+    const btnEl = document.getElementById('exit-countdown-btn');
+    const titleEl = document.getElementById('exit-countdown-title');
+    
+    if(!modal) return;
+    
+    if (action === 'tieptuc') {
+        titleEl.innerText = "ĐANG DỌN BÀN...";
+    } else {
+        titleEl.innerText = "ĐANG LƯU KẾT QUẢ...";
+    }
+
+    modal.style.display = 'flex';
+    btnEl.disabled = true;
+    btnEl.style.background = '#636e72';
+    btnEl.style.color = '#dfe6e9';
+    btnEl.style.cursor = 'not-allowed';
+    btnEl.innerText = "ĐANG ĐỒNG BỘ...";
+    
+    let timeLeft = 5; // Cài 5 giây theo ý mầy!
+    numEl.innerText = timeLeft;
+    numEl.style.color = "#ff7675";
+    
+    clearInterval(exitCountdownTimer);
+    exitCountdownTimer = setInterval(() => {
+        timeLeft--;
+        numEl.innerText = timeLeft;
+        
+        if (timeLeft <= 0) {
+            clearInterval(exitCountdownTimer);
+            numEl.innerText = "OK";
+            numEl.style.color = "#55efc4";
+            
+            btnEl.disabled = false;
+            btnEl.style.background = 'linear-gradient(180deg, #00c38a, #008f67)';
+            btnEl.style.color = '#fff';
+            btnEl.style.cursor = 'pointer';
+            
+            if(action === 'tieptuc') {
+                btnEl.innerText = "BẤM VÀO ĐÂY ĐỂ CHƠI TIẾP";
+            } else {
+                btnEl.innerText = "BẤM VÀO ĐÂY ĐỂ RA SẢNH";
+            }
+            
+            btnEl.onclick = function() {
+                modal.style.display = 'none';
+                if (pendingExitAction === 'thoat') {
+                    executeBackToMenu();
+                } else if (pendingExitAction === 'tieptuc') {
+                    executePlayNextMatch();
+                }
+            };
+        }
+    }, 1000);
+}
+
+// ----------------------------------------------------
+// HÀM 1: BẤM NÚT TIẾP TỤC SAU KHI XONG VÁN
+function playNextMatch() {
+    showExitCountdown('tieptuc'); // Bật đếm ngược 5 giây
+}
+
+// Ruột xử lý thực sự của nút Tiếp Tục (chạy sau khi đếm xong)
+async function executePlayNextMatch() {
     clearInterval(interval);
     clearInterval(readyInterval);
     readyOverlayWaitingShown = false;
@@ -7152,18 +7165,8 @@ async function playNextMatch() {
     const snap = await db.ref("matches/" + roomId).once("value");
     const room = snap.val() || {};
 
-    // NẾU BÀN CHƯA DỌN (TỨC LÀ CÒN DÍNH KẾT QUẢ WINNER HOẶC FINISHED)
-    // Thằng nào bấm Tiếp tục trước thì thằng đó thay mặt hệ thống dọn bàn luôn!
     if (room.winner || room.status === "finished") {
-        const stake = Math.max(0, Math.floor(Number(room.stakePMC || 0)));
-        
-        // Trừ hao 1.5 giây cho Firebase nó phát tiền cho thằng thắng xong xuôi
-        if (room.winner !== "hoa" && stake > 0 && room.settlement?.paid !== true) {
-            console.log("Đợi chút cho tiền về ví rồi mới dọn bàn...");
-            await new Promise(res => setTimeout(res, 1500));
-        }
-
-        // RESET SẠCH SẼ FIREBASE VỀ TRẠNG THÁI WAITING
+        // Đã có 5 giây bảo kê ở ngoài nên chỗ này dọn Firebase thả ga đéo sợ lag!
         await db.ref("matches/" + roomId).update({
             status: "waiting",
             turn: "do",
@@ -7184,7 +7187,6 @@ async function playNextMatch() {
         });
     }
 
-    // Load lại ví cho chắc cốp
     await loadWalletBalance().catch(()=>{});
 
     readyDo = false;
@@ -7192,8 +7194,69 @@ async function playNextMatch() {
     isGameOver = false;
     selectedPiece = null;
 
-    // Ép giao diện mở bảng Sẵn Sàng ngay lập tức
     showReadyOverlay(currentRoomMode || "co-tuong", true);
+}
+
+
+// ----------------------------------------------------
+// HÀM 2: BẤM NÚT THOÁT TRẬN 
+async function backToMenu() {
+    // Khán giả đéo có dữ liệu gì để lưu, cho thoát ngay lập tức khỏi chờ
+    if (isSpectatorMode) {
+        executeBackToMenu();
+        return;
+    }
+
+    // Nếu trận đang đánh dở (chưa chiếu bí) thì hỏi xác nhận. Nhấn OK mới cho vô đếm 5 giây
+    if (!isGameOver && currentRoomStatus === 'playing') {
+        if (!confirm("Thoát ván đấu này? Mày sẽ bị xử thua đó!")) return;
+    }
+
+    showExitCountdown('thoat'); // Bật đếm ngược 5 giây
+}
+
+// Ruột xử lý thực sự của nút Thoát Trận (chạy sau khi đếm xong)
+async function executeBackToMenu() {
+    document.getElementById("game-arena").style.display = "none";
+    showHomeUI();
+    closeArenaFriendBox();
+    renderRoomInviteOverlay();
+
+    // CHỖ NÀY CỰC QUAN TRỌNG: Hiện bảng EXP và thanh ánh sáng (nếu có EXP)
+    if (window.pendingSessionEXP && window.pendingSessionEXP !== 0) {
+        if (typeof window.applyPendingExpToDatabase === 'function') {
+            window.applyPendingExpToDatabase();
+        }
+    }
+
+    if (isSpectatorMode) {
+        cleanupRoomListeners();
+        clearActiveMatchSnapshot();
+        currentRoomId = null;
+        mySide = null;
+        viewSide = "do";
+        currentRoomMode = null;
+        currentRoomStakePMC = 0;
+        currentRoomBucket = null;
+        currentRoomStatus = null;
+        setPlayerPresence("home").catch(() => {});
+        document.body.classList.remove("spectator-mode");
+        isSpectatorMode = false;
+    } else {
+        leaveRealtimeMatch().then(() => {
+            setPlayerPresence("home").catch(() => {});
+        });
+    }
+
+    clearInterval(interval);
+    clearInterval(readyInterval);
+    sounds.bgm.pause();
+    sounds.heartbeat.pause();
+
+    const chatContent = document.getElementById("match-content-popup");
+    if (chatContent) {
+        chatContent.innerHTML = '<p style="color:#55efc4;">Hệ thống: Vào việc đi mậy!</p>';
+    }
 }
 function exitAfterMatch() {
     hideVictoryPopup();
@@ -16681,7 +16744,17 @@ window.updateExpBarUI = function(totalExp) {
     if(fill) fill.style.width = pct + "%";
     if(text) text.innerText = `CẤP ${currentLevel} • ${Math.floor(currentLevelProgress)} / ${expForNextLevel} EXP`;
 };
+
 </script>
+<!-- BẢNG ĐẾM NGƯỢC CHỜ 5 GIÂY (CHỐNG LAG FIREBASE) -->
+<div id="exit-countdown-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:99999; align-items:center; justify-content:center; backdrop-filter:blur(5px);">
+    <div style="background: linear-gradient(180deg, #1f1f1f, #0a0a0a); border: 2px solid #55efc4; border-radius: 20px; padding: 25px; width: min(80vw, 320px); text-align: center; box-shadow: 0 0 30px rgba(85, 239, 196, 0.4);">
+        <h3 style="color:#ffd166; margin-top:0; letter-spacing:1px;" id="exit-countdown-title">ĐANG LƯU KẾT QUẢ...</h3>
+        <p style="color:#b2bec3; font-size:13px; line-height:1.5;">Hệ thống đang đồng bộ dữ liệu với máy chủ để tránh lỗi mất điểm và tài sản.</p>
+        <div id="exit-countdown-number" style="font-size: 60px; font-weight: 900; color: #ff7675; margin: 15px 0; text-shadow: 0 0 15px rgba(255, 118, 117, 0.6);">5</div>
+        <button id="exit-countdown-btn" disabled style="width:100%; background: #636e72; color: #dfe6e9; padding: 12px; border-radius: 12px; font-size: 16px; font-weight: 900; cursor: not-allowed; border:none; transition: 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">ĐANG ĐỒNG BỘ...</button>
+    </div>
+</div>
 </body>
 
 </html>
