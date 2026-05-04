@@ -6958,10 +6958,8 @@ function hideVictoryPopup() {
 }
 // 🔥 FIX LỖI KẸT NÚT TIẾP TỤC: MẠNH MÁY THẰNG NÀO BẤM LÀ TỰ DỌN BÀN, ĐÉO ĐỢI NHAU NỮA!
 async function playNextMatch() {
-    // XÓA CHỮ await ĐI
-    if (typeof window.applyPendingExpToDatabase === 'function') {
-        window.applyPendingExpToDatabase();
-    }
+    // Tao kiêu mầy XÓA SẠCH cái đoạn window.applyPendingExpToDatabase() ở đây đi!
+    // Xóa xong thì khi bấm Tiếp Tục nó chỉ dọn bàn thôi, EXP thắng/thua được cộng dồn ngầm.
 
     hideVictoryPopup();
     clearInterval(interval);
