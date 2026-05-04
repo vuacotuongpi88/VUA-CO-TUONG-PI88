@@ -16815,6 +16815,7 @@ window.closeExpSummary = function() {
     const modal = document.getElementById('exp-summary-modal');
     if(modal) modal.classList.remove('show');
 
+    // NẾU CÓ EXP CHỜ NHẬN
     if (window.finalNewExpToAnimate !== undefined) {
         window.spawnExpEffect(window.pendingSessionEXP > 0);
         window.updateExpBarUI(window.finalNewExpToAnimate); 
@@ -16826,21 +16827,30 @@ window.closeExpSummary = function() {
 
         loadWalletBalance().catch(()=>{});
 
+        // NẾU NÃY BẤM NÚT NÀO THÌ XỬ LÝ THEO LUỒNG ĐÓ
         if (typeof pendingExitAfterExp !== 'undefined' && pendingExitAfterExp) {
             pendingExitAfterExp = false; 
-            setTimeout(() => {
-                // PHÂN LUỒNG TẠI ĐÂY
-                if (pendingExitActionType === 'tieptuc') {
-                    executePlayNextMatch(); // Vô luôn bảng SS
-                } else {
-                    if (typeof showExitCountdown === 'function') showExitCountdown('thoat'); // Thoát thì đếm 5s
-                }
-            }, 1500); 
+            
+            if (pendingExitActionType === 'tieptuc') {
+                // ĐỢI HẠT BAY 1.5S XONG LÀ MỞ BẢNG SS LUÔN, KHÔNG BẬT BẢNG ĐẾM 5 GIÂY LÀM LÔZ GÌ NỮA!
+                setTimeout(() => {
+                    executePlayNextMatch();
+                }, 1500); 
+            } else {
+                // CHỈ THOÁT TRẬN MỚI CẦN BẬT BẢNG ĐẾM 5 GIÂY ẢO TƯỞNG CỦA MẦY LÊN
+                setTimeout(() => {
+                    if (typeof showExitCountdown === 'function') showExitCountdown('thoat');
+                }, 1500);
+            }
         }
-    } else {
+    } 
+    // NẾU KHÔNG CÓ EXP MÀ BẢNG BÁO CÁO BỊ BẬT VÌ LỖI GÌ ĐÓ (HOẶC VÁN HÒA, THUA KÉO DÀI)
+    else {
         if (typeof pendingExitAfterExp !== 'undefined' && pendingExitAfterExp) {
             pendingExitAfterExp = false;
+            
             if (pendingExitActionType === 'tieptuc') {
+                // GỌI THẲNG LUÔN, KHÔNG CHỜ
                 executePlayNextMatch();
             } else {
                 if (typeof showExitCountdown === 'function') showExitCountdown('thoat');
