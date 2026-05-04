@@ -6616,13 +6616,13 @@ function selectGame(mode) {
 }
 
 async function backToMenu() {
-    // Gọi lệnh cộng dồn EXP ngay khi người chơi bấm thoát phòng
+    // THÊM CHỮ AWAIT VÀO ĐÂY NÈ MẬY
     if (typeof window.applyPendingExpToDatabase === 'function') {
-        window.applyPendingExpToDatabase();
+        await window.applyPendingExpToDatabase();
     }
     
     if (isSpectatorMode) {
-//... (Giữ nguyên đoạn dưới của mầy)
+// ... giữ nguyên phần dưới
         cleanupRoomListeners();
         clearActiveMatchSnapshot();
         currentRoomId = null;
@@ -6958,9 +6958,9 @@ function hideVictoryPopup() {
 }
 // 🔥 FIX LỖI KẸT NÚT TIẾP TỤC: MẠNH MÁY THẰNG NÀO BẤM LÀ TỰ DỌN BÀN, ĐÉO ĐỢI NHAU NỮA!
 async function playNextMatch() {
-    // KHI BẤM TIẾP TỤC -> ĐẨY EXP CỦA VÁN VỪA XONG LÊN MẠNG
+    // THÊM CHỮ AWAIT VÀO ĐÂY NỮA
     if (typeof window.applyPendingExpToDatabase === 'function') {
-        window.applyPendingExpToDatabase();
+        await window.applyPendingExpToDatabase();
     }
 
     hideVictoryPopup();
@@ -16395,23 +16395,27 @@ window.applyPendingExpToDatabase = async function() {
     const walletKey = makeWalletDbKey();
     const userRef = db.ref("wallets/" + walletKey);
     
-    let finalExp = 0;
-    await userRef.transaction((current) => {
-        current = current || {}; // Cứu cánh nếu ví chưa có data
+    try {
+        // Đổi transaction thành once + update để né đụng độ với hàm StatsV2 của mầy
+        const snap = await userRef.once("value");
+        const current = snap.val() || {};
+
         let oldExp = Number(current.exp || 0);
         let newExp = Math.max(0, oldExp + window.pendingSessionEXP);
-        
-        current.exp = newExp;
-        current.level = window.getLevelFromExp(newExp);
-        finalExp = newExp; 
-        
-        return current;
-    });
+        let newLevel = window.getLevelFromExp(newExp);
 
-    window.spawnExpEffect(window.pendingSessionEXP > 0);
-    window.pendingSessionEXP = 0; // Trả về 0 sau khi lưu
-    
-    window.updateExpBarUI(finalExp); 
+        await userRef.update({
+            exp: newExp,
+            level: newLevel
+        });
+
+        window.spawnExpEffect(window.pendingSessionEXP > 0);
+        window.pendingSessionEXP = 0; // Trả về 0 sau khi lưu thành công
+        
+        window.updateExpBarUI(newExp); 
+    } catch (err) {
+        console.error("Lỗi lưu EXP:", err);
+    }
 };
 
 window.spawnExpEffect = function(isWin) {
