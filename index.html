@@ -6770,45 +6770,64 @@ async function processExitToLobby() {
 }
 
 async function backToMenu() {
-    // 1. NẾU LÀ KHÁN GIẢ THÌ THOÁT LUÔN ĐÉO CÓ BÁO CÁO EXP
-    if (isSpectatorMode) {
-        await processExitToLobby();
-        return;
-    }
+    // 1. DỌN BẢNG CHIẾU BÍ VÀ BẢNG SẴN SÀNG NGAY TỨC THÌ
+    hideVictoryPopup();
+    const overlay = document.getElementById("ready-overlay");
+    if (overlay) overlay.style.display = "none";
 
-    // 2. NẾU ĐANG ĐÁNH GIỮA CHỪNG MÀ BẤM THOÁT -> HỎI XÁC NHẬN
-    // (Chặn cái confirm ngu học này khi ván cờ ĐÃ KẾT THÚC để chống đơ máy)
-    if (!isGameOver) {
+    // 2. CHỈ HỎI XÁC NHẬN NẾU ĐANG ĐÁNH DỞ. Đánh xong rồi thì im lặng cho thoát!
+    if (!isGameOver && currentRoomStatus === 'playing' && !isSpectatorMode) {
         if (!confirm("Thoát ván đấu này? Mày sẽ bị xử thua đó!")) return;
     }
 
-    // 3. DỌN BẢNG CHIẾU BÍ LẬP TỨC
-    hideVictoryPopup(); 
+    // 3. ÉP CHUYỂN GIAO DIỆN RA SẢNH NGAY LẬP TỨC (Chống đơ màn hình)
+    document.getElementById("game-arena").style.display = "none";
+    showHomeUI();
+    closeArenaFriendBox();
+    renderRoomInviteOverlay();
 
-    // 4. KIỂM TRA XEM CÓ EXP CHƯA NHẬN KHÔNG
+    // 4. HIỆN BẢNG CỘNG EXP VÀO GIỮA MÀN HÌNH SẢNH LUÔN CHO NGẦU
     if (window.pendingSessionEXP && window.pendingSessionEXP !== 0) {
-        // Đổi ruột hàm đóng bảng Báo Cáo EXP để nó tự ra sảnh
-        const oldClose = window.closeExpSummary;
-        window.closeExpSummary = async function() {
-            oldClose(); // Chạy hiệu ứng bay hạt, lên cấp...
-            window.closeExpSummary = oldClose; // Trả lại như cũ
-            
-            // Đợi 1.5 giây cho hạt EXP bay xong rồi mới cút ra sảnh
-            setTimeout(async () => {
-                await processExitToLobby();
-            }, 1500); 
-        };
-
-        // Gọi hàm lưu EXP -> Tự động bật bảng Thống kê lên
         if (typeof window.applyPendingExpToDatabase === 'function') {
             window.applyPendingExpToDatabase();
         }
-    } else {
-        // NẾU KHÔNG CÓ EXP THÌ THOÁT THẲNG RA SẢNH LUÔN
-        await processExitToLobby();
+    }
+
+    // 5. THOÁT ĐỐI VỚI KHÁN GIẢ
+    if (isSpectatorMode) {
+        cleanupRoomListeners();
+        clearActiveMatchSnapshot();
+        currentRoomId = null;
+        mySide = null;
+        viewSide = "do";
+        currentRoomMode = null;
+        currentRoomStakePMC = 0;
+        currentRoomBucket = null;
+        currentRoomStatus = null;
+        setPlayerPresence("home").catch(() => {});
+        clearInterval(interval);
+        clearInterval(readyInterval);
+        document.body.classList.remove("spectator-mode");
+        isSpectatorMode = false;
+        return;
+    }
+
+    // 6. THOÁT ĐỐI VỚI NGƯỜI CHƠI (Xóa chữ 'await' để nó ngầm dọn Firebase, không làm lag giao diện)
+    leaveRealtimeMatch().then(() => {
+        setPlayerPresence("home").catch(() => {});
+    });
+
+    // 7. TẮT ĐỒNG HỒ VÀ NHẠC
+    clearInterval(interval);
+    clearInterval(readyInterval);
+    sounds.bgm.pause();
+    sounds.heartbeat.pause();
+
+    const chatContent = document.getElementById("match-content-popup");
+    if (chatContent) {
+        chatContent.innerHTML = '<p style="color:#55efc4;">Hệ thống: Vào việc đi mậy!</p>';
     }
 }
-
 function exitAfterMatch() {
     backToMenu(); // Chạy thẳng vào logic an toàn ở trên
 }
