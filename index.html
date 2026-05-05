@@ -5454,11 +5454,19 @@ margin-bottom: 14px;
             <span>TỔNG EXP:</span>
             <span id="summary-exp" class="val-exp">+0</span>
         </div>
-        <div class="exp-summary-row" style="border-bottom: none; justify-content: center;">
+       <div class="exp-summary-row" style="border-bottom: none; justify-content: center;">
              <span id="summary-level" style="color: #ffd166; font-size: 18px;">Cấp hiện tại: 1</span>
         </div>
 
-        <button class="exp-summary-btn" onclick="closeExpSummary()">XÁC NHẬN</button>
+        <!-- CỤM NÚT MỚI Ở ĐÂY -->
+        <div id="exp-summary-actions" style="margin-top: 20px; display: flex; flex-direction: column; gap: 10px; align-items: center;">
+            <button id="btn-buy-back-exp" class="exp-summary-btn" style="display:none; background: linear-gradient(180deg, #e17055, #d63031); width: 100%;" onclick="buyBackExp()">
+                MUA LẠI EXP (10s)
+            </button>
+            <button id="btn-confirm-exp" class="exp-summary-btn" style="width: 100%; margin-top: 0;" onclick="closeExpSummary()">
+                XÁC NHẬN <span id="exp-countdown-text"></span>
+            </button>
+        </div>
     </div>
 </div>
 <div id="avatar-skin-shop-modal" class="modal" style="display:none;">
@@ -16701,6 +16709,8 @@ window.applyPendingExpToDatabase = async function() {
         window.showExpSummary(window.getLevelFromExp(window.finalNewExpToAnimate));
     }
 };
+window.expSummaryTimerInt = null;
+
 window.showExpSummary = function(currentLevel) {
     const modal = document.getElementById('exp-summary-modal');
     if(!modal) return;
@@ -16715,18 +16725,109 @@ window.showExpSummary = function(currentLevel) {
     const expEl = document.getElementById('summary-exp');
     expEl.innerText = expSymbol + window.pendingSessionEXP;
     
+    const btnBuyBack = document.getElementById('btn-buy-back-exp');
+    const countdownText = document.getElementById('exp-countdown-text');
+    
+    clearInterval(window.expSummaryTimerInt);
+    
+    // NẾU THẮNG
     if(window.pendingSessionEXP > 0) {
         expEl.className = "val-win";
-    } else {
+        if(btnBuyBack) btnBuyBack.style.display = 'none';
+        if(countdownText) countdownText.innerText = "";
+    } 
+    // NẾU THUA (Có điểm âm)
+    else if (window.pendingSessionEXP < 0) {
         expEl.className = "val-loss";
+        const costPMC = Math.abs(window.pendingSessionEXP);
+        
+        if(btnBuyBack) {
+            btnBuyBack.style.display = 'block';
+            btnBuyBack.innerText = `GIỮ LẠI BẰNG ${costPMC} PMC`;
+            btnBuyBack.disabled = false;
+        }
+
+        // Đếm ngược 10 giây
+        let timeLeft = 10;
+        if(countdownText) countdownText.innerText = `(${timeLeft}s)`;
+        
+        window.expSummaryTimerInt = setInterval(() => {
+            timeLeft--;
+            if(countdownText) countdownText.innerText = `(${timeLeft}s)`;
+            
+            if(timeLeft <= 0) {
+                clearInterval(window.expSummaryTimerInt);
+                window.closeExpSummary(); // Hết 10s tự động chốt đơn (trừ EXP)
+            }
+        }, 1000);
+    } 
+    // NẾU HÒA HOẶC KHÔNG CÓ EXP
+    else {
+        expEl.className = "val-loss";
+        if(btnBuyBack) btnBuyBack.style.display = 'none';
+        if(countdownText) countdownText.innerText = "";
     }
 
     document.getElementById('summary-level').innerText = `Cấp hiện tại: ${currentLevel}`;
-
     modal.classList.add('show');
 };
 
+window.buyBackExp = async function() {
+    clearInterval(window.expSummaryTimerInt); // Dừng đếm ngược ngay
+    const costPMC = Math.abs(window.pendingSessionEXP);
+    
+    if (costPMC <= 0) return;
+
+    const currentPmc = getPmcBalance();
+    if (currentPmc < costPMC) {
+        alert("Mầy không đủ PMC để mua lại EXP!");
+        window.closeExpSummary(); // Nghèo thì chịu khó bị trừ EXP
+        return;
+    }
+
+    const btn = document.getElementById('btn-buy-back-exp');
+    if(btn) {
+        btn.innerText = "ĐANG XỬ LÝ...";
+        btn.disabled = true;
+    }
+
+    try {
+        const walletKey = makeWalletDbKey();
+        const adminWallet = "pi_admin_master"; // Ví hệ thống
+
+        // Trừ tiền thằng chơi
+        const paid = await adjustPmcWalletByKey(walletKey, -costPMC);
+        if (paid == null) throw new Error("Trừ PMC lỗi");
+
+        // Chuyển cho Admin (Lỗi cũng kệ, tiền ra khỏi túi người chơi là đc)
+        try {
+            await adjustPmcWalletByKey(adminWallet, costPMC);
+            await db.ref("walletTransactions").push({
+                type: "buy_back_exp_after_loss", 
+                walletKey: walletKey, 
+                adminWalletKey: adminWallet,
+                feePMC: costPMC, 
+                createdAt: Date.now(), 
+                status: "done"
+            });
+        } catch(e) {}
+
+        alert(`Chuyển khoản thành công! Đã trừ ${costPMC} PMC. EXP của mày được bảo toàn.`);
+        
+        // Gán EXP chờ về 0 để hàm closeExpSummary ĐÉO trừ của nó nữa
+        window.pendingSessionEXP = 0; 
+        
+        window.closeExpSummary();
+
+    } catch (err) {
+        console.error("Lỗi mua lại EXP:", err);
+        alert("Lỗi khi mua lại EXP. Mạng yếu.");
+        window.closeExpSummary(); // Lỗi thì đành trừ EXP
+    }
+};
+
 window.closeExpSummary = function() {
+    clearInterval(window.expSummaryTimerInt); // Dọn dẹp timer
     const modal = document.getElementById('exp-summary-modal');
     if(modal) modal.classList.remove('show');
 
