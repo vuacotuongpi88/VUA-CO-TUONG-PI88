@@ -16655,44 +16655,39 @@ window.applyPendingExpToDatabase = async function() {
     const userRef = db.ref("wallets/" + walletKey);
     
     try {
-        let finalExp = 0;
-        let finalLevel = 1;
-
-        // Dùng transaction ôm TOÀN BỘ VÍ để:
-        // 1. Xếp hàng ngay ngắn với các hàm lưu khác (chống ghi đè cache)
-        // 2. Lấy được cục data thật trên Server trả về sau khi giao dịch
-        // 3. Cập nhật kèm updatedAt để qua mặt Luật bảo mật Firebase
-        const result = await userRef.transaction((wallet) => {
-            // Nếu local cache chưa load kịp, cứ cho nó 1 object rỗng để chạy tạm (Firebase sẽ đối chiếu Server và lấy số thật về chạy lại)
-            if (!wallet) wallet = {};
-            
-            let currentExp = Number(wallet.exp || 0);
-            wallet.exp = Math.max(0, currentExp + window.pendingSessionEXP);
-            wallet.level = window.getLevelFromExp(wallet.exp);
-            wallet.updatedAt = firebase.database.ServerValue.TIMESTAMP;
-
-            return wallet; 
-        });
-
-        // Sau khi Firebase Server duyệt giao dịch thành công
-        if (result.committed && result.snapshot && result.snapshot.val()) {
-            // Lấy CHÍNH XÁC con số cuối cùng đã chốt trên Server (Ví dụ: 14)
-            finalExp = Number(result.snapshot.val().exp || 0);
-            finalLevel = Number(result.snapshot.val().level || 1);
+        // 1. Phân loại cộng/trừ để đẩy lệnh an toàn nhất lên Server
+        if (window.pendingSessionEXP > 0) {
+            // Dùng increment: Server tự cộng dồn, qua mặt mọi loại cache sai lệch, ĐÉO bao giờ ghi đè!
+            await userRef.update({
+                exp: firebase.database.ServerValue.increment(window.pendingSessionEXP),
+                updatedAt: firebase.database.ServerValue.TIMESTAMP
+            });
         } else {
-            throw new Error("Giao dịch Firebase bị từ chối");
+            // Trừ điểm thì đọc số thật trước để ép về 0 nếu bị âm (chống bug EXP âm)
+            const expSnap = await userRef.child('exp').once('value');
+            let realExp = Number(expSnap.val() || 0);
+            await userRef.update({
+                exp: Math.max(0, realExp + window.pendingSessionEXP),
+                updatedAt: firebase.database.ServerValue.TIMESTAMP
+            });
         }
 
-        // Cập nhật lại Cache ở máy mầy chuẩn đét theo Server
+        // 2. CHỜ SERVER LÀM XONG -> KÉO CON SỐ CHUẨN ĐÉT VỀ CHO UI
+        const finalSnap = await userRef.child('exp').once('value');
+        let finalExp = Number(finalSnap.val() || 0);
+        let finalLevel = window.getLevelFromExp(finalExp);
+
+        // Cập nhật luôn level mới lên server cho đồng bộ
+        await userRef.update({ level: finalLevel });
+
+        // 3. Render UI bằng con số thật 100% từ Server
         localStorage.setItem('exp_cache', finalExp);
-        
-        // Bắn số thật ra thanh UI cho nó chạy
         window.finalNewExpToAnimate = finalExp;
         window.showExpSummary(finalLevel);
 
     } catch (err) {
-        console.error("Lỗi giao dịch EXP:", err);
-        // Fallback: Lỡ đứt cáp giữa chừng thì vẫn cộng ảo cho UI nó mượt
+        console.error("Lỗi lưu EXP:", err);
+        // Lỡ đứt cáp rớt mạng thì mới xài số ảo chạy tạm cho mượt UI
         let fallbackExp = Number(localStorage.getItem('exp_cache') || 0) + window.pendingSessionEXP;
         window.finalNewExpToAnimate = Math.max(0, fallbackExp);
         window.showExpSummary(window.getLevelFromExp(window.finalNewExpToAnimate));
