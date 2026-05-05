@@ -1587,11 +1587,15 @@ box-shadow: 0 5px 20px rgba(0, 0, 0, 0.8);
 }
 
 .desktop-ad-panel {
+    height: 260px; /* Fix chết chiều cao */
     min-height: 260px;
+    max-height: 260px;
     display: flex;
     flex-direction: column;
     justify-content: center;
     text-align: center;
+    padding: 0 !important; /* XÓA PADDING LUÔN */
+    overflow: hidden;
 }
 
 .desktop-ranking-panel {
@@ -2920,7 +2924,9 @@ color: transparent;
 
     .mobile-ad-banner {
         width: 88%;
-        min-height: 210px;
+        height: 220px; /* Fix chết chiều cao luôn, không cho nó giãn nữa */
+        min-height: 220px;
+        max-height: 220px;
         border: 2px dashed #55efc4;
         border-radius: 18px;
         background: rgba(0, 0, 0, 0.55);
@@ -2929,9 +2935,10 @@ color: transparent;
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        padding: 18px;
+        padding: 0; /* XÓA SẠCH PADDING Ở ĐÂY LÀ QUAN TRỌNG NHẤT */
         box-sizing: border-box;
         text-align: center;
+        overflow: hidden; /* Cắt sạch phần lòi ra ngoài */
     }
 
     .ad-title {
@@ -5428,6 +5435,7 @@ margin-bottom: 14px;
 .ad-slider-container {
     width: 100%;
     height: 100%;
+    min-height: 180px; /* Thêm cái này để bảo kê trên điện thoại không bị móp */
     position: relative;
     overflow: hidden;
     border-radius: 16px; /* Ôm theo viền khung */
