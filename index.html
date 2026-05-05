@@ -16655,37 +16655,37 @@ window.applyPendingExpToDatabase = async function() {
     const userRef = db.ref("wallets/" + walletKey);
     
     try {
-        let finalExp = 0;
-        let finalLevel = 1;
+        // 1. Kéo data hiện tại về để tính Level cho chuẩn xác
+        const snap = await userRef.once("value");
+        let currentExp = 0;
+        if (snap.exists()) {
+            currentExp = Number(snap.val().exp || 0);
+        }
+        
+        // Tính toán trước kết quả sẽ ra bao nhiêu
+        let targetExp = currentExp + window.pendingSessionEXP;
+        let finalExp = Math.max(0, targetExp);
+        let finalLevel = window.getLevelFromExp(finalExp);
 
-        // Bắt buộc dùng transaction ôm TOÀN BỘ VÍ để xếp hàng chung với thằng StatsV2
-        await userRef.transaction((wallet) => {
-            // Nếu ví chưa có gì thì khởi tạo
-            wallet = wallet || {};
-            
-            // Tính toán EXP và Level mới
-            let currentExp = Number(wallet.exp || 0);
-            wallet.exp = Math.max(0, currentExp + window.pendingSessionEXP);
-            wallet.level = window.getLevelFromExp(wallet.exp);
-            wallet.updatedAt = firebase.database.ServerValue.TIMESTAMP;
+        // 2. Xài vũ khí hạng nặng: increment + update gom chung 1 cục
+        // Nếu lỡ bị trừ xuống âm điểm, ép nó về 0. Nếu dương thì cho Server tự cộng dồn.
+        let expPayload = (targetExp < 0) ? 0 : firebase.database.ServerValue.increment(window.pendingSessionEXP);
 
-            // Lưu tạm ra biến ngoài để tí show lên UI
-            finalExp = wallet.exp;
-            finalLevel = wallet.level;
-
-            return wallet; // Trả nguyên cục ví cho Firebase tự đồng bộ an toàn
+        // Lệnh này update đủ cả 3 món nên 100% qua mặt được Luật Firebase
+        await userRef.update({
+            exp: expPayload,
+            level: finalLevel,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
         });
 
-        // Cập nhật lại Cache ở máy mầy
+        // 3. Render UI ngon lành
         localStorage.setItem('exp_cache', finalExp);
-        
-        // Bắn số mới ra UI cho nó chạy thanh màu vàng
         window.finalNewExpToAnimate = finalExp;
         window.showExpSummary(finalLevel);
 
     } catch (err) {
-        console.error("Lỗi giao dịch EXP:", err);
-        // Fallback: Lỡ đứt cáp giữa chừng thì vẫn cộng ảo cho UI nó mượt
+        // Nếu văng vào đây thì mầy mở F12 (Console) lên là thấy dòng đỏ chóe báo lỗi luật Firebase ngay
+        console.error("Lỗi lưu EXP văng mẹ nó vào catch:", err);
         let fallbackExp = Number(localStorage.getItem('exp_cache') || 0) + window.pendingSessionEXP;
         window.finalNewExpToAnimate = Math.max(0, fallbackExp);
         window.showExpSummary(window.getLevelFromExp(window.finalNewExpToAnimate));
