@@ -10262,13 +10262,37 @@ async function loadWalletBalance() {
         localStorage.setItem(getBalanceCacheKey(), String(currentWalletBalance));
         localStorage.setItem(getPmcCacheKey(), String(currentPmcBalance));
 
+        // 👇👇 BẮT ĐẦU FIX LỖI F5 MẤT TÊN 👇👇
+        // 1. Nếu Database đã có tên/ảnh do mầy tự đổi, thì phải kéo nó về đè lên màn hình
+        const nameToSave = data.name || localStorage.getItem("user-name-display") || "Người chơi";
+        const photoToSave = data.photo || localStorage.getItem("user-photo") || "images/do_tuong.png";
+
+        if (data.name) {
+            localStorage.setItem("user-name-display", data.name);
+            localStorage.setItem("currentUsername", data.name);
+            const nameDisplay = document.getElementById("user-name-display");
+            const userName = document.getElementById("user-name");
+            if (nameDisplay) nameDisplay.innerText = data.name;
+            if (userName) userName.innerText = data.name;
+        }
+        
+        if (data.photo) {
+            localStorage.setItem("user-photo", data.photo);
+            const userPhoto = document.getElementById("user-photo");
+            const editUserPhoto = document.getElementById("edit-user-photo");
+            if (userPhoto) userPhoto.src = data.photo;
+            if (editUserPhoto) editUserPhoto.src = data.photo;
+        }
+
+        // 2. Chốt lại: Cập nhật Firebase bằng tên gốc của Database, không cho ghi đè bậy bạ nữa!
         await walletRef().update({
             balance: currentWalletBalance,
             pmcBalance: currentPmcBalance,
             updatedAt: firebase.database.ServerValue.TIMESTAMP,
-            name: localStorage.getItem("user-name-display") || "Người chơi",
-            photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+            name: nameToSave,
+            photo: photoToSave
         });
+        // 👆👆 KẾT THÚC FIX LỖI 👆👆
 
         updateBalanceUI(currentWalletBalance);
         updatePmcUI(currentPmcBalance);
