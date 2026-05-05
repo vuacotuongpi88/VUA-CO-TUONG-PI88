@@ -16655,43 +16655,49 @@ window.applyPendingExpToDatabase = async function() {
     const userRef = db.ref("wallets/" + walletKey);
     
     try {
-        // 1. Kéo data hiện tại về để tính Level cho chuẩn xác
-        const snap = await userRef.once("value");
-        let currentExp = 0;
-        if (snap.exists()) {
-            currentExp = Number(snap.val().exp || 0);
-        }
-        
-        // Tính toán trước kết quả sẽ ra bao nhiêu
-        let targetExp = currentExp + window.pendingSessionEXP;
-        let finalExp = Math.max(0, targetExp);
-        let finalLevel = window.getLevelFromExp(finalExp);
+        let finalExp = 0;
+        let finalLevel = 1;
 
-        // 2. Xài vũ khí hạng nặng: increment + update gom chung 1 cục
-        // Nếu lỡ bị trừ xuống âm điểm, ép nó về 0. Nếu dương thì cho Server tự cộng dồn.
-        let expPayload = (targetExp < 0) ? 0 : firebase.database.ServerValue.increment(window.pendingSessionEXP);
+        // Dùng transaction ôm TOÀN BỘ VÍ để:
+        // 1. Xếp hàng ngay ngắn với các hàm lưu khác (chống ghi đè cache)
+        // 2. Lấy được cục data thật trên Server trả về sau khi giao dịch
+        // 3. Cập nhật kèm updatedAt để qua mặt Luật bảo mật Firebase
+        const result = await userRef.transaction((wallet) => {
+            // Nếu local cache chưa load kịp, cứ cho nó 1 object rỗng để chạy tạm (Firebase sẽ đối chiếu Server và lấy số thật về chạy lại)
+            if (!wallet) wallet = {};
+            
+            let currentExp = Number(wallet.exp || 0);
+            wallet.exp = Math.max(0, currentExp + window.pendingSessionEXP);
+            wallet.level = window.getLevelFromExp(wallet.exp);
+            wallet.updatedAt = firebase.database.ServerValue.TIMESTAMP;
 
-        // Lệnh này update đủ cả 3 món nên 100% qua mặt được Luật Firebase
-        await userRef.update({
-            exp: expPayload,
-            level: finalLevel,
-            updatedAt: firebase.database.ServerValue.TIMESTAMP
+            return wallet; 
         });
 
-        // 3. Render UI ngon lành
+        // Sau khi Firebase Server duyệt giao dịch thành công
+        if (result.committed && result.snapshot && result.snapshot.val()) {
+            // Lấy CHÍNH XÁC con số cuối cùng đã chốt trên Server (Ví dụ: 14)
+            finalExp = Number(result.snapshot.val().exp || 0);
+            finalLevel = Number(result.snapshot.val().level || 1);
+        } else {
+            throw new Error("Giao dịch Firebase bị từ chối");
+        }
+
+        // Cập nhật lại Cache ở máy mầy chuẩn đét theo Server
         localStorage.setItem('exp_cache', finalExp);
+        
+        // Bắn số thật ra thanh UI cho nó chạy
         window.finalNewExpToAnimate = finalExp;
         window.showExpSummary(finalLevel);
 
     } catch (err) {
-        // Nếu văng vào đây thì mầy mở F12 (Console) lên là thấy dòng đỏ chóe báo lỗi luật Firebase ngay
-        console.error("Lỗi lưu EXP văng mẹ nó vào catch:", err);
+        console.error("Lỗi giao dịch EXP:", err);
+        // Fallback: Lỡ đứt cáp giữa chừng thì vẫn cộng ảo cho UI nó mượt
         let fallbackExp = Number(localStorage.getItem('exp_cache') || 0) + window.pendingSessionEXP;
         window.finalNewExpToAnimate = Math.max(0, fallbackExp);
         window.showExpSummary(window.getLevelFromExp(window.finalNewExpToAnimate));
     }
 };
-
 window.showExpSummary = function(currentLevel) {
     const modal = document.getElementById('exp-summary-modal');
     if(!modal) return;
