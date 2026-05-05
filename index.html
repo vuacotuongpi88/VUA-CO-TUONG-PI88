@@ -10095,7 +10095,7 @@ function refreshMyMatchBalanceBoxesNow(piAmount = getPiBalance(), pmcAmount = ge
     }
 }
 
-async function syncMyMatchBalanceToRoomNow() {
+window.syncMyMatchBalanceToRoomNow = async function() {
     if (!currentRoomId || !mySide) return;
 
     const piAmount = getPiBalance();
@@ -10103,13 +10103,18 @@ async function syncMyMatchBalanceToRoomNow() {
 
     refreshMyMatchBalanceBoxesNow(piAmount, pmcAmount);
 
+    // LỚP KHIÊN THÉP: Kiểm tra xem cái ghế này có người ngồi không trước khi ném tiền vào!
+    // Chống tuyệt đối vụ tạo ra "Bóng ma" sau khi đối thủ đã thoát.
+    const snap = await db.ref("matches/" + currentRoomId + "/players/" + mySide).once("value");
+    if (!snap.exists()) return; 
+
     await db.ref("matches/" + currentRoomId + "/players/" + mySide).update({
         balance: piAmount,
         piBalance: piAmount,
         pmcBalance: pmcAmount,
         updatedAt: firebase.database.ServerValue.TIMESTAMP
     }).catch(err => console.error("Lỗi sync số dư vào phòng:", err));
-}
+};
 function setPmcBalance(amount) {
     const safeAmount = Math.max(0, Math.floor(Number(amount) || 0));
     currentPmcBalance = safeAmount;
@@ -10554,14 +10559,18 @@ function renderAvatarSkinShop() {
         `;
     }).join("");
 }
-async function syncEquippedAvatarSkinToRoom(skinId) {
+window.syncEquippedAvatarSkinToRoom = async function(skinId) {
     if (!currentRoomId || !mySide) return;
+
+    // LỚP KHIÊN THÉP: Chống tạo bóng ma từ việc đồng bộ Skin
+    const snap = await db.ref("matches/" + currentRoomId + "/players/" + mySide).once("value");
+    if (!snap.exists()) return;
 
     await db.ref("matches/" + currentRoomId + "/players/" + mySide).update({
         avatarSkin: skinId,
         updatedAt: firebase.database.ServerValue.TIMESTAMP
     }).catch(err => console.error("Lỗi sync skin vào phòng:", err));
-}
+};
 
 function refreshRoomAvatarSkinUI() {
     const skinId = getEquippedAvatarSkin();
