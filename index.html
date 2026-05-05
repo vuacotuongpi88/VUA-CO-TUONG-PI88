@@ -17331,21 +17331,28 @@ window.handleAdClick = function(slideNumber) {
             break;
     }
 };
-// 🔥 BÙA GẮN TIẾNG TAP TOÀN CỤC (CÂN LUÔN NÚT SINH RA ĐỘNG)
-document.addEventListener("pointerdown", function(e) {
-    // 1. Bỏ qua khu vực quân cờ và bàn cờ (vì tụi nó đã kêu tiếng 'click' cộc cạch riêng rồi)
+// 🔥 BÙA GẮN TIẾNG CLICK TỐC ĐỘ CAO CHO MỌI THAO TÁC NGOÀI SẢNH
+document.addEventListener("click", function(e) {
+    // 1. Bỏ qua khu vực bàn cờ (vì nhấc quân cờ nó có lệnh kêu riêng rồi)
     if (e.target.closest('.piece') || e.target.closest('#board')) {
         return;
     }
 
-    // 2. Tìm xem vị trí mầy vừa chạm có phải là nút bấm hay không
-    const isClickable = e.target.closest("button, [id*='btn'], [class*='btn'], .mission-top-tab, .avatar-shop-tab, .menu-item, .mobile-game-card, .menu-card, .close, .top-close, .rank-close, .mission-hub-close, .social-icon, .ad-dot");
+    // 2. Gom CỔ TẤT CẢ các Nút: Nút Cược (stake-chip), Nút Game (game-card), Button...
+    const isClickable = e.target.closest("button, .stake-chip, .desktop-game-card, .mobile-game-card, [id*='btn'], [class*='btn'], .mission-top-tab, .avatar-shop-tab, .menu-item, .close, .top-close, .rank-close, .social-icon, .ad-dot");
 
-    // 3. Nếu đúng là khu vực có thể bấm -> Phát tiếng 'tap' ngay và luôn!
+    // 3. NẾU BẤM TRÚNG -> ĐẺ RA 1 CÁI LOA ẢO ĐỂ PHÁT TIẾNG NGAY LẬP TỨC
     if (isClickable) {
-        playSnd('tap');
+        if (window.isSfxMuted) return; // Đang tắt âm thanh thì nín
+        
+        if (sounds && sounds.click) {
+            // cloneNode() giúp mày bấm 10 phát 1 giây nó vẫn kêu đủ 10 tiếng chồng lên nhau, đéo bị đứt!
+            let amThanhAo = sounds.click.cloneNode(); 
+            amThanhAo.volume = 0.5; // Cho nhỏ lại 50% để nghe cạch cạch vừa tai, ko bị chát
+            amThanhAo.play().catch(() => {});
+        }
     }
-}, {passive: true});
+});
 </script>
 <!-- BẢNG ĐẾM NGƯỢC CHỜ 5 GIÂY (CHỐNG LAG FIREBASE) -->
 <div id="exit-countdown-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:99999; align-items:center; justify-content:center; backdrop-filter:blur(5px);">
