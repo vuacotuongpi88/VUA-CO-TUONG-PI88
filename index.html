@@ -6725,15 +6725,16 @@ function switchAccount() {
 
 // --- HỆ THỐNG ÂM THANH (KHỚP VỚI HÌNH THƯ MỤC CỦA MÀY) ---
 const sounds = {
-welcome: new Audio('sounds/welcome.mp3'),
-click: new Audio('sounds/click.mp3'),
-capture: new Audio('sounds/capture.mp3'),
-check: new Audio('sounds/check.mp3'),
-win: new Audio('sounds/win.mp3'),
-lose: new Audio('sounds/lose.mp3'),
-heartbeat: new Audio('sounds/heartbeat.mp3'),
-timeout: new Audio('sounds/timeout.mp3'),
-bgm: new Audio('sounds/bgm.mp3')
+    welcome: new Audio('sounds/welcome.mp3'),
+    click: new Audio('sounds/click.mp3'),     /* Tiếng cộc cạch của quân cờ giữ nguyên */
+    tap: new Audio('sounds/tap.mp3'),         /* MỚI THÊM: Tiếng bíp bíp của Nút bấm */
+    capture: new Audio('sounds/capture.mp3'),
+    check: new Audio('sounds/check.mp3'),
+    win: new Audio('sounds/win.mp3'),
+    lose: new Audio('sounds/lose.mp3'),
+    heartbeat: new Audio('sounds/heartbeat.mp3'),
+    timeout: new Audio('sounds/timeout.mp3'),
+    bgm: new Audio('sounds/bgm.mp3')
 };
 sounds.bgm.loop = true;
 sounds.bgm.volume = 0.4;
@@ -17330,6 +17331,20 @@ window.handleAdClick = function(slideNumber) {
             break;
     }
 };
+// BÙA TỰ ĐỘNG GẮN TIẾNG BẤM (TAP) CHO TOÀN BỘ NÚT NGOÀI SẢNH CHỜ
+document.addEventListener("DOMContentLoaded", () => {
+    // Chờ 1 giây để giao diện load xong hết
+    setTimeout(() => {
+        // Gom cổ tất cả các nút: button thường, div có chữ btn, các tab menu, các ô chọn game...
+        const allButtons = document.querySelectorAll("button, [id*='btn'], [class*='btn'], .mission-top-tab, .avatar-shop-tab, .menu-item, .mobile-game-card, .menu-card");
+        
+        allButtons.forEach(btn => {
+            // Cứ chạm hay click vào là phát tiếng 'tap'
+            btn.addEventListener("mousedown", () => playSnd('tap'));
+            btn.addEventListener("touchstart", () => playSnd('tap'), {passive: true});
+        });
+    }, 1000);
+});
 </script>
 <!-- BẢNG ĐẾM NGƯỢC CHỜ 5 GIÂY (CHỐNG LAG FIREBASE) -->
 <div id="exit-countdown-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:99999; align-items:center; justify-content:center; backdrop-filter:blur(5px);">
