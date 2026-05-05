@@ -16652,32 +16652,40 @@ window.applyPendingExpToDatabase = async function() {
     }
 
     const walletKey = makeWalletDbKey();
-
+    const userRef = db.ref("wallets/" + walletKey);
+    
     try {
-        let newExpVal = 0;
+        let finalExp = 0;
+        let finalLevel = 1;
+
+        // Bắt buộc dùng transaction ôm TOÀN BỘ VÍ để xếp hàng chung với thằng StatsV2
+        await userRef.transaction((wallet) => {
+            // Nếu ví chưa có gì thì khởi tạo
+            wallet = wallet || {};
+            
+            // Tính toán EXP và Level mới
+            let currentExp = Number(wallet.exp || 0);
+            wallet.exp = Math.max(0, currentExp + window.pendingSessionEXP);
+            wallet.level = window.getLevelFromExp(wallet.exp);
+            wallet.updatedAt = firebase.database.ServerValue.TIMESTAMP;
+
+            // Lưu tạm ra biến ngoài để tí show lên UI
+            finalExp = wallet.exp;
+            finalLevel = wallet.level;
+
+            return wallet; // Trả nguyên cục ví cho Firebase tự đồng bộ an toàn
+        });
+
+        // Cập nhật lại Cache ở máy mầy
+        localStorage.setItem('exp_cache', finalExp);
         
-        // 1. Dùng transaction thọc thẳng vào nhánh "exp", đéo quan tâm nguyên cục ví đang bị update cái gì
-        await db.ref("wallets/" + walletKey + "/exp").transaction((currExp) => {
-            newExpVal = Math.max(0, Number(currExp || 0) + window.pendingSessionEXP);
-            return newExpVal; // Ép Server cộng chính xác trên số thực tế (88 + 2 = 90)
-        });
-
-        let newLevel = window.getLevelFromExp(newExpVal);
-
-        // 2. Cập nhật Level và thời gian sau khi EXP đã tính chuẩn
-        await db.ref("wallets/" + walletKey).update({
-            level: newLevel,
-            updatedAt: firebase.database.ServerValue.TIMESTAMP
-        });
-
-        // 3. Cập nhật lại Cache và UI
-        localStorage.setItem('exp_cache', newExpVal);
-        window.finalNewExpToAnimate = newExpVal;
-        window.showExpSummary(newLevel);
+        // Bắn số mới ra UI cho nó chạy thanh màu vàng
+        window.finalNewExpToAnimate = finalExp;
+        window.showExpSummary(finalLevel);
 
     } catch (err) {
-        console.error("Lỗi lưu EXP:", err);
-        // Fallback: Lỡ rớt mạng
+        console.error("Lỗi giao dịch EXP:", err);
+        // Fallback: Lỡ đứt cáp giữa chừng thì vẫn cộng ảo cho UI nó mượt
         let fallbackExp = Number(localStorage.getItem('exp_cache') || 0) + window.pendingSessionEXP;
         window.finalNewExpToAnimate = Math.max(0, fallbackExp);
         window.showExpSummary(window.getLevelFromExp(window.finalNewExpToAnimate));
