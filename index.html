@@ -7134,16 +7134,15 @@ function showExitCountdown(action) {
         }
     }, 1000);
 }
-// 1. NÚT TIẾP TỤC SAU KHI XONG VÁN (ĐÉO DÍNH DÁNG TỚI EXP)
+
+// ----------------------------------------------------
+// HÀM 1: BẤM NÚT TIẾP TỤC SAU KHI XONG VÁN
 function playNextMatch() {
-    hideVictoryPopup(); // Tắt cái bảng Chiến Thắng đi
-    executePlayNextMatch(); // Chạy thẳng vô dọn bàn
+    showExitCountdown('tieptuc'); // Bật đếm ngược 5 giây
 }
 
-window._localForceReady = false; // Cờ lệnh chống đơ UI
-
+// Ruột xử lý thực sự của nút Tiếp Tục (chạy sau khi đếm xong)
 async function executePlayNextMatch() {
-    hideVictoryPopup(); 
     clearInterval(interval);
     clearInterval(readyInterval);
     readyOverlayWaitingShown = false;
@@ -7160,52 +7159,75 @@ async function executePlayNextMatch() {
         return;
     }
 
-    // ÉP FIREBASE KHÔNG ĐƯỢC TẮT BẢNG SS CỦA MẦY
-    window._localForceReady = true;
-
-    // DỌN BÀN NGAY LẬP TỨC
+    const roomId = currentRoomId;
     clearRealtimeBoardVisualOnly();
+
+    const snap = await db.ref("matches/" + roomId).once("value");
+    const room = snap.val() || {};
+
+    if (room.winner || room.status === "finished") {
+        // Đã có 5 giây bảo kê ở ngoài nên chỗ này dọn Firebase thả ga đéo sợ lag!
+        await db.ref("matches/" + roomId).update({
+            status: "waiting",
+            turn: "do",
+            board: null,
+            winner: null,
+            winReason: null,
+            drawRequest: null,
+            settlement: null,
+            refunds: null,
+            readyDeadlineAt: null,
+            lastMoveFrom: null,
+            lastMoveTo: null,
+            "ready/do": false,
+            "ready/den": false,
+            "stakeLocked/do": false,
+            "stakeLocked/den": false,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+    }
+
+    await loadWalletBalance().catch(()=>{});
 
     readyDo = false;
     readyDen = false;
-    isGameOver = false; 
+    isGameOver = false;
     selectedPiece = null;
 
-    loadWalletBalance().catch(()=>{});
-
-    // MỞ BẢNG SS LIỀN NGAY VÀ LẬP TỨC
-    showReadyOverlay(currentRoomMode || "co-tuong", true, true);
-    updateReadyUI();
+    showReadyOverlay(currentRoomMode || "co-tuong", true);
 }
+
+
 // ----------------------------------------------------
-// 2. NÚT THOÁT TRẬN (LÚC NÀY MỚI LÔI EXP RA TÍNH)
+// HÀM 2: BẤM NÚT THOÁT TRẬN 
 async function backToMenu() {
+    // Khán giả đéo có dữ liệu gì để lưu, cho thoát ngay lập tức khỏi chờ
     if (isSpectatorMode) {
-        showExitCountdown('thoat');
+        executeBackToMenu();
         return;
     }
 
+    // Nếu trận đang đánh dở (chưa chiếu bí) thì hỏi xác nhận. Nhấn OK mới cho vô đếm 5 giây
     if (!isGameOver && currentRoomStatus === 'playing') {
         if (!confirm("Thoát ván đấu này? Mày sẽ bị xử thua đó!")) return;
     }
 
-    hideVictoryPopup();
+    showExitCountdown('thoat'); // Bật đếm ngược 5 giây
+}
 
-    // CHỈ KHI BẤM THOÁT MỚI GỌI BẢNG BÁO CÁO EXP
+// Ruột xử lý thực sự của nút Thoát Trận (chạy sau khi đếm xong)
+async function executeBackToMenu() {
+    document.getElementById("game-arena").style.display = "none";
+    showHomeUI();
+    closeArenaFriendBox();
+    renderRoomInviteOverlay();
+
+    // CHỖ NÀY CỰC QUAN TRỌNG: Hiện bảng EXP và thanh ánh sáng (nếu có EXP)
     if (window.pendingSessionEXP && window.pendingSessionEXP !== 0) {
         if (typeof window.applyPendingExpToDatabase === 'function') {
             window.applyPendingExpToDatabase();
         }
-    } else {
-        showExitCountdown('thoat');
     }
-}
-
-async function executeBackToMenu() {
-    document.getElementById("game-arena").style.display = "none";
-    showHomeUI();
-    closeArenaFriendBox();
-    renderRoomInviteOverlay();
 
     if (isSpectatorMode) {
         cleanupRoomListeners();
@@ -7221,8 +7243,9 @@ async function executeBackToMenu() {
         document.body.classList.remove("spectator-mode");
         isSpectatorMode = false;
     } else {
-        await leaveRealtimeMatch();
-        await setPlayerPresence("home").catch(() => {});
+        leaveRealtimeMatch().then(() => {
+            setPlayerPresence("home").catch(() => {});
+        });
     }
 
     clearInterval(interval);
@@ -7235,110 +7258,8 @@ async function executeBackToMenu() {
         chatContent.innerHTML = '<p style="color:#55efc4;">Hệ thống: Vào việc đi mậy!</p>';
     }
 }
-
 function exitAfterMatch() {
-    backToMenu();
-}
-async function executeBackToMenu() {
-    document.getElementById("game-arena").style.display = "none";
-    showHomeUI();
-    closeArenaFriendBox();
-    renderRoomInviteOverlay();
-
-    if (isSpectatorMode) {
-        cleanupRoomListeners();
-        clearActiveMatchSnapshot();
-        currentRoomId = null;
-        mySide = null;
-        viewSide = "do";
-        currentRoomMode = null;
-        currentRoomStakePMC = 0;
-        currentRoomBucket = null;
-        currentRoomStatus = null;
-        setPlayerPresence("home").catch(() => {});
-        document.body.classList.remove("spectator-mode");
-        isSpectatorMode = false;
-    } else {
-        await leaveRealtimeMatch();
-        await setPlayerPresence("home").catch(() => {});
-    }
-
-    clearInterval(interval);
-    clearInterval(readyInterval);
-    sounds.bgm.pause();
-    sounds.heartbeat.pause();
-
-    const chatContent = document.getElementById("match-content-popup");
-    if (chatContent) {
-        chatContent.innerHTML = '<p style="color:#55efc4;">Hệ thống: Vào việc đi mậy!</p>';
-    }
-}
-
-function exitAfterMatch() {
-    backToMenu();
-}
-// ----------------------------------------------------
-// 2. NÚT THOÁT TRẬN (KẾT HỢP EXP VÀ CHỜ 5 GIÂY)
-async function backToMenu() {
-    if (isSpectatorMode) {
-        showExitCountdown('thoat');
-        return;
-    }
-
-    if (!isGameOver && currentRoomStatus === 'playing') {
-        if (!confirm("Thoát ván đấu này? Mày sẽ bị xử thua đó!")) return;
-    }
-
     hideVictoryPopup();
-
-    // NẾU CÓ EXP CHƯA NHẬN -> MỞ BẢNG BÁO CÁO TRƯỚC
-    if (window.pendingSessionEXP && window.pendingSessionEXP !== 0) {
-        pendingExitAfterExp = true; // Cắm cờ để lát nữa tắt bảng EXP nó biết đường gọi đếm 5s
-        if (typeof window.applyPendingExpToDatabase === 'function') {
-            window.applyPendingExpToDatabase();
-        }
-    } else {
-        // Đéo có EXP thì gọi đếm 5 giây luôn
-        showExitCountdown('thoat');
-    }
-}
-
-async function executeBackToMenu() {
-    document.getElementById("game-arena").style.display = "none";
-    showHomeUI();
-    closeArenaFriendBox();
-    renderRoomInviteOverlay();
-
-    if (isSpectatorMode) {
-        cleanupRoomListeners();
-        clearActiveMatchSnapshot();
-        currentRoomId = null;
-        mySide = null;
-        viewSide = "do";
-        currentRoomMode = null;
-        currentRoomStakePMC = 0;
-        currentRoomBucket = null;
-        currentRoomStatus = null;
-        setPlayerPresence("home").catch(() => {});
-        document.body.classList.remove("spectator-mode");
-        isSpectatorMode = false;
-    } else {
-        await leaveRealtimeMatch();
-        await setPlayerPresence("home").catch(() => {});
-    }
-
-    clearInterval(interval);
-    clearInterval(readyInterval);
-    sounds.bgm.pause();
-    sounds.heartbeat.pause();
-
-    const chatContent = document.getElementById("match-content-popup");
-    if (chatContent) {
-        chatContent.innerHTML = '<p style="color:#55efc4;">Hệ thống: Vào việc đi mậy!</p>';
-    }
-}
-
-function exitAfterMatch() {
     backToMenu();
 }
 function getViewSide() {
@@ -9327,39 +9248,38 @@ if (
 renderPlayersFromRoom(room);
 updateReadyUI();
 
-// Nếu Firebase đã lưu xong xuôi, tự động tắt cờ lệnh
-    if (!room.winner && room.status === "waiting") {
-        window._localForceReady = false;
+const hasEnoughPlayersWaiting =
+    !!room.players?.do &&
+    !!room.players?.den &&
+    room.status === "waiting" &&
+    !room.winner;
+
+if (hasEnoughPlayersWaiting) {
+    isGameOver = false;
+    selectedPiece = null;
+    clearMoveHints();
+    hideVictoryPopup();
+    renderTimerUI();
+
+    // Mở bảng SS ổn định, không cho Firebase snapshot làm chớp tắt
+    ensureReadyOverlayForWaitingRoom(room, listeningRoomId);
+} else {
+    // Chỉ đóng bảng SS khi thật sự đã vào trận hoặc phòng không còn đủ người.
+    // Không đóng/mở theo mấy update phụ như số dư, ready, stakeLocked.
+    const reallyMustCloseReady =
+        room.status === "playing" ||
+        !!room.winner ||
+        !room.players?.do ||
+        !room.players?.den;
+
+    if (reallyMustCloseReady) {
+        closeReadyOverlay();
+        readyOverlayRoomKey = "";
     }
 
-    const hasEnoughPlayersWaiting =
-        !!room.players?.do &&
-        !!room.players?.den &&
-        room.status === "waiting" &&
-        (!room.winner || window._localForceReady); // ÉP QUA CỬA KHI BẤM TIẾP TỤC
+    renderTimerUI();
+}
 
-    if (hasEnoughPlayersWaiting) {
-        isGameOver = false;
-        selectedPiece = null;
-        clearMoveHints();
-        hideVictoryPopup();
-        renderTimerUI();
-
-        // Mở bảng SS ổn định, không cho Firebase snapshot làm chớp tắt
-        ensureReadyOverlayForWaitingRoom(room, listeningRoomId);
-    } else {
-        const reallyMustCloseReady =
-            (room.status === "playing" && !room.winner) ||
-            (!room.players?.do && !room.players?.den) ||
-            (!!room.winner && !window._localForceReady); // CẤM TẮT NẾU ĐANG BẤM TIẾP TỤC
-
-        if (reallyMustCloseReady) {
-            closeReadyOverlay();
-            readyOverlayRoomKey = "";
-        }
-
-        renderTimerUI();
-    }
 if (room.status === "playing" && !room.winner) {
     readyOverlayWaitingShown = false;
     readyOverlayRoomKey = "";
@@ -11985,44 +11905,13 @@ function updateReadyUI() {
     const btn = document.getElementById("ready-main-btn");
     const sideText = document.getElementById("ready-side-text");
     const countdownEl = document.getElementById("ready-countdown");
-    if (countdownEl) {
-        countdownEl.textContent = Math.max(0, readyTime);
-    }
+if (countdownEl) {
+    countdownEl.textContent = Math.max(0, readyTime);
+}
     if (!btn || !sideText) return;
-
-    const room = window.__lastBoundRoom || {};
     
- // NẾU VÁN VỪA XONG MÀ CHƯA DỌN FIREBASE XONG (ĐANG CHIA TIỀN)
-    if (room.winner) {
-        btn.className = ""; 
-        btn.style.background = "#636e72";
-        btn.style.color = "#dfe6e9";
-        btn.textContent = "ĐANG TỔNG KẾT...";
-        sideText.textContent = "CHỜ HỆ THỐNG DỌN BÀN XÍU NHA";
-        btn.disabled = true;
-        btn.style.opacity = "0.7";
-        btn.style.cursor = "default";
-        if (countdownEl) countdownEl.textContent = "--";
-        return;
-    }
-    // NẾU TRONG PHÒNG CHỈ CÓ 1 MÌNH
-    const isAlone = (!room.players?.do || !room.players?.den);
-    if (isAlone) {
-        btn.className = ""; 
-        btn.style.background = "#636e72";
-        btn.style.color = "#dfe6e9";
-        btn.textContent = "ĐANG TÌM ĐỐI THỦ...";
-        sideText.textContent = "CHỜ NGƯỜI CHƠI KHÁC VÀO BÀN";
-        btn.disabled = true;
-        btn.style.opacity = "0.7";
-        btn.style.cursor = "default";
-        if (countdownEl) countdownEl.textContent = "--";
-        return;
-    }
 
-    btn.className = "";
-    btn.style.background = "";
-    btn.style.color = "";
+    btn.classList.remove("ready-btn-do", "ready-btn-den");
 
     if (mySide === "do") {
         btn.classList.add("ready-btn-do");
@@ -12309,15 +12198,16 @@ function autoResetNextMatch() {
     }, 5000);
 }
 
-function showReadyOverlay(mode, forceResetTime = false, forceShow = false) {
+function showReadyOverlay(mode, forceResetTime = false) {
     pendingGameMode = mode || pendingGameMode || currentRoomMode || "tong";
     const overlay = document.getElementById("ready-overlay");
     if (!overlay) return;
 
-    // Chặn bảng SS tự bật lung tung, NHƯNG nếu forceShow = true (bấm Tiếp tục) thì bắt buộc mở
+    // Chặn lỗi mới tạo phòng / chỉ còn 1 người mà bảng SS tự bật bên Đen.
+    // Bảng SS chỉ được hiện khi Firebase xác nhận đủ Đỏ + Đen trong phòng đang chờ.
     const guardRoom = window.__lastBoundRoom || null;
     const guardRoomId = window.__lastBoundRoomId || "";
-    if (!forceShow && currentRoomId && guardRoom && guardRoomId === currentRoomId) {
+    if (currentRoomId && guardRoom && guardRoomId === currentRoomId) {
         const enoughPlayers = !!guardRoom.players?.do && !!guardRoom.players?.den && guardRoom.status === "waiting" && !guardRoom.winner;
         if (!enoughPlayers) {
             overlay.style.display = "none";
@@ -12330,6 +12220,7 @@ function showReadyOverlay(mode, forceResetTime = false, forceShow = false) {
         }
     }
 
+    // Nếu nó đang hiện rồi thì KHÔNG reset lại thời gian, KHÔNG chạy lại interval
     if (overlay.style.display === "flex" && !forceResetTime) {
         readyOverlayWaitingShown = true;
         updateReadyUI();
@@ -12339,13 +12230,13 @@ function showReadyOverlay(mode, forceResetTime = false, forceShow = false) {
     readyOverlayWaitingShown = true;
     overlay.style.display = "flex";
 
-    if (forceResetTime || !readyTime || readyTime <= 0) {
-        if (readyDeadlineAt) {
-            readyTime = getReadySecondsLeft(readyDeadlineAt);
-        } else {
-            readyTime = 30;
-        }
+if (forceResetTime || !readyTime || readyTime <= 0) {
+    if (readyDeadlineAt) {
+        readyTime = getReadySecondsLeft(readyDeadlineAt);
+    } else {
+        readyTime = 30;
     }
+}
 
     updateReadyUI();
     startReadyCountdown();
@@ -12358,11 +12249,9 @@ function ensureReadyOverlayForWaitingRoom(room = {}, roomId = currentRoomId) {
         !!room.players?.do &&
         !!room.players?.den &&
         room.status === "waiting" &&
-        (!room.winner || window._localForceReady); // THÊM CÁI ĐUÔI NÀY VÀO
+        !room.winner;
 
     if (!hasEnoughPlayersWaiting) return;
-    
-    // ... (Giữ nguyên phần dưới của hàm này)
 
 const key = [
     roomId || "",
@@ -16812,24 +16701,19 @@ window.closeExpSummary = function() {
     const modal = document.getElementById('exp-summary-modal');
     if(modal) modal.classList.remove('show');
 
+    // 🔥 KHI BẤM NÚT XÁC NHẬN -> MỚI NỔ HIỆU ỨNG VÀ CHẠY THANH EXP
     if (window.finalNewExpToAnimate !== undefined) {
         window.spawnExpEffect(window.pendingSessionEXP > 0);
         window.updateExpBarUI(window.finalNewExpToAnimate); 
         
+        // Chạy xong hết rồi mới reset mẻ cày
         window.pendingSessionEXP = 0; 
         window.sessionWins = 0;
         window.sessionLosses = 0;
         window.finalNewExpToAnimate = undefined;
 
+        // Load lại ví hiển thị cho mượt (Giờ an toàn tuyệt đối, đéo lo bị đè EXP nữa)
         loadWalletBalance().catch(()=>{});
-
-        // Đợi hạt bay 1.5 giây xong thì gọi đếm 5 giây rồi văng ra sảnh
-        setTimeout(() => {
-            if (typeof showExitCountdown === 'function') showExitCountdown('thoat');
-        }, 1500); 
-    } else {
-        // Có lỗi đéo có hạt thì đếm 5 giây luôn
-        if (typeof showExitCountdown === 'function') showExitCountdown('thoat');
     }
 };
 
