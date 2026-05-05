@@ -3583,6 +3583,32 @@ cursor: pointer;
 font-size: 16px;
 padding: 2px 4px 6px 4px;
 }
+/* ===== NÚT TẮT MỞ ÂM THANH ===== */
+.sound-toggle-btn {
+    position: relative;
+    background: #2d3436 !important;
+    border: 1px solid #55efc4 !important;
+    color: white !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    cursor: pointer;
+    border-radius: 6px;
+}
+/* Hiệu ứng gạch chéo đỏ tẹt ngang qua nút khi bị tắt */
+.sound-toggle-btn.muted-audio::after {
+    content: '';
+    position: absolute;
+    width: 110%;
+    height: 3px;
+    background: #ff7675;
+    transform: rotate(15deg);
+    left: -5%;
+    top: 48%;
+    box-shadow: 0 0 5px black;
+    border-radius: 2px;
+}
 #match-chat-popup {
 position: fixed;
 left: 10px;
@@ -6029,11 +6055,53 @@ margin-bottom: 14px;
 </div>
 
 <div id="desktop-match-actions">
-<button class="action-thoat" onclick="handleMatchAction('thoat')">THOÁT TRẬN</button>
-<button class="action-dauhang" onclick="handleMatchAction('dauhang')">ĐẦU HÀNG</button>
-<button class="action-hoa" onclick="handleMatchAction('hoa')">XIN HÒA</button>
-<button class="action-doitran" onclick="changeMatch()">ĐỔI TRẬN</button>
+    <button class="action-thoat" onclick="handleMatchAction('thoat')">THOÁT TRẬN</button>
+    <button class="action-dauhang" onclick="handleMatchAction('dauhang')">ĐẦU HÀNG</button>
+    <button class="action-hoa" onclick="handleMatchAction('hoa')">XIN HÒA</button>
+    <button class="action-doitran" onclick="changeMatch()">ĐỔI TRẬN</button>
+    <!-- THÊM 2 NÚT TẮT ÂM THANH CHO PC Ở ĐÂY -->
+    <div style="display: flex; gap: 5px; grid-column: 1 / -1; margin-top: 2px;">
+        <button id="btn-toggle-bgm-desk" class="sound-toggle-btn" onclick="toggleBGM(event)" style="flex:1; padding: 6px; font-size: 14px;">🎵 Nhạc Nền</button>
+        <button id="btn-toggle-sfx-desk" class="sound-toggle-btn" onclick="toggleSFX(event)" style="flex:1; padding: 6px; font-size: 14px;">🔊 Tiếng Cờ</button>
+    </div>
 </div>
+</div>
+
+<div id="match-chat-btn" onclick="toggleMatchChat()">💬</div>
+
+<div id="arena-friend-btn" onclick="toggleArenaFriendBox(event)">
+    👥
+    <span id="arena-friend-badge" class="friend-badge-dot">0</span>
+</div>
+<div id="arena-skin-btn" onclick="openAvatarSkinShop()">🎭</div>
+<div id="arena-top-btn" onclick="openArenaTopModal(event)">🏆</div>
+
+<div id="arena-friend-box">
+    <div class="arena-friend-header">
+        <span>MỜI BẠN VÀO PHÒNG</span>
+        <span class="arena-friend-close" onclick="closeArenaFriendBox()">✖</span>
+    </div>
+    <div class="arena-friend-note">
+        Chỉ mời được khi mày đang là chủ phòng chờ và phòng chưa đủ người.
+    </div>
+    <div id="arena-friend-list"></div>
+</div>
+
+<div id="mobile-match-actions">
+    <div id="mobile-action-menu">
+        <div class="mobile-action-close" onclick="closeActionMenu()">✖</div>
+        <button onclick="handleMatchAction('thoat')">🏁 THOÁT TRẬN</button>
+        <button onclick="handleMatchAction('dauhang')">🏳️ ĐẦU HÀNG</button>
+        <button onclick="handleMatchAction('hoa')">🤝 XIN HÒA</button>
+        <button class="action-doitran" onclick="changeMatch()">🔁 ĐỔI TRẬN</button>
+        
+        <!-- THÊM 2 NÚT TẮT ÂM THANH CHO ĐIỆN THOẠI Ở ĐÂY -->
+        <div style="display: flex; gap: 6px; margin-top: 4px;">
+            <button id="btn-toggle-bgm-mob" class="sound-toggle-btn" onclick="toggleBGM(event)" style="flex:1; padding: 8px; font-size: 14px;">🎵 Nhạc</button>
+            <button id="btn-toggle-sfx-mob" class="sound-toggle-btn" onclick="toggleSFX(event)" style="flex:1; padding: 8px; font-size: 14px;">🔊 Tiếng</button>
+        </div>
+    </div>
+    <div id="mobile-action-main" onclick="toggleActionMenu(event)">☰</div>
 </div>
 
 <div id="match-chat-btn" onclick="toggleMatchChat()">💬</div>
@@ -6556,12 +6624,79 @@ sounds.bgm.loop = true;
 sounds.bgm.volume = 0.4;
 sounds.heartbeat.loop = true; 
 
+// --- QUẢN LÝ BẬT TẮT ÂM THANH ---
+window.isBgmMuted = localStorage.getItem('bgm_muted') === 'true';
+window.isSfxMuted = localStorage.getItem('sfx_muted') === 'true';
+
 function playSnd(name) {
-if (sounds[name]) {
-sounds[name].currentTime = 0;
-sounds[name].play().catch(e => console.log("Chờ tương tác để phát nhạc..."));
+    if (!sounds[name]) return;
+    
+    // Nếu là Nhạc Nền (bgm)
+    if (name === 'bgm') {
+        if (window.isBgmMuted) return; // Mày tắt rồi thì im re
+        sounds.bgm.currentTime = 0;
+        sounds.bgm.play().catch(e => console.log("Chờ tương tác để phát nhạc..."));
+        return;
+    }
+
+    // Nếu là Âm Thanh cờ / nút bấm (sfx)
+    if (window.isSfxMuted) return; // Mày tắt hiệu ứng rồi thì câm luôn
+    
+    sounds[name].currentTime = 0;
+    sounds[name].play().catch(e => console.log("Chờ tương tác để phát nhạc..."));
 }
-}
+
+window.toggleBGM = function(e) {
+    if(e) e.stopPropagation();
+    window.isBgmMuted = !window.isBgmMuted;
+    localStorage.setItem('bgm_muted', window.isBgmMuted);
+    
+    if (window.isBgmMuted) {
+        sounds.bgm.pause(); // Tắt ngay lập tức nếu đang phát
+    } else {
+        // Bật lại nếu đang trong trận
+        if (currentRoomId && currentRoomStatus === 'playing' && !isGameOver) {
+            sounds.bgm.play().catch(()=>{});
+        }
+    }
+    window.updateSoundIcons();
+};
+
+window.toggleSFX = function(e) {
+    if(e) e.stopPropagation();
+    window.isSfxMuted = !window.isSfxMuted;
+    localStorage.setItem('sfx_muted', window.isSfxMuted);
+    
+    // Nếu tắt SFX thì cũng phải dập luôn tiếng tim đập bùm bụp chiếu tướng
+    if (window.isSfxMuted && sounds.heartbeat) {
+        sounds.heartbeat.pause();
+    }
+    window.updateSoundIcons();
+};
+
+window.updateSoundIcons = function() {
+    // Cập nhật gạch chéo đỏ cho cả PC lẫn Mobile
+    const bgmBtns = [document.getElementById('btn-toggle-bgm-desk'), document.getElementById('btn-toggle-bgm-mob')];
+    const sfxBtns = [document.getElementById('btn-toggle-sfx-desk'), document.getElementById('btn-toggle-sfx-mob')];
+    
+    bgmBtns.forEach(b => {
+        if(!b) return;
+        if(window.isBgmMuted) b.classList.add('muted-audio');
+        else b.classList.remove('muted-audio');
+    });
+    
+    sfxBtns.forEach(b => {
+        if(!b) return;
+        if(window.isSfxMuted) b.classList.add('muted-audio');
+        else b.classList.remove('muted-audio');
+    });
+};
+
+// Gọi update icon khi vừa vào trang
+document.addEventListener("DOMContentLoaded", () => {
+    setTimeout(window.updateSoundIcons, 500);
+});
+// ---------------------------------
 
 function sendMessage() {
 // 1. Tìm ô nhập liệu
