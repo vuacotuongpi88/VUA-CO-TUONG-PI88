@@ -10464,14 +10464,14 @@ window.renderAvatarSkinShop = function() {
     if (balance) balance.innerText = "Số dư: " + formatPMC(currentPmc) + " PMC";
 
     if (window.avatarSkinShopTab === "exp") {
-        // 6 GÓI EXP ĐỂ CÀY LÊN MAX CẤP 180 (1.611.000 EXP)
+        // 6 GÓI EXP ĐỂ CÀY LÊN MAX CẤP 180 - TỔNG ĐÚNG 60 VÉ
         const expPackages = [
-            { id: "exp1", name: "Gói Tân Binh", exp: 1000, price: 1000, desc: "+1.000 EXP", tickets: 0, icon: "🌱" },
-            { id: "exp2", name: "Gói Thương Gia", exp: 5000, price: 4800, desc: "+5.000 EXP", tickets: 0, icon: "💰" },
-            { id: "exp3", name: "Gói Tinh Nhuệ", exp: 20000, price: 18500, desc: "+20.000 EXP", tickets: 0, icon: "⚔️" },
-            { id: "exp4", name: "Gói Đại Cao Thủ", exp: 100000, price: 85000, desc: "+100.000 EXP <br><b style='color:#00c38a'>+2 Lượt Miễn Phí (Bàn <=10k)</b>", tickets: 2, icon: "🐉" },
-            { id: "exp5", name: "Gói Tông Sư", exp: 500000, price: 400000, desc: "+500.000 EXP <br><b style='color:#00c38a'>+5 Lượt Miễn Phí (Bàn <=10k)</b>", tickets: 5, icon: "👑" },
-            { id: "exp6", name: "Gói Thiên Vương", exp: 1650000, price: 1200000, desc: "LÊN THẲNG MAX CẤP 180<br><b style='color:#ff7675'>+10 Lượt Miễn Phí (Miễn Trảm)</b>", tickets: 10, icon: "🏆" }
+            { id: "exp1", name: "Gói Tân Binh", exp: 1000, price: 1000, desc: "+1.000 EXP <br><b style='color:#00c38a'>+2 Lượt Miễn Phí</b>", tickets: 2, icon: "🌱" },
+            { id: "exp2", name: "Gói Thương Gia", exp: 5000, price: 4800, desc: "+5.000 EXP <br><b style='color:#00c38a'>+4 Lượt Miễn Phí</b>", tickets: 4, icon: "💰" },
+            { id: "exp3", name: "Gói Tinh Nhuệ", exp: 20000, price: 18500, desc: "+20.000 EXP <br><b style='color:#00c38a'>+8 Lượt Miễn Phí</b>", tickets: 8, icon: "⚔️" },
+            { id: "exp4", name: "Gói Đại Cao Thủ", exp: 100000, price: 85000, desc: "+100.000 EXP <br><b style='color:#00c38a'>+12 Lượt Miễn Phí</b>", tickets: 12, icon: "🐉" },
+            { id: "exp5", name: "Gói Tông Sư", exp: 500000, price: 400000, desc: "+500.000 EXP <br><b style='color:#00c38a'>+16 Lượt Miễn Phí</b>", tickets: 16, icon: "👑" },
+            { id: "exp6", name: "Gói Thiên Vương", exp: 1650000, price: 1200000, desc: "LÊN THẲNG MAX CẤP 180<br><b style='color:#ff7675'>+18 Lượt Miễn Phí (Miễn Trảm)</b>", tickets: 18, icon: "🏆" }
         ];
 
         list.innerHTML = expPackages.map(pkg => {
@@ -16495,13 +16495,13 @@ function updateExpBarUI(totalExp) {
 }
 // CẬP NHẬT: Thứ bậc rương chuẩn - Tím là VIP nhất
 const LEVEL_MILESTONES = [
-    { level: 10, name: 'Rương Đồng', desc: 'Mở ngẫu nhiên 2 - 20 PMC', icon: 'images/ruong_dong.png', chestStyle: 'linear-gradient(135deg, #cd7f32, #8e4a23)', shadow: '#cd7f32' },
-    { level: 20, name: 'Rương Bạc', desc: 'Mở ngẫu nhiên 4 - 40 PMC', icon: 'images/ruong_bac.png', chestStyle: 'linear-gradient(135deg, #bdc3c7, #7f8c8d)', shadow: '#bdc3c7' },
-    { level: 30, name: 'Rương Vàng + Skin', desc: 'Thưởng PMC & Mở khóa Skin Đồng', skinId: 'bronze', icon: 'images/avatar_frames/bronze-crown.png', chestStyle: 'linear-gradient(135deg, #f1c40f, #e67e22)', shadow: '#f1c40f' },
-    { level: 60, name: 'Rương Bạch Kim + Skin', desc: 'Thưởng PMC & Mở khóa Skin Ngọc', skinId: 'jade', icon: 'images/avatar_frames/jade-flower.png', chestStyle: 'linear-gradient(135deg, #00b894, #0984e3)', shadow: '#00b894' },
-    { level: 90, name: 'Rương Kim Cương', desc: 'Thưởng ngẫu nhiên PMC (x5 giá trị)', icon: 'images/ruong_kim_cuong.png', chestStyle: 'linear-gradient(135deg, #74b9ff, #0984e3)', shadow: '#74b9ff' },
-    { level: 120, name: 'Rương Đỏ + Skin', desc: 'Thưởng PMC & Mở khóa Skin Long Vương', skinId: 'dragon', icon: 'images/avatar_frames/dragon-frame.png', chestStyle: 'linear-gradient(135deg, #ff4757, #c0392b)', shadow: '#ff4757' },
-    { level: 180, name: 'Rương Tím VIP + Skin', desc: 'Thưởng PMC KHỦNG & Skin Phượng Hoàng', skinId: 'phoenix', icon: 'images/avatar_frames/phoenix-frame.png', chestStyle: 'linear-gradient(135deg, #a55eea, #6c5ce7)', shadow: '#a55eea' }
+    { level: 10, name: 'Rương Đồng', desc: 'Ngẫu nhiên PMC & Tặng 2 Lượt Miễn Phí', tickets: 2, icon: 'images/ruong_dong.png', chestStyle: 'linear-gradient(135deg, #cd7f32, #8e4a23)', shadow: '#cd7f32' },
+    { level: 20, name: 'Rương Bạc', desc: 'Ngẫu nhiên PMC & Tặng 2 Lượt Miễn Phí', tickets: 2, icon: 'images/ruong_bac.png', chestStyle: 'linear-gradient(135deg, #bdc3c7, #7f8c8d)', shadow: '#bdc3c7' },
+    { level: 30, name: 'Rương Vàng + Skin', desc: 'Mở khóa Skin Đồng & 2 Lượt Miễn Phí', tickets: 2, skinId: 'bronze', icon: 'images/avatar_frames/bronze-crown.png', chestStyle: 'linear-gradient(135deg, #f1c40f, #e67e22)', shadow: '#f1c40f' },
+    { level: 60, name: 'Rương Bạch Kim + Skin', desc: 'Mở khóa Skin Ngọc & 2 Lượt Miễn Phí', tickets: 2, skinId: 'jade', icon: 'images/avatar_frames/jade-flower.png', chestStyle: 'linear-gradient(135deg, #00b894, #0984e3)', shadow: '#00b894' },
+    { level: 90, name: 'Rương Kim Cương', desc: 'Thưởng PMC KHỦNG & 2 Lượt Miễn Phí', tickets: 2, icon: 'images/ruong_kim_cuong.png', chestStyle: 'linear-gradient(135deg, #74b9ff, #0984e3)', shadow: '#74b9ff' },
+    { level: 120, name: 'Rương Đỏ + Skin', desc: 'Mở khóa Skin Long Vương & 2 Lượt Miễn Phí', tickets: 2, skinId: 'dragon', icon: 'images/avatar_frames/dragon-frame.png', chestStyle: 'linear-gradient(135deg, #ff4757, #c0392b)', shadow: '#ff4757' },
+    { level: 180, name: 'Rương Tím VIP + Skin', desc: 'Phượng Hoàng & 10 Lượt Miễn Phí VIP', tickets: 10, skinId: 'phoenix', icon: 'images/avatar_frames/phoenix-frame.png', chestStyle: 'linear-gradient(135deg, #a55eea, #6c5ce7)', shadow: '#a55eea' }
 ];
 
 async function renderLevelRewards() {
@@ -16632,6 +16632,10 @@ async function claimLevelChest(targetLevel, btnElement) {
         
         // Cộng PMC
         current.pmcBalance = (current.pmcBalance || 0) + rewardPMC;
+        // Cộng Vé miễn phí từ rương mốc
+        if (milestone.tickets) {
+            current.freeTickets = (Number(current.freeTickets) || 0) + milestone.tickets;
+        }
 
         // Nếu mốc đó có tặng kèm skin thì bỏ vô túi skin luôn
         if (milestone.skinId) {
@@ -16642,8 +16646,7 @@ async function claimLevelChest(targetLevel, btnElement) {
     });
 
     // Mở rương thành công thì báo chớp nháy
-    alert(`🎉 MỞ RƯƠNG THÀNH CÔNG!\n\nBạn nhận được: ${rewardPMC} PMC${milestone.skinId ? `\n🎁 Kèm theo Skin: ${milestone.name} (Đã thêm vào mục Hồ Sơ)` : ''}`);
-    
+    alert(`🎉 MỞ RƯƠNG THÀNH CÔNG!\n\nBạn nhận được: ${rewardPMC} PMC\n🎫 Được tặng thêm: ${milestone.tickets} Lượt Đánh Miễn Phí${milestone.skinId ? `\n🎁 Kèm theo Skin: ${milestone.name} (Đã thêm vào mục Hồ Sơ)` : ''}`);
     // Cập nhật lại ví ở màn hình chính và tải lại bảng rương
     loadWalletBalance();
     renderLevelRewards();
@@ -16708,6 +16711,10 @@ window.applyPendingExpToDatabase = async function() {
         let finalLevel = 1;
         let isServerSynced = false;
 
+        // BẪY CÀY CHAY: Lấy cấp độ cũ trước khi kéo số mới về
+        let oldExp = Number(localStorage.getItem('exp_cache') || 0);
+        let oldLevel = window.getLevelFromExp(oldExp);
+
         // Ping liên tục tối đa 5 giây để đợi Firebase nhả con số thật ra
         for (let i = 0; i < 20; i++) {
             const snap = await userRef.child('exp').once('value');
@@ -16722,18 +16729,31 @@ window.applyPendingExpToDatabase = async function() {
 
         // Nếu rớt mạng quá 5 giây thì đành lấy số ảo cộng lên cho Game khỏi hiện 0
         if (!isServerSynced) {
-            let fallbackExp = Number(localStorage.getItem('exp_cache') || 0) + window.pendingSessionEXP;
+            let fallbackExp = oldExp + window.pendingSessionEXP;
             finalExp = Math.max(0, fallbackExp);
         }
 
         finalLevel = window.getLevelFromExp(finalExp);
-        await userRef.update({ level: finalLevel }); // Đồng bộ nốt level lên fire
+
+        // CHUẨN BỊ GÓI DATA ĐỂ LƯU CẤP ĐỘ (VÀ VÉ MIỄN PHÍ NẾU CÓ)
+        const finalUpdates = { level: finalLevel };
+
+        // Nếu cấp mới lớn hơn cấp cũ -> Tặng vé tương ứng số cấp vừa vượt qua
+        if (finalLevel > oldLevel && window.pendingSessionEXP > 0) {
+            let ticketsGained = finalLevel - oldLevel;
+            
+            // Dùng increment để cộng dồn vé cực kỳ an toàn
+            finalUpdates.freeTickets = firebase.database.ServerValue.increment(ticketsGained);
+            
+            setTimeout(() => alert(`🎉 LÊN CẤP ${finalLevel}!\nĐược hệ thống thưởng ${ticketsGained} Lượt Đánh Miễn Phí!`), 800);
+        }
+
+        await userRef.update(finalUpdates); // Đồng bộ nốt level (và vé) lên fire
 
         // 3. GHI NHẬN SỐ THẬT TỪ FIREBASE ĐỂ VẼ LÊN GAME
         localStorage.setItem('exp_cache', finalExp);
         window.finalNewExpToAnimate = finalExp;
         window.showExpSummary(finalLevel);
-
     } catch (err) {
         console.error("Lỗi đồng bộ EXP từ Fire:", err);
         let fallbackExp = Number(localStorage.getItem('exp_cache') || 0) + window.pendingSessionEXP;
