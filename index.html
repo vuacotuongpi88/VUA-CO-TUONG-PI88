@@ -16812,9 +16812,24 @@ window.buyBackExp = async function() {
             });
         } catch(e) {}
 
-        alert(`Chuyển khoản thành công! Đã trừ ${costPMC} PMC. EXP của mày được bảo toàn.`);
+        // 👇👇 ĐÂY LÀ KHÚC CHỮA BỆNH TỤT EXP 👇👇
+        // Trả lại EXP vào Database vì lúc nãy nó lỡ trừ mất trên máy chủ rồi
+        const userRef = db.ref("wallets/" + walletKey);
+        await userRef.update({
+            exp: firebase.database.ServerValue.increment(costPMC),
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+
+        // Cộng trả lại biến hiển thị UI ở Local để thanh EXP đứng im đéo nhúc nhích
+        if (window.finalNewExpToAnimate !== undefined) {
+            window.finalNewExpToAnimate += costPMC;
+            localStorage.setItem('exp_cache', window.finalNewExpToAnimate);
+        }
+        // 👆👆 KẾT THÚC CHỮA BỆNH 👆👆
+
+        alert(`Mua lại thành công! Đã trừ ${costPMC} PMC. EXP của mày được bảo toàn nguyên vẹn.`);
         
-        // Gán EXP chờ về 0 để hàm closeExpSummary ĐÉO trừ của nó nữa
+        // Gán EXP chờ về 0 để hàm closeExpSummary ĐÉO làm trò ruồi nữa
         window.pendingSessionEXP = 0; 
         
         window.closeExpSummary();
