@@ -16652,41 +16652,35 @@ window.applyPendingExpToDatabase = async function() {
     }
 
     const walletKey = makeWalletDbKey();
-    const userRef = db.ref("wallets/" + walletKey);
-    
-    // 1. Lấy tạm Exp từ Cache phòng hờ đứt cáp ngay từ giây đầu tiên
-    let currentExp = Number(localStorage.getItem('exp_cache') || 0);
-    
+
     try {
-        // 2. Kéo data thật từ Server về (Chống null ảo)
-        const snap = await userRef.once("value");
-        if (snap.exists()) {
-            let current = snap.val();
-            currentExp = Number(current.exp || 0); // Lấy được Exp thật thì xài đồ thật
-        }
+        let newExpVal = 0;
         
-        let newExp = Math.max(0, currentExp + window.pendingSessionEXP);
-        let newLevel = window.getLevelFromExp(newExp);
-        
-        // 3. Ghi đè, dùng chuẩn TIMESTAMP của Firebase để đéo bị văng lỗi bảo mật nữa
-        await userRef.update({
-            exp: newExp,
-            level: newLevel,
-            updatedAt: firebase.database.ServerValue.TIMESTAMP // 🔥 SỬA THÀNH CÁI NÀY
+        // 1. Dùng transaction thọc thẳng vào nhánh "exp", đéo quan tâm nguyên cục ví đang bị update cái gì
+        await db.ref("wallets/" + walletKey + "/exp").transaction((currExp) => {
+            newExpVal = Math.max(0, Number(currExp || 0) + window.pendingSessionEXP);
+            return newExpVal; // Ép Server cộng chính xác trên số thực tế (88 + 2 = 90)
         });
 
-        // Cập nhật lại Cache
-        localStorage.setItem('exp_cache', newExp);
-        
-        window.finalNewExpToAnimate = newExp;
+        let newLevel = window.getLevelFromExp(newExpVal);
+
+        // 2. Cập nhật Level và thời gian sau khi EXP đã tính chuẩn
+        await db.ref("wallets/" + walletKey).update({
+            level: newLevel,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+
+        // 3. Cập nhật lại Cache và UI
+        localStorage.setItem('exp_cache', newExpVal);
+        window.finalNewExpToAnimate = newExpVal;
         window.showExpSummary(newLevel);
 
     } catch (err) {
         console.error("Lỗi lưu EXP:", err);
-        // 4. Fallback xịn: Dùng luôn currentExp vừa đọc được ở bước 2 để cộng, không bao giờ lo bị 0 + 2 = 2
-        let fallbackExp = Math.max(0, currentExp + window.pendingSessionEXP);
-        window.finalNewExpToAnimate = fallbackExp;
-        window.showExpSummary(window.getLevelFromExp(fallbackExp));
+        // Fallback: Lỡ rớt mạng
+        let fallbackExp = Number(localStorage.getItem('exp_cache') || 0) + window.pendingSessionEXP;
+        window.finalNewExpToAnimate = Math.max(0, fallbackExp);
+        window.showExpSummary(window.getLevelFromExp(window.finalNewExpToAnimate));
     }
 };
 
