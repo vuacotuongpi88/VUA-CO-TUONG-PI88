@@ -16266,10 +16266,15 @@ document.addEventListener("click", function(e) {
     color: #f7e7b1;
 }
 @media (max-width: 768px) {
+    /* Đã rút thằng .mission-top-tabs ra khỏi cái 1fr này */
     .mission-summary-grid,
-    .mission-top-tabs,
     .mission-pane-grid {
         grid-template-columns: 1fr;
+    }
+    
+    /* Ép 5 cái nút dàn thành 2 hàng (3 trên, 2 dưới) cho gọn gàng */
+    .mission-top-tabs {
+        grid-template-columns: repeat(3, 1fr); 
     }
     .mission-card-footer {
         flex-direction: column;
@@ -16370,17 +16375,6 @@ document.addEventListener("click", function(e) {
 <div id="mission-pane-referral" class="mission-pane"><div class="mission-pane-grid"></div></div>
 <!-- MỚI THÊM: Khu vực hiển thị Rương -->
 <div id="mission-pane-level" class="mission-pane"><div class="mission-pane-grid" id="level-reward-list"></div></div>
-        <div class="mission-top-tabs" id="mission-top-tabs">
-          <button class="mission-top-tab active" data-tab="day" onclick="switchMissionTab('day')">Ngày</button>
-          <button class="mission-top-tab" data-tab="week" onclick="switchMissionTab('week')">Tuần</button>
-          <button class="mission-top-tab" data-tab="month" onclick="switchMissionTab('month')">Tháng</button>
-          <button class="mission-top-tab" data-tab="referral" onclick="switchMissionTab('referral')">Mời bạn</button>
-        </div>
-
-        <div id="mission-pane-day" class="mission-pane show"><div class="mission-pane-grid"></div></div>
-        <div id="mission-pane-week" class="mission-pane"><div class="mission-pane-grid"></div></div>
-        <div id="mission-pane-month" class="mission-pane"><div class="mission-pane-grid"></div></div>
-        <div id="mission-pane-referral" class="mission-pane"><div class="mission-pane-grid"></div></div>
 
         <div class="mission-marketing-note" id="mission-marketing-note">
           Quỹ càng dày thì thưởng càng đậm. Đạt điều kiện là nhận thẳng vào ví PMC nội bộ, không chờ admin.
