@@ -5897,78 +5897,75 @@ margin-bottom: 14px;
         <div id="friend-list" class="friend-sections"></div>
     </div>
 </div>
- <div id="mobile-lobby-title" class="lobby-title-box lobby-title-mobile">
+<div id="mobile-lobby-title" class="lobby-title-box lobby-title-mobile">
     <div class="lobby-main-title">SẢNH CHỜ</div>
     <div class="lobby-sub-title">TRÚC LÂM TIÊN CẢNH</div>
 </div>
-        <!-- Dán cái này vào TRONG ruột thẻ <div class="mobile-ad-banner"> -->
-<div class="ad-slider-container">
-    <div class="ad-slider-track" id="ad-slider-track">
+
+<!-- NGUYÊN CỤC QUẢNG CÁO CHUẨN ĐƯỢC GÓI GỌN Ở ĐÂY -->
+<div id="mobile-ad-zone">
+    <div class="mobile-ad-banner">
         
-        <!-- Slide 1: Nạp Pi -->
-        <div class="ad-slide ad-bg-1" onclick="handleAdClick(1)">
-            <h3 style="color: #ff7675;">🔥 KHUYẾN MÃI NẠP PI</h3>
-            <p>1 Pi = 500 PMC! Nạp ngay để sắm Skin xịn và tham gia các trận cược lớn!</p>
-            <div class="ad-btn">NẠP NGAY ➔</div>
+        <!-- BẮT ĐẦU SLIDER QUẢNG CÁO NẰM BÊN TRONG BANNER -->
+        <div class="ad-slider-container">
+            <div class="ad-slider-track" id="ad-slider-track">
+                <div class="ad-slide ad-bg-1" onclick="handleAdClick(1)">
+                    <h3 style="color: #ff7675;">🔥 KHUYẾN MÃI NẠP PI</h3>
+                    <p>1 Pi = 500 PMC! Nạp ngay để sắm Skin xịn và tham gia các trận cược lớn!</p>
+                    <div class="ad-btn">NẠP NGAY ➔</div>
+                </div>
+                <div class="ad-slide ad-bg-2" onclick="handleAdClick(2)">
+                    <h3 style="color: #a29bfe;">🐉 RA MẮT LONG VƯƠNG</h3>
+                    <p>Khẳng định đẳng cấp Đại Gia với Skin Long Vương & Phượng Hoàng chớp sáng!</p>
+                    <div class="ad-btn">VÀO SHOP ➔</div>
+                </div>
+                <div class="ad-slide ad-bg-3" onclick="handleAdClick(3)">
+                    <h3 style="color: #55efc4;">🎯 CÀY NHIỆM VỤ NHẬN PMC</h3>
+                    <p>Hoàn thành nhiệm vụ hàng ngày, nhận ngay PMC miễn phí chảy thẳng vào ví!</p>
+                    <div class="ad-btn">NHẬN THƯỞNG ➔</div>
+                </div>
+                <div class="ad-slide ad-bg-4" onclick="handleAdClick(4)">
+                    <h3 style="color: #f1c40f;">🏆 ĐUA TOP CAO THỦ</h3>
+                    <p>Ghi danh lên Bảng Vàng! Đánh bại các Kỳ Vương khác để giành vinh quang!</p>
+                    <div class="ad-btn">XEM BẢNG TOP ➔</div>
+                </div>
+                <div class="ad-slide ad-bg-5" onclick="handleAdClick(5)">
+                    <h3 style="color: #fd79a8;">👥 THÊM BẠN THÊM VUI</h3>
+                    <p>Mời hảo hữu cùng tham gia, lập phòng kín solo riêng tư cực gắt!</p>
+                    <div class="ad-btn">MỜI BẠN NGAY ➔</div>
+                </div>
+                <div class="ad-slide ad-bg-6" onclick="handleAdClick(6)">
+                    <h3 style="color: #74b9ff;">🎁 MỞ RƯƠNG THĂNG CẤP</h3>
+                    <p>Thắng là có EXP! Lên cấp mở rương nhận PMC và Lượt đánh Miễn Phí!</p>
+                    <div class="ad-btn">XEM TIẾN ĐỘ ➔</div>
+                </div>
+            </div>
+            
+            <div class="ad-dots">
+                <div class="ad-dot active" onclick="goToAdSlide(0)"></div>
+                <div class="ad-dot" onclick="goToAdSlide(1)"></div>
+                <div class="ad-dot" onclick="goToAdSlide(2)"></div>
+                <div class="ad-dot" onclick="goToAdSlide(3)"></div>
+                <div class="ad-dot" onclick="goToAdSlide(4)"></div>
+                <div class="ad-dot" onclick="goToAdSlide(5)"></div>
+            </div>
         </div>
-
-        <!-- Slide 2: Shop Skin -->
-        <div class="ad-slide ad-bg-2" onclick="handleAdClick(2)">
-            <h3 style="color: #a29bfe;">🐉 RA MẮT LONG VƯƠNG</h3>
-            <p>Khẳng định đẳng cấp Đại Gia với Skin Long Vương & Phượng Hoàng chớp sáng!</p>
-            <div class="ad-btn">VÀO SHOP ➔</div>
-        </div>
-
-        <!-- Slide 3: Làm Nhiệm vụ -->
-        <div class="ad-slide ad-bg-3" onclick="handleAdClick(3)">
-            <h3 style="color: #55efc4;">🎯 CÀY NHIỆM VỤ NHẬN PMC</h3>
-            <p>Hoàn thành nhiệm vụ hàng ngày, nhận ngay PMC miễn phí chảy thẳng vào ví!</p>
-            <div class="ad-btn">NHẬN THƯỞNG ➔</div>
-        </div>
-
-        <!-- Slide 4: Đua Top -->
-        <div class="ad-slide ad-bg-4" onclick="handleAdClick(4)">
-            <h3 style="color: #f1c40f;">🏆 ĐUA TOP CAO THỦ</h3>
-            <p>Ghi danh lên Bảng Vàng! Đánh bại các Kỳ Vương khác để giành vinh quang!</p>
-            <div class="ad-btn">XEM BẢNG TOP ➔</div>
-        </div>
-
-        <!-- Slide 5: Kết bạn -->
-        <div class="ad-slide ad-bg-5" onclick="handleAdClick(5)">
-            <h3 style="color: #fd79a8;">👥 THÊM BẠN THÊM VUI</h3>
-            <p>Mời hảo hữu cùng tham gia, lập phòng kín solo riêng tư cực gắt!</p>
-            <div class="ad-btn">MỜI BẠN NGAY ➔</div>
-        </div>
-
-        <!-- Slide 6: Cày Cấp -->
-        <div class="ad-slide ad-bg-6" onclick="handleAdClick(6)">
-            <h3 style="color: #74b9ff;">🎁 MỞ RƯƠNG THĂNG CẤP</h3>
-            <p>Thắng là có EXP! Lên cấp mở rương nhận PMC và Lượt đánh Miễn Phí!</p>
-            <div class="ad-btn">XEM TIẾN ĐỘ ➔</div>
-        </div>
+        <!-- KẾT THÚC SLIDER QUẢNG CÁO -->
 
     </div>
 
-    <!-- Cục dấu chấm ở dưới -->
-    <div class="ad-dots">
-        <div class="ad-dot active" onclick="goToAdSlide(0)"></div>
-        <div class="ad-dot" onclick="goToAdSlide(1)"></div>
-        <div class="ad-dot" onclick="goToAdSlide(2)"></div>
-        <div class="ad-dot" onclick="goToAdSlide(3)"></div>
-        <div class="ad-dot" onclick="goToAdSlide(4)"></div>
-        <div class="ad-dot" onclick="goToAdSlide(5)"></div>
+    <!-- DANH SÁCH BÀN CỜ TƯỚNG -->
+    <div class="mobile-rank-card" onclick="openRankingModal(event)">
+        <div class="rank-board-icon">♟</div>
+        <div class="rank-board-text">
+            <strong>DANH SÁCH BÀN CỜ TƯỚNG</strong>
+            <small>Bấm vào bàn phù hợp để vào phòng. Thiếu người sẽ hiện chờ, đủ 2 người sẽ hiện đang chơi</small>
+        </div>
     </div>
 </div>
 
-           <div class="mobile-rank-card" onclick="openRankingModal(event)">
-                <div class="rank-board-icon">♟</div>
-                <div class="rank-board-text">
-                    <strong>DANH SÁCH BÀN CỜ TƯỚNG</strong>
-                    <small>Bấm vào bàn phù hợp để vào phòng. Thiếu người sẽ hiện chờ, đủ 2 người sẽ hiện đang chơi</small>
-                </div>
-            </div>
-        </div>
-        <div id="mobile-game-row">
+<div id="mobile-game-row">
+<!-- ... ĐOẠN NÀY LÀ CÁC NÚT VÀO GAME CỦA MẦY GIỮ NGUYÊN ... -->
             <div class="mobile-game-card" onclick="batDauTranDau('tong')">
                 <img src="images/co_tuong_new.png" alt="Cờ Tướng">
                 <span>CỜ TƯỚNG</span>
