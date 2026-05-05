@@ -13355,7 +13355,6 @@ listEl.innerHTML = list.map((p, i) => {
             value = `${p.skinCount} skin`;
             sub += ` • đang dùng: ${escapeTopHtml(p.equippedSkin)}`;
         } else if (arenaTopActiveTab === "record") {
-            // 🔥 SỬA CHỖ NÀY: Thắng >= 1 chữ Xanh, Thua >= 1 chữ Đỏ
             let winHtml = p.wins >= 1 ? `<span style="color: #55efc4;">Thắng ${p.wins}</span>` : `Thắng ${p.wins}`;
             let lossHtml = p.losses >= 1 ? `<span style="color: #ff7675;">Thua ${p.losses}</span>` : `Thua ${p.losses}`;
             value = `V2 ${winHtml} / ${lossHtml}`;
@@ -13381,12 +13380,10 @@ listEl.innerHTML = list.map((p, i) => {
             statusHtml += ` <span class="top-status-chip home">● ĐANG RẢNH</span>`;
         }
 
-        // 🔥 SỬA CHỖ NÀY: Ai Offline là ẩn mất dạng nút THÁCH ĐẤU luôn
         let challengeBtn = "";
         if (isMe) {
             challengeBtn = `<button class="top-challenge-btn" disabled style="opacity:.45;">LÀ MẦY</button>`;
         } else if (p.online) {
-            // Chỉ ai Đang rảnh hoặc Đang đấu (còn Online) mới hiện nút
             challengeBtn = `<button class="top-challenge-btn" onclick="openTopChallengeModal('${escapeTopHtml(p.walletKey)}')">THÁCH ĐẤU</button>`;
         }
 
@@ -13394,10 +13391,25 @@ listEl.innerHTML = list.map((p, i) => {
             ? `<button class="top-watch-btn" onclick="watchTopPlayingRoom('${escapeTopHtml(p.liveRoomId)}')">👁️ XEM (${Number(p.viewerCount || 0)})</button>`
             : "";
 
+        // TẠO CẤU TRÚC ỐP SKIN CHO AVATAR BẢNG TOP
+        const skinData = getAvatarSkinById(p.equippedSkin || "none");
+        const frameSrc = skinData.frameImage || "";
+        const frameDisplay = (p.equippedSkin === "none" || !frameSrc) ? "display:none;" : "";
+        
+        const avatarWithSkinHtml = `
+            <div class="avatar-frame-shell" data-skin="${escapeTopHtml(p.equippedSkin)}" style="width:38px; height:38px; min-width:38px; position:relative; display:inline-flex; align-items:center; justify-content:center;">
+                <img class="avatar-core" src="${escapeTopHtml(p.photo)}" alt="avatar" style="width:70%; height:70%; object-fit:cover; border-radius:50%; border:1px solid rgba(255,209,102,0.8); background:#111;">
+                <img class="avatar-frame-overlay" src="${escapeTopHtml(frameSrc)}" style="position:absolute; width:135%; height:135%; top:50%; left:50%; transform:translate(-50%, -50%); object-fit:contain; pointer-events:none; z-index:6; filter:drop-shadow(0 0 5px rgba(0,0,0,0.8)); ${frameDisplay}">
+            </div>
+        `;
+
         return `
             <div class="top-player-row">
                 <div class="top-player-rank">#${i + 1}</div>
-                <img class="top-player-avatar" src="${escapeTopHtml(p.photo)}" alt="avatar">
+                
+                <!-- BÊ NGUYÊN CỤC AVATAR CÓ SKIN VÀO ĐÂY -->
+                ${avatarWithSkinHtml}
+                
                 <div>
                     <div class="top-player-name">${escapeTopHtml(p.name)}</div>
                     <div class="top-player-sub">${sub} ${statusHtml}</div>
@@ -16504,7 +16516,7 @@ function ensureArenaSkinButton() {
     if (!btn) {
         btn = document.createElement("div");
         btn.id = "arena-skin-btn";
-        btn.innerHTML = "🎭";
+        btn.innerHTML = "🛒"; // <--- ĐỔI MẶT NẠ THÀNH CÁI XE ĐẨY Ở ĐÂY
         btn.onclick = openAvatarSkinShop;
     }
 
