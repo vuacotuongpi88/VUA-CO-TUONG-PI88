@@ -1583,7 +1583,6 @@ box-shadow: 0 5px 20px rgba(0, 0, 0, 0.8);
     border: 2px solid #55efc4;
     border-radius: 20px;
     box-shadow: 0 0 18px rgba(85, 239, 196, 0.18);
-    padding: 18px;
     box-sizing: border-box;
 }
 
@@ -2892,7 +2891,6 @@ color: transparent;
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    padding: 14px;
     box-sizing: border-box;
     text-align: center;
 }
@@ -5426,6 +5424,96 @@ margin-bottom: 14px;
 @keyframes slideDown {
     to { transform: translateY(0); }
 }
+/* ===== SLIDER QUẢNG CÁO ===== */
+.ad-slider-container {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+    border-radius: 16px; /* Ôm theo viền khung */
+}
+
+.ad-slider-track {
+    display: flex;
+    width: 600%; /* Vì có 6 slide */
+    height: 100%;
+    transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.ad-slide {
+    width: 16.6666%; /* 100 / 6 */
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 15px;
+    box-sizing: border-box;
+    cursor: pointer;
+    position: relative;
+}
+
+/* Nền cho 6 loại quảng cáo khác nhau */
+.ad-bg-1 { background: linear-gradient(135deg, #2d3436 0%, #d63031 100%); }
+.ad-bg-2 { background: linear-gradient(135deg, #2d3436 0%, #6c5ce7 100%); }
+.ad-bg-3 { background: linear-gradient(135deg, #093028 0%, #00b894 100%); }
+.ad-bg-4 { background: linear-gradient(135deg, #3d2204 0%, #f39c12 100%); }
+.ad-bg-5 { background: linear-gradient(135deg, #180933 0%, #8e44ad 100%); }
+.ad-bg-6 { background: linear-gradient(135deg, #0a1f2b 0%, #0984e3 100%); }
+
+.ad-slide h3 {
+    margin: 0 0 8px 0;
+    font-size: 18px;
+    color: #fff;
+    text-shadow: 0 0 10px rgba(0,0,0,0.8);
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.ad-slide p {
+    margin: 0;
+    font-size: 12px;
+    color: #dfe6e9;
+    line-height: 1.4;
+    text-shadow: 0 0 5px rgba(0,0,0,0.8);
+}
+
+.ad-slide .ad-btn {
+    margin-top: 10px;
+    background: rgba(0,0,0,0.5);
+    border: 1px solid #fff;
+    color: #fff;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+/* Dấu chấm điều hướng ở dưới đáy */
+.ad-dots {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 6px;
+}
+
+.ad-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.4);
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.ad-dot.active {
+    background: #55efc4;
+    box-shadow: 0 0 6px #55efc4;
+    width: 16px;
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -5805,11 +5893,64 @@ margin-bottom: 14px;
     <div class="lobby-main-title">SẢNH CHỜ</div>
     <div class="lobby-sub-title">TRÚC LÂM TIÊN CẢNH</div>
 </div>
-        <div id="mobile-ad-zone">
-            <div class="mobile-ad-banner">
-                <div class="ad-title">KHU QUẢNG CÁO / SỰ KIỆN</div>
-                <div class="ad-sub">Mầy có thể thay bằng banner giải đấu, tài trợ, thông báo hệ thống...</div>
-            </div>
+        <!-- Dán cái này vào TRONG ruột thẻ <div class="mobile-ad-banner"> -->
+<div class="ad-slider-container">
+    <div class="ad-slider-track" id="ad-slider-track">
+        
+        <!-- Slide 1: Nạp Pi -->
+        <div class="ad-slide ad-bg-1" onclick="handleAdClick(1)">
+            <h3 style="color: #ff7675;">🔥 KHUYẾN MÃI NẠP PI</h3>
+            <p>1 Pi = 500 PMC! Nạp ngay để sắm Skin xịn và tham gia các trận cược lớn!</p>
+            <div class="ad-btn">NẠP NGAY ➔</div>
+        </div>
+
+        <!-- Slide 2: Shop Skin -->
+        <div class="ad-slide ad-bg-2" onclick="handleAdClick(2)">
+            <h3 style="color: #a29bfe;">🐉 RA MẮT LONG VƯƠNG</h3>
+            <p>Khẳng định đẳng cấp Đại Gia với Skin Long Vương & Phượng Hoàng chớp sáng!</p>
+            <div class="ad-btn">VÀO SHOP ➔</div>
+        </div>
+
+        <!-- Slide 3: Làm Nhiệm vụ -->
+        <div class="ad-slide ad-bg-3" onclick="handleAdClick(3)">
+            <h3 style="color: #55efc4;">🎯 CÀY NHIỆM VỤ NHẬN PMC</h3>
+            <p>Hoàn thành nhiệm vụ hàng ngày, nhận ngay PMC miễn phí chảy thẳng vào ví!</p>
+            <div class="ad-btn">NHẬN THƯỞNG ➔</div>
+        </div>
+
+        <!-- Slide 4: Đua Top -->
+        <div class="ad-slide ad-bg-4" onclick="handleAdClick(4)">
+            <h3 style="color: #f1c40f;">🏆 ĐUA TOP CAO THỦ</h3>
+            <p>Ghi danh lên Bảng Vàng! Đánh bại các Kỳ Vương khác để giành vinh quang!</p>
+            <div class="ad-btn">XEM BẢNG TOP ➔</div>
+        </div>
+
+        <!-- Slide 5: Kết bạn -->
+        <div class="ad-slide ad-bg-5" onclick="handleAdClick(5)">
+            <h3 style="color: #fd79a8;">👥 THÊM BẠN THÊM VUI</h3>
+            <p>Mời hảo hữu cùng tham gia, lập phòng kín solo riêng tư cực gắt!</p>
+            <div class="ad-btn">MỜI BẠN NGAY ➔</div>
+        </div>
+
+        <!-- Slide 6: Cày Cấp -->
+        <div class="ad-slide ad-bg-6" onclick="handleAdClick(6)">
+            <h3 style="color: #74b9ff;">🎁 MỞ RƯƠNG THĂNG CẤP</h3>
+            <p>Thắng là có EXP! Lên cấp mở rương nhận PMC và Lượt đánh Miễn Phí!</p>
+            <div class="ad-btn">XEM TIẾN ĐỘ ➔</div>
+        </div>
+
+    </div>
+
+    <!-- Cục dấu chấm ở dưới -->
+    <div class="ad-dots">
+        <div class="ad-dot active" onclick="goToAdSlide(0)"></div>
+        <div class="ad-dot" onclick="goToAdSlide(1)"></div>
+        <div class="ad-dot" onclick="goToAdSlide(2)"></div>
+        <div class="ad-dot" onclick="goToAdSlide(3)"></div>
+        <div class="ad-dot" onclick="goToAdSlide(4)"></div>
+        <div class="ad-dot" onclick="goToAdSlide(5)"></div>
+    </div>
+</div>
 
            <div class="mobile-rank-card" onclick="openRankingModal(event)">
                 <div class="rank-board-icon">♟</div>
@@ -17090,7 +17231,88 @@ window.updateExpBarUI = function(totalExp) {
     if(fill) fill.style.width = pct + "%";
     if(text) text.innerText = `CẤP ${currentLevel} • ${Math.floor(currentLevelProgress)} / ${expForNextLevel} EXP`;
 };
+// --- LOGIC CHO BANNER QUẢNG CÁO TỰ TRƯỢT ---
+let currentAdIndex = 0;
+const totalAds = 6;
+let adIntervalTimer = null;
 
+function goToAdSlide(index) {
+    currentAdIndex = index;
+    const track = document.getElementById("ad-slider-track");
+    if (track) {
+        // Đẩy track qua trái: Mỗi slide chiếm 16.666% tổng width của track
+        track.style.transform = `translateX(-${currentAdIndex * (100 / totalAds)}%)`;
+    }
+    
+    // Cập nhật dấu chấm
+    const dots = document.querySelectorAll(".ad-dot");
+    dots.forEach((dot, i) => {
+        dot.classList.toggle("active", i === currentAdIndex);
+    });
+
+    // Reset lại timer để nó không bị trượt kép nếu người dùng vừa bấm tay
+    resetAdTimer();
+}
+
+function nextAdSlide() {
+    currentAdIndex = (currentAdIndex + 1) % totalAds;
+    goToAdSlide(currentAdIndex);
+}
+
+function resetAdTimer() {
+    if (adIntervalTimer) clearInterval(adIntervalTimer);
+    adIntervalTimer = setInterval(nextAdSlide, 4000); // Tự động trượt mỗi 4 giây
+}
+
+// Bắt đầu chạy khi load xong
+document.addEventListener("DOMContentLoaded", () => {
+    resetAdTimer();
+});
+
+// XỬ LÝ KHI CLICK VÀO QUẢNG CÁO
+window.handleAdClick = function(slideNumber) {
+    switch(slideNumber) {
+        case 1:
+            // Khuyến mãi Nạp Pi
+            if (typeof openWallet === 'function') openWallet('nap');
+            break;
+        case 2:
+            // Mở Shop Skin
+            if (typeof openAvatarSkinShop === 'function') openAvatarSkinShop();
+            break;
+        case 3:
+            // Mở bảng Nhiệm vụ (Hub)
+            if (typeof openMissionHub === 'function') openMissionHub();
+            break;
+        case 4:
+            // Đua Top Cao Thủ
+            if (typeof openArenaTopModal === 'function') openArenaTopModal();
+            break;
+        case 5:
+            // Kết bạn (Nếu là điện thoại thì xổ menu bạn bè)
+            if (window.innerWidth <= 600) {
+                const friendBox = document.getElementById("mobile-friend-box");
+                if (friendBox) friendBox.classList.add("show");
+            } else {
+                // Nếu PC mầy có hàm mở bạn bè riêng thì nhét vô đây
+                alert("Mở tab Bạn Bè phía dưới để mời nhé!");
+            }
+            break;
+        case 6:
+            // Mở Rương Cấp độ trong Mission Hub
+            if (typeof openMissionHub === 'function') {
+                openMissionHub();
+                // Ép nó nhảy qua tab Cấp Độ
+                setTimeout(() => {
+                    if(typeof switchMissionTab === 'function') {
+                        switchMissionTab('level');
+                        if(typeof renderLevelRewards === 'function') renderLevelRewards();
+                    }
+                }, 300);
+            }
+            break;
+    }
+};
 </script>
 <!-- BẢNG ĐẾM NGƯỢC CHỜ 5 GIÂY (CHỐNG LAG FIREBASE) -->
 <div id="exit-countdown-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:99999; align-items:center; justify-content:center; backdrop-filter:blur(5px);">
