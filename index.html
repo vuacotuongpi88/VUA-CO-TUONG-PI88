@@ -17331,20 +17331,21 @@ window.handleAdClick = function(slideNumber) {
             break;
     }
 };
-// BÙA TỰ ĐỘNG GẮN TIẾNG BẤM (TAP) CHO TOÀN BỘ NÚT NGOÀI SẢNH CHỜ
-document.addEventListener("DOMContentLoaded", () => {
-    // Chờ 1 giây để giao diện load xong hết
-    setTimeout(() => {
-        // Gom cổ tất cả các nút: button thường, div có chữ btn, các tab menu, các ô chọn game...
-        const allButtons = document.querySelectorAll("button, [id*='btn'], [class*='btn'], .mission-top-tab, .avatar-shop-tab, .menu-item, .mobile-game-card, .menu-card");
-        
-        allButtons.forEach(btn => {
-            // Cứ chạm hay click vào là phát tiếng 'tap'
-            btn.addEventListener("mousedown", () => playSnd('tap'));
-            btn.addEventListener("touchstart", () => playSnd('tap'), {passive: true});
-        });
-    }, 1000);
-});
+// 🔥 BÙA GẮN TIẾNG TAP TOÀN CỤC (CÂN LUÔN NÚT SINH RA ĐỘNG)
+document.addEventListener("pointerdown", function(e) {
+    // 1. Bỏ qua khu vực quân cờ và bàn cờ (vì tụi nó đã kêu tiếng 'click' cộc cạch riêng rồi)
+    if (e.target.closest('.piece') || e.target.closest('#board')) {
+        return;
+    }
+
+    // 2. Tìm xem vị trí mầy vừa chạm có phải là nút bấm hay không
+    const isClickable = e.target.closest("button, [id*='btn'], [class*='btn'], .mission-top-tab, .avatar-shop-tab, .menu-item, .mobile-game-card, .menu-card, .close, .top-close, .rank-close, .mission-hub-close, .social-icon, .ad-dot");
+
+    // 3. Nếu đúng là khu vực có thể bấm -> Phát tiếng 'tap' ngay và luôn!
+    if (isClickable) {
+        playSnd('tap');
+    }
+}, {passive: true});
 </script>
 <!-- BẢNG ĐẾM NGƯỢC CHỜ 5 GIÂY (CHỐNG LAG FIREBASE) -->
 <div id="exit-countdown-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:99999; align-items:center; justify-content:center; backdrop-filter:blur(5px);">
