@@ -5040,11 +5040,10 @@ margin-bottom: 14px;
 /* ===== SHOP SKIN TABS / TÚI SKIN ===== */
 .avatar-shop-tabs {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr; /* SỬA Ở ĐÂY: Thêm 1 chữ 1fr nữa để thành 3 cột */
     gap: 8px;
     margin: 10px 0 12px;
 }
-
 .avatar-shop-tab {
     padding: 9px 10px !important;
     border-radius: 12px !important;
@@ -5473,17 +5472,23 @@ margin-bottom: 14px;
     <div class="modal-content avatar-shop-box">
         <span class="close" onclick="closeAvatarSkinShop()">&times;</span>
 
-        <h3 style="color:#55efc4; margin:0;">SHOP SKIN AVATAR</h3>
+        <h3 style="color:#55efc4; margin:0;">CỬA HÀNG VẬT PHẨM</h3>
         <div id="avatar-skin-shop-balance" class="avatar-shop-balance">Số dư: 0 PMC</div>
 
-<div class="avatar-shop-tabs">
-    <button id="avatar-shop-tab-shop" class="avatar-shop-tab active" onclick="setAvatarSkinShopTab('shop')">
-        🛒 SHOP
-    </button>
-    <button id="avatar-shop-tab-bag" class="avatar-shop-tab" onclick="setAvatarSkinShopTab('bag')">
-        🎒 TÚI
-    </button>
-</div>
+        <div class="avatar-shop-tabs">
+            <button id="avatar-shop-tab-shop" class="avatar-shop-tab active" onclick="setAvatarSkinShopTab('shop')">
+                🛒 SKIN
+            </button>
+            <button id="avatar-shop-tab-bag" class="avatar-shop-tab" onclick="setAvatarSkinShopTab('bag')">
+                🎒 TÚI
+            </button>
+            <!-- THÊM TAB MUA EXP Ở ĐÂY -->
+            <button id="avatar-shop-tab-exp" class="avatar-shop-tab" onclick="setAvatarSkinShopTab('exp')">
+                ✨ MUA EXP
+            </button>
+        </div>
+
+        <div id="avatar-skin-shop-list" class="avatar-shop-list"></div>
 
 <div id="avatar-skin-shop-list" class="avatar-shop-list"></div>
     </div>
@@ -10432,45 +10437,82 @@ function avatarShopEscape(text) {
 }
 let avatarSkinShopTab = "shop";
 
-function setAvatarSkinShopTab(tab) {
-    avatarSkinShopTab = tab === "bag" ? "bag" : "shop";
-    renderAvatarSkinShop();
+window.avatarSkinShopTab = "shop";
+
+window.setAvatarSkinShopTab = function(tab) {
+    window.avatarSkinShopTab = tab; // Có thể là "shop", "bag", hoặc "exp"
+    window.renderAvatarSkinShop();
 }
 
-function refreshAvatarSkinShopTabs() {
+window.refreshAvatarSkinShopTabs = function() {
     const shopTab = document.getElementById("avatar-shop-tab-shop");
     const bagTab = document.getElementById("avatar-shop-tab-bag");
+    const expTab = document.getElementById("avatar-shop-tab-exp");
 
-    if (shopTab) shopTab.classList.toggle("active", avatarSkinShopTab === "shop");
-    if (bagTab) bagTab.classList.toggle("active", avatarSkinShopTab === "bag");
+    if (shopTab) shopTab.classList.toggle("active", window.avatarSkinShopTab === "shop");
+    if (bagTab) bagTab.classList.toggle("active", window.avatarSkinShopTab === "bag");
+    if (expTab) expTab.classList.toggle("active", window.avatarSkinShopTab === "exp");
 }
-function renderAvatarSkinShop() {
+
+window.renderAvatarSkinShop = function() {
     const list = document.getElementById("avatar-skin-shop-list");
     const balance = document.getElementById("avatar-skin-shop-balance");
     if (!list) return;
 
-    refreshAvatarSkinShopTabs();
+    window.refreshAvatarSkinShopTabs();
 
-    const owned = getOwnedAvatarSkins();
-    const equipped = getEquippedAvatarSkin();
     const currentPmc = getPmcBalance();
-
-    const rawUserPhoto = (localStorage.getItem("user-photo") || "").trim();
-    const isDefaultChessAvatar =
-        !rawUserPhoto ||
-        rawUserPhoto.includes("do_tuong") ||
-        rawUserPhoto.includes("den_tuong");
-
-    const currentPhoto = isDefaultChessAvatar ? "" : rawUserPhoto;
-    const avatarPreviewStyle = currentPhoto ? "" : "display:none;";
-
     if (balance) {
         balance.innerText = "Số dư: " + formatPMC(currentPmc) + " PMC";
     }
 
-    let skinsToRender = [];
+    // ============================================
+    // NẾU MỞ TAB MUA EXP
+    // ============================================
+    if (window.avatarSkinShopTab === "exp") {
+        const expPackages = [
+            { id: "exp1", name: "Gói Tân Binh", exp: 1000, price: 1000, desc: "+1.000 EXP", icon: "🌱" },
+            { id: "exp2", name: "Gói Thương Gia", exp: 5000, price: 4800, desc: "+5.000 EXP (Rẻ hơn 200)", icon: "💰" },
+            { id: "exp3", name: "Gói Lãnh Chúa", exp: 20000, price: 18500, desc: "+20.000 EXP (Rẻ hơn 1.500)", icon: "👑" },
+            { id: "exp4", name: "Gói Tông Sư", exp: 100000, price: 85000, desc: "+100.000 EXP (Siêu ưu đãi)", icon: "🐉" }
+        ];
 
-    if (avatarSkinShopTab === "bag") {
+        list.innerHTML = expPackages.map(pkg => {
+            const canBuy = currentPmc >= pkg.price;
+            const btnClass = canBuy ? "avatar-shop-btn" : "avatar-shop-btn locked";
+            const btnAttr = canBuy ? `onclick="window.buyExpDirectly(${pkg.exp}, ${pkg.price})"` : "disabled";
+            const btnText = canBuy ? "MUA" : "THIẾU PMC";
+            
+            return `
+                <div class="avatar-shop-card">
+                    <div style="width:48px;height:48px; display:flex; align-items:center; justify-content:center; background:#111; border-radius:50%; border:1px solid #f4c542; font-size:24px;">
+                        ${pkg.icon}
+                    </div>
+                    <div>
+                        <div class="avatar-shop-name" style="color:#f4c542;">${pkg.name}</div>
+                        <div class="avatar-shop-desc">${pkg.desc}</div>
+                        <div class="avatar-shop-price">${formatPMC(pkg.price)} PMC</div>
+                    </div>
+                    <button class="${btnClass}" ${btnAttr}>${btnText}</button>
+                </div>
+            `;
+        }).join("");
+        return;
+    }
+
+    // ============================================
+    // NẾU MỞ TAB SHOP SKIN HAY TÚI SKIN (Logic gốc của mầy)
+    // ============================================
+    const owned = getOwnedAvatarSkins();
+    const equipped = getEquippedAvatarSkin();
+
+    const rawUserPhoto = (localStorage.getItem("user-photo") || "").trim();
+    const isDefaultChessAvatar = !rawUserPhoto || rawUserPhoto.includes("do_tuong") || rawUserPhoto.includes("den_tuong");
+    const currentPhoto = isDefaultChessAvatar ? "" : rawUserPhoto;
+    const avatarPreviewStyle = currentPhoto ? "" : "display:none;";
+
+    let skinsToRender = [];
+    if (window.avatarSkinShopTab === "bag") {
         skinsToRender = AVATAR_SKINS.filter(skin => owned[skin.id]);
     } else {
         skinsToRender = AVATAR_SKINS.filter(skin => skin.id !== "none");
@@ -10479,10 +10521,8 @@ function renderAvatarSkinShop() {
     if (skinsToRender.length === 0) {
         list.innerHTML = `
             <div class="avatar-shop-empty">
-                Túi skin đang trống.<br>
-                Qua tab SHOP mua skin trước.
-            </div>
-        `;
+                Túi skin đang trống.<br>Qua tab SHOP mua skin trước.
+            </div>`;
         return;
     }
 
@@ -10496,20 +10536,15 @@ function renderAvatarSkinShop() {
         let btnAttr = "";
         let extraLabel = "";
 
-        if (avatarSkinShopTab === "bag") {
+        if (window.avatarSkinShopTab === "bag") {
             if (isEquipped) {
-                btnText = "ĐANG GẮN";
-                btnClass += " equipped";
-                btnAttr = "disabled";
+                btnText = "ĐANG GẮN"; btnClass += " equipped"; btnAttr = "disabled";
             } else {
-                btnText = "GẮN";
-                btnAttr = `onclick="equipAvatarSkin('${skin.id}')"`;
+                btnText = "GẮN"; btnAttr = `onclick="equipAvatarSkin('${skin.id}')"`;
             }
         } else {
             if (isOwned) {
-                btnText = "ĐÃ CÓ";
-                btnClass += " equipped";
-                btnAttr = "disabled";
+                btnText = "ĐÃ CÓ"; btnClass += " equipped"; btnAttr = "disabled";
                 extraLabel = `<div class="avatar-shop-owned-label">Đã nằm trong túi</div>`;
             } else {
                 btnText = canBuy ? "MUA" : "THIẾU PMC";
@@ -10523,43 +10558,87 @@ function renderAvatarSkinShop() {
         return `
             <div class="avatar-shop-card">
                 <div class="avatar-frame-shell" data-skin="${skin.id}" style="width:48px;height:48px;">
-                    <img
-                        class="avatar-core avatar-shop-preview"
-                        src="${avatarShopEscape(currentPhoto)}"
-                        alt="${avatarShopEscape(skin.name)}"
-                        style="${avatarPreviewStyle}"
-                    >
-                    <img
-                        class="avatar-frame-overlay"
-                        src="${avatarShopEscape(skin.frameImage || "")}"
-                        alt=""
-                        style="${skin.id === "none" ? "display:none;" : ""}"
-                    >
+                    <img class="avatar-core avatar-shop-preview" src="${avatarShopEscape(currentPhoto)}" alt="${avatarShopEscape(skin.name)}" style="${avatarPreviewStyle}">
+                    <img class="avatar-frame-overlay" src="${avatarShopEscape(skin.frameImage || "")}" alt="" style="${skin.id === "none" ? "display:none;" : ""}">
                 </div>
-
                 <div>
                     <div class="avatar-shop-name">${avatarShopEscape(skin.name)}</div>
                     <div class="avatar-shop-desc">${avatarShopEscape(skin.desc)}</div>
                     <div class="avatar-shop-price">${priceText}</div>
                     ${extraLabel}
                 </div>
-
                 <button class="${btnClass}" ${btnAttr}>${btnText}</button>
             </div>
         `;
     }).join("");
-}
-window.syncEquippedAvatarSkinToRoom = async function(skinId) {
-    if (!currentRoomId || !mySide) return;
+};
 
-    // LỚP KHIÊN THÉP: Chống tạo bóng ma từ việc đồng bộ Skin
-    const snap = await db.ref("matches/" + currentRoomId + "/players/" + mySide).once("value");
-    if (!snap.exists()) return;
+// HÀM XỬ LÝ MUA EXP TRỰC TIẾP
+window.buyExpDirectly = async function(expAmount, pmcCost) {
+    if (window.isBuyingExp) return;
+    
+    const currentPmc = getPmcBalance();
+    if (currentPmc < pmcCost) {
+        alert("Mầy không đủ PMC!");
+        return;
+    }
 
-    await db.ref("matches/" + currentRoomId + "/players/" + mySide).update({
-        avatarSkin: skinId,
-        updatedAt: firebase.database.ServerValue.TIMESTAMP
-    }).catch(err => console.error("Lỗi sync skin vào phòng:", err));
+    if (!confirm(`Đại gia muốn dùng ${pmcCost.toLocaleString('vi-VN')} PMC để đổi lấy ${expAmount.toLocaleString('vi-VN')} EXP?`)) {
+        return;
+    }
+
+    window.isBuyingExp = true;
+
+    try {
+        const walletKey = makeWalletDbKey();
+        const adminWallet = "pi_admin_master"; // Tiền chảy thẳng về ví Admin
+
+        // 1. Trừ tiền người chơi
+        const paid = await adjustPmcWalletByKey(walletKey, -pmcCost);
+        if (paid == null) throw new Error("Thanh toán lỗi");
+
+        // Bắn tiền cho Admin
+        try {
+            await adjustPmcWalletByKey(adminWallet, pmcCost);
+            await db.ref("walletTransactions").push({
+                type: "buy_exp_package", 
+                walletKey: walletKey, 
+                adminWalletKey: adminWallet,
+                feePMC: pmcCost, 
+                expGained: expAmount,
+                createdAt: Date.now(), 
+                status: "done"
+            });
+        } catch(e) {} // Lỗi ghi lịch sử Admin kệ mẹ nó, tiền trừ xong rồi
+
+        // 2. Bơm EXP vào người chơi và tự động tính level mới
+        const userRef = db.ref("wallets/" + walletKey);
+        await userRef.transaction((current) => {
+            if (!current) current = {}; 
+            let oldExp = Number(current.exp || 0);
+            let newExp = oldExp + expAmount;
+            current.exp = newExp;
+            current.level = window.getLevelFromExp(newExp); // Lấy hàm có sẵn của mầy
+            return current;
+        });
+
+        // 3. Render lại ví, cập nhật thanh EXP và Shop
+        await loadWalletBalance();
+        
+        // Tạo vài đóm sáng EXP rơi lả tả cho đại gia sướng mắt
+        if (typeof window.spawnExpEffect === 'function') {
+            for(let i=0; i<3; i++) setTimeout(() => window.spawnExpEffect(true), i * 300);
+        }
+
+        alert(`Chúc mừng! Đã bơm thành công ${expAmount.toLocaleString('vi-VN')} EXP vào người!`);
+        window.renderAvatarSkinShop(); // Tải lại số dư PMC hiển thị trong Shop
+        
+    } catch(err) {
+        console.error("Lỗi mua EXP:", err);
+        alert("Có lỗi xảy ra khi giao dịch.");
+    } finally {
+        window.isBuyingExp = false;
+    }
 };
 
 function refreshRoomAvatarSkinUI() {
