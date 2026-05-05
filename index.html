@@ -16574,17 +16574,18 @@ async function renderLevelRewards() {
                 <div class="mission-card-progress-fill" style="width:${progressPct}%; background:${isReady ? 'linear-gradient(90deg, #f1c40f, #e67e22)' : ''}"></div>
             </div>
             
-            <!-- ÉP HIỂN THỊ NẰM NGANG (ROW) KHÔNG BỊ XẾP CHỒNG LÊN NHAU -->
+            <!-- ÉP HIỂN THỊ NẰM NGANG VÀ ĐƯA NÚT LÊN TRƯỚC, RƯƠNG RA SAU -->
             <div style="display: flex; flex-direction: row; gap: 12px; align-items: stretch; margin-top: 14px;">
                 
-                <!-- Ô BÊN TRÁI: RƯƠNG (Cố định chiều rộng vuông vức) -->
+                <!-- Ô BÊN TRÁI BÂY GIỜ LÀ NÚT NHẬN -->
+                <button class="${btnClass}" ${onclick} ${isLocked || isClaimed ? "disabled" : ""} style="flex: 1; margin: 0; min-height: 48px; border-radius: 12px;">${btnText}</button>
+
+                <!-- Ô BÊN PHẢI BÂY GIỜ LÀ RƯƠNG -->
                 <div style="flex-shrink: 0; width: 64px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); border-radius: 12px; border: 1px dashed rgba(85, 239, 196, 0.3);">
                     ${tempChestHtml} 
                     <!-- SAU NÀY CÓ ẢNH THẬT THÌ THAY \${tempChestHtml} BẰNG THẺ <img> CỦA MẦY -->
                 </div>
-
-                <!-- Ô BÊN PHẢI: NÚT NHẬN (Dùng flex: 1 để giãn dài ra chiếm hết chỗ trống) -->
-                <button class="${btnClass}" ${onclick} ${isLocked || isClaimed ? "disabled" : ""} style="flex: 1; margin: 0; min-height: 48px; border-radius: 12px;">${btnText}</button>
+                
             </div>
 
         </div>`;
