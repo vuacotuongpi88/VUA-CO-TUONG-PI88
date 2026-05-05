@@ -7000,17 +7000,21 @@ function refreshTimerRings() {
 
 
 function endGame(main, sub) {
-isGameOver = true;
+    isGameOver = true;
     clearInterval(interval);
     clearInterval(readyInterval);
 
-    // --- XÓA CÁI LỖI ĐI VÀ DÁN ĐOẠN NÀY VÀO ---
-    if (!isSpectatorMode && sub.includes("THẮNG")) {
-        let winnerSide = sub.includes("ĐỎ") ? "do" : "den";
-        if (mySide === winnerSide) {
-            window.pendingSessionEXP = (window.pendingSessionEXP || 0) + window.getExpByResult('win'); 
-        } else {
-            window.pendingSessionEXP = (window.pendingSessionEXP || 0) + window.getExpByResult('loss'); 
+    // --- BẢN FIX MỚI: SỬA LỖI HÒA BỊ TRỪ ĐIỂM ---
+    if (!isSpectatorMode) {
+        if (sub.includes("HÒA") || sub.includes("KHÔNG PHÂN")) {
+            // Hòa thì không trừ cũng không cộng (hoặc mầy muốn cộng thì thêm lệnh vào đây)
+        } else if (sub.includes("THẮNG")) {
+            let winnerSide = sub.includes("ĐỎ") ? "do" : "den";
+            if (mySide === winnerSide) {
+                window.pendingSessionEXP = (window.pendingSessionEXP || 0) + window.getExpByResult('win'); 
+            } else {
+                window.pendingSessionEXP = (window.pendingSessionEXP || 0) + window.getExpByResult('loss'); 
+            }
         }
     }
     // ------------------------------------------
@@ -7234,6 +7238,9 @@ function backToMenu() {
 
     if (!isGameOver && currentRoomStatus === 'playing') {
         if (!confirm("Thoát ván đấu này? Mày sẽ bị xử thua đó!")) return;
+        
+        // --- BẢN FIX MỚI: BỎ CHẠY TRỪ EXP NGAY LẬP TỨC TRƯỚC KHI DỌN BÀN ---
+        window.pendingSessionEXP = (window.pendingSessionEXP || 0) + window.getExpByResult('loss');
     }
 
     showExitCountdown('thoat'); 
@@ -16661,6 +16668,7 @@ window.applyPendingExpToDatabase = async function() {
             
             current.exp = newExp;
             current.level = window.getLevelFromExp(newExp);
+            current.updatedAt = Date.now(); // <-- FIX LỖI RULES FIREBASE TỪ CHỐI GIAO DỊCH
             
             // Lấy số liệu chuẩn để đá ra ngoài cho UI chạy hiệu ứng
             finalNewExp = newExp;
@@ -16677,6 +16685,8 @@ window.applyPendingExpToDatabase = async function() {
 
     } catch (err) {
         console.error("Lỗi lưu EXP:", err);
+        // DÙ LỖI MẠNG HAY LỖI FIREBASE CŨNG PHẢI BẬT BẢNG LÊN CHO CHƠI TIẾP, ĐỪNG ĐỂ UI BỊ ĐỨNG!
+        window.showExpSummary(window.getLevelFromExp(Number(localStorage.getItem('exp') || 0)));
     }
 };
 
