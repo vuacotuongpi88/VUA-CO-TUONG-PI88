@@ -10460,27 +10460,24 @@ window.renderAvatarSkinShop = function() {
     if (!list) return;
 
     window.refreshAvatarSkinShopTabs();
-
     const currentPmc = getPmcBalance();
-    if (balance) {
-        balance.innerText = "Số dư: " + formatPMC(currentPmc) + " PMC";
-    }
+    if (balance) balance.innerText = "Số dư: " + formatPMC(currentPmc) + " PMC";
 
-    // ============================================
-    // NẾU MỞ TAB MUA EXP
-    // ============================================
     if (window.avatarSkinShopTab === "exp") {
+        // 6 GÓI EXP ĐỂ CÀY LÊN MAX CẤP 180 (1.611.000 EXP)
         const expPackages = [
-            { id: "exp1", name: "Gói Tân Binh", exp: 1000, price: 1000, desc: "+1.000 EXP", icon: "🌱" },
-            { id: "exp2", name: "Gói Thương Gia", exp: 5000, price: 4800, desc: "+5.000 EXP (Rẻ hơn 200)", icon: "💰" },
-            { id: "exp3", name: "Gói Lãnh Chúa", exp: 20000, price: 18500, desc: "+20.000 EXP (Rẻ hơn 1.500)", icon: "👑" },
-            { id: "exp4", name: "Gói Tông Sư", exp: 100000, price: 85000, desc: "+100.000 EXP (Siêu ưu đãi)", icon: "🐉" }
+            { id: "exp1", name: "Gói Tân Binh", exp: 1000, price: 1000, desc: "+1.000 EXP", tickets: 0, icon: "🌱" },
+            { id: "exp2", name: "Gói Thương Gia", exp: 5000, price: 4800, desc: "+5.000 EXP", tickets: 0, icon: "💰" },
+            { id: "exp3", name: "Gói Tinh Nhuệ", exp: 20000, price: 18500, desc: "+20.000 EXP", tickets: 0, icon: "⚔️" },
+            { id: "exp4", name: "Gói Đại Cao Thủ", exp: 100000, price: 85000, desc: "+100.000 EXP <br><b style='color:#00c38a'>+2 Lượt Miễn Phí (Bàn <=10k)</b>", tickets: 2, icon: "🐉" },
+            { id: "exp5", name: "Gói Tông Sư", exp: 500000, price: 400000, desc: "+500.000 EXP <br><b style='color:#00c38a'>+5 Lượt Miễn Phí (Bàn <=10k)</b>", tickets: 5, icon: "👑" },
+            { id: "exp6", name: "Gói Thiên Vương", exp: 1650000, price: 1200000, desc: "LÊN THẲNG MAX CẤP 180<br><b style='color:#ff7675'>+10 Lượt Miễn Phí (Miễn Trảm)</b>", tickets: 10, icon: "🏆" }
         ];
 
         list.innerHTML = expPackages.map(pkg => {
             const canBuy = currentPmc >= pkg.price;
             const btnClass = canBuy ? "avatar-shop-btn" : "avatar-shop-btn locked";
-            const btnAttr = canBuy ? `onclick="window.buyExpDirectly(${pkg.exp}, ${pkg.price})"` : "disabled";
+            const btnAttr = canBuy ? `onclick="window.buyExpDirectly(${pkg.exp}, ${pkg.price}, ${pkg.tickets})"` : "disabled";
             const btnText = canBuy ? "MUA" : "THIẾU PMC";
             
             return `
@@ -10500,12 +10497,9 @@ window.renderAvatarSkinShop = function() {
         return;
     }
 
-    // ============================================
-    // NẾU MỞ TAB SHOP SKIN HAY TÚI SKIN (Logic gốc của mầy)
-    // ============================================
+    // ... (Đoạn mã tab skin và tab túi giữ nguyên như hôm qua) ...
     const owned = getOwnedAvatarSkins();
     const equipped = getEquippedAvatarSkin();
-
     const rawUserPhoto = (localStorage.getItem("user-photo") || "").trim();
     const isDefaultChessAvatar = !rawUserPhoto || rawUserPhoto.includes("do_tuong") || rawUserPhoto.includes("den_tuong");
     const currentPhoto = isDefaultChessAvatar ? "" : rawUserPhoto;
@@ -10519,10 +10513,7 @@ window.renderAvatarSkinShop = function() {
     }
 
     if (skinsToRender.length === 0) {
-        list.innerHTML = `
-            <div class="avatar-shop-empty">
-                Túi skin đang trống.<br>Qua tab SHOP mua skin trước.
-            </div>`;
+        list.innerHTML = `<div class="avatar-shop-empty">Túi skin đang trống.<br>Qua tab SHOP mua skin trước.</div>`;
         return;
     }
 
@@ -10530,31 +10521,16 @@ window.renderAvatarSkinShop = function() {
         const isOwned = !!owned[skin.id];
         const isEquipped = equipped === skin.id;
         const canBuy = currentPmc >= skin.price;
-
-        let btnText = "";
-        let btnClass = "avatar-shop-btn";
-        let btnAttr = "";
-        let extraLabel = "";
+        let btnText = "", btnClass = "avatar-shop-btn", btnAttr = "", extraLabel = "";
 
         if (window.avatarSkinShopTab === "bag") {
-            if (isEquipped) {
-                btnText = "ĐANG GẮN"; btnClass += " equipped"; btnAttr = "disabled";
-            } else {
-                btnText = "GẮN"; btnAttr = `onclick="equipAvatarSkin('${skin.id}')"`;
-            }
+            if (isEquipped) { btnText = "ĐANG GẮN"; btnClass += " equipped"; btnAttr = "disabled"; } 
+            else { btnText = "GẮN"; btnAttr = `onclick="equipAvatarSkin('${skin.id}')"`; }
         } else {
-            if (isOwned) {
-                btnText = "ĐÃ CÓ"; btnClass += " equipped"; btnAttr = "disabled";
-                extraLabel = `<div class="avatar-shop-owned-label">Đã nằm trong túi</div>`;
-            } else {
-                btnText = canBuy ? "MUA" : "THIẾU PMC";
-                btnClass += canBuy ? "" : " locked";
-                btnAttr = canBuy ? `onclick="buyAvatarSkin('${skin.id}')"` : "disabled";
-            }
+            if (isOwned) { btnText = "ĐÃ CÓ"; btnClass += " equipped"; btnAttr = "disabled"; extraLabel = `<div class="avatar-shop-owned-label">Đã nằm trong túi</div>`; } 
+            else { btnText = canBuy ? "MUA" : "THIẾU PMC"; btnClass += canBuy ? "" : " locked"; btnAttr = canBuy ? `onclick="buyAvatarSkin('${skin.id}')"` : "disabled"; }
         }
-
         const priceText = skin.price <= 0 ? "Miễn phí" : formatPMC(skin.price) + " PMC";
-
         return `
             <div class="avatar-shop-card">
                 <div class="avatar-frame-shell" data-skin="${skin.id}" style="width:48px;height:48px;">
@@ -10568,71 +10544,52 @@ window.renderAvatarSkinShop = function() {
                     ${extraLabel}
                 </div>
                 <button class="${btnClass}" ${btnAttr}>${btnText}</button>
-            </div>
-        `;
+            </div>`;
     }).join("");
 };
 
-// HÀM XỬ LÝ MUA EXP TRỰC TIẾP
-window.buyExpDirectly = async function(expAmount, pmcCost) {
+window.buyExpDirectly = async function(expAmount, pmcCost, bonusTickets) {
     if (window.isBuyingExp) return;
-    
     const currentPmc = getPmcBalance();
-    if (currentPmc < pmcCost) {
-        alert("Mầy không đủ PMC!");
-        return;
-    }
+    if (currentPmc < pmcCost) { alert("Mầy không đủ PMC!"); return; }
 
-    if (!confirm(`Đại gia muốn dùng ${pmcCost.toLocaleString('vi-VN')} PMC để đổi lấy ${expAmount.toLocaleString('vi-VN')} EXP?`)) {
-        return;
-    }
+    let ticketMsg = bonusTickets > 0 ? `\n🎁 ĐƯỢC TẶNG KÈM: ${bonusTickets} Lượt Đánh Miễn Phí!` : "";
+    if (!confirm(`Đại gia muốn dùng ${pmcCost.toLocaleString('vi-VN')} PMC để đổi lấy ${expAmount.toLocaleString('vi-VN')} EXP?${ticketMsg}`)) return;
 
     window.isBuyingExp = true;
-
     try {
         const walletKey = makeWalletDbKey();
-        const adminWallet = "pi_admin_master"; // Tiền chảy thẳng về ví Admin
-
-        // 1. Trừ tiền người chơi
+        const adminWallet = "pi_admin_master"; 
         const paid = await adjustPmcWalletByKey(walletKey, -pmcCost);
         if (paid == null) throw new Error("Thanh toán lỗi");
 
-        // Bắn tiền cho Admin
         try {
             await adjustPmcWalletByKey(adminWallet, pmcCost);
             await db.ref("walletTransactions").push({
-                type: "buy_exp_package", 
-                walletKey: walletKey, 
-                adminWalletKey: adminWallet,
-                feePMC: pmcCost, 
-                expGained: expAmount,
-                createdAt: Date.now(), 
-                status: "done"
+                type: "buy_exp_package", walletKey: walletKey, adminWalletKey: adminWallet,
+                feePMC: pmcCost, expGained: expAmount, createdAt: Date.now(), status: "done"
             });
-        } catch(e) {} // Lỗi ghi lịch sử Admin kệ mẹ nó, tiền trừ xong rồi
+        } catch(e) {} 
 
-        // 2. Bơm EXP vào người chơi và tự động tính level mới
         const userRef = db.ref("wallets/" + walletKey);
         await userRef.transaction((current) => {
             if (!current) current = {}; 
-            let oldExp = Number(current.exp || 0);
-            let newExp = oldExp + expAmount;
-            current.exp = newExp;
-            current.level = window.getLevelFromExp(newExp); // Lấy hàm có sẵn của mầy
+            current.exp = (Number(current.exp) || 0) + expAmount;
+            current.level = window.getLevelFromExp(current.exp); 
+            // CỘNG VÉ MIỄN PHÍ VÀO VÍ
+            if (bonusTickets > 0) {
+                current.freeTickets = (Number(current.freeTickets) || 0) + bonusTickets;
+            }
             return current;
         });
 
-        // 3. Render lại ví, cập nhật thanh EXP và Shop
         await loadWalletBalance();
-        
-        // Tạo vài đóm sáng EXP rơi lả tả cho đại gia sướng mắt
         if (typeof window.spawnExpEffect === 'function') {
             for(let i=0; i<3; i++) setTimeout(() => window.spawnExpEffect(true), i * 300);
         }
 
         alert(`Chúc mừng! Đã bơm thành công ${expAmount.toLocaleString('vi-VN')} EXP vào người!`);
-        window.renderAvatarSkinShop(); // Tải lại số dư PMC hiển thị trong Shop
-        
+        window.renderAvatarSkinShop(); 
     } catch(err) {
         console.error("Lỗi mua EXP:", err);
         alert("Có lỗi xảy ra khi giao dịch.");
@@ -10908,50 +10865,35 @@ async function maybeRefundWaitingStakePMC(roomId, room, side) {
     if (!lock) return null;
 
     const player = room?.players?.[side] || {};
-
-    // Ưu tiên ví đã lưu trong lock, nếu lock cũ chỉ là true thì lấy ví trong player
-    const walletKey =
-        (typeof lock === "object" && lock.walletKey)
-            ? lock.walletKey
-            : player.walletKey;
-
-    if (!walletKey) {
-        console.warn("Không hoàn PMC được vì thiếu walletKey:", { roomId, side, lock, player });
-        return null;
-    }
+    const walletKey = (typeof lock === "object" && lock.walletKey) ? lock.walletKey : player.walletKey;
+    if (!walletKey) return null;
 
     const refundRef = db.ref(`matches/${roomId}/refunds/${side}`);
-
     const result = await runRefTransaction(refundRef, current => {
         if (current && current.done) return;
-
-        return {
-            done: true,
-            side,
-            walletKey,
-            stake,
-            at: Date.now(),
-            uid: player.uid || ""
-        };
+        return { done: true, side, walletKey, stake, at: Date.now(), uid: player.uid || "" };
     });
 
     if (!result.committed) return null;
 
-    const nextPmc = await adjustPmcWalletByKey(walletKey, stake, {
-        name: player.name || "Người chơi",
-        photo: player.photo || "images/do_tuong.png"
-    });
-
-    if (nextPmc == null) {
-        console.error("Hoàn PMC thất bại:", { roomId, side, walletKey, stake });
-        return null;
+    // NẾU LÚC NÃY XÀI VÉ -> TRẢ LẠI 1 VÉ
+    if (lock.isTicketUsed) {
+        const ticketRef = db.ref(`wallets/${walletKey}/freeTickets`);
+        await ticketRef.transaction((tks) => (Number(tks) || 0) + 1);
+        await db.ref(`matches/${roomId}/ready/${side}`).set(false).catch(() => {});
+        await db.ref(`matches/${roomId}/stakeLocked/${side}`).set(false).catch(() => {});
+        console.log("Đã hoàn LƯỢT MIỄN PHÍ");
+        return currentPmcBalance; // Trả về số dư PMC cũ để UI ko bị rách
     }
 
-    await db.ref(`matches/${roomId}/players/${side}`).update({
-        pmcBalance: nextPmc,
-        updatedAt: firebase.database.ServerValue.TIMESTAMP
-    }).catch(() => {});
+    // NẾU LÚC NÃY XÀI PMC -> TRẢ LẠI PMC
+    const nextPmc = await adjustPmcWalletByKey(walletKey, stake, {
+        name: player.name || "Người chơi", photo: player.photo || "images/do_tuong.png"
+    });
 
+    if (nextPmc == null) return null;
+
+    await db.ref(`matches/${roomId}/players/${side}`).update({ pmcBalance: nextPmc, updatedAt: firebase.database.ServerValue.TIMESTAMP }).catch(() => {});
     await db.ref(`matches/${roomId}/ready/${side}`).set(false).catch(() => {});
     await db.ref(`matches/${roomId}/stakeLocked/${side}`).set(false).catch(() => {});
 
@@ -10959,13 +10901,8 @@ async function maybeRefundWaitingStakePMC(roomId, room, side) {
         currentPmcBalance = nextPmc;
         localStorage.setItem(getPmcCacheKey(), String(nextPmc));
         updatePmcUI(nextPmc);
-
-        if (typeof refreshMyMatchBalanceBoxesNow === "function") {
-            refreshMyMatchBalanceBoxesNow(getPiBalance(), nextPmc);
-        }
+        if (typeof refreshMyMatchBalanceBoxesNow === "function") refreshMyMatchBalanceBoxesNow(getPiBalance(), nextPmc);
     }
-
-    console.log("Đã hoàn PMC phòng chờ:", { roomId, side, walletKey, stake, nextPmc });
     return nextPmc;
 }
 async function transferWaitingRoomHost(roomId, room, roomBucket) {
@@ -11336,49 +11273,65 @@ async function chargeStakeForReady(roomId, side) {
         if (room?.stakeLocked?.[side]) return { ok: true, stage: "already_locked" };
 
         const localProfile = getCurrentPlayerProfile();
-        // Ép buộc dùng mã ví chuẩn của máy hiện tại, đéo tin tưởng dữ liệu cũ trên phòng nữa!
         const targetWalletKey = localProfile.walletKey;
 
-        // Cập nhật ngay lập tức mã ví đúng lên phòng
         await db.ref("matches/" + roomId + "/players/" + side).update({
-            walletKey: localProfile.walletKey,
-            name: localProfile.name,
-            photo: localProfile.photo,
-            uid: localProfile.uid || ""
+            walletKey: localProfile.walletKey, name: localProfile.name, photo: localProfile.photo, uid: localProfile.uid || ""
         });
 
         const safeWalletKey = String(targetWalletKey || "").replace(/[.#$\[\]\/]/g, "_");
         const targetWalletSnap = await db.ref("wallets/" + safeWalletKey).once("value");
         const targetWallet = targetWalletSnap.val() || {};
         const targetPmc = Math.max(0, Math.floor(Number(targetWallet.pmcBalance || 0) || 0));
+        
+        // KIỂM TRA XEM CÓ VÉ MIỄN PHÍ KHÔNG
+        const freeTickets = Math.max(0, Math.floor(Number(targetWallet.freeTickets || 0)));
 
         if (!targetWalletKey) return { ok: false, stage: "wallet_key_missing" };
+
+        // NẾU CÓ VÉ VÀ PHÒNG <= 10.000 PMC -> HỎI XEM CÓ XÀI KHÔNG
+        let useTicket = false;
+        if (stake > 0 && stake <= 10000 && freeTickets > 0) {
+            useTicket = confirm(`🎁 Mày đang có ${freeTickets} LƯỢT ĐÁNH MIỄN PHÍ (Áp dụng bàn <= 10.000 PMC).\n\nCó muốn dùng 1 lượt để MIỄN TRỪ ${formatPMC(stake)} PMC cho ván này không?\n(Nếu chọn Cancel sẽ trừ PMC như bình thường)`);
+        }
+
+        if (useTicket) {
+            // NẾU ĐỒNG Ý DÙNG VÉ: TRỪ VÉ (ĐÉO TRỪ TIỀN)
+            await db.ref("wallets/" + safeWalletKey + "/freeTickets").set(freeTickets - 1);
+            
+            // Vẫn lock phòng bình thường, nhưng đánh dấu là 'isTicketUsed: true'
+            await db.ref("matches/" + roomId + "/stakeLocked/" + side).set({
+                done: true,
+                walletKey: targetWalletKey,
+                stake,
+                isTicketUsed: true, // Cờ quan trọng để lúc Hủy thì trả vé chứ đéo trả tiền
+                at: firebase.database.ServerValue.TIMESTAMP,
+                uid: localProfile.uid || ""
+            });
+            return { ok: true, stage: "done", walletKey: targetWalletKey, paid: targetPmc };
+        }
+
+        // NẾU KHÔNG CÓ VÉ HOẶC KHÔNG XÀI -> TRỪ TIỀN NHƯ CŨ
         if (targetPmc < stake) return { ok: false, stage: "insufficient_wallet" };
 
         const paid = await adjustPmcWalletByKey(targetWalletKey, -stake, {
-            name: localProfile.name || "Người chơi",
-            photo: localProfile.photo || "images/do_tuong.png"
+            name: localProfile.name || "Người chơi", photo: localProfile.photo || "images/do_tuong.png"
         });
 
         if (paid == null) return { ok: false, stage: "tx_not_committed" };
 
-        // Trừ xong cập nhật UI ngay tắp lự
         currentPmcBalance = paid;
         localStorage.setItem(getPmcCacheKey(), String(paid));
         updatePmcUI(paid);
         refreshMyMatchBalanceBoxesNow(getPiBalance(), paid);
 
         await db.ref("matches/" + roomId + "/players/" + side).update({
-            pmcBalance: paid,
-            updatedAt: firebase.database.ServerValue.TIMESTAMP
+            pmcBalance: paid, updatedAt: firebase.database.ServerValue.TIMESTAMP
         }).catch(()=>{});
 
         await db.ref("matches/" + roomId + "/stakeLocked/" + side).set({
-            done: true,
-            walletKey: targetWalletKey,
-            stake,
-            at: firebase.database.ServerValue.TIMESTAMP,
-            uid: localProfile.uid || ""
+            done: true, walletKey: targetWalletKey, stake,
+            at: firebase.database.ServerValue.TIMESTAMP, uid: localProfile.uid || ""
         });
 
         return { ok: true, stage: "done", walletKey: targetWalletKey, paid };
