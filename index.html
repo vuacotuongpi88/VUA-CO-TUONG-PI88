@@ -16090,9 +16090,18 @@ document.addEventListener("click", function(e) {
 /* Dòng 15450 */
 .mission-top-tabs {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr)); /* Sửa số 4 thành số 5 ở đây */
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 10px;
     margin-bottom: 14px;
+    
+    /* BÙA CỐ ĐỊNH TẠI CHỖ (STICKY) */
+    position: -webkit-sticky;
+    position: sticky;
+    top: -16px; /* Hút chặt lên mép trên cùng của khung cuộn */
+    z-index: 50; /* Đảm bảo nó luôn nổi đè lên trên mấy cái Rương */
+    padding: 10px 0; /* Tạo không gian cho đẹp */
+    background: #0d0a14; /* Nền tối để che mấy cái Rương khi vuốt lên */
+    box-shadow: 0 10px 10px -10px rgba(0,0,0,0.8); /* Đổ bóng nhẹ xuống dưới cho có chiều sâu */
 }
 .mission-top-tab {
     display: flex;
