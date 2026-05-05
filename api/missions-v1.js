@@ -373,15 +373,8 @@ async function buildBoard(db, walletKey, now = Date.now()) {
     const rewardPmc = rewardAmountPmc(def, missionPoolPmc);
     const target = Math.max(1, Number(def.target || 1));
     const progressPercent = Math.floor(Math.max(0, Math.min(1, progress / target)) * 100);
-    // Dùng đúng hàm mầy đã viết để sinh ra cái tên có đuôi chu kỳ (ví dụ: daily_login__20260505)
-    const currentPeriodKey = periodKeyForMission(def, now);
-    
-    // Check thẳng vào ID có chứa cái đuôi đó
-    const claimSnap = await db.ref(`missionClaimsV1/${walletKey}/${def.id}__${currentPeriodKey}`).once('value');
+    const claimSnap = await missionClaimRef(db, walletKey, def, now).once('value');
     const claimVal = claimSnap.val() || null;
-    
-    // Nếu ngày/tuần/tháng mới đến, currentPeriodKey sẽ tự động đổi.
-    // Lúc đó Firebase check cái ID mới này đéo thấy (vì chưa claim), tự động 'claimed' sẽ = false! Xong bài!
     const claimed = !!(claimVal && claimVal.status === 'done');
     const ready = !claimed && progress >= target && rewardPmc > 0 && treasuryPmc >= rewardPmc;
 
@@ -568,14 +561,12 @@ async function claimMission(db, walletKey, missionId, now = Date.now()) {
       status: 'done'
     };
 
-   await Promise.all([
+    await Promise.all([
       walletTxnRef(db).push().set(txPayload),
       missionTxnRef(db).push().set(txPayload),
-      // BẮT BUỘC lưu với cấu trúc ID kèm Khóa chu kỳ để nó tự động reset
-      db.ref(`missionClaimsV1/${walletKey}/${def.id}__${mission.periodKey}`).set({
+      claimRef.set({
         status: 'done',
-        missionId: def.id,  // Giữ ID gốc để dễ tìm
-        fullKey: `${def.id}__${mission.periodKey}`, // Khóa chu kỳ hiện tại
+        missionId,
         walletKey,
         amountPmc: mission.rewardPmc,
         periodKey: mission.periodKey,
