@@ -1,995 +1,17345 @@
-const { getDatabase } = require('firebase-admin/database');
-const adminBundle = require('./_firebaseAdmin.js');
-const crypto = require('crypto');
+<!DOCTYPE html>
+<html lang="vi">
 
-const ADMIN_TREASURY_WALLET_KEY = String(
-  process.env.ADMIN_TREASURY_WALLET_KEY || 'pi_admin_master'
-).trim();
-const TREASURY_SHARE_RATIO = Number(process.env.MISSION_TREASURY_SHARE_RATIO || 0.30);
-const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Cờ Tướng Online MC - TRÚC LÂM ĐỘC TÔN</title>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+<style>
 
-function safeKey(value) {
-  return String(value || '').replace(/[.#$\[\]/]/g, '_');
+body {
+    margin: 0;
+    background: linear-gradient(rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.3)),
+    url('images/nen_rung_tre.jpg') center/cover no-repeat;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100dvh;
+    height: 100dvh;
+    color: white;
+    font-family: 'Arial Black', sans-serif;
+    overflow: hidden;
 }
 
-function nowMs() {
-  return Date.now();
+/* --- MENU & UI --- */
+#home-menu {
+text-align: center;
+background: rgba(0, 0, 0, 0.7);
+padding: 40px;
+border-radius: 20px;
+border: 2px solid #55efc4;
+box-shadow: 0 0 30px rgba(85, 239, 196, 0.3);
 }
 
-function clamp(n, min, max) {
-  return Math.max(min, Math.min(max, n));
+.menu-grid {
+display: flex;
+gap: 20px;
+margin-top: 30px;
+justify-content: center;
 }
 
-function localDate(ts = Date.now()) {
-  return new Date(ts + VN_OFFSET_MS);
+.menu-card {
+background: rgba(15, 30, 15, 0.9);
+border: 2px solid #55efc4;
+border-radius: 15px;
+padding: 20px;
+width: 140px;
+cursor: pointer;
+transition: 0.3s;
 }
 
-function dayStartMs(ts = Date.now()) {
-  const d = localDate(ts);
-  d.setUTCHours(0, 0, 0, 0);
-  return d.getTime() - VN_OFFSET_MS;
+.menu-card img {
+width: 80px;
+/* Tăng từ 68px lên 80px cho điện thoại dễ nhìn */
+height: auto;
 }
 
-function monthStartMs(ts = Date.now()) {
-  const d = localDate(ts);
-  d.setUTCDate(1);
-  d.setUTCHours(0, 0, 0, 0);
-  return d.getTime() - VN_OFFSET_MS;
+.timer-box {
+width: 140px;
+padding: 10px;
+border-radius: 12px;
+text-align: center;
+font-size: 1.6rem;
+font-weight: bold;
+background: rgba(15, 30, 15, 0.85);
+border: 2px solid #55efc4;
+color: #55efc4;
+margin: 10px 0;
 }
 
-function weekStartMs(ts = Date.now()) {
-  const d = localDate(ts);
-  const day = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() - day + 1);
-  d.setUTCHours(0, 0, 0, 0);
-  return d.getTime() - VN_OFFSET_MS;
+.active-do {
+border-color: #ff7675;
+color: #ff7675;
+box-shadow: 0 0 15px #d63031;
 }
 
-function localDayKey(ts = Date.now()) {
-  const d = localDate(ts);
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(d.getUTCDate()).padStart(2, '0');
-  return `${y}${m}${day}`;
+.active-den {
+border-color: #ffeaa7;
+color: #ffeaa7;
+box-shadow: 0 0 15px #fdcb6e;
 }
 
-function localMonthKey(ts = Date.now()) {
-  const d = localDate(ts);
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-  return `${y}${m}`;
+.active-do {
+    --ring-color: #ffffff;
+    --ring-glow: rgba(255, 255, 255, 0.38);
+    border-color: transparent;
+    color: #ff7675;
+    box-shadow:
+        0 0 10px rgba(255, 255, 255, 0.20),
+        0 0 18px rgba(255, 255, 255, 0.35),
+        inset 0 0 10px rgba(255,255,255,0.04);
 }
 
-function localWeekKey(ts = Date.now()) {
-  const start = weekStartMs(ts);
-  return `W${localDayKey(start)}`;
+.active-den {
+    --ring-color: #ffffff;
+    --ring-glow: rgba(255, 255, 255, 0.38);
+    border-color: transparent;
+    color: #ffeaa7;
+    box-shadow:
+        0 0 10px rgba(255, 255, 255, 0.20),
+        0 0 18px rgba(255, 255, 255, 0.35),
+        inset 0 0 10px rgba(255,255,255,0.04);
 }
 
-function countChildren(obj) {
-  if (!obj || typeof obj !== 'object') return 0;
-  return Object.keys(obj).length;
+.timer-inline.danger-time {
+    --ring-color: #ff3b30 !important;
+    --ring-glow: rgba(255, 59, 48, 0.58) !important;
+    color: #ffd9d6 !important;
+    animation: timerDangerPulse 0.7s infinite alternate;
 }
 
-function formatRewardText(amountPmc) {
-  return `${Math.max(0, Math.floor(Number(amountPmc) || 0)).toLocaleString('vi-VN')} PMC`;
-}
-
-function readPmcBalance(obj) {
-  return Math.max(
-    0,
-    Math.floor(Number(obj?.pmcBalance ?? obj?.pmc ?? 0) || 0)
-  );
-}
-
-function missionDefinitions() {
-  return [
-    {
-      id: 'daily_login',
-      tab: 'day',
-      title: 'Lộc đăng nhập',
-      desc: 'Vào game hôm nay là có quà mở màn.',
-      target: 1,
-      metricKey: 'alwaysOne',
-      periodType: 'day',
-      rewardRate: 0.00015,
-      minPmc: 2,
-      maxPmc: 8,
-      note: 'Quà mở hàng nhẹ, lấy vui mỗi ngày.'
-    },
-    {
-      id: 'daily_play_3',
-      tab: 'day',
-      title: 'Cày 3 ván',
-      desc: 'Hoàn thành 3 ván trong ngày để mở khóa thưởng.',
-      target: 3,
-      metricKey: 'dayMatches',
-      periodType: 'day',
-      rewardRate: 0.00035,
-      minPmc: 5,
-      maxPmc: 18,
-      note: 'Chơi đều là có quà, nhưng không đốt quỹ.'
-    },
-    {
-      id: 'daily_win_1',
-      tab: 'day',
-      title: 'Thắng mở hàng',
-      desc: 'Có ít nhất 1 trận thắng hôm nay.',
-      target: 1,
-      metricKey: 'dayWins',
-      periodType: 'day',
-      rewardRate: 0.00045,
-      minPmc: 6,
-      maxPmc: 25,
-      note: 'Thắng trận đầu có lộc nhỏ.'
-    },
-    {
-      id: 'weekly_play_10',
-      tab: 'week',
-      title: 'Chiến thần tuần',
-      desc: 'Hoàn thành 10 ván trong tuần.',
-      target: 10,
-      metricKey: 'weekMatches',
-      periodType: 'week',
-      rewardRate: 0.0008,
-      minPmc: 12,
-      maxPmc: 60,
-      note: 'Mốc tuần cho người chăm chơi.'
-    },
-    {
-      id: 'weekly_win_5',
-      tab: 'week',
-      title: '5 chiến thắng',
-      desc: 'Thắng 5 trận trong tuần để ăn quỹ lớn hơn.',
-      target: 5,
-      metricKey: 'weekWins',
-      periodType: 'week',
-      rewardRate: 0.0010,
-      minPmc: 15,
-      maxPmc: 80,
-      note: 'Thắng nhiều thì thưởng khá hơn.'
-    },
-    {
-      id: 'weekly_active_3',
-      tab: 'week',
-      title: 'Chuyên cần 3 ngày',
-      desc: 'Có ít nhất 3 ngày trong tuần hoàn thành ván cờ.',
-      target: 3,
-      metricKey: 'weekActiveDays',
-      periodType: 'week',
-      rewardRate: 0.0009,
-      minPmc: 14,
-      maxPmc: 70,
-      note: 'Giữ nhịp chơi đều là được cộng.'
-    },
-    {
-      id: 'monthly_play_30',
-      tab: 'month',
-      title: 'Tháng siêng năng',
-      desc: 'Hoàn thành 30 ván trong tháng.',
-      target: 30,
-      metricKey: 'monthMatches',
-      periodType: 'month',
-      rewardRate: 0.0020,
-      minPmc: 40,
-      maxPmc: 180,
-      note: 'Mốc tháng đáng giá nhưng vẫn sống quỹ.'
-    },
-    {
-      id: 'monthly_win_15',
-      tab: 'month',
-      title: '15 chiến thắng tháng',
-      desc: 'Thắng 15 trận trong tháng để mở khóa thưởng VIP.',
-      target: 15,
-      metricKey: 'monthWins',
-      periodType: 'month',
-      rewardRate: 0.0025,
-      minPmc: 55,
-      maxPmc: 240,
-      note: 'Ngon hơn mốc ngày, nhưng không quá tay.'
-    },
-    {
-      id: 'monthly_active_10',
-      tab: 'month',
-      title: 'Đều đặn 10 ngày',
-      desc: 'Có ít nhất 10 ngày trong tháng chơi đủ ván.',
-      target: 10,
-      metricKey: 'monthActiveDays',
-      periodType: 'month',
-      rewardRate: 0.0022,
-      minPmc: 45,
-      maxPmc: 200,
-      note: 'Thưởng bền cho người chơi đều.'
-    },
-    {
-      id: 'ref_1',
-      tab: 'referral',
-      title: 'Mời 1 bạn',
-      desc: 'Có 1 bạn bè hợp lệ trong danh sách bạn hữu.',
-      target: 1,
-      metricKey: 'friendCount',
-      periodType: 'lifetime',
-      rewardRate: 0.0008,
-      minPmc: 8,
-      maxPmc: 35,
-      note: 'Mốc mở đầu nhẹ, dễ kích hoạt.'
-    },
-    {
-      id: 'ref_10',
-      tab: 'referral',
-      title: 'Mời 10 bạn',
-      desc: 'Đạt 10 bạn bè hợp lệ để mở khóa quỹ lớn.',
-      target: 10,
-      metricKey: 'friendCount',
-      periodType: 'lifetime',
-      rewardRate: 0.0020,
-      minPmc: 30,
-      maxPmc: 150,
-      note: 'Có kéo người thật thì thưởng mới dày hơn.'
-    },
-    {
-      id: 'ref_100',
-      tab: 'referral',
-      title: 'Mời 100 bạn',
-      desc: 'Đạt 100 bạn hữu thật để nhận thưởng cộng đồng lớn.',
-      target: 100,
-      metricKey: 'friendCount',
-      periodType: 'lifetime',
-      rewardRate: 0.0060,
-      minPmc: 120,
-      maxPmc: 700,
-      note: 'Mốc lớn, nhưng vẫn trong ngưỡng chịu được.'
-    },
-    {
-      id: 'ref_1000',
-      tab: 'referral',
-      title: 'Mời 1000 bạn',
-      desc: 'Đại sứ bàn cờ cấp lớn.',
-      target: 1000,
-      metricKey: 'friendCount',
-      periodType: 'lifetime',
-      rewardRate: 0.0120,
-      minPmc: 600,
-      maxPmc: 1500,
-      note: 'Mốc rất khó, thưởng lớn vừa đủ.'
-    },
-    {
-      id: 'ref_10000',
-      tab: 'referral',
-      title: 'Mời 10000 bạn',
-      desc: 'Sứ giả truyền lửa cấp huyền thoại.',
-      target: 10000,
-      metricKey: 'friendCount',
-      periodType: 'lifetime',
-      rewardRate: 0.0200,
-      minPmc: 4000,
-      maxPmc: 8000,
-      note: 'Huyền thoại thì có thưởng lớn, nhưng không phá app.'
+@keyframes timerDangerPulse {
+    from {
+        transform: scale(1);
+        box-shadow:
+            0 0 10px rgba(255, 59, 48, 0.35),
+            0 0 16px rgba(255, 59, 48, 0.45),
+            inset 0 0 10px rgba(255,255,255,0.04);
     }
-  ];
+    to {
+        transform: scale(1.03);
+        box-shadow:
+            0 0 14px rgba(255, 59, 48, 0.45),
+            0 0 24px rgba(255, 59, 48, 0.65),
+            inset 0 0 10px rgba(255,255,255,0.05);
+    }
 }
 
-function periodKeyForMission(def, now = Date.now()) {
-  if (def.periodType === 'day') return localDayKey(now);
-  if (def.periodType === 'week') return localWeekKey(now);
-  if (def.periodType === 'month') return localMonthKey(now);
-  return 'lifetime';
+/* --- BÀN CỜ & QUÂN CỜ --- */
+.game-container {
+position: relative;
+width: 90vw;
+height: 90vw;
+max-width: 450px;
+max-height: 450px;
+background: url('images/ban_co_go.jpg') center/100% 100% no-repeat;
+border: 5px solid #2d3436;
+border-radius: 8px;
 }
 
-function missionClaimRef(db, walletKey, def, now = Date.now()) {
-  const periodKey = periodKeyForMission(def, now);
-  return db.ref(`missionClaimsV1/${walletKey}/${def.id}__${periodKey}`);
+.piece {
+position: absolute;
+width: 9%;
+height: 9%;
+transform: translate(-50%, -50%);
+z-index: 20;
+transition: all 0.2s;
+cursor: pointer;
+border-radius: 60%;
+/* Bo tròn chuẩn */
+clip-path: circle(60%);
+/* Cắt sạch nền dư, ôm sát con cờ */
+object-fit: cover;
+filter: drop-shadow(2px 4px 3px rgba(0, 0, 0, 0.5));
 }
 
-async function buildMetrics(db, walletKey, now = Date.now()) {
-  const dayStart = dayStartMs(now);
-  const weekStart = weekStartMs(now);
-  const monthStart = monthStartMs(now);
+.selected {
+filter: drop-shadow(0 0 10px #55efc4) brightness(1.2);
+z-index: 100;
+transform: translate(-50%, -50%) scale(1.15);
+}
+.move-hint,
+.move-hint-capture,
+.last-move-from,
+.last-move-to {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 15;
+}
 
-  const [matchesSnap, friendsSnap] = await Promise.all([
-    db.ref('matches').once('value'),
-    db.ref(`social/friends/${walletKey}`).once('value')
-  ]);
+/* chấm chỉ đường thường */
+.move-hint {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.95);
+    border: none;
+    box-shadow: 0 0 6px rgba(255, 255, 255, 0.55);
+}
 
-  const metrics = {
-    alwaysOne: 1,
-    friendCount: countChildren(friendsSnap.val()),
-    dayMatches: 0,
-    dayWins: 0,
-    weekMatches: 0,
-    weekWins: 0,
-    monthMatches: 0,
-    monthWins: 0,
-    weekActiveDays: 0,
-    monthActiveDays: 0
-  };
+/* chấm ô có quân để ăn */
+.move-hint-capture {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: transparent;
+    border: 2px solid rgba(255, 255, 255, 0.95);
+    box-shadow: 0 0 6px rgba(255, 255, 255, 0.45);
+}
 
-  const weekDays = new Set();
-  const monthDays = new Set();
+/* điểm xuất phát cũ */
+.last-move-from {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.95);
+    border: none;
+    box-shadow: 0 0 6px rgba(255, 255, 255, 0.55);
+}
 
-  matchesSnap.forEach(child => {
-    const room = child.val() || {};
-    const players = room.players || {};
-    const doKey = String(players?.do?.walletKey || '').trim();
-    const denKey = String(players?.den?.walletKey || '').trim();
+/* điểm vừa đi tới */
+.last-move-to {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: transparent;
+    border: 2px solid rgba(255, 255, 255, 0.95);
+    box-shadow: 0 0 7px rgba(255, 255, 255, 0.5);
+}
+/* Hiệu ứng hào quang điện xẹt đỏ rực */
+.is-chieu {
+animation: dien-giat 0.2s infinite alternate !important;
+z-index: 999 !important;
+}
 
-    let side = '';
-    if (doKey === walletKey) side = 'do';
-    if (denKey === walletKey) side = 'den';
-    if (!side) return;
+@keyframes dien-giat {
+50% {
+filter: drop-shadow(0 0 5px #ff0000) drop-shadow(0 0 15px #ff0000) brightness(1.2);
+transform: translate(-50%, -50%) scale(1);
+}
 
-    const winner = String(room.winner || '').trim();
-    if (!winner) return;
+50% {
+filter: drop-shadow(0 0 10px #ff0000) drop-shadow(0 0 30px #ff0000) brightness(1.8);
+transform: translate(-50%, -50%) scale(1.1);
+}
+}
 
-    const eventTs = Number(room.updatedAt || room.createdAt || 0);
-    if (!Number.isFinite(eventTs) || eventTs <= 0) return;
+/* Tia sét đỏ chạy vòng ngoài con Tướng */
 
-    if (eventTs >= dayStart) {
-      metrics.dayMatches += 1;
-      if (winner === side) metrics.dayWins += 1;
+.lightning-chieu::before {
+content: '';
+position: absolute;
+top: 50%;
+left: 50%;
+right: 50%;
+bottom: 50%;
+/* Gọi file ảnh mầy vừa lưu */
+background: url('images/tia_set.png') no-repeat center;
+background-size: contain;
+z-index: 1;
+/* Giữ nguyên hiệu ứng xoay và chớp chậm (0.3s) */
+animation: set-xoay 0.6s infinite linear, set-giat 0.3s infinite;
+filter: drop-shadow(0 0 10px red);
+pointer-events: none;
+}
+
+@keyframes set-xoay {
+from {
+transform: rotate(0deg);
+}
+
+to {
+transform: rotate(360deg);
+}
+}
+
+@keyframes set-giat {
+
+0%,
+100% {
+opacity: 1;
+transform: scale(1);
+}
+
+50% {
+opacity: 0.6;
+transform: scale(1.1) skew(2deg);
+}
+}
+
+@keyframes flash-red-inner {
+0% {
+filter: drop-shadow(0 0 5px red) brightness(1);
+}
+
+100% {
+filter: drop-shadow(0 0 20px red) brightness(1.5);
+}
+}
+
+/* --- VICTORY & LOGIN --- */
+#victory-wrap {
+position: absolute;
+top: 50%;
+left: 50%;
+transform: translate(-50%, -50%) scale(0);
+z-index: 2000;
+width: 100%;
+text-align: center;
+transition: 0.5s;
+}
+
+.victory-banner {
+    padding: 20px;
+    border: 4px solid #f1c40f;
+    border-radius: 12px;
+    color: #fff;
+    box-shadow: 0 0 26px rgba(0,0,0,0.45);
+    transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* bên này thắng -> popup đỏ */
+.victory-banner.win-local {
+    background: linear-gradient(180deg, #d63031, #8e1b1b);
+    border-color: #ffd166;
+    box-shadow:
+        0 0 16px rgba(214, 48, 49, 0.45),
+        0 0 28px rgba(255, 209, 102, 0.22);
+}
+
+/* bên này thua -> popup đen */
+.victory-banner.lose-local {
+    background: linear-gradient(180deg, #1f1f1f, #000000);
+    border-color: #7f8c8d;
+    box-shadow:
+        0 0 16px rgba(0, 0, 0, 0.65),
+        0 0 20px rgba(255, 255, 255, 0.08);
+}
+
+/* hòa / chưa xác định */
+.victory-banner.draw-local {
+    background: linear-gradient(180deg, #2d3436, #636e72);
+    border-color: #dfe6e9;
+    box-shadow:
+        0 0 14px rgba(99, 110, 114, 0.35),
+        0 0 20px rgba(223, 230, 233, 0.16);
+}
+
+.panel {
+margin-top: 15px;
+display: flex;
+flex-direction: column;
+align-items: center;
+gap: 10px;
+}
+
+button {
+padding: 10px 30px;
+background: #00b894;
+color: white;
+border: none;
+border-radius: 5px;
+font-weight: bold;
+cursor: pointer;
+font-size: 1rem;
+}
+
+#login-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    background:
+        linear-gradient(rgba(0,0,0,0.58), rgba(0,0,0,0.72)),
+        url('images/nen_rung_tre.jpg') center/cover no-repeat;
+    overflow: hidden;
+}
+
+.welcome-login-corner {
+    position: absolute;
+    top: max(12px, env(safe-area-inset-top, 0px) + 8px);
+    right: 12px;
+    z-index: 10001;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-end;
+}
+
+.welcome-login-corner button {
+    min-width: 122px;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 800;
+    border-radius: 999px;
+    border: 1px solid rgba(236, 221, 7, 0.911);
+    box-shadow: 0 6px 16px rgba(9, 0, 24, 0.932);
+}
+
+#welcome-google-btn {
+    background: linear-gradient(180deg, #ffffffec, #ecd504dc);
+    color: #eb0707;
+}
+
+#welcome-pi-btn {
+    background: linear-gradient(180deg, #a604e6, #4b2ca3);
+    color: #ebdb07;
+}
+
+.welcome-wrap {
+    width: min(980px, 100%);
+    height: 100%;
+    margin: 0 auto;
+    padding: 78px 16px 18px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow: hidden;
+}
+
+.welcome-hero {
+    text-align: center;
+    margin-bottom: 14px;
+    flex-shrink: 0;
+}
+
+.welcome-hero h1 {
+    margin: 0;
+    font-size: clamp(28px, 5vw, 54px);
+    letter-spacing: 3px;
+    color: #b508e0;
+    text-shadow: 0 0 14px rgba(85,239,196,0.22);
+}
+
+.welcome-hero p {
+    margin: 8px 0 0;
+    font-size: clamp(13px, 2.5vw, 18px);
+    color: #ebdb07;
+    font-weight: 700;
+}
+
+.welcome-commit-box {
+    width: min(100%, 920px);
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    background: rgb(5, 5, 5);
+    border: 2px solid #f5f5f5;
+    border-radius: 20px;
+    padding: 18px 16px 22px;
+    box-sizing: border-box;
+    box-shadow: 0 0 24px rgb(253, 251, 251);
+    backdrop-filter: blur(4px);
+}
+
+.welcome-commit-title {
+    text-align: center;
+    font-size: 20px;
+    color: #f00505;
+    font-weight: 900;
+    letter-spacing: 1px;
+    margin-bottom: 14px;
+}
+
+.welcome-commit-list {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+}
+
+.welcome-commit-item {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    background: rgba(10, 10, 10, 0.945);
+    border: 1px solid rgba(240, 5, 5, 0.22);
+    border-radius: 14px;
+    padding: 12px;
+}
+
+.welcome-commit-no {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #be04f7;
+    color: #fdfdff;
+    font-weight: 900;
+    font-size: 13px;
+}
+
+.welcome-commit-text strong {
+    display: block;
+    color: #b406e9;
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.welcome-commit-text span {
+    display: block;
+    color: #ffffff;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.welcome-bottom-note {
+    margin-top: 12px;
+    text-align: center;
+    font-size: 12px;
+    color: #e0d20a;
+}
+#arena-friend-btn {
+    position: fixed;
+    right: 18px;
+    top: 16px;
+    bottom: auto;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, #7b2ff7, #4d1d95);
+    color: #f4c542;
+    font-size: 24px;
+    cursor: pointer;
+    z-index: 12020;
+    box-shadow:
+        0 0 14px rgba(123, 47, 247, 0.38),
+        0 0 16px rgba(244, 197, 66, 0.12);
+    border: 1px solid rgba(244, 197, 66, 0.42);
+}
+#arena-mission-btn {
+    position: fixed;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, #00c38a, #008f67);
+    color: #fff8d6;
+    font-size: 24px;
+    cursor: pointer;
+    z-index: 12019;
+    box-shadow:
+        0 0 14px rgba(0, 195, 138, 0.34),
+        0 0 16px rgba(244, 197, 66, 0.12);
+    border: 1px solid rgba(244, 197, 66, 0.42);
+}
+
+#arena-mission-btn .mission-badge-dot {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: #ff2d55;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 900;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 10px rgba(255,45,85,0.45);
+    border: 2px solid rgba(0,0,0,0.75);
+}
+
+#arena-mission-btn .mission-badge-dot.show {
+    display: inline-flex;
+}
+
+@media (max-width: 600px) {
+    #arena-mission-btn {
+        top: 16px;
+        right: 72px; /* nằm song song bên trái icon kết bạn */
+        bottom: auto;
+        display: flex;
+    }
+}
+
+@media (min-width: 601px) {
+    #arena-mission-btn {
+        right: 86px; /* nằm song song bên trái icon kết bạn desktop */
+        bottom: 24px;
+        top: auto;
+        display: flex;
+    }
+}
+/* ===== NÚT SHOP SKIN NGOÀI SẢNH ===== */
+#arena-skin-btn {
+    position: fixed !important;
+    top: 16px !important;
+    right: 132px !important;
+    bottom: auto !important;
+    width: 52px !important;
+    height: 52px !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: linear-gradient(180deg, #ff3bd4, #7b2ff7) !important;
+    color: #fff8d6 !important;
+    font-size: 24px !important;
+    cursor: pointer !important;
+    z-index: 13050 !important;
+    box-shadow:
+        0 0 14px rgba(255, 59, 212, 0.36),
+        0 0 16px rgba(244, 197, 66, 0.12) !important;
+    border: 1px solid rgba(244, 197, 66, 0.42) !important;
+}
+
+#arena-skin-btn:active {
+    transform: scale(0.94);
+}
+
+#arena-friend-box {
+    position: fixed;
+    right: 18px;
+    bottom: 148px;
+    width: min(88vw, 320px);
+    max-height: min(55vh, 420px);
+    overflow: hidden;
+    display: none;
+    flex-direction: column;
+    background: rgba(18, 8, 34, 0.96);
+    border: 2px solid #f4c542;
+    border-radius: 16px;
+    z-index: 12021;
+    box-shadow:
+        0 0 18px rgba(123, 47, 247, 0.28),
+        0 0 18px rgba(244, 197, 66, 0.10);
+}
+
+#arena-friend-box.show {
+    display: flex;
+}
+
+.arena-friend-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 14px 8px;
+    color: #f4c542;
+    font-size: 13px;
+    font-weight: 900;
+}
+
+.arena-friend-close {
+    cursor: pointer;
+    color: #fff;
+    font-size: 16px;
+}
+
+.arena-friend-note {
+    padding: 0 14px 10px;
+    color: #d8c7ff;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+#arena-friend-list {
+    padding: 0 12px 12px;
+    overflow-y: auto;
+}
+
+.arena-friend-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    border-radius: 12px;
+    background: rgba(49, 19, 83, 0.88);
+    border: 1px solid rgba(244, 197, 66, 0.16);
+}
+
+.arena-friend-row:last-child {
+    margin-bottom: 0;
+}
+
+.arena-friend-meta {
+    min-width: 0;
+    flex: 1;
+}
+
+.arena-friend-name {
+    font-size: 12px;
+    font-weight: 900;
+    color: #fff6db;
+    line-height: 1.2;
+    word-break: break-word;
+}
+
+.arena-friend-sub {
+    margin-top: 2px;
+    font-size: 10px;
+    color: #d8c7ff;
+}
+
+.arena-friend-invite-btn {
+    padding: 7px 10px !important;
+    border-radius: 10px !important;
+    font-size: 10px !important;
+    font-weight: 900 !important;
+    background: linear-gradient(180deg, #7b2ff7, #4d1d95) !important;
+    color: #fff8d6 !important;
+    border: 1px solid rgba(244, 197, 66, 0.42) !important;
+    min-width: 62px;
+}
+
+#room-invite-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.68);
+    z-index: 14000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    box-sizing: border-box;
+}
+
+#room-invite-overlay.show {
+    display: flex !important;
+}
+
+.room-invite-card {
+    width: min(92vw, 360px);
+    background: rgba(18, 8, 34, 0.98);
+    border: 2px solid #f4c542;
+    border-radius: 18px;
+    padding: 18px 16px;
+    box-shadow:
+        0 0 18px rgba(123, 47, 247, 0.28),
+        0 0 18px rgba(244, 197, 66, 0.12);
+    text-align: center;
+}
+
+.room-invite-title {
+    font-size: 18px;
+    font-weight: 900;
+    color: #f4c542;
+    margin-bottom: 12px;
+}
+
+.room-invite-line {
+    font-size: 13px;
+    color: #fff6db;
+    margin-bottom: 8px;
+    line-height: 1.45;
+}
+
+.room-invite-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.room-invite-accept {
+    background: linear-gradient(180deg, #7b2ff7, #4d1d95) !important;
+    color: #fff8d6 !important;
+    border-radius: 12px !important;
+    font-weight: 900 !important;
+}
+
+.room-invite-decline {
+    background: linear-gradient(180deg, #636e72, #2d3436) !important;
+    color: #fff !important;
+    border-radius: 12px !important;
+    font-weight: 900 !important;
+}
+
+@media (max-width: 600px) {
+    #arena-friend-btn {
+        top: 16px;
+        right: 12px;
+        bottom: auto;
+        display: flex;
     }
 
-    if (eventTs >= weekStart) {
-      metrics.weekMatches += 1;
-      weekDays.add(localDayKey(eventTs));
-      if (winner === side) metrics.weekWins += 1;
+    #arena-friend-box {
+        top: 76px;
+        right: 12px;
+        bottom: auto;
+        width: min(88vw, 300px);
     }
-
-    if (eventTs >= monthStart) {
-      metrics.monthMatches += 1;
-      monthDays.add(localDayKey(eventTs));
-      if (winner === side) metrics.monthWins += 1;
-    }
-  });
-
-  metrics.weekActiveDays = weekDays.size;
-  metrics.monthActiveDays = monthDays.size;
-  return metrics;
 }
 
-function rewardAmountPmc(def, missionPoolPmc) {
-  const raw = Math.floor(Number(missionPoolPmc || 0) * Number(def.rewardRate || 0));
-  return clamp(raw, Number(def.minPmc || 0), Number(def.maxPmc || 0));
+@media (min-width: 601px) {
+    #arena-friend-btn {
+        display: flex;
+        right: 22px;
+        bottom: 24px;
+    }
+}
+@media (max-width: 600px) {
+    .welcome-wrap {
+        padding: 70px 10px 12px;
+    }
+
+    .welcome-login-corner {
+        top: max(10px, env(safe-area-inset-top, 0px) + 6px);
+        right: 10px;
+        gap: 6px;
+    }
+
+    .welcome-login-corner button {
+        min-width: 106px;
+        padding: 7px 10px;
+        font-size: 11px;
+    }
+
+    .welcome-hero h1 {
+        font-size: 28px;
+        letter-spacing: 2px;
+    }
+
+    .welcome-hero p {
+        font-size: 12px;
+    }
+
+    .welcome-commit-box {
+        padding: 12px 10px 16px;
+        border-radius: 16px;
+    }
+
+    .welcome-commit-title {
+        font-size: 16px;
+    }
+
+    .welcome-commit-item {
+        padding: 10px;
+        border-radius: 12px;
+    }
+
+    .welcome-commit-text strong {
+        font-size: 13px;
+    }
+
+    .welcome-commit-text span {
+        font-size: 11px;
+    }
 }
 
-async function buildBoard(db, walletKey, now = Date.now()) {
-  const defs = missionDefinitions();
-  const [walletSnap, treasurySnap, metrics] = await Promise.all([
-    db.ref(`wallets/${walletKey}`).once('value'),
-    db.ref(`wallets/${safeKey(ADMIN_TREASURY_WALLET_KEY)}`).once('value'),
-    buildMetrics(db, walletKey, now)
-  ]);
+/* ===== LOGIN: NÚT GIỮA MÀN + 9 SÁCH NHÀ PHÁT TRIỂN ===== */
+#login-screen .welcome-login-corner {
+    top: 50% !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translate(-50%, -50%) !important;
+    align-items: center !important;
+    gap: 10px !important;
+    width: min(86vw, 280px);
+}
 
-  const walletVal = walletSnap.val() || {};
-  const treasuryVal = treasurySnap.val() || {};
-  const treasuryPmc = readPmcBalance(treasuryVal);
-  const missionPoolPmc = Math.max(0, Math.floor(treasuryPmc * TREASURY_SHARE_RATIO));
+#login-screen .welcome-login-corner button {
+    width: 100%;
+    min-width: 210px;
+    justify-content: center;
+    font-size: 14px;
+    padding: 12px 14px;
+}
 
-  const tabs = { day: [], week: [], month: [], referral: [] };
-  let claimableTotalPmc = 0;
-  let claimableCount = 0;
+#pi-browser-note {
+    text-align: center !important;
+}
 
-  for (const def of defs) {
-    const progress = Math.max(0, Number(metrics[def.metricKey] || 0));
-    const rewardPmc = rewardAmountPmc(def, missionPoolPmc);
-    const target = Math.max(1, Number(def.target || 1));
-    const progressPercent = Math.floor(Math.max(0, Math.min(1, progress / target)) * 100);
-    // Dùng đúng hàm mầy đã viết để sinh ra cái tên có đuôi chu kỳ (ví dụ: daily_login__20260505)
-    const currentPeriodKey = periodKeyForMission(def, now);
+.dev-rules-link {
+    margin-top: 2px;
+    font-size: 11px;
+    color: #ffeaa7;
+    text-decoration: underline;
+    cursor: pointer;
+    font-weight: 900;
+    text-shadow: 0 0 8px rgba(0,0,0,0.9);
+    opacity: 0.96;
+}
+
+.welcome-commit-box {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10050;
+    width: min(92vw, 720px) !important;
+    max-height: min(82vh, 680px);
+    flex: unset !important;
+}
+
+.welcome-commit-box.show {
+    display: block !important;
+}
+
+.welcome-commit-title {
+    position: relative;
+    padding-right: 34px;
+}
+
+.dev-rules-close {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #d63031;
+    color: #fff;
+    cursor: pointer;
+    font-size: 15px;
+    box-shadow: 0 0 10px rgba(214,48,49,0.45);
+}
+
+/* ===== NÚT TOP NGOÀI SẢNH ===== */
+#arena-top-btn {
+    position: fixed !important;
+    top: 16px !important;
+    right: 192px !important;
+    bottom: auto !important;
+    width: 52px !important;
+    height: 52px !important;
+    border-radius: 50% !important;
+    display: none;
+    align-items: center !important;
+    justify-content: center !important;
+    background: linear-gradient(180deg, #ffd166, #e17055) !important;
+    color: #2d1600 !important;
+    font-size: 24px !important;
+    cursor: pointer !important;
+    z-index: 13050 !important;
+    box-shadow:
+        0 0 14px rgba(255, 209, 102, 0.36),
+        0 0 16px rgba(244, 197, 66, 0.12) !important;
+    border: 1px solid rgba(255, 255, 255, 0.42) !important;
+    font-weight: 900;
+}
+
+#arena-top-btn:active {
+    transform: scale(0.94);
+}
+
+body.in-match #arena-top-btn {
+    display: none !important;
+}
+
+.top-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.82);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 26500;
+    padding: 12px;
+    box-sizing: border-box;
+}
+
+.top-modal.show {
+    display: flex;
+}
+
+.top-modal-box {
+    width: min(94vw, 760px);
+    max-height: 86vh;
+    overflow: hidden;
+    background: rgba(12, 10, 16, 0.98);
+    border: 2px solid #ffd166;
+    border-radius: 18px;
+    box-shadow: 0 0 22px rgba(255, 209, 102, 0.22), 0 0 28px rgba(0,0,0,0.8);
+}
+
+.top-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 14px;
+    background: linear-gradient(90deg, #7b2ff7, #e17055);
+    color: #fff8d6;
+    font-weight: 900;
+    letter-spacing: 1px;
+}
+
+.top-close {
+    cursor: pointer;
+    font-size: 18px;
+}
+
+.top-tabs {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 7px;
+    padding: 10px;
+    background: rgba(0,0,0,0.24);
+}
+
+.top-tab {
+    padding: 9px 6px !important;
+    border-radius: 11px !important;
+    font-size: 11px !important;
+    background: rgba(20, 18, 24, 0.96) !important;
+    color: #dfe6e9 !important;
+    border: 1px solid rgba(255, 209, 102, 0.26) !important;
+    font-weight: 900 !important;
+}
+
+.top-tab.active {
+    background: linear-gradient(180deg, #ffd166, #c99712) !important;
+    color: #241000 !important;
+    border-color: #fff8d6 !important;
+}
+
+#arena-top-list {
+    max-height: calc(86vh - 126px);
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.top-player-row {
+    display: grid;
+    grid-template-columns: 42px 42px 1fr auto;
+    gap: 8px;
+    align-items: center;
+    padding: 9px 10px;
+    margin-bottom: 8px;
+    border-radius: 13px;
+    background: rgba(255, 255, 255, 0.055);
+    border: 1px solid rgba(255, 209, 102, 0.16);
+}
+
+.top-player-rank {
+    font-size: 15px;
+    color: #ffd166;
+    font-weight: 900;
+    text-align: center;
+}
+
+.top-player-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid rgba(255, 209, 102, 0.45);
+}
+
+.top-player-name {
+    color: #fff;
+    font-size: 13px;
+    font-weight: 900;
+    line-height: 1.2;
+    word-break: break-word;
+}
+
+.top-player-sub {
+    margin-top: 2px;
+    color: #b2bec3;
+    font-size: 10px;
+    line-height: 1.2;
+}
+
+.top-player-value {
+    color: #7dffb3;
+    font-size: 12px;
+    font-weight: 900;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.top-empty {
+    padding: 18px 10px;
+    text-align: center;
+    color: #b2bec3;
+    font-size: 13px;
+}
+
+
+.top-player-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    align-items: flex-end;
+}
+
+.top-challenge-btn,
+.top-watch-btn {
+    padding: 6px 9px !important;
+    border-radius: 9px !important;
+    font-size: 10px !important;
+    font-weight: 900 !important;
+    line-height: 1 !important;
+    min-width: 68px;
+    white-space: nowrap;
+}
+
+.top-challenge-btn {
+    background: linear-gradient(180deg, #00c38a, #008f67) !important;
+    color: #fff !important;
+    border: 1px solid rgba(125,255,179,0.52) !important;
+}
+
+.top-watch-btn {
+    background: linear-gradient(180deg, #6c5ce7, #341f97) !important;
+    color: #fff8d6 !important;
+    border: 1px solid rgba(255,255,255,0.18) !important;
+}
+
+.top-status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 3px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 900;
+    border: 1px solid rgba(255,255,255,0.14);
+}
+
+.top-status-chip.playing {
+    color: #ff7675;
+    background: rgba(255,118,117,0.12);
+    border-color: rgba(255,118,117,0.28);
+}
+
+.top-status-chip.home {
+    color: #7dffb3;
+    background: rgba(125,255,179,0.10);
+    border-color: rgba(125,255,179,0.26);
+}
+
+#top-challenge-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 28000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.78);
+    padding: 14px;
+    box-sizing: border-box;
+}
+
+#top-challenge-modal.show {
+    display: flex;
+}
+
+.top-challenge-box {
+    width: min(92vw, 390px);
+    background: rgba(14, 10, 24, 0.98);
+    border: 2px solid #ffd166;
+    border-radius: 18px;
+    padding: 16px;
+    box-shadow: 0 0 22px rgba(255,209,102,0.22), 0 0 24px rgba(0,0,0,0.7);
+    text-align: center;
+}
+
+.top-challenge-title {
+    color: #ffd166;
+    font-size: 18px;
+    font-weight: 900;
+    margin-bottom: 8px;
+}
+
+.top-challenge-target {
+    color: #fff;
+    font-size: 13px;
+    font-weight: 800;
+    margin-bottom: 10px;
+}
+
+.top-challenge-mode-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 10px 0;
+}
+
+.top-challenge-mode-btn {
+    padding: 9px 8px !important;
+    border-radius: 11px !important;
+    font-size: 12px !important;
+    background: rgba(255,255,255,0.08) !important;
+    color: #dfe6e9 !important;
+    border: 1px solid rgba(255,209,102,0.25) !important;
+}
+
+.top-challenge-mode-btn.active {
+    background: linear-gradient(180deg, #ffd166, #c99712) !important;
+    color: #241000 !important;
+    border-color: #fff8d6 !important;
+}
+
+#top-challenge-stake-input {
+    width: 100%;
+    box-sizing: border-box;
+    background: #090909;
+    color: #fff;
+    border: 1px solid rgba(255,209,102,0.55);
+    border-radius: 12px;
+    padding: 12px;
+    font-size: 14px;
+    outline: none;
+    margin-top: 8px;
+}
+
+.top-challenge-note {
+    margin-top: 8px;
+    color: #b2bec3;
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.top-challenge-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.top-challenge-cancel {
+    background: linear-gradient(180deg, #636e72, #2d3436) !important;
+    border-radius: 12px !important;
+    color: #fff !important;
+}
+
+.top-challenge-ok {
+    background: linear-gradient(180deg, #00c38a, #008f67) !important;
+    border-radius: 12px !important;
+    color: #fff !important;
+}
+
+
+
+/* ===== KHÁN GIẢ: MẮT XEM + CHAT TRỰC TIẾP ===== */
+#viewer-count-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 1200;
+    min-width: 54px;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 999px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: rgba(0, 0, 0, 0.78);
+    color: #ffeaa7;
+    border: 1px solid rgba(255, 209, 102, 0.55);
+    box-shadow: 0 0 12px rgba(255, 209, 102, 0.25);
+    font-size: 12px;
+    font-weight: 900;
+    pointer-events: none;
+}
+
+body.spectator-mode #viewer-count-badge,
+body.in-match #viewer-count-badge.show {
+    display: inline-flex;
+}
+
+body.spectator-mode #ready-overlay {
+    display: none !important;
+}
+
+body.spectator-mode #desktop-match-actions .action-dauhang,
+body.spectator-mode #desktop-match-actions .action-hoa,
+body.spectator-mode #desktop-match-actions .action-doitran,
+body.spectator-mode #ready-main-btn {
+    display: none !important;
+}
+
+.spectator-room-note {
+    color: #ffeaa7 !important;
+    font-size: 12px !important;
+}
+
+.top-status-chip.online {
+    color: #55efc4;
+    background: rgba(85,239,196,0.10);
+    border-color: rgba(85,239,196,0.28);
+}
+
+.top-status-chip.offline {
+    color: #b2bec3;
+    background: rgba(178,190,195,0.08);
+    border-color: rgba(178,190,195,0.18);
+}
+
+.top-status-chip.spectating {
+    color: #ffeaa7;
+    background: rgba(255,234,167,0.10);
+    border-color: rgba(255,234,167,0.28);
+}
+
+@media (max-width: 600px) {
+    #arena-top-btn {
+        top: 16px !important;
+        right: 192px !important;
+        width: 48px !important;
+        height: 48px !important;
+        font-size: 22px !important;
+    }
+
+    .top-tabs {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .top-player-row {
+        grid-template-columns: 34px 36px 1fr;
+    }
+
+    .top-player-value {
+        grid-column: 3 / 4;
+        text-align: left;
+        margin-top: -4px;
+    }
+
+    .top-player-actions {
+        grid-column: 3 / 4;
+        align-items: flex-start;
+        margin-top: -2px;
+    }
+
+    .top-challenge-btn,
+    .top-watch-btn {
+        min-width: 76px;
+        padding: 6px 8px !important;
+        font-size: 9px !important;
+    }
+
+}
+
+/* Ẩn icon nhiệm vụ + shop khi đã vào phòng / vào trận */
+body.in-match #arena-mission-btn,
+body.in-match #arena-skin-btn,
+body.in-match #arena-top-btn {
+    display: none !important;
+}
+/* Container dời qua trái */
+.hamburger-menu-container {
+position: fixed;
+top: 10px;
+left: 15px;
+display: flex;
+align-items: center;
+gap: 10px;
+z-index: 10000;
+cursor: pointer;
+}
+
+/* TẠO HÌNH 3 GẠCH (Cái này mầy thiếu nè) */
+.hamburger-icon {
+width: 25px;
+height: 18px;
+display: flex;
+flex-direction: column;
+justify-content: space-between;
+}
+
+.hamburger-icon span {
+display: block;
+width: 100%;
+height: 3px;
+background-color: #55efc4;
+border-radius: 3px;
+}
+
+/* Chữ và Khung số dư */
+.user-meta {
+display: flex;
+flex-direction: column;
+align-items: flex-start;
+}
+
+.pi-balance-box {
+font-size: 0.75rem;
+color: #ffce54;
+font-weight: bold;
+background: rgba(0, 0, 0, 0.8);
+border: 1px solid #55efc4;
+padding: 1px 8px;
+border-radius: 12px;
+box-shadow: 0 0 8px rgba(85, 239, 196, 0.4);
+}
+.pmc-balance-box {
+    color: #7dffb3;
+    border-color: #7dffb3;
+    box-shadow: 0 0 8px rgba(125, 255, 179, 0.28);
+    margin-top: 4px;
+}
+
+.modal-input-dark {
+    width: 100%;
+    box-sizing: border-box;
+    background: #111;
+    color: #fff;
+    border: 1px solid #55efc4;
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 14px;
+    outline: none;
+    margin-top: 10px;
+}
+
+.pmc-note {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #b2bec3;
+    line-height: 1.5;
+}
+
+.exchange-preview {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(85, 239, 196, 0.08);
+    border: 1px solid rgba(85, 239, 196, 0.25);
+    color: #7dffb3;
+    font-weight: 800;
+    font-size: 14px;
+}
+
+.stake-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.stake-chip {
+    padding: 10px 8px;
+    border-radius: 12px;
+    border: 1px solid rgba(85,239,196,0.35);
+    background: #111;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: 0.18s ease;
+}
+
+.stake-chip:hover {
+    border-color: #55efc4;
+    transform: translateY(-1px);
+}
+
+.stake-chip.active {
+    background: linear-gradient(180deg, #00c38a, #00a06d);
+    color: #fff;
+    border-color: #7dffb3;
+    box-shadow: 0 0 12px rgba(125,255,179,0.25);
+}
+
+.stake-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.stake-cancel-btn {
+    background: linear-gradient(180deg, #636e72, #2d3436);
+    color: white;
+    border-radius: 12px;
+    font-weight: 800;
+}
+
+.stake-ok-btn {
+    background: linear-gradient(180deg, #6d28d9, #3b0764);
+    color: white;
+    border-radius: 12px;
+    font-weight: 800;
+}
+
+.room-mode-title {
+    font-size: 22px;
+    color: #55efc4;
+    font-weight: 900;
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+}
+/* Menu sổ xuống */
+.profile-menu {
+display: none;
+position: absolute;
+top: 45px;
+left: 0;
+background: #1a1a1a;
+border: 1px solid #55efc4;
+border-radius: 8px;
+width: 170px;
+z-index: 10001;
+box-shadow: 0 5px 20px rgba(0, 0, 0, 0.8);
+}
+
+.profile-menu.show {
+    display: block;
+    animation: menuFadeIn 0.18s ease-out;
+}
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 10px;
+    color: #f5f6fa;
+    font-size: 0.8rem;
+    font-weight: 700;
+    line-height: 1.15;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    cursor: pointer;
+    transition: background 0.18s ease, transform 0.12s ease, box-shadow 0.18s ease, color 0.18s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.menu-item:last-of-type {
+    border-bottom: none;
+}
+.menu-item:hover {
+    background: linear-gradient(90deg, rgba(85, 239, 196, 0.18), rgba(85, 239, 196, 0.05));
+    color: #55efc4;
+    box-shadow: inset 3px 0 0 #55efc4;
+    transform: translateX(2px);
+}
+
+.menu-item:active {
+    transform: scale(0.97);
+    background: rgba(85, 239, 196, 0.24);
+}
+
+.menu-item-danger {
+    color: #ff8a80 !important;
+}
+
+.menu-item-danger:hover {
+    color: #fff !important;
+    background: linear-gradient(90deg, rgba(214, 48, 49, 0.35), rgba(214, 48, 49, 0.12));
+    box-shadow: inset 3px 0 0 #d63031;
+}
+
+.menu-icon {
+    width: 22px;
+    min-width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 7px;
+    background: rgba(85, 239, 196, 0.12);
+    font-size: 13px;
+}
+
+@keyframes menuFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-6px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+.desktop-home-wrap {
+    display: block;
+    width: min(1180px, 94vw);
+    margin: 0 auto;
+}
+#desktop-home-layout {
+    display: grid;
+    grid-template-columns: 320px minmax(360px, 1fr) 300px;
+    gap: 20px;
+    align-items: stretch;
+}
+
+.desktop-side-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.desktop-panel {
+    background: rgba(0, 0, 0, 0.72);
+    border: 2px solid #55efc4;
+    border-radius: 20px;
+    box-shadow: 0 0 18px rgba(85, 239, 196, 0.18);
+    box-sizing: border-box;
+}
+
+.desktop-ad-panel {
+    height: 260px; /* Fix chết chiều cao */
+    min-height: 260px;
+    max-height: 260px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    text-align: center;
+    padding: 0 !important; /* XÓA PADDING LUÔN */
+    overflow: hidden;
+}
+
+.desktop-ranking-panel {
+    cursor: pointer;
+}
+
+.desktop-panel-title {
+    color: #55efc4;
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 12px;
+    text-align: center;
+    letter-spacing: 2px;
+}
+
+.desktop-panel-sub {
+    color: #dfe6e9;
+    font-size: 14px;
+    line-height: 1.6;
+    text-align: center;
+    opacity: 0.95;
+}
+
+#desktop-ranking-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.desktop-rank-row {
+    display: grid;
+    grid-template-columns: 36px 1fr auto;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #2d3436;
+    font-size: 13px;
+    color: #fff;
+}
+.lobby-room-row {
+    padding: 10px 12px;
+    border: 1px solid rgba(85,239,196,0.22);
+    border-radius: 14px;
+    background: rgba(12,18,12,0.72);
+    margin-bottom: 10px;
+    transition: 0.18s ease;
+}
+
+.lobby-room-row.joinable {
+    cursor: pointer;
+    border-color: rgba(85,239,196,0.55);
+}
+
+.lobby-room-row.joinable:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0 14px rgba(85,239,196,0.18);
+    border-color: #55efc4;
+}
+
+.lobby-room-top,
+.lobby-room-mid,
+.lobby-room-sub {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.lobby-room-top {
+    margin-bottom: 6px;
+}
+
+.lobby-room-mid {
+    margin-bottom: 6px;
+    font-size: 13px;
+    color: #dfe6e9;
+}
+
+.lobby-room-sub {
+    font-size: 12px;
+    color: #b2bec3;
+}
+
+.room-stake-chip {
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: rgba(125,255,179,0.12);
+    border: 1px solid rgba(125,255,179,0.4);
+    color: #7dffb3;
+    font-weight: 800;
+    font-size: 11px;
+}
+
+.room-state {
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.room-state.waiting {
+    background: rgba(253,203,110,0.14);
+    color: #ffeaa7;
+    border: 1px solid rgba(253,203,110,0.32);
+}
+
+.room-state.full {
+    background: rgba(116,185,255,0.14);
+    color: #74b9ff;
+    border: 1px solid rgba(116,185,255,0.32);
+}
+
+.room-state.playing {
+    background: rgba(255,118,117,0.14);
+    color: #ff7675;
+    border: 1px solid rgba(255,118,117,0.32);
+}
+
+.room-state.done {
+    background: rgba(99,110,114,0.18);
+    color: #dfe6e9;
+    border: 1px solid rgba(223,230,233,0.22);
+}
+
+.room-join-hint {
+    margin-top: 8px;
+    font-size: 11px;
+    color: #55efc4;
+    font-weight: 800;
+}
+.desktop-rank-row strong {
+    color: #55efc4;
+}
+
+.desktop-center-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    text-align: center;
+    padding-top: 46px;
+    padding-bottom: 34px;
+    min-height: 720px;
+    box-sizing: border-box;
+}
+.lobby-title-box {
+    position: relative;
+    text-align: center;
+    pointer-events: none;
+    z-index: 6;
+}
+
+.lobby-main-title {
+    position: relative;
+    display: inline-block;
+    padding: 8px 20px 6px;
+    font-family: "Georgia", "Times New Roman", serif;
+    font-style: italic;
+    font-weight: 900;
+    line-height: 0.98;
+    letter-spacing: 5px;
+    text-transform: uppercase;
+    color: #f306cc;
+    background: linear-gradient(180deg, #eede05d5 0%, hsl(61, 95%, 45%) 28%, #f509c6 62%, #05ee79 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    text-shadow:
+        0 0 10px rgba(255, 120, 220, 0.18),
+        0 0 22px rgba(204, 4, 194, 0.774);
+    transform: skewX(-8deg);
+    animation: titleBay 2.8s ease-in-out infinite alternate;
+}
+
+.lobby-main-title::before,
+.lobby-main-title::after {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-58%);
+    font-family: "Georgia", "Times New Roman", serif;
+    font-style: italic;
+    font-weight: 900;
+    line-height: 1;
+    pointer-events: none;
+    opacity: 0.96;
+}
+
+
+.lobby-sub-title {
+    margin-top: 6px;
+    font-family: "Georgia", "Times New Roman", serif;
+    font-style: italic;
+    font-weight: 800;
+    letter-spacing: 3px;
+    color: #eb9a04;
+    text-transform: uppercase;
+    text-shadow:
+        0 0 8px rgb(204, 6, 243),
+        0 0 14px rgb(240, 10, 228);
+    animation: subLua 3.2s ease-in-out infinite alternate;
+}
+
+/* desktop */
+.lobby-title-desktop {
+    margin-top: 2px;
+    margin-bottom: 28px;
+}
+
+.lobby-title-desktop .lobby-main-title {
+    font-size: 56px;
+}
+
+.lobby-title-desktop .lobby-sub-title {
+    font-size: 22px;
+}
+
+/* mobile */
+#mobile-lobby-title.lobby-title-mobile {
+    position: absolute;
+    top: 62px;
+    left: 12px;
+    right: 12px;
+}
+
+.lobby-title-mobile .lobby-main-title {
+    padding: 4px 12px 2px;
+    font-size: 38px;
+    letter-spacing: 4px;
+}
+
+.lobby-title-mobile .lobby-main-title::before {
+    left: -34px;
+    font-size: 28px;
+}
+
+.lobby-title-mobile .lobby-main-title::after {
+    right: -34px;
+    font-size: 28px;
+}
+
+.lobby-title-mobile .lobby-sub-title {
+    font-size: 16px;
+    letter-spacing: 2px;
+    margin-top: 3px;
+}
+
+@keyframes titleBay {
+    from {
+        transform: skewX(-8deg) translateY(0) scale(1);
+        filter: drop-shadow(0 0 2px rgba(255,255,255,0.12));
+    }
+    to {
+        transform: skewX(-10deg) translateY(-2px) scale(1.03);
+        filter: drop-shadow(0 0 8px rgba(255,255,255,0.18));
+    }
+}
+
+@keyframes rongBay {
+    0%, 100% {
+        transform: translateY(-58%) rotate(-8deg) scale(1);
+    }
+    50% {
+        transform: translateY(-63%) translateX(-3px) rotate(5deg) scale(1.08);
+    }
+}
+
+@keyframes phungMua {
+    0%, 100% {
+        transform: translateY(-58%) rotate(8deg) scale(1);
+    }
+    50% {
+        transform: translateY(-63%) translateX(3px) rotate(-5deg) scale(1.08);
+    }
+}
+
+@keyframes subLua {
+    from {
+        opacity: 0.92;
+        letter-spacing: 3px;
+    }
+    to {
+        opacity: 1;
+        letter-spacing: 4px;
+    }
+}
+@media (min-width: 601px) {
+    .desktop-lobby-title-box {
+        position: relative;
+        margin-top: 6px;
+        margin-bottom: 28px;
+        text-align: center;
+    }
+
+    .desktop-long-phung-title {
+        position: relative;
+        display: inline-block;
+        margin: 0;
+        padding: 14px 92px 10px;
+        font-size: 44px;
+        font-weight: 900;
+        letter-spacing: 8px;
+        color: #8fffe8;
+        text-transform: uppercase;
+        text-shadow:
+            0 0 6px rgba(85, 239, 196, 0.9),
+            0 0 16px rgba(85, 239, 196, 0.75),
+            0 0 32px rgba(0, 255, 204, 0.35),
+            0 4px 18px rgba(0, 0, 0, 0.85);
+        animation: lobbyTitleGlow 2.2s ease-in-out infinite alternate;
+    }
+
+    .desktop-long-phung-title::before,
+    .desktop-long-phung-title::after {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-54%);
+        font-size: 42px;
+        font-weight: 900;
+        line-height: 1;
+        pointer-events: none;
+        filter: drop-shadow(0 0 10px rgba(255,255,255,0.18));
+    }
+
+    .desktop-long-phung-title::before {
+        content: "龍";
+        left: 10px;
+        color: #ffd166;
+        text-shadow:
+            0 0 8px rgba(255, 209, 102, 0.8),
+            0 0 18px rgba(255, 120, 50, 0.55),
+            0 0 26px rgba(255, 80, 0, 0.28);
+        animation: dragonBay 2.8s ease-in-out infinite;
+    }
+
+    .desktop-long-phung-title::after {
+        content: "鳳";
+        right: 10px;
+        color: #ff7be5;
+        text-shadow:
+            0 0 8px rgba(255, 123, 229, 0.82),
+            0 0 18px rgba(180, 80, 255, 0.55),
+            0 0 26px rgba(255, 0, 170, 0.25);
+        animation: phungMua 2.8s ease-in-out infinite;
+    }
+
+    .desktop-long-phung-sub {
+        position: relative;
+        display: inline-block;
+        margin: 10px 0 0;
+        padding: 6px 18px;
+        font-size: 19px;
+        font-weight: 900;
+        letter-spacing: 3px;
+        background: linear-gradient(90deg, #ff78d1, #ffd166, #55efc4, #ff78d1);
+        background-size: 220% auto;
+     background-clip: text;
+-webkit-background-clip: text;
+color: transparent;
+-webkit-text-fill-color: transparent;
+        text-shadow: 0 0 14px rgba(255, 0, 200, 0.12);
+        animation: subShine 4s linear infinite;
+    }
+
+    .desktop-long-phung-sub::before,
+    .desktop-long-phung-sub::after {
+        content: "✦";
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 16px;
+        color: #ffd166;
+        text-shadow: 0 0 10px rgba(255, 209, 102, 0.7);
+    }
+
+    .desktop-long-phung-sub::before {
+        left: -18px;
+    }
+
+    .desktop-long-phung-sub::after {
+        right: -18px;
+    }
+
+    @keyframes lobbyTitleGlow {
+        from {
+            transform: translateY(0);
+            text-shadow:
+                0 0 6px rgba(195, 6, 233, 0.75),
+                0 0 14px rgba(230, 7, 174, 0.55),
+                0 0 24px rgba(233, 10, 166, 0.25),
+                0 4px 18px rgba(0, 0, 0, 0.82);
+        }
+        to {
+            transform: translateY(-2px);
+            text-shadow:
+                0 0 10px rgb(233, 6, 233),
+                0 0 22px rgba(216, 8, 243, 0.85),
+                0 0 40px rgba(205, 6, 231, 0.42),
+                0 4px 20px rgba(0, 0, 0, 0.88);
+        }
+    }
+
+    @keyframes dragonBay {
+        0%, 100% {
+            transform: translateY(-54%) translateX(0) rotate(-6deg) scale(1);
+        }
+        50% {
+            transform: translateY(-58%) translateX(-4px) rotate(4deg) scale(1.08);
+        }
+    }
+
+    @keyframes phungMua {
+        0%, 100% {
+            transform: translateY(-54%) translateX(0) rotate(6deg) scale(1);
+        }
+        50% {
+            transform: translateY(-58%) translateX(4px) rotate(-4deg) scale(1.08);
+        }
+    }
+
+    @keyframes subShine {
+        0% {
+            background-position: 0% center;
+        }
+        100% {
+            background-position: 220% center;
+        }
+    }
+}
+.desktop-game-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 230px);
+    justify-content: center;
+    gap: 26px 25px;
+    margin-top: 34px;
+}
+
+.desktop-game-card {
+    width: 210px;
+    min-height: 248px;
+    background:
+        linear-gradient(180deg, rgba(18, 35, 18, 0.95), rgba(8, 18, 8, 0.9)),
+        rgba(15, 30, 15, 0.94);
+    border: 2px solid rgba(85, 239, 196, 0.9);
+    border-radius: 22px;
+    padding: 16px 14px 18px;
+    cursor: pointer;
+    box-shadow:
+        0 0 18px rgba(85, 239, 196, 0.16),
+        inset 0 0 18px rgba(85, 239, 196, 0.04);
+    transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+    box-sizing: border-box;
+    position: relative;
+    overflow: hidden;
+}
+
+.desktop-game-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at top, rgba(85, 239, 196, 0.08), transparent 55%);
+    pointer-events: none;
+}
+
+.desktop-game-card:hover {
+    transform: translateY(-5px) scale(1.02);
+    border-color: #7fffd4;
+    box-shadow:
+        0 0 24px rgba(85, 239, 196, 0.24),
+        0 0 10px rgba(168, 85, 247, 0.18);
+}
+
+.desktop-game-card img {
+    width: 140px;
+    height: 140px;
+    object-fit: cover;
+    border-radius: 18px;
+}
+
+.desktop-game-card p {
+    margin-top: 12px;
+    font-weight: bold;
+    color: #fff;
+    font-size: 16px;
+}
+.desktop-game-card.placeholder {
+    cursor: default;
+    position: relative;
+    opacity: 0.92;
+}
+
+.desktop-game-card.placeholder:hover {
+    transform: translateY(-2px);
+}
+
+.desktop-game-card.placeholder::after {
+    content: "DỰ KIẾN";
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    padding: 4px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+    background: rgba(224, 6, 170, 0.92);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 999px;
+    box-shadow: 0 0 10px rgba(108, 92, 231, 0.35);
+}
+
+.desktop-game-card.placeholder img {
+    filter: grayscale(0.2) brightness(0.9);
+}
+
+.desktop-game-card .game-note {
+    margin-top: 10px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: #c8d6d8;
+    min-height: 34px;
+    opacity: 0.92;
+}
+.desktop-friend-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+#desktop-friend-list {
+    max-height: 320px;
+    overflow-y: auto;
+    font-size: 13px;
+}
+
+.mobile-home-wrap {
+    display: none;
+}
+
+#mobile-friend-wrap {
+    display: none;
+}
+
+#mobile-friend-box {
+    display: none;
+}
+#mobile-friend-toggle {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: #55efc4;
+    color: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.5);
+}
+
+#mobile-friend-box {
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+    position: absolute;
+    top: 60px;
+    right: 0;
+    width: min(76vw, 290px);
+    max-width: 290px;
+    background: rgba(0, 0, 0, 0.88);
+    border: 2px solid #55efc4;
+    border-radius: 14px;
+    padding: 10px;
+    box-sizing: border-box;
+    z-index: 11000;
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.45);
+}
+
+#mobile-friend-box.show {
+    display: flex;
+}
+
+.friend-box-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.friend-close {
+    cursor: pointer;
+    font-size: 16px;
+    color: #fff;
+}
+
+.rank-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 26000;
+}
+
+.rank-modal.show {
+    display: flex;
+}
+
+.rank-modal-box {
+    width: min(92vw, 420px);
+    max-height: 80vh;
+    overflow: hidden;
+    background: rgba(15, 15, 15, 0.97);
+    border: 2px solid #55efc4;
+    border-radius: 16px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.65);
+}
+
+.rank-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 14px;
+    background: #55efc4;
+    color: #000;
+    font-weight: bold;
+}
+
+.rank-close {
+    cursor: pointer;
+    font-size: 18px;
+}
+
+#ranking-list {
+    max-height: 65vh;
+    overflow-y: auto;
+    padding: 10px;
+}
+.invite-join-box{
+    padding: 12px 12px 0;
+}
+
+.invite-join-title{
+    font-size: 12px;
+    font-weight: 800;
+    color: #55efc4;
+    margin-bottom: 8px;
+    text-align: left;
+}
+
+.invite-join-row{
+    display: flex;
+    gap: 8px;
+}
+
+#invite-code-input{
+    flex: 1;
+    background: #09110d;
+    color: #fff;
+    border: 1px solid #55efc4;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    outline: none;
+    text-transform: uppercase;
+    box-sizing: border-box;
+}
+
+#invite-code-input:focus{
+    box-shadow: 0 0 10px rgba(85,239,196,0.18);
+}
+
+.invite-join-btn{
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 800;
+    background: linear-gradient(180deg, #00c38a, #008f67);
+    white-space: nowrap;
+}
+
+.invite-join-note{
+    margin-top: 8px;
+    font-size: 11px;
+    color: #b2bec3;
+    text-align: left;
+    line-height: 1.4;
+}
+.room-top-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 12px 12px 0;
+}
+
+.room-top-tab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 9px 10px !important;
+    border-radius: 12px;
+    border: 1px solid rgba(244, 197, 66, 0.34);
+    background: linear-gradient(180deg, rgba(58, 24, 102, 0.96), rgba(32, 12, 56, 0.96)) !important;
+    color: #f7e7b1 !important;
+    font-size: 12px !important;
+    font-weight: 900;
+    letter-spacing: 0.4px;
+}
+
+.room-top-tab.active {
+    background: linear-gradient(180deg, #7b2ff7, #4d1d95) !important;
+    color: #fff8d6 !important;
+    border-color: #f4c542 !important;
+    box-shadow:
+        0 0 14px rgba(123, 47, 247, 0.38),
+        0 0 20px rgba(244, 197, 66, 0.15) !important;
+}
+
+.room-top-tab-count {
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, #f4c542, #c99712);
+    color: #2a1147;
+    font-size: 10px;
+    font-weight: 900;
+}
+.rank-row {
+    display: grid;
+    grid-template-columns: 48px 1fr auto;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 10px;
+    border-bottom: 1px solid #333;
+    font-size: 13px;
+}
+
+.rank-row strong {
+    color: #55efc4;
+}
+
+.friend-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 0;
+    border-bottom: 1px solid #333;
+    font-size: 12px;
+}
+
+.friend-item button {
+    padding: 4px 8px;
+    font-size: 11px;
+    background: #d63031;
+}
+.desktop-game-card p,
+.mobile-game-card span {
+    display: inline-block;
+    margin: 14px auto 0;
+    padding: 10px 20px;
+    background:
+        linear-gradient(180deg, #6d28d9, #3b0764 55%, #240046);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 12px;
+    box-shadow:
+        0 0 14px rgba(168, 85, 247, 0.38),
+        0 0 24px rgba(91, 33, 182, 0.22),
+        inset 0 0 10px rgba(255, 255, 255, 0.08);
+    color: #fff7ff;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
+    position: relative;
+    overflow: hidden;
+}
+
+.desktop-game-card p::before,
+.mobile-game-card span::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(120deg, transparent 15%, rgba(255,255,255,0.18), transparent 85%);
+    opacity: 0.65;
+    pointer-events: none;
+}
+
+.desktop-friend-panel .friend-box-row input {
+    width: 100%;
+    background: rgba(10, 10, 10, 0.9);
+    color: #fff;
+    border: 1px solid rgba(85, 239, 196, 0.65);
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-sizing: border-box;
+    font-size: 13px;
+    outline: none;
+}
+
+.desktop-friend-panel .friend-box-row input::placeholder {
+    color: #b2bec3;
+}
+
+.desktop-friend-panel .friend-box-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.desktop-friend-panel .friend-box-actions button {
+    padding: 7px 6px !important;
+    font-size: 11px !important;
+    font-weight: 700;
+    border-radius: 10px;
+    border: 1px solid rgba(85, 239, 196, 0.55);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.22);
+    letter-spacing: 0.3px;
+    line-height: 1.1;
+    min-width: 0;
+}
+
+.desktop-friend-panel .friend-box-actions button:first-child {
+    background: linear-gradient(180deg, #58d604, #b15cc2);
+    color: #fff;
+}
+
+.desktop-friend-panel .friend-box-actions button:last-child {
+    background: linear-gradient(180deg, #be43d6, #e2043c);
+    color: #fff;
+}
+
+#desktop-friend-list {
+    margin-top: 6px;
+}
+
+#desktop-friend-list .friend-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid #04db9b;
+    font-size: 13px;
+    color: #fff;
+}
+
+#desktop-friend-list .friend-item button {
+    padding: 5px 10px !important;
+    font-size: 11px !important;
+    background: #d63031;
+    border-radius: 8px;
+}
+.friend-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.friend-section {
+    background: rgba(7, 16, 12, 0.86);
+    border: 1px solid rgba(85,239,196,0.22);
+    border-radius: 14px;
+    padding: 10px;
+}
+
+.friend-section-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    font-weight: 900;
+    color: #55efc4;
+    letter-spacing: 0.5px;
+}
+
+.friend-section-count {
+    min-width: 20px;
+    height: 20px;
+    border-radius: 999px;
+    padding: 0 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(85,239,196,0.14);
+    border: 1px solid rgba(85,239,196,0.35);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.friend-empty {
+    font-size: 12px;
+    color: #b2bec3;
+    opacity: 0.9;
+}
+
+.friend-request-card,
+.friend-sent-card,
+.friend-accepted-card {
+    border: 1px solid rgba(85,239,196,0.18);
+    border-radius: 12px;
+    padding: 8px 10px;
+    background: rgba(0,0,0,0.28);
+    margin-bottom: 8px;
+}
+
+.friend-request-card:last-child,
+.friend-sent-card:last-child,
+.friend-accepted-card:last-child {
+    margin-bottom: 0;
+}
+
+.friend-user-line {
+    font-size: 12px;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 6px;
+    word-break: break-word;
+}
+
+.friend-sub-line {
+    font-size: 11px;
+    color: #b2bec3;
+    margin-bottom: 8px;
+}
+
+.friend-btn-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.friend-btn-accept {
+    background: linear-gradient(180deg, #00c38a, #008f67) !important;
+    color: #fff !important;
+}
+
+.friend-btn-reject {
+    background: linear-gradient(180deg, #636e72, #2d3436) !important;
+    color: #fff !important;
+}
+
+.friend-btn-cancel {
+    background: linear-gradient(180deg, #6c5ce7, #4834d4) !important;
+    color: #fff !important;
+}
+
+.friend-btn-remove {
+    background: linear-gradient(180deg, #e74c3c, #c0392b) !important;
+    color: #fff !important;
+}
+.friend-accepted-card.compact-friend {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+}
+
+.friend-accepted-main {
+    min-width: 0;
+    flex: 1 1 auto;
+    max-width: calc(100% - 74px);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: left;
+}
+
+.friend-accepted-name {
+    font-size: 12px;
+    font-weight: 900;
+    color: #fff;
+    line-height: 1.2;
+    white-space: normal;
+    overflow: hidden;
+    text-overflow: unset;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.friend-accepted-status {
+    font-size: 10px;
+    color: #b2bec3;
+    line-height: 1.1;
+}
+
+.friend-accepted-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.friend-mini-btn {
+    min-width: 0;
+    padding: 6px 8px !important;
+    border-radius: 9px !important;
+    font-size: 10px !important;
+    font-weight: 900 !important;
+    line-height: 1 !important;
+    letter-spacing: 0.2px;
+}
+
+.friend-invite-btn {
+    background: linear-gradient(180deg, #00c38a, #008f67) !important;
+    color: #fff !important;
+}
+
+.friend-trash-btn {
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+    padding: 0 !important;
+    border-radius: 9px !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, #e74c3c, #c0392b) !important;
+    color: #fff !important;
+    font-size: 14px !important;
+    font-weight: 900 !important;
+}
+.friend-request-card.compact-stranger,
+.friend-sent-card.compact-stranger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+}
+
+.stranger-main {
+    min-width: 0;
+    flex: 1 1 auto;
+    max-width: calc(100% - 96px);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: left;
+}
+.stranger-name {
+    font-size: 12px;
+    font-weight: 900;
+    color: #fff;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.stranger-name {
+    font-size: 12px;
+    font-weight: 900;
+    color: #fff;
+    line-height: 1.2;
+    white-space: normal;
+    overflow: hidden;
+    text-overflow: unset;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+.stranger-status {
+    font-size: 10px;
+    color: #b2bec3;
+    line-height: 1.1;
+}
+
+.stranger-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.stranger-mini-btn {
+    min-width: 0;
+    padding: 6px 8px !important;
+    border-radius: 9px !important;
+    font-size: 10px !important;
+    font-weight: 900 !important;
+    line-height: 1 !important;
+    letter-spacing: 0.2px;
+}
+
+.stranger-accept-btn {
+    background: linear-gradient(180deg, #00c38a, #008f67) !important;
+    color: #fff !important;
+}
+
+.stranger-reject-btn {
+    background: linear-gradient(180deg, #636e72, #2d3436) !important;
+    color: #fff !important;
+}
+
+.stranger-cancel-btn {
+    background: linear-gradient(180deg, #6c5ce7, #4834d4) !important;
+    color: #fff !important;
+}
+#mobile-friend-wrap {
+    position: fixed;
+}
+
+.friend-badge-dot {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: #ff2d55;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 900;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 10px rgba(255,45,85,0.45);
+    border: 2px solid rgba(0,0,0,0.75);
+}
+
+.friend-badge-dot.show {
+    display: inline-flex;
+}
+.friend-top-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.friend-top-tab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 9px 10px !important;
+    border-radius: 12px;
+    border: 1px solid rgba(85,239,196,0.28);
+    background: rgba(8, 16, 12, 0.92) !important;
+    color: #dfe6e9 !important;
+    font-size: 12px !important;
+    font-weight: 900;
+    letter-spacing: 0.4px;
+}
+
+.friend-top-tab.active {
+    background: linear-gradient(180deg, #00c38a, #008f67) !important;
+    color: #fff !important;
+    border-color: rgba(125,255,179,0.7);
+    box-shadow: 0 0 14px rgba(85,239,196,0.22);
+}
+
+.friend-top-tab-count {
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.16);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 900;
+}
+
+.mobile-friend-top-tabs {
+    margin-top: 8px;
+}
+.friend-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.friend-tab-btn {
+    position: relative;
+    padding: 9px 10px !important;
+    border-radius: 12px;
+    border: 1px solid rgba(85,239,196,0.28);
+    background: rgba(8, 16, 12, 0.92) !important;
+    color: #dfe6e9 !important;
+    font-size: 12px !important;
+    font-weight: 900;
+    letter-spacing: 0.4px;
+}
+
+.friend-tab-btn.active {
+    background: linear-gradient(180deg, #00c38a, #008f67) !important;
+    color: #fff !important;
+    border-color: rgba(125,255,179,0.7);
+    box-shadow: 0 0 14px rgba(85,239,196,0.22);
+}
+
+.friend-tab-badge {
+    margin-left: 6px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.14);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 900;
+}
+
+.friend-tab-btn.active .friend-tab-badge {
+    background: rgba(255,255,255,0.22);
+}
+
+.friend-tab-pane {
+    display: none;
+}
+
+.friend-tab-pane.show {
+    display: block;
+}
+
+.friend-subsection {
+    background: rgba(7, 16, 12, 0.86);
+    border: 1px solid rgba(85,239,196,0.22);
+    border-radius: 14px;
+    padding: 10px;
+    margin-bottom: 10px;
+}
+
+.friend-subsection:last-child {
+    margin-bottom: 0;
+}
+@media (max-width: 600px) {
+    #home-menu {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100dvh;
+        min-height: 100dvh;
+        margin: 0;
+        padding: 0;
+        display: block !important;
+        background: transparent;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+        overflow: hidden;
+    }
+
+    .desktop-home-wrap {
+        display: none;
+    }
+
+    .mobile-home-wrap {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        position: relative;
+    }
+
+ #mobile-ad-zone {
+    height: auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 10px;
+    padding: 150px 14px 10px;
+    box-sizing: border-box;
+}
+
+.mobile-ad-banner {
+    width: 88%;
+    min-height: 120px;
+    border: 2px dashed #55efc4;
+    border-radius: 18px;
+    background: rgba(0, 0, 0, 0.55);
+    box-shadow: 0 0 18px rgba(226, 85, 239, 0.2);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    box-sizing: border-box;
+    text-align: center;
+}
+
+.mobile-rank-card {
+    width: 88%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(15, 30, 15, 0.92);
+    border: 2px solid #55efc4;
+    border-radius: 16px;
+    padding: 10px 12px;
+    box-sizing: border-box;
+    cursor: pointer;
+    box-shadow: 0 0 15px rgba(85, 239, 196, 0.2);
+}
+
+#mobile-game-row {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 36px);
+    display: flex;
+    gap: 12px;
+}
+
+    .mobile-ad-banner {
+        width: 88%;
+        height: 220px; /* Fix chết chiều cao luôn, không cho nó giãn nữa */
+        min-height: 220px;
+        max-height: 220px;
+        border: 2px dashed #55efc4;
+        border-radius: 18px;
+        background: rgba(0, 0, 0, 0.55);
+        box-shadow: 0 0 18px rgba(226, 85, 239, 0.2);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 0; /* XÓA SẠCH PADDING Ở ĐÂY LÀ QUAN TRỌNG NHẤT */
+        box-sizing: border-box;
+        text-align: center;
+        overflow: hidden; /* Cắt sạch phần lòi ra ngoài */
+    }
+
+    .ad-title {
+        font-size: 22px;
+        color: #55efc4;
+        margin-bottom: 10px;
+        letter-spacing: 2px;
+    }
+
+    .ad-sub {
+        font-size: 13px;
+        color: #fff;
+        line-height: 1.5;
+        opacity: 0.9;
+    }
+
+    .mobile-rank-card {
+        width: 88%;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: rgba(15, 30, 15, 0.92);
+        border: 2px solid #55efc4;
+        border-radius: 16px;
+        padding: 14px;
+        box-sizing: border-box;
+        cursor: pointer;
+        box-shadow: 0 0 15px rgba(85, 239, 196, 0.2);
+    }
+#mobile-lobby-title {
+    position: absolute;
+    top: 72px;
+    left: 12px;
+    right: 12px;
+    text-align: center;
+    z-index: 6;
+    pointer-events: none;
+}
+
+#mobile-lobby-title h2 {
+    margin: 0;
+    color: #55efc4;
+    font-size: 22px;
+    letter-spacing: 4px;
+    text-shadow: 0 0 10px rgba(0, 0, 0, 0.7);
+}
+
+#mobile-lobby-title p {
+    margin: 6px 0 0;
+    color: #ff00ff;
+    font-size: 14px;
+    font-weight: bold;
+    text-shadow: 0 0 8px rgba(0, 0, 0, 0.7);
+}
+    .rank-board-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 50px;
+        background: #55efc4;
+        color: #000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        font-weight: bold;
+        flex-shrink: 0;
+    }
+
+    .rank-board-text {
+        display: flex;
+        flex-direction: column;
+        text-align: left;
+    }
+
+    .rank-board-text strong {
+        color: #fff;
+        font-size: 15px;
+    }
+
+    .rank-board-text small {
+        color: #b2bec3;
+        font-size: 12px;
+        margin-top: 3px;
+    }
+
+    #mobile-game-row {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 60px);
+    display: flex;
+    gap: 12px;
+}
+    .mobile-game-card {
+        flex: 1;
+        background: rgba(15, 30, 15, 0.94);
+        border: 2px solid #55efc4;
+        border-radius: 18px;
+        padding: 12px 10px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        box-shadow: 0 0 15px rgba(85, 239, 196, 0.2);
+    }
+
+    .mobile-game-card img {
+        width: 72px;
+        height: 72px;
+        object-fit: cover;
+        border-radius: 14px;
+    }
+
+    .mobile-game-card span {
+        color: #fff;
+        font-size: 13px;
+        font-weight: bold;
+    }
+
+   #mobile-friend-wrap {
+    display: block;
+    position: fixed;
+    top: 16px;
+    right: 12px;
+    z-index: 11000;
+}
+
+.friend-box-title {
+    font-size: 13px;
+    font-weight: bold;
+    color: #55efc4;
+}
+
+.friend-box-row input {
+    width: 100%;
+    background: rgba(10, 10, 10, 0.9);
+    color: #fff;
+    border: 1px solid rgba(85, 239, 196, 0.65);
+    border-radius: 10px;
+    padding: 9px 10px;
+    box-sizing: border-box;
+    font-size: 12px;
+    outline: none;
+}
+
+.friend-box-row input::placeholder {
+    color: #b2bec3;
+}
+
+.friend-box-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.friend-box-actions button {
+    padding: 9px 8px !important;
+    font-size: 12px !important;
+    font-weight: 700;
+    border-radius: 10px;
+    border: 1px solid rgba(85, 239, 196, 0.55);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.22);
+    letter-spacing: 0.3px;
+    line-height: 1.1;
+    min-width: 0;
+}
+
+.friend-box-actions button:first-child {
+    background: linear-gradient(180deg, #21d4b4, #00b894);
+    color: #fff;
+}
+
+.friend-box-actions button:last-child {
+    background: linear-gradient(180deg, #4b5563, #2f3640);
+    color: #fff;
+}
+
+.friend-box-actions button:hover {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+}
+
+#friend-list {
+    max-height: 120px;
+    overflow-y: auto;
+    font-size: 12px;
+}
+    .hamburger-menu-container {
+        top: 16px;
+        left: 10px;
+    }
+}
+
+
+.hamburger-icon:active {
+transform: scale(0.9);
+/* Bấm vào thì nó hơi thu nhỏ lại xíu */
+opacity: 0.7;
+}
+
+/* Style cho Popup Chỉnh sửa */
+.modal {
+position: fixed;
+z-index: 20000;
+left: 0;
+top: 0;
+width: 100%;
+height: 100%;
+background-color: rgba(0, 0, 0, 0.9);
+display: flex;
+align-items: center;
+justify-content: center;
+}
+
+.modal-content {
+background-color: #1a1a1a;
+padding: 30px;
+border: 2px solid #55efc4;
+border-radius: 15px;
+text-align: center;
+width: 300px;
+position: relative;
+}
+
+.close {
+position: absolute;
+right: 15px;
+top: 10px;
+color: #fff;
+font-size: 25px;
+cursor: pointer;
+}
+
+.social-icon {
+font-size: 1.3rem;
+cursor: pointer;
+transition: transform 0.2s;
+padding: 5px;
+}
+
+.social-icon:hover {
+transform: scale(1.2);
+filter: drop-shadow(0 0 5px #55efc4);
+}
+#withdraw-lock-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.82);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 40000;
+    backdrop-filter: blur(6px);
+}
+
+.withdraw-lock-box {
+    width: min(92vw, 360px);
+    background: linear-gradient(180deg, rgba(8,12,14,0.98), rgba(16,20,18,0.98));
+    border: 2px solid #55efc4;
+    border-radius: 20px;
+    box-shadow:
+        0 0 24px rgba(85, 239, 196, 0.22),
+        0 0 40px rgba(0, 0, 0, 0.5);
+    padding: 20px 18px 18px;
+    box-sizing: border-box;
+    text-align: center;
+}
+
+.withdraw-lock-icon {
+    width: 72px;
+    height: 72px;
+    margin: 0 auto 12px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 34px;
+    background: radial-gradient(circle at 30% 30%, #8fffe8, #00b894);
+    color: #03241d;
+    box-shadow: 0 0 18px rgba(85, 239, 196, 0.35);
+}
+
+#withdraw-lock-title {
+    color: #55efc4;
+    font-size: 24px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+}
+
+#withdraw-lock-sub {
+    color: #dfe6e9;
+    font-size: 13px;
+    line-height: 1.45;
+    margin-bottom: 14px;
+    opacity: 0.95;
+}
+
+#withdraw-lock-input,
+#withdraw-lock-confirm {
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 10px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(85, 239, 196, 0.45);
+    background: rgba(0, 0, 0, 0.75);
+    color: #fff;
+    font-size: 15px;
+    outline: none;
+}
+
+#withdraw-lock-input:focus,
+#withdraw-lock-confirm:focus {
+    border-color: #55efc4;
+    box-shadow: 0 0 10px rgba(85, 239, 196, 0.2);
+}
+
+.withdraw-lock-hint {
+    margin: 4px 0 14px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(255, 195, 0, 0.08);
+    border: 1px solid rgba(255, 195, 0, 0.22);
+    color: #ffeaa7;
+    font-size: 12px;
+    line-height: 1.45;
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    text-align: left;
+}
+
+.withdraw-lock-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.lock-cancel-btn {
+    background: linear-gradient(180deg, #636e72, #2d3436);
+    color: white;
+    border-radius: 12px;
+    font-weight: 800;
+}
+
+.lock-ok-btn {
+    background: linear-gradient(180deg, #00d2a0, #00b894);
+    color: white;
+    border-radius: 12px;
+    font-weight: 800;
+}
+/* Làm mờ nhẹ nền menu cho chuyên nghiệp */
+.profile-menu {
+display: none;
+position: absolute;
+top: 45px;
+left: 0;
+width: 158px;
+background: rgba(20, 20, 20, 0.96);
+border: 1px solid rgba(85, 239, 196, 0.75);
+border-radius: 12px;
+z-index: 10001;
+box-shadow: 0 10px 24px rgba(0, 0, 0, 0.55);
+overflow: hidden;
+backdrop-filter: blur(10px);
+}
+
+.profile-menu.show {
+display: block;
+animation: menuFadeIn 0.18s ease-out;
+}
+
+.menu-item {
+display: flex;
+align-items: center;
+gap: 8px;
+padding: 10px 11px;
+color: #f5f6fa;
+font-size: 0.8rem;
+font-weight: 700;
+line-height: 1.15;
+border-bottom: 1px solid rgba(255,255,255,0.06);
+cursor: pointer;
+user-select: none;
+-webkit-tap-highlight-color: transparent;
+transition: background 0.18s ease, transform 0.12s ease, box-shadow 0.18s ease, color 0.18s ease, opacity 0.12s ease;
+}
+
+.menu-item:last-of-type {
+border-bottom: none;
+}
+
+.menu-item:hover {
+background: linear-gradient(90deg, rgba(85,239,196,0.18), rgba(85,239,196,0.05));
+color: #55efc4;
+box-shadow: inset 3px 0 0 #55efc4;
+transform: translateX(2px);
+}
+
+.menu-item:active,
+.menu-item.touch-active {
+background: linear-gradient(90deg, rgba(85,239,196,0.28), rgba(85,239,196,0.12));
+color: #55efc4;
+box-shadow: inset 3px 0 0 #55efc4, 0 0 12px rgba(85,239,196,0.22);
+transform: scale(0.97);
+opacity: 0.96;
+}
+
+.menu-item.touch-release {
+transform: scale(1);
+}
+
+@keyframes menuFadeIn {
+from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+}
+to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+}
+.game-wrapper {
+display: flex;
+justify-content: center;
+align-items: flex-start;
+gap: 20px;
+width: 100%;
+}
+
+#match-chat-popup {
+width: 300px;
+height: 450px;
+background: rgba(0, 0, 0, 0.85);
+border: 2px solid #55efc4;
+border-radius: 12px;
+display: flex;
+flex-direction: column;
+position: relative;
+overflow: hidden;
+box-sizing: border-box;
+}
+
+.chat-header {
+background: #55efc4;
+color: #000;
+padding: 10px;
+font-weight: bold;
+display: flex;
+justify-content: space-between;
+align-items: center;
+}
+
+#match-content-popup {
+flex: 1;
+overflow-y: auto;
+padding: 10px;
+color: white;
+font-size: 13px;
+}
+
+.chat-input-box {
+display: flex;
+padding: 8px;
+gap: 5px;
+border-top: 1px solid #444;
+flex-shrink: 0;
+}
+.chat-input-box input {
+flex: 1;
+background: #222;
+color: white;
+border: 1px solid #55efc4;
+padding: 8px;
+border-radius: 4px;
+}
+
+.chat-input-box button {
+background: #55efc4;
+color: #000;
+border: none;
+padding: 8px 12px;
+font-weight: bold;
+border-radius: 4px;
+cursor: pointer;
+}
+
+#match-chat-btn {
+display: none;
+}
+
+.close-chat-mobile {
+display: none;
+}
+.chat-side {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+}
+
+#desktop-match-actions {
+    width: 300px;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    padding: 8px;
+    border: 2px solid #55efc4;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.92);
+    box-sizing: border-box;
+    position: relative;
+    z-index: 21000;
+    box-shadow: 0 0 14px rgba(85, 239, 196, 0.28);
+}
+#mobile-match-actions {
+    display: none;
+}
+
+#desktop-match-actions button {
+    min-width: 0;
+    padding: 8px 4px;
+    font-size: 10px;
+    font-weight: bold;
+    line-height: 1.1;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+#desktop-match-actions .action-thoat {
+    background: #e17055;
+    color: white;
+}
+
+#desktop-match-actions .action-dauhang {
+    background: #d63031;
+    color: white;
+}
+
+#desktop-match-actions .action-hoa {
+    background: #fdcb6e;
+    color: black;
+}
+
+#desktop-match-actions .action-doitran {
+    background: #6c5ce7;
+    color: white;
+}
+
+#mobile-match-actions {
+    display: none;
+}
+
+#mobile-action-main {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: #e17055;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.5);
+    user-select: none;
+}
+
+@media (max-width: 600px) {
+    .game-wrapper {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    #desktop-match-actions {
+        display: none;
+    }
+
+    #mobile-match-actions {
+    display: block;
+    position: fixed;
+    left: 10px;
+    bottom: 20px;
+    z-index: 21000;
+}
+#mobile-action-menu {
+    z-index: 21001;
+}
+
+#mobile-action-main {
+width: 50px;
+height: 50px;
+border-radius: 50%;
+background: #e17055;
+color: white;
+display: flex;
+align-items: center;
+justify-content: center;
+font-size: 22px;
+font-weight: bold;
+cursor: pointer;
+box-shadow: 0 0 12px rgba(0, 0, 0, 0.5);
+user-select: none;
+}
+
+#mobile-action-menu {
+position: absolute;
+left: 0;
+bottom: 60px;
+min-width: 165px;
+background: rgba(26, 26, 26, 0.98);
+border: 2px solid #55efc4;
+border-radius: 12px;
+padding: 8px;
+display: none;
+flex-direction: column;
+gap: 6px;
+box-shadow: 0 0 15px rgba(0, 0, 0, 0.6);
+}
+
+#mobile-action-menu.show {
+display: flex;
+}
+
+#mobile-action-menu button {
+width: 100%;
+background: #222;
+color: white;
+border: 1px solid #55efc4;
+border-radius: 8px;
+padding: 10px 12px;
+font-size: 13px;
+cursor: pointer;
+text-align: left;
+}
+#mobile-action-menu .action-doitran {
+    background: #6c5ce7;
+    color: white;
+}
+.mobile-action-close {
+text-align: right;
+color: #fff;
+cursor: pointer;
+font-size: 16px;
+padding: 2px 4px 6px 4px;
+}
+/* ===== NÚT TẮT MỞ ÂM THANH ===== */
+.sound-toggle-btn {
+    position: relative;
+    background: #2d3436 !important;
+    border: 1px solid #55efc4 !important;
+    color: white !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    cursor: pointer;
+    border-radius: 6px;
+}
+/* Hiệu ứng gạch chéo đỏ tẹt ngang qua nút khi bị tắt */
+.sound-toggle-btn.muted-audio::after {
+    content: '';
+    position: absolute;
+    width: 110%;
+    height: 3px;
+    background: #ff7675;
+    transform: rotate(15deg);
+    left: -5%;
+    top: 48%;
+    box-shadow: 0 0 5px black;
+    border-radius: 2px;
+}
+#match-chat-popup {
+position: fixed;
+left: 10px;
+right: 10px;
+bottom: 80px;
+width: auto;
+max-width: calc(100vw - 20px);
+height: 350px;
+display: none;
+z-index: 9999;
+box-sizing: border-box;
+}
+
+#match-content-popup {
+min-height: 0;
+word-break: break-word;
+}
+
+.chat-input-box {
+width: 100%;
+padding: 6px;
+gap: 4px;
+box-sizing: border-box;
+}
+
+.chat-input-box input {
+flex: 1;
+min-width: 0;
+width: 100%;
+box-sizing: border-box;
+font-size: 16px;
+}
+
+.chat-input-box button {
+flex-shrink: 0;
+padding: 8px 10px;
+white-space: nowrap;
+}
+
+#toggle-emoji-btn {
+width: 34px;
+min-width: 34px;
+height: 34px;
+padding: 0 !important;
+display: flex;
+align-items: center;
+justify-content: center;
+}
+
+#match-chat-btn {
+position: fixed;
+bottom: 20px;
+right: 10px;
+width: 50px;
+height: 50px;
+background: #55efc4;
+color: black;
+border-radius: 50%;
+display: flex;
+align-items: center;
+justify-content: center;
+cursor: pointer;
+font-size: 20px;
+z-index: 9999;
+}
+
+.close-chat-mobile {
+display: inline;
+cursor: pointer;
+}
+}
+#match-chat-btn {
+position: fixed;
+bottom: 20px;
+right: 10px;
+width: 50px;
+height: 50px;
+background: #55efc4;
+color: black;
+border-radius: 50%;
+display: flex;
+align-items: center;
+justify-content: center;
+cursor: pointer;
+font-size: 20px;
+z-index: 9999;
+}
+/* ===== BONG BÓNG BÁO TIN NHẮN TRONG TRẬN ===== */
+#match-chat-peek {
+    position: fixed;
+    right: 12px;
+    bottom: 78px;
+    width: min(72vw, 260px);
+    max-width: 260px;
+    padding: 10px 12px;
+    box-sizing: border-box;
+    border-radius: 16px;
+    background: rgba(8, 14, 12, 0.96);
+    border: 2px solid #55efc4;
+    color: #fff;
+    z-index: 10002;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+    transition: opacity 0.22s ease, transform 0.22s ease;
+    box-shadow:
+        0 0 14px rgba(85, 239, 196, 0.35),
+        0 8px 22px rgba(0, 0, 0, 0.55);
+}
+
+#match-chat-peek.show {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+#match-chat-peek::after {
+    content: "";
+    position: absolute;
+    right: 22px;
+    bottom: -9px;
+    width: 14px;
+    height: 14px;
+    background: rgba(8, 14, 12, 0.96);
+    border-right: 2px solid #55efc4;
+    border-bottom: 2px solid #55efc4;
+    transform: rotate(45deg);
+}
+
+.match-chat-peek-title {
+    color: #55efc4;
+    font-size: 12px;
+    font-weight: 900;
+    margin-bottom: 4px;
+}
+
+.match-chat-peek-text {
+    color: #fff;
+    font-size: 13px;
+    line-height: 1.35;
+    font-weight: 700;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+#ready-overlay {
+position: fixed;
+inset: 0;
+background: rgba(0, 0, 0, 0.55);
+display: none;
+align-items: center;
+justify-content: center;
+z-index: 20000;
+pointer-events: none;
+}
+
+#ready-box {
+width: min(90vw, 360px);
+background: rgba(15, 15, 15, 0.96);
+border: 2px solid #55efc4;
+border-radius: 16px;
+box-shadow: 0 0 20px rgba(0, 0, 0, 0.6);
+padding: 18px;
+text-align: center;
+pointer-events: auto;
+}
+
+#ready-title {
+font-size: 24px;
+font-weight: bold;
+color: #55efc4;
+margin-bottom: 10px;
+}
+
+#ready-countdown {
+font-size: 42px;
+font-weight: bold;
+color: #ffeaa7;
+margin-bottom: 16px;
+}
+
+#ready-status-row {
+display: flex;
+flex-direction: column;
+gap: 8px;
+margin-bottom: 14px;
+}
+
+#ready-side-text {
+    margin-bottom: 14px;
+    font-size: 13px;
+    font-weight: 800;
+    color: #dfe6e9;
+    letter-spacing: 0.5px;
+    text-align: center;
+}
+
+#ready-button-row {
+    display: flex;
+    justify-content: center;
+}
+
+#ready-main-btn {
+    width: 100%;
+    padding: 12px 10px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 900;
+    letter-spacing: 0.6px;
+    border: none;
+    cursor: pointer;
+}
+
+.ready-btn-do {
+    background: linear-gradient(180deg, #ff5a5f, #d63031);
+    color: white;
+    box-shadow: 0 0 14px rgba(214, 48, 49, 0.35);
+}
+
+.ready-btn-den {
+    background: linear-gradient(180deg, #7f8c8d, #2d3436);
+    color: white;
+    box-shadow: 0 0 14px rgba(45, 52, 54, 0.35);
+}
+
+.player-ready-on {
+    color: #55efc4 !important;
+    font-weight: 900;
+}
+
+.player-ready-off {
+    color: #b2bec3 !important;
+    font-weight: 700;
+}
+.board-side {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.game-container {
+    position: relative;
+}
+
+.player-timer-row {
+    width: min(450px, 90vw);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.turn-row {
+    width: min(450px, 90vw);
+    text-align: center;
+    margin-top: 2px;
+    margin-bottom: 2px;
+}
+
+.timer-inline {
+    --timer-pct: 1turn;
+    --ring-color: #ffffff;
+--ring-glow: rgba(255, 255, 255, 0.35);
+
+    width: 110px;
+    min-width: 110px;
+    padding: 8px 10px;
+    font-size: 1.2rem;
+    border-radius: 12px;
+    margin: 0;
+    box-sizing: border-box;
+
+    position: relative;
+    border: 2px solid transparent;
+    background:
+        linear-gradient(rgba(15, 30, 15, 0.94), rgba(15, 30, 15, 0.94)) padding-box,
+        conic-gradient(
+            from -90deg,
+            var(--ring-color) 0turn var(--timer-pct),
+            rgba(255,255,255,0.08) var(--timer-pct) 1turn
+        ) border-box;
+    box-shadow:
+        0 0 8px rgba(0,0,0,0.35),
+        0 0 14px var(--ring-glow),
+        inset 0 0 10px rgba(255,255,255,0.04);
+    transition:
+        background 0.18s linear,
+        box-shadow 0.18s linear,
+        color 0.18s linear,
+        transform 0.18s ease;
+}
+
+.player-chip-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 150px;
+    padding: 6px 10px;
+    background: rgba(0, 0, 0, 0.78);
+    border: 1px solid #55efc4;
+    border-radius: 12px;
+    box-shadow: 0 0 12px rgba(85, 239, 196, 0.18);
+    cursor: pointer;
+    box-sizing: border-box;
+}
+
+.player-chip-inline img {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid #e704c9;
+}
+
+.player-chip-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    line-height: 1.1;
+    font-size: 11px;
+}
+
+.player-chip-name {
+    color: #f106d2;
+    font-weight: bold;
+}
+
+.player-chip-rank {
+    font-weight: 900;
+    background: linear-gradient(90deg, #ffd54a 0%, #ffd54a 35%, #ffd54a 70%, #ffef9a 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 10px rgba(255, 213, 74, 0.18);
+}
+.player-chip-name {
+    color: #f11606;
+    font-weight: bold;
+}
+
+@media (max-width: 600px) {
+    .player-timer-row {
+        width: min(90vw, 360px);
+        gap: 8px;
+    }
+
+    .timer-inline {
+        width: 92px;
+        min-width: 92px;
+        padding: 6px 8px;
+        font-size: 1rem;
+    }
+
+    .player-chip-inline {
+        min-width: 132px;
+        padding: 5px 8px;
+        gap: 6px;
+    }
+
+    .player-chip-inline img {
+        width: 28px;
+        height: 28px;
+    }
+
+    .player-chip-meta {
+        font-size: 10px;
+    }
+}
+
+@media (max-width: 600px) {
+    .player-timer-row {
+        width: min(90vw, 360px);
+        gap: 8px;
+    }
+
+    .timer-inline {
+        width: 92px;
+        min-width: 92px;
+        padding: 6px 8px;
+        font-size: 1rem;
+    }
+
+    .player-chip-inline {
+        min-width: 132px;
+        padding: 5px 8px;
+        gap: 6px;
+    }
+
+    .player-chip-inline img {
+        width: 28px;
+        height: 28px;
+    }
+
+    .player-chip-meta {
+        font-size: 10px;
+    }
+    .chat-header {
+    display: none;
+}
+
+#match-content-popup {
+    padding-top: 8px;
+}
+}
+#withdraw-amount-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.82);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 40001;
+    backdrop-filter: blur(6px);
+}
+
+.withdraw-amount-box {
+    width: min(92vw, 360px);
+    background: linear-gradient(180deg, rgba(8,12,14,0.98), rgba(16,20,18,0.98));
+    border: 2px solid #55efc4;
+    border-radius: 20px;
+    box-shadow:
+        0 0 24px rgba(85, 239, 196, 0.22),
+        0 0 40px rgba(0, 0, 0, 0.5);
+    padding: 20px 18px 18px;
+    box-sizing: border-box;
+    text-align: center;
+}
+
+.withdraw-amount-icon {
+    width: 72px;
+    height: 72px;
+    margin: 0 auto 12px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 34px;
+    background: radial-gradient(circle at 30% 30%, #8fffe8, #00b894);
+    color: #03241d;
+    box-shadow: 0 0 18px rgba(85, 239, 196, 0.35);
+}
+
+.withdraw-amount-title {
+    color: #55efc4;
+    font-size: 24px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+}
+
+.withdraw-amount-sub {
+    color: #dfe6e9;
+    font-size: 13px;
+    line-height: 1.45;
+    margin-bottom: 14px;
+    opacity: 0.95;
+}
+
+#withdraw-amount-input {
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 12px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(85, 239, 196, 0.45);
+    background: rgba(0, 0, 0, 0.75);
+    color: #fff;
+    font-size: 16px;
+    outline: none;
+    text-align: center;
+}
+
+#withdraw-amount-input:focus {
+    border-color: #55efc4;
+    box-shadow: 0 0 10px rgba(85, 239, 196, 0.2);
+}
+
+.withdraw-amount-note {
+    margin: 4px 0 14px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(85, 239, 196, 0.08);
+    border: 1px solid rgba(85, 239, 196, 0.18);
+    color: #dfe6e9;
+    font-size: 12px;
+    line-height: 1.55;
+    text-align: left;
+}
+
+.withdraw-amount-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.amount-cancel-btn {
+    background: linear-gradient(180deg, #636e72, #2d3436);
+    color: white;
+    border-radius: 12px;
+    font-weight: 800;
+}
+
+.amount-ok-btn {
+    background: linear-gradient(180deg, #00d2a0, #00b894);
+    color: white;
+    border-radius: 12px;
+    font-weight: 800;
+}
+.player-slot {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+.player-invite-code {
+    min-height: 14px;
+    margin-left: 2px;
+    font-size: 11px;
+    font-weight: 900;
+    color: #ffeaa7;
+    letter-spacing: 0.3px;
+    line-height: 1.15;
+    text-shadow: 0 0 6px rgba(0,0,0,0.72);
+    white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+    .player-invite-code {
+        font-size: 10px;
+    }
+}
+/* ===== PI THEME OVERRIDE: FRIEND UI ===== */
+.desktop-friend-panel,
+#mobile-friend-box {
+    background: linear-gradient(180deg, rgba(32, 12, 56, 0.96), rgba(18, 8, 34, 0.96)) !important;
+    border-color: #f4c542 !important;
+    box-shadow:
+        0 0 18px rgba(164, 92, 255, 0.22),
+        0 0 28px rgba(244, 197, 66, 0.12) !important;
+}
+
+.friend-box-title,
+.desktop-panel-title,
+.friend-section-title {
+    color: #f4c542 !important;
+    text-shadow: 0 0 10px rgba(244, 197, 66, 0.18);
+}
+
+.desktop-friend-panel .friend-box-row input,
+.friend-box-row input,
+#desktop-friend-name-input,
+#friend-name-input {
+    background: rgba(20, 10, 34, 0.95) !important;
+    color: #fff7e6 !important;
+    border: 1px solid rgba(244, 197, 66, 0.68) !important;
+    box-shadow: inset 0 0 10px rgba(164, 92, 255, 0.12);
+}
+
+.desktop-friend-panel .friend-box-row input::placeholder,
+.friend-box-row input::placeholder {
+    color: #d7c6ff !important;
+}
+
+.friend-top-tab,
+.friend-tab-btn {
+    background: linear-gradient(180deg, rgba(58, 24, 102, 0.96), rgba(32, 12, 56, 0.96)) !important;
+    color: #f7e7b1 !important;
+    border: 1px solid rgba(244, 197, 66, 0.34) !important;
+    box-shadow: inset 0 0 10px rgba(164, 92, 255, 0.12);
+}
+
+.friend-top-tab.active,
+.friend-tab-btn.active {
+    background: linear-gradient(180deg, #7b2ff7, #4d1d95) !important;
+    color: #fff8d6 !important;
+    border-color: #f4c542 !important;
+    box-shadow:
+        0 0 14px rgba(123, 47, 247, 0.38),
+        0 0 20px rgba(244, 197, 66, 0.15) !important;
+}
+
+.friend-top-tab-count,
+.friend-tab-badge,
+.friend-section-count {
+    background: linear-gradient(180deg, #f4c542, #c99712) !important;
+    color: #2a1147 !important;
+    border: 1px solid rgba(255, 247, 214, 0.32) !important;
+    box-shadow: 0 0 10px rgba(244, 197, 66, 0.18);
+}
+
+.friend-section,
+.friend-subsection {
+    background: linear-gradient(180deg, rgba(34, 14, 58, 0.92), rgba(20, 8, 34, 0.92)) !important;
+    border-color: rgba(244, 197, 66, 0.24) !important;
+    box-shadow: inset 0 0 14px rgba(164, 92, 255, 0.08);
+}
+
+.friend-request-card,
+.friend-sent-card,
+.friend-accepted-card {
+    background: linear-gradient(180deg, rgba(49, 19, 83, 0.88), rgba(27, 10, 46, 0.88)) !important;
+    border-color: rgba(244, 197, 66, 0.20) !important;
+}
+
+.friend-user-line,
+.friend-accepted-name,
+.stranger-name {
+    color: #fff6db !important;
+}
+
+.friend-sub-line,
+.friend-accepted-status,
+.stranger-status,
+.friend-empty {
+    color: #d8c7ff !important;
+}
+
+.desktop-friend-panel .friend-box-actions button:first-child,
+.friend-box-actions button:first-child,
+.friend-invite-btn,
+.stranger-accept-btn,
+.friend-btn-accept {
+    background: linear-gradient(180deg, #7b2ff7, #4d1d95) !important;
+    color: #fff8d6 !important;
+    border: 1px solid rgba(244, 197, 66, 0.42) !important;
+    box-shadow: 0 0 10px rgba(123, 47, 247, 0.28);
+}
+
+.desktop-friend-panel .friend-box-actions button:last-child,
+.friend-box-actions button:last-child,
+.friend-trash-btn,
+.friend-btn-remove,
+.friend-btn-reject,
+.stranger-reject-btn,
+.stranger-cancel-btn,
+.friend-btn-cancel {
+    background: linear-gradient(180deg, #f4c542, #c99712) !important;
+    color: #2a1147 !important;
+    border: 1px solid rgba(255, 247, 214, 0.28) !important;
+    box-shadow: 0 0 10px rgba(244, 197, 66, 0.18);
+}
+
+#mobile-friend-toggle {
+    background: linear-gradient(180deg, #7b2ff7, #4d1d95) !important;
+    color: #f4c542 !important;
+    border: 1px solid rgba(244, 197, 66, 0.44);
+    box-shadow:
+        0 0 12px rgba(123, 47, 247, 0.30),
+        0 0 18px rgba(244, 197, 66, 0.12) !important;
+}
+
+.friend-badge-dot {
+    background: linear-gradient(180deg, #f4c542, #c99712) !important;
+    color: #2a1147 !important;
+    border-color: rgba(44, 17, 71, 0.88) !important;
+    box-shadow: 0 0 10px rgba(244, 197, 66, 0.28) !important;
+}
+/* TÁCH AVATAR RA KHỎI Ô THÔNG TIN */
+.player-chip-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+.player-avatar-outside {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #e704c9;
+    background: rgba(0, 0, 0, 0.75);
+    box-shadow:
+        0 0 8px rgba(231, 4, 201, 0.45),
+        0 0 10px rgba(0, 0, 0, 0.55);
+}
+
+.player-chip-inline {
+    display: flex !important;
+    align-items: center !important;
+    min-width: 112px !important;
+    padding: 6px 9px !important;
+    gap: 0 !important;
+    background: rgba(0, 0, 0, 0.78);
+    border: 1px solid #55efc4;
+    border-radius: 10px;
+    box-shadow: 0 0 12px rgba(85, 239, 196, 0.18);
+    box-sizing: border-box;
+}
+
+.player-chip-meta {
+    width: 100%;
+}
+
+@media (max-width: 600px) {
+    .player-chip-row {
+        gap: 5px;
+    }
+
+    .player-avatar-outside {
+        width: 30px;
+        height: 30px;
+        min-width: 30px;
+    }
+
+    .player-chip-inline {
+        min-width: 104px !important;
+        padding: 5px 7px !important;
+    }
+
+    .player-chip-meta {
+        font-size: 10px;
+    }
+}
+.player-chip-stack {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 4px !important;
+    min-width: 104px !important;
+    flex: 1 1 auto !important;
+}
+
+.player-chip-inline {
+    width: 100% !important;
+}
+
+.player-balance-row {
+    width: 100% !important;
+    display: flex !important;
+    gap: 4px !important;
+    align-items: center !important;
+}
+
+.player-balance-box {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    height: 22px !important;
+    padding: 0 6px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 8px !important;
+    font-size: 10px !important;
+    font-weight: 800 !important;
+    line-height: 1 !important;
+    box-sizing: border-box !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    text-shadow: 0 0 6px rgba(0,0,0,0.45) !important;
+}
+
+.player-balance-pi {
+    color: #fff7d6 !important;
+    border: 1px solid rgba(244, 197, 66, 0.9) !important;
+    background: linear-gradient(180deg, rgba(70, 52, 6, 0.95), rgba(34, 24, 4, 0.95)) !important;
+    box-shadow: 0 0 10px rgba(244, 197, 66, 0.16) !important;
+}
+
+.player-balance-pmc {
+    color: #d8fff6 !important;
+    border: 1px solid rgba(85, 239, 196, 0.85) !important;
+    background: linear-gradient(180deg, rgba(7, 54, 43, 0.95), rgba(4, 29, 24, 0.95)) !important;
+    box-shadow: 0 0 10px rgba(85, 239, 196, 0.14) !important;
+}
+
+.player-invite-code {
+    min-height: 13px !important;
+    margin-left: 0 !important;
+    font-size: 10px !important;
+    font-weight: 900 !important;
+    color: #ffeaa7 !important;
+    line-height: 1.1 !important;
+    letter-spacing: 0.3px !important;
+    text-shadow: 0 0 6px rgba(0,0,0,0.72) !important;
+    white-space: nowrap !important;
+}
+
+@media (max-width: 600px) {
+    .player-chip-stack {
+        min-width: 96px !important;
+        gap: 3px !important;
+    }
+
+    .player-balance-row {
+        gap: 3px !important;
+    }
+
+    .player-balance-box {
+        height: 20px !important;
+        font-size: 9px !important;
+        padding: 0 5px !important;
+        border-radius: 7px !important;
+    }
+
+    .player-invite-code {
+        font-size: 9px !important;
+    }
+}
+/* KHÓA UI AVATAR + ĐỒNG HỒ THEO 2 GÓC BÀN CỜ */
+.board-side {
+    width: min(92vw, 460px) !important;
+    margin: 0 auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+}
+
+.player-timer-row {
+    width: min(90vw, 450px) !important;
+    max-width: 450px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    box-sizing: border-box !important;
+}
+
+
+
+.timer-inline {
+    width: 92px !important;
+    min-width: 92px !important;
+    height: 38px !important;
+    padding: 0 8px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-sizing: border-box !important;
+}
+
+.player-slot {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-end !important;
+    max-width: 170px !important;
+}
+
+.player-chip-row {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 5px !important;
+}
+
+.player-avatar-outside {
+    width: 31px !important;
+    height: 31px !important;
+    min-width: 31px !important;
+    border-radius: 50% !important;
+    object-fit: cover !important;
+}
+
+/* mobile cho gọn lại */
+@media (max-width: 600px) {
+    .board-side {
+        width: min(96vw, 430px) !important;
+    }
+
+    .player-timer-row {
+        width: min(90vw, 390px) !important;
+        max-width: 390px !important;
+        gap: 6px !important;
+    }
+
+    .timer-inline {
+        width: 82px !important;
+        min-width: 82px !important;
+        height: 34px !important;
+        font-size: 0.95rem !important;
+    }
+
+    .player-slot {
+        max-width: 150px !important;
+    }
+
+    .player-avatar-outside {
+        width: 28px !important;
+        height: 28px !important;
+        min-width: 28px !important;
+    }
+
+    .player-chip-inline {
+        min-width: 96px !important;
+        padding: 4px 6px !important;
+    }
+
+    .player-chip-meta {
+        font-size: 9px !important;
+    }
+}
+/* ÉP HÀNG DƯỚI: đồng hồ trái, avatar phải */
+.bottom-row {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+}
+/* ĐỔI NGƯỢC: AVATAR BÊN TRÁI - ĐỒNG HỒ BÊN PHẢI */
+.player-timer-row {
+    width: min(90vw, 450px) !important;
+    max-width: 450px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    box-sizing: border-box !important;
+}
+
+/* HÀNG TRÊN: avatar trái, đồng hồ phải */
+.top-row {
+    flex-direction: row !important;
+    margin-bottom: 6px !important;
+}
+
+/* HÀNG DƯỚI: avatar trái, đồng hồ phải */
+.bottom-row {
+    flex-direction: row-reverse !important;
+    margin-top: 6px !important;
+}
+
+/* Avatar/info luôn bám bên trái */
+.top-row .player-slot,
+.bottom-row .player-slot {
+    margin-left: 0 !important;
+    margin-right: auto !important;
+    align-items: flex-start !important;
+}
+
+/* Đồng hồ luôn bám bên phải */
+.top-row .timer-inline,
+.bottom-row .timer-inline {
+    margin-left: auto !important;
+    margin-right: 0 !important;
+}
+
+/* Avatar nằm trước ô thông tin */
+.player-chip-row {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 5px !important;
+}
+
+.player-chip-inline {
+    min-width: 96px !important;
+}
+
+/* mobile */
+@media (max-width: 600px) {
+    .player-timer-row {
+        width: min(90vw, 390px) !important;
+        max-width: 390px !important;
+        gap: 6px !important;
+    }
+
+    .timer-inline {
+        width: 82px !important;
+        min-width: 82px !important;
+        height: 34px !important;
+        font-size: 0.95rem !important;
+    }
+
+    .player-slot {
+        max-width: 160px !important;
+    }
+
+    .player-avatar-outside {
+        width: 28px !important;
+        height: 28px !important;
+        min-width: 28px !important;
+    }
+
+    .player-chip-inline {
+        min-width: 96px !important;
+        padding: 4px 6px !important;
+    }
+}
+/* ===== SHOP SKIN VIỀN AVATAR ===== */
+.avatar-skin-none {
+    border-color: #55efc4 !important;
+    box-shadow: 0 0 8px rgba(85,239,196,0.35) !important;
+}
+/* ===== AVATAR FRAME SHELL ===== */
+.avatar-frame-shell {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.avatar-core {
+    width: 100%;
+    height: 100%;
+    object-fit: cover !important;
+    border-radius: 50% !important;
+    position: relative;
+    z-index: 2;
+    background: #111;
+    border: 2px solid rgba(255,255,255,0.92);
+    box-sizing: border-box;
+}
+
+.avatar-frame-shell::before {
+    content: "";
+    position: absolute;
+    inset: -7px;
+    border-radius: 50%;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.frame-ornament {
+    position: absolute;
+    z-index: 4;
+    pointer-events: none;
+}
+
+.frame-ornament::before {
+    display: block;
+    line-height: 1;
+    text-align: center;
+    filter: drop-shadow(0 0 6px rgba(255,255,255,0.25));
+}
+
+.frame-top {
+    top: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.frame-left {
+    left: -10px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.frame-right {
+    right: -10px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.frame-bottom {
+    bottom: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+/* ===== MẶC ĐỊNH ===== */
+.frame-none::before {
+    background:
+        radial-gradient(circle, rgba(85,239,196,0.18), rgba(85,239,196,0.04) 68%, transparent 72%);
+    border: 2px solid #55efc4;
+    box-shadow: 0 0 10px rgba(85,239,196,0.32);
+}
+
+.frame-none .frame-ornament::before {
+    content: "";
+}
+
+/* ===== ĐỒNG - vương miện nhỏ + hoa văn ===== */
+.frame-bronze::before {
+    background:
+        repeating-conic-gradient(
+            from 0deg,
+            rgba(255,214,153,0.25) 0deg 12deg,
+            rgba(120,60,20,0.05) 12deg 24deg
+        ),
+        radial-gradient(circle, rgba(255,220,170,0.10), transparent 70%);
+    border: 3px solid #cd7f32;
+    box-shadow:
+        0 0 10px rgba(205,127,50,0.7),
+        0 0 18px rgba(255,179,71,0.25);
+}
+
+.frame-bronze .frame-top::before {
+    content: "♛";
+    font-size: 16px;
+    color: #ffd48a;
+}
+
+.frame-bronze .frame-left::before,
+.frame-bronze .frame-right::before {
+    content: "❖";
+    font-size: 12px;
+    color: #e9b36f;
+}
+
+.frame-bronze .frame-bottom::before {
+    content: "◈";
+    font-size: 12px;
+    color: #f8c27b;
+}
+
+/* ===== NGỌC - hoa văn lá/ngọc ===== */
+.frame-jade::before {
+    background:
+        radial-gradient(circle at 50% 50%, rgba(0,255,157,0.10), transparent 68%),
+        repeating-conic-gradient(
+            from 0deg,
+            rgba(0,255,157,0.20) 0deg 14deg,
+            rgba(0,70,40,0.05) 14deg 28deg
+        );
+    border: 3px solid #00ff9d;
+    box-shadow:
+        0 0 12px rgba(0,255,157,0.95),
+        0 0 22px rgba(0,255,157,0.35);
+}
+
+.frame-jade .frame-top::before {
+    content: "❀";
+    font-size: 16px;
+    color: #b7ffe0;
+}
+
+.frame-jade .frame-left::before,
+.frame-jade .frame-right::before {
+    content: "❧";
+    font-size: 16px;
+    color: #8effcf;
+}
+
+.frame-jade .frame-right::before {
+    transform: scaleX(-1);
+}
+
+.frame-jade .frame-bottom::before {
+    content: "◉";
+    font-size: 12px;
+    color: #c4ffe8;
+}
+
+/* ===== LONG VƯƠNG - đầu rồng + móng ôm + ngọc ===== */
+.frame-dragon::before {
+    background:
+        radial-gradient(circle at 50% 15%, rgba(255,225,120,0.18), transparent 35%),
+        radial-gradient(circle at 16% 50%, rgba(255,120,0,0.12), transparent 28%),
+        radial-gradient(circle at 84% 50%, rgba(255,120,0,0.12), transparent 28%),
+        repeating-conic-gradient(
+            from 0deg,
+            rgba(255,210,90,0.26) 0deg 12deg,
+            rgba(140,50,0,0.06) 12deg 24deg
+        );
+    border: 3px solid #f4c542;
+    box-shadow:
+        0 0 14px rgba(244,197,66,0.95),
+        0 0 26px rgba(255,72,0,0.42),
+        0 0 34px rgba(255,0,0,0.20);
+    animation: dragonFramePulse 1.15s infinite alternate;
+}
+
+.frame-dragon .frame-top::before {
+    content: "龍";
+    font-size: 18px;
+    color: #ffe18a;
+    background: radial-gradient(circle, rgba(140,50,0,0.85), rgba(60,20,0,0.2));
+    border-radius: 999px;
+    padding: 2px 7px;
+    border: 1px solid rgba(255,220,120,0.65);
+}
+
+.frame-dragon .frame-left::before,
+.frame-dragon .frame-right::before {
+    content: "❧";
+    font-size: 20px;
+    color: #ffcf66;
+}
+
+.frame-dragon .frame-left::before {
+    transform: rotate(-35deg);
+}
+
+.frame-dragon .frame-right::before {
+    transform: scaleX(-1) rotate(-35deg);
+}
+
+.frame-dragon .frame-bottom::before {
+    content: "◉";
+    font-size: 14px;
+    color: #ffd85b;
+    text-shadow: 0 0 10px rgba(255,216,91,0.65);
+}
+
+/* ===== PHƯỢNG HOÀNG - mão + cánh lửa ===== */
+.frame-phoenix::before {
+    background:
+        radial-gradient(circle at 50% 18%, rgba(255,230,120,0.16), transparent 34%),
+        radial-gradient(circle at 18% 50%, rgba(255,60,190,0.14), transparent 26%),
+        radial-gradient(circle at 82% 50%, rgba(255,60,190,0.14), transparent 26%),
+        repeating-conic-gradient(
+            from 0deg,
+            rgba(255,100,220,0.24) 0deg 13deg,
+            rgba(100,30,120,0.06) 13deg 26deg
+        );
+    border: 3px solid #ff3bd4;
+    box-shadow:
+        0 0 14px rgba(255,59,212,0.95),
+        0 0 26px rgba(168,85,247,0.45),
+        0 0 34px rgba(255,180,80,0.16);
+    animation: phoenixFramePulse 1.1s infinite alternate;
+}
+
+.frame-phoenix .frame-top::before {
+    content: "鳳";
+    font-size: 18px;
+    color: #ffe9a0;
+    background: radial-gradient(circle, rgba(130,20,110,0.82), rgba(60,10,50,0.22));
+    border-radius: 999px;
+    padding: 2px 7px;
+    border: 1px solid rgba(255,220,150,0.65);
+}
+
+.frame-phoenix .frame-left::before,
+.frame-phoenix .frame-right::before {
+    content: "✦";
+    font-size: 18px;
+    color: #ffb7f0;
+}
+
+.frame-phoenix .frame-left::before {
+    transform: rotate(-18deg) scale(1.2, 1);
+}
+
+.frame-phoenix .frame-right::before {
+    transform: rotate(18deg) scale(1.2, 1);
+}
+
+.frame-phoenix .frame-bottom::before {
+    content: "❂";
+    font-size: 13px;
+    color: #ffd66b;
+}
+
+@keyframes dragonFramePulse {
+    from {
+        transform: scale(1);
+        filter: brightness(1);
+    }
+    to {
+        transform: scale(1.03);
+        filter: brightness(1.16);
+    }
+}
+
+@keyframes phoenixFramePulse {
+    from {
+        transform: scale(1);
+        filter: brightness(1);
+    }
+    to {
+        transform: scale(1.035);
+        filter: brightness(1.2) saturate(1.15);
+    }
+}
+@keyframes avatarDragonPulse {
+    from { filter: brightness(1); }
+    to { filter: brightness(1.18) saturate(1.2); }
+}
+
+@keyframes avatarPhoenixPulse {
+    from { filter: brightness(1); }
+    to { filter: brightness(1.22) saturate(1.35); }
+}
+
+.avatar-shop-box {
+    width: min(92vw, 440px) !important;
+    max-height: 86vh;
+    overflow: hidden;
+    padding: 22px 16px 18px !important;
+}
+
+.avatar-shop-balance {
+    margin: 6px 0 12px;
+    color: #7dffb3;
+    font-size: 13px;
+    font-weight: 900;
+}
+
+.avatar-shop-list {
+    max-height: 66vh;
+    overflow-y: auto;
+    display: grid;
+    gap: 10px;
+    padding-right: 4px;
+}
+
+.avatar-shop-card {
+    display: grid;
+    grid-template-columns: 58px 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 14px;
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(85,239,196,0.22);
+    text-align: left;
+}
+
+.avatar-shop-preview {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #111;
+}
+
+.avatar-shop-name {
+    color: #fff;
+    font-size: 13px;
+    font-weight: 900;
+}
+
+.avatar-shop-desc {
+    margin-top: 3px;
+    color: #b2bec3;
+    font-size: 11px;
+    line-height: 1.35;
+}
+
+.avatar-shop-price {
+    margin-top: 4px;
+    color: #f4c542;
+    font-size: 11px;
+    font-weight: 900;
+}
+
+.avatar-shop-btn {
+    min-width: 76px;
+    padding: 8px 9px !important;
+    border-radius: 10px !important;
+    font-size: 11px !important;
+    font-weight: 900 !important;
+    background: linear-gradient(180deg, #7b2ff7, #4d1d95) !important;
+    color: #fff8d6 !important;
+}
+
+.avatar-shop-btn.equipped {
+    background: linear-gradient(180deg, #00c38a, #008f67) !important;
+    color: #fff !important;
+}
+
+.avatar-shop-btn.locked {
+    background: linear-gradient(180deg, #636e72, #2d3436) !important;
+    color: #dfe6e9 !important;
+    opacity: 0.82;
+}
+
+@media (max-width: 600px) {
+    .avatar-shop-card {
+        grid-template-columns: 52px 1fr;
+    }
+
+    .avatar-shop-card button {
+        grid-column: 1 / -1;
+        width: 100%;
+    }
+}
+
+/* ===== AVATAR FRAME PNG OVERLAY - FRAME NẰM NGOÀI AVATAR ===== */
+.avatar-frame-shell {
+    position: relative !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 50% !important;
+    flex-shrink: 0 !important;
+    overflow: visible !important;
+    isolation: isolate;
+}
+
+/* Ảnh đại diện thật nằm nhỏ ở giữa, để chừa đất cho skin ôm ngoài */
+.avatar-frame-shell .avatar-core,
+.avatar-frame-shell .player-avatar-outside.avatar-core {
+    width: 68% !important;
+    height: 68% !important;
+    min-width: 0 !important;
+    object-fit: cover !important;
+    border-radius: 50% !important;
+    position: relative !important;
+    z-index: 2 !important;
+    background: #111 !important;
+    border: 1px solid rgba(255,255,255,0.9) !important;
+    box-sizing: border-box !important;
+}
+
+/* Ảnh frame/skin nằm ngoài cùng */
+.avatar-frame-overlay {
+    position: absolute !important;
+    left: 50% !important;
+    top: 50% !important;
+    width: 132% !important;
+    height: 132% !important;
+    transform: translate(-50%, -50%) !important;
+    object-fit: contain !important;
+    z-index: 6 !important;
+    pointer-events: none !important;
+    filter: drop-shadow(0 0 7px rgba(0,0,0,0.75));
+}
+
+/* Avatar menu góc trái */
+.hamburger-menu-container .avatar-frame-shell {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+}
+
+/* Preview trong shop giữ vừa mắt */
+.avatar-shop-card .avatar-frame-shell {
+    width: 58px !important;
+    height: 58px !important;
+    min-width: 58px !important;
+}
+
+/* Skin rồng/phượng to hơn chút */
+.avatar-frame-shell[data-skin="dragon"] .avatar-frame-overlay {
+    width: 148% !important;
+    height: 148% !important;
+    animation: vipFramePulse 1.2s infinite alternate;
+    filter:
+        drop-shadow(0 0 7px rgba(255, 190, 45, 0.7))
+        drop-shadow(0 0 12px rgba(255, 70, 0, 0.38));
+}
+
+.avatar-frame-shell[data-skin="phoenix"] .avatar-frame-overlay {
+    width: 148% !important;
+    height: 148% !important;
+    animation: vipFramePulse 1.1s infinite alternate;
+    filter:
+        drop-shadow(0 0 7px rgba(255, 59, 212, 0.72))
+        drop-shadow(0 0 12px rgba(168, 85, 247, 0.42));
+}
+
+@keyframes vipFramePulse {
+    from {
+        transform: translate(-50%, -50%) scale(1);
+    }
+    to {
+        transform: translate(-50%, -50%) scale(1.04);
+    }
+}
+/* ===== SHOP SKIN TABS / TÚI SKIN ===== */
+.avatar-shop-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr; /* SỬA Ở ĐÂY: Thêm 1 chữ 1fr nữa để thành 3 cột */
+    gap: 8px;
+    margin: 10px 0 12px;
+}
+.avatar-shop-tab {
+    padding: 9px 10px !important;
+    border-radius: 12px !important;
+    font-size: 12px !important;
+    font-weight: 900 !important;
+    background: rgba(0, 0, 0, 0.55) !important;
+    color: #b2bec3 !important;
+    border: 1px solid rgba(85, 239, 196, 0.25) !important;
+}
+
+.avatar-shop-tab.active {
+    background: linear-gradient(180deg, #00c38a, #008f67) !important;
+    color: #fff !important;
+    border-color: #7dffb3 !important;
+    box-shadow: 0 0 12px rgba(85,239,196,0.22) !important;
+}
+
+.avatar-shop-empty {
+    padding: 18px 12px;
+    text-align: center;
+    color: #b2bec3;
+    font-size: 13px;
+    line-height: 1.5;
+    border: 1px dashed rgba(85,239,196,0.28);
+    border-radius: 14px;
+    background: rgba(0,0,0,0.32);
+}
+
+.avatar-shop-owned-label {
+    display: inline-block;
+    margin-top: 5px;
+    padding: 3px 7px;
+    border-radius: 999px;
+    background: rgba(125,255,179,0.12);
+    border: 1px solid rgba(125,255,179,0.34);
+    color: #7dffb3;
+    font-size: 10px;
+    font-weight: 900;
+}
+/* ===== FIX SKIN BÁM CHẶT AVATAR TRONG TRẬN ===== */
+.player-chip-row > .avatar-frame-shell.avatar-match-shell {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    flex: 0 0 34px !important;
+    margin: 0 5px 0 0 !important;
+    padding: 0 !important;
+    position: relative !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    overflow: visible !important;
+    transform: none !important;
+}
+
+/* Ảnh thật nằm đúng giữa shell */
+.avatar-frame-shell.avatar-match-shell > .avatar-core,
+.avatar-frame-shell.avatar-match-shell > .player-avatar-outside.avatar-core {
+    position: absolute !important;
+    left: 50% !important;
+    top: 50% !important;
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px !important;
+    max-width: 24px !important;
+    max-height: 24px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    transform: translate(-50%, -50%) !important;
+    object-fit: cover !important;
+    border-radius: 50% !important;
+    z-index: 2 !important;
+    box-sizing: border-box !important;
+}
+
+/* Skin/frame bám đúng giữa avatar */
+.avatar-frame-shell.avatar-match-shell > .avatar-frame-overlay {
+    position: absolute !important;
+    left: 50% !important;
+    top: 50% !important;
+    width: 46px !important;
+    height: 46px !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    transform: translate(-50%, -50%) !important;
+    object-fit: contain !important;
+    z-index: 6 !important;
+    pointer-events: none !important;
+}
+
+/* Rồng / phượng to hơn chút nhưng vẫn cùng tâm */
+.avatar-frame-shell.avatar-match-shell[data-skin="dragon"] > .avatar-frame-overlay,
+.avatar-frame-shell.avatar-match-shell[data-skin="phoenix"] > .avatar-frame-overlay {
+    width: 52px !important;
+    height: 52px !important;
+}
+/* ===== BẢNG THÔNG TIN ĐỐI THỦ TRONG TRẬN ===== */
+#match-opponent-profile-modal {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.72);
+    z-index: 26050;
+    padding: 14px;
+    box-sizing: border-box;
+}
+
+#match-opponent-profile-modal.show {
+    display: flex;
+}
+
+.match-opponent-card {
+    width: min(92vw, 360px);
+    background: rgba(10, 14, 12, 0.98);
+    border: 2px solid #55efc4;
+    border-radius: 18px;
+    box-shadow:
+        0 0 18px rgba(85, 239, 196, 0.28),
+        0 10px 28px rgba(0, 0, 0, 0.72);
+    overflow: hidden;
+}
+
+.match-opponent-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    background: linear-gradient(180deg, #00c38a, #008f67);
+    color: #fff;
+    font-weight: 900;
+    font-size: 14px;
+}
+
+.match-opponent-close {
+    cursor: pointer;
+    font-size: 18px;
+    font-weight: 900;
+}
+
+.match-opponent-body {
+    padding: 14px;
+}
+
+.match-opponent-top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.match-opponent-avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #f4c542;
+    background: #111;
+    box-shadow: 0 0 12px rgba(244, 197, 66, 0.24);
+}
+
+.match-opponent-name {
+    color: #fff6db;
+    font-size: 15px;
+    font-weight: 900;
+    line-height: 1.25;
+    word-break: break-word;
+}
+
+.match-opponent-sub {
+    margin-top: 4px;
+    color: #55efc4;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.match-opponent-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.match-opponent-stat {
+    background: rgba(85, 239, 196, 0.08);
+    border: 1px solid rgba(85, 239, 196, 0.24);
+    border-radius: 12px;
+    padding: 10px 8px;
+    text-align: center;
+}
+
+.match-opponent-stat strong {
+    display: block;
+    color: #f4c542;
+    font-size: 18px;
+    margin-bottom: 3px;
+}
+
+.match-opponent-stat span {
+    display: block;
+    color: #dfe6e9;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.match-opponent-friend-btn {
+    width: 100%;
+    margin-top: 14px;
+    padding: 11px 12px !important;
+    border-radius: 12px !important;
+    background: linear-gradient(180deg, #7b2ff7, #4d1d95) !important;
+    color: #fff8d6 !important;
+    font-size: 13px !important;
+    font-weight: 900 !important;
+}
+
+.match-opponent-friend-btn[disabled] {
+    opacity: 0.55;
+    filter: grayscale(0.4);
+}
+
+/* ===== STATS V2 HIỂN THỊ DƯỚI AVATAR TRONG TRẬN ===== */
+.player-v2-record-line {
+    margin-top: 2px;
+    color: #ffeaa7;
+    font-size: 9px;
+    font-weight: 900;
+    line-height: 1.15;
+    text-shadow: 0 0 6px rgba(0,0,0,0.9);
+}
+.player-v2-record-line .v2-win { color: #7dffb3; }
+.player-v2-record-line .v2-loss { color: #ffb3b3; }
+/* --- HỆ THỐNG LEVEL & EXP CHUẨN --- */
+#exp-bar-container {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 8px;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 15000;
+}
+#exp-bar-fill {
+    width: 0%; 
+    height: 100%;
+    background: linear-gradient(90deg, #7b2ff7, #ff3bd4, #f4c542);
+    box-shadow: 0 0 15px #7b2ff7;
+    transition: width 0.8s ease-out;
+}
+#exp-text-float {
+    position: fixed;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    font-weight: 900;
+    color: #ffeaa7;
+    text-shadow: 2px 2px 4px #000;
+    pointer-events: none;
+    z-index: 15001;
+    letter-spacing: 1px;
+}
+.exp-particle {
+    position: fixed;
+    width: 20px;
+    height: 20px;
+    background: radial-gradient(circle, #ff3bd4, #7b2ff7);
+    border-radius: 50%;
+    z-index: 20000;
+    box-shadow: 0 0 15px #ff3bd4;
+}
+/* --- BẢNG BÁO CÁO KẾT QUẢ KHI RA SẢNH --- */
+#exp-summary-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 25000;
+    backdrop-filter: blur(5px);
+}
+
+#exp-summary-modal.show {
+    display: flex;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.exp-summary-box {
+    background: linear-gradient(180deg, #1f1f1f, #0a0a0a);
+    border: 2px solid #55efc4;
+    border-radius: 20px;
+    padding: 25px;
+    width: min(90vw, 380px);
+    text-align: center;
+    box-shadow: 0 0 30px rgba(85, 239, 196, 0.4);
+    transform: translateY(-50px);
+    animation: slideDown 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.exp-summary-title {
+    color: #ffd166;
+    font-size: 24px;
+    font-weight: 900;
+    margin-bottom: 20px;
+    letter-spacing: 2px;
+    text-shadow: 0 0 10px rgba(255, 209, 102, 0.5);
+}
+
+.exp-summary-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 15px;
+    font-size: 16px;
+    border-bottom: 1px dashed #333;
+    padding-bottom: 5px;
+}
+
+.exp-summary-row span:first-child {
+    color: #b2bec3;
+    font-weight: bold;
+}
+
+.exp-summary-row span:last-child {
+    color: #fff;
+    font-weight: 900;
+}
+
+.val-win { color: #55efc4 !important; }
+.val-loss { color: #ff7675 !important; }
+.val-exp { color: #fd79a8 !important; font-size: 20px;}
+
+.exp-summary-btn {
+    margin-top: 20px;
+    background: linear-gradient(180deg, #00c38a, #008f67);
+    color: #fff;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 900;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0, 195, 138, 0.4);
+    transition: 0.2s;
+}
+
+.exp-summary-btn:active {
+    transform: scale(0.95);
+}
+
+@keyframes slideDown {
+    to { transform: translateY(0); }
+}
+/* ===== SLIDER QUẢNG CÁO ===== */
+.ad-slider-container {
+    width: 100%;
+    height: 100%;
+    min-height: 180px; /* Thêm cái này để bảo kê trên điện thoại không bị móp */
+    position: relative;
+    overflow: hidden;
+    border-radius: 16px; /* Ôm theo viền khung */
+}
+
+.ad-slider-track {
+    display: flex;
+    width: 600%; /* Vì có 6 slide */
+    height: 100%;
+    transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.ad-slide {
+    width: 16.6666%; /* 100 / 6 */
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 15px;
+    box-sizing: border-box;
+    cursor: pointer;
+    position: relative;
+}
+
+/* Nền cho 6 loại quảng cáo khác nhau */
+.ad-bg-1 { background: linear-gradient(135deg, #2d3436 0%, #d63031 100%); }
+.ad-bg-2 { background: linear-gradient(135deg, #2d3436 0%, #6c5ce7 100%); }
+.ad-bg-3 { background: linear-gradient(135deg, #093028 0%, #00b894 100%); }
+.ad-bg-4 { background: linear-gradient(135deg, #3d2204 0%, #f39c12 100%); }
+.ad-bg-5 { background: linear-gradient(135deg, #180933 0%, #8e44ad 100%); }
+.ad-bg-6 { background: linear-gradient(135deg, #0a1f2b 0%, #0984e3 100%); }
+
+.ad-slide h3 {
+    margin: 0 0 8px 0;
+    font-size: 18px;
+    color: #fff;
+    text-shadow: 0 0 10px rgba(0,0,0,0.8);
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.ad-slide p {
+    margin: 0;
+    font-size: 12px;
+    color: #dfe6e9;
+    line-height: 1.4;
+    text-shadow: 0 0 5px rgba(0,0,0,0.8);
+}
+
+.ad-slide .ad-btn {
+    margin-top: 10px;
+    background: rgba(0,0,0,0.5);
+    border: 1px solid #fff;
+    color: #fff;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+/* Dấu chấm điều hướng ở dưới đáy */
+.ad-dots {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 6px;
+}
+
+.ad-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.4);
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.ad-dot.active {
+    background: #55efc4;
+    box-shadow: 0 0 6px #55efc4;
+    width: 16px;
+}
+</style>
+<script src="https://sdk.minepi.com/pi-sdk.js"></script>
+<script>
+  Pi.init({ version: "2.0" });
+</script>
+</head>
+<body>
+    <div id="exp-bar-container"><div id="exp-bar-fill"></div></div>
+<div id="exp-text-float">CẤP 1: 0/100 EXP</div>
+<div id="edit-profile-modal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <span class="close" onclick="closeEditProfile()">&times;</span>
+        <h3 style="color:#55efc4; margin-top:0;">CHỈNH SỬA HỒ SƠ</h3>
+
+        <img id="edit-user-photo" src="images/do_tuong.png"
+             style="width:90px; height:90px; border-radius:50%; border:2px solid #55efc4; object-fit:cover; margin-bottom:12px;">
+
+        <div style="margin-bottom:12px;">
+            <input type="file" accept="image/*" onchange="previewAvatar(event)"
+                   style="width:100%; color:white;">
+        </div>
+
+        <div style="margin-bottom:12px;">
+            <input id="new-username" type="text" placeholder="Nhập tên mới"
+                   style="width:100%; padding:10px; border-radius:8px; border:1px solid #55efc4; background:#111; color:#fff; box-sizing:border-box;">
+        </div>
+
+        <div id="rename-notice" style="color:#ffeaa7; font-size:12px; min-height:18px; margin-bottom:12px;"></div>
+
+        <button onclick="saveProfile()" style="width:100%;">LƯU HỒ SƠ</button>
+    </div>
+</div>
+<!-- Popup Báo Cáo EXP -->
+<div id="exp-summary-modal">
+    <div class="exp-summary-box">
+        <div class="exp-summary-title">TỔNG KẾT TRẬN CHIẾN</div>
+        
+        <div class="exp-summary-row">
+            <span>Tổng số ván đã đánh:</span>
+            <span id="summary-total-match">0</span>
+        </div>
+        <div class="exp-summary-row">
+            <span>Thắng:</span>
+            <span id="summary-win" class="val-win">0</span>
+        </div>
+        <div class="exp-summary-row">
+            <span>Thua:</span>
+            <span id="summary-loss" class="val-loss">0</span>
+        </div>
+        <div class="exp-summary-row" style="border-bottom: none; margin-top: 10px;">
+            <span>TỔNG EXP:</span>
+            <span id="summary-exp" class="val-exp">+0</span>
+        </div>
+       <div class="exp-summary-row" style="border-bottom: none; justify-content: center;">
+             <span id="summary-level" style="color: #ffd166; font-size: 18px;">Cấp hiện tại: 1</span>
+        </div>
+
+        <!-- CỤM NÚT MỚI Ở ĐÂY -->
+        <div id="exp-summary-actions" style="margin-top: 20px; display: flex; flex-direction: column; gap: 10px; align-items: center;">
+            <button id="btn-buy-back-exp" class="exp-summary-btn" style="display:none; background: linear-gradient(180deg, #e17055, #d63031); width: 100%;" onclick="buyBackExp()">
+                MUA LẠI EXP (10s)
+            </button>
+            <button id="btn-confirm-exp" class="exp-summary-btn" style="width: 100%; margin-top: 0;" onclick="closeExpSummary()">
+                XÁC NHẬN <span id="exp-countdown-text"></span>
+            </button>
+        </div>
+    </div>
+</div>
+<div id="avatar-skin-shop-modal" class="modal" style="display:none;">
+    <div class="modal-content avatar-shop-box">
+        <span class="close" onclick="closeAvatarSkinShop()">&times;</span>
+
+        <h3 style="color:#55efc4; margin:0;">CỬA HÀNG VẬT PHẨM</h3>
+        <div id="avatar-skin-shop-balance" class="avatar-shop-balance">Số dư: 0 PMC</div>
+
+        <div class="avatar-shop-tabs">
+            <button id="avatar-shop-tab-shop" class="avatar-shop-tab active" onclick="setAvatarSkinShopTab('shop')">
+                🛒 SKIN
+            </button>
+            <button id="avatar-shop-tab-bag" class="avatar-shop-tab" onclick="setAvatarSkinShopTab('bag')">
+                🎒 TÚI
+            </button>
+            <!-- THÊM TAB MUA EXP Ở ĐÂY -->
+            <button id="avatar-shop-tab-exp" class="avatar-shop-tab" onclick="setAvatarSkinShopTab('exp')">
+                ✨ MUA EXP
+            </button>
+        </div>
+
+        <div id="avatar-skin-shop-list" class="avatar-shop-list"></div>
+
+<div id="avatar-skin-shop-list" class="avatar-shop-list"></div>
+    </div>
+</div>
+<div id="login-screen">
+    <div class="welcome-login-corner">
+    <button id="welcome-google-btn" onclick="loginGoogle()" style="display:none;">ĐĂNG NHẬP GG</button>
+    <button id="welcome-pi-btn" onclick="loginPi()" style="display:none;">ĐĂNG NHẬP PI</button>
+    <div class="dev-rules-link" onclick="openDeveloperRules()">9 SÁCH NHÀ PHÁT TRIỂN</div>
+    <div id="pi-browser-note" style="display:none; max-width:220px; padding:8px 10px; border-radius:12px; background:rgba(0,0,0,0.72); color:#ffeaa7; font-size:11px; line-height:1.4; text-align:right; border:1px solid rgba(236,221,7,0.45);">
+        Muốn đăng nhập / nạp / rút Pi, vui lòng mở app bằng Pi Browser.
+    </div>
+</div>
+
+    <div class="welcome-wrap">
+        <div class="welcome-hero">
+            <h1>TRÚC LÂM ĐỘC TÔN</h1>
+            <p>Đọc cam kết trước khi vào sảnh chơi, chúc các bạn sớm là 1 vị VUA CỜ TƯỚNG PINETWORK</p>
+        </div>
+
+        <div class="welcome-commit-box">
+            <div class="welcome-commit-title">9 CAM KẾT CỘNG ĐỒNG <span class="dev-rules-close" onclick="closeDeveloperRules()">✖</span></div>
+
+            <div class="welcome-commit-list">
+                <div class="welcome-commit-item">
+                    <div class="welcome-commit-no">1</div>
+                    <div class="welcome-commit-text">
+                        <strong>Về đồng Pi của các bạn:</strong>
+                        <span>Đồng Pi của các bạn là mồ hôi công sức, đội ngũ cam kết giữ gìn minh bạch 100%. Mọi giao dịch đều đi qua cổng Pi SDK chính thức, hiện rõ trên Blockchain để các bạn tự mình kiểm tra. Không có chuyện 'mất hút' hay mập mờ ở đây."</span>
+                    </div>
+                </div>
+
+                <div class="welcome-commit-item">
+                    <div class="welcome-commit-no">2</div>
+                    <div class="welcome-commit-text">
+                        <strong>Chuyện bảo mật là trên hết:</strong>
+                        <span>Thông tin của các bạn, đội ngũ giữ kỹ như giữ bí kíp cờ thế. Mọi dữ liệu đều được khóa chặt trên Firebase bằng mã hóa xịn. Cam kết không bao giờ đem bán hay tiết lộ cho bất kỳ ai. các bạn cứ yên tâm mà cầm quân</span>
+                    </div>
+                </div>
+
+                <div class="welcome-commit-item">
+                    <div class="welcome-commit-no">3</div>
+                    <div class="welcome-commit-text">
+                        <strong>Cờ sạch, cờ đẹp:</strong>
+                        <span>Trúc Lâm Tiên Cảnh là nơi so trình trí tuệ, không phải chỗ cho máy móc (Engine) tung hoành. đội ngũ cam kết quét gian lận liên tục. ai dùng phần mềm can thiệp là đội ngũ cho 'ra đảo' vĩnh viễn, trả lại sự công bằng cho các bạn kỳ thủ chân chính</span>
+                    </div>
+                </div>
+
+                <div class="welcome-commit-item">
+                    <div class="welcome-commit-no">4</div>
+                    <div class="welcome-commit-text">
+                        <strong>Sống và chơi theo pháp luật:</strong>
+                        <span>Game này lập ra để mình giao lưu, giải trí trí tuệ lúc thảnh thơi. đội ngũ cam kết tuân thủ đúng luật pháp, chỉ chơi cờ giải trí, không tổ chức cờ bạc, sát phạt tiền nong trái phép dưới mọi hình thức</span>
+                    </div>
+                </div>
+
+                <div class="welcome-commit-item">
+                    <div class="welcome-commit-no">5</div>
+                    <div class="welcome-commit-text">
+                        <strong>Tài sản là của bạn:</strong>
+                        <span>Dù là số dư Pi hay những vật phẩm mày cày cuốc được trong game, đó là tài sản của bạn. đội ngũ cam kết không bao giờ tự ý thu hồi hay làm khó dễ. bạn chơi được, bạn giữ được</span>
+                    </div>
+                </div>
+
+                <div class="welcome-commit-item">
+                    <div class="welcome-commit-no">6</div>
+                    <div class="welcome-commit-text">
+                        <strong>Có lỗi là có đội ngũ hỗ trợ:</strong>
+                        <span>Làm app không tránh khỏi lúc trục trặc, nhưng đội ngũ cam kết không bỏ rơi bạn. Gặp lỗi nạp Pi hay bàn cờ bị lag, cứ hú một tiếng, đội ngũ sẽ trực chiến xử lý ngay lập tức để ván cờ không bị gián đoạn</span>
+                    </div>
+                </div>
+
+                <div class="welcome-commit-item">
+                    <div class="welcome-commit-no">7</div>
+                    <div class="welcome-commit-text">
+                        <strong>Sân chơi văn minh:</strong>
+                        <span>Chơi cờ là nét đẹp văn hóa. đội ngũ cam kết giữ cho phòng chat luôn sạch sẽ, không để những lời lẽ thiếu văn hóa làm ảnh hưởng đến tinh thần các bạn. Ai vô văn hóa, đội ngũ mời ra ngoài ngay để giữ chất 'Tiên Cảnh</span>
+                    </div>
+                </div>
+
+                <div class="welcome-commit-item">
+                    <div class="welcome-commit-no">8</div>
+                    <div class="welcome-commit-text">
+                        <strong>Nâng cấp không ngừng:</strong>
+                        <span>đội ngũ không để cái app này dậm chân tại chỗ. Cam kết dồn tâm huyết để nâng cấp server mỗi ngày, thêm tính năng mới cho bạn trãi nghiệm cho sướng. Game ngày càng mượt, giao diện ngày càng đẹp là lời hứa danh dự của đội ngũ</span>
+                    </div>
+                </div>
+
+                <div class="welcome-commit-item">
+                    <div class="welcome-commit-no">9</div>
+                    <div class="welcome-commit-text">
+                        <strong>Trách nhiệm tới cùng:</strong>
+                        <span>Nếu có bất kỳ tranh chấp hay hiểu lầm nào, đội ngũ cam kết sẽ ngồi lại phân xử dựa trên dữ liệu thật của hệ thống. Luônủa anh em  đặt quyền lợi chính đáng clên hàng đầu để đảm bảo sự công tâm, không thiên vị bất cứ ai</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="welcome-bottom-note">
+                phiên bản : 1.00
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="user-display" class="hamburger-menu-container" style="display: none;">
+<div class="hamburger-icon" onclick="toggleProfileMenu(event)">
+<span></span>
+<span></span>
+<span></span>
+</div>
+
+<div class="user-meta" onclick="toggleProfileMenu(event)">
+<div id="user-name-display" style="font-weight: bold; color: #55efc4;">core team</div>
+<div id="user-balance" class="pi-balance-box">0.00 π</div>
+<div id="user-pmc-balance" class="pi-balance-box pmc-balance-box">0 PMC</div>
+</div>
+
+<div id="profile-dropdown" class="profile-menu">
     
-    // Check thẳng vào ID có chứa cái đuôi đó
-    const claimSnap = await db.ref(`missionClaimsV1/${walletKey}/${def.id}__${currentPeriodKey}`).once('value');
-    const claimVal = claimSnap.val() || null;
+<div class="profile-header" style="display:flex; align-items:center; gap:8px; padding:8px 10px;">
+    <img id="user-photo" src="" style="width:28px; height:28px; border-radius:50%; border:1px solid #55efc4; object-fit:cover;">
+    <span id="user-name" style="color:white; font-size:13px; font-weight:700;">core team</span>
+</div>
+    <hr style="border: 0.5px solid #444; margin: 5px 0;">
+
+<div class="menu-item" onclick="openEditProfile()">
+    <span class="menu-icon">⚙️</span>
+    <span>HỒ SƠ</span>
+</div>
+
+<div class="menu-item" onclick="openWallet('nap')">
+    <span class="menu-icon">🪙</span>
+    <span>NẠP PI</span>
+</div>
+<div class="menu-item" onclick="openExchangeModal()">
+    <span class="menu-icon">🔁</span>
+    <span>ĐỔI PI → PMC</span>
+</div>
+<div class="menu-item" onclick="openPmcToPiModal()">
+    <span class="menu-icon">💱</span>
+    <span>ĐỔI PMC → PI</span>
+</div>
+<div class="menu-item" onclick="openWallet('rut')">
+    <span class="menu-icon">💸</span>
+    <span>RÚT PI</span>
+</div>
+<div id="menu-admin-fee-wallet" class="menu-item" onclick="openAdminFeeTreasuryModal()" style="display:none;">
+    <span class="menu-icon">🏦</span>
+    <span>VÍ PHÍ HỆ THỐNG</span>
+</div>
+<div class="menu-item" onclick="switchAccount()">
+    <span class="menu-icon">🔄</span>
+    <span>ĐỔI TÀI KHOẢN</span>
+</div>
+
+<div class="menu-item menu-item-danger" onclick="logout()">🚪 ĐĂNG XUẤT</div>
+
+    <hr style="border: 0.5px solid #444; margin: 5px 0;">
+
+    <div style="display: flex; justify-content: space-around; padding: 10px 5px; background: #000; border-radius: 0 0 8px 8px;">
+        <div class="social-icon" onclick="openChat()" title="CSKH">
+            <img src="images/support_icon.png" style="width: 24px; height: 24px; vertical-align: middle;">
+        </div>
+
+        <div class="social-icon" onclick="window.open('https://youtube.com/@CoreTeam', '_blank')" title="Youtube">
+            <img src="images/youtube_icon.png" style="width: 24px; height: 24px; vertical-align: middle;">
+        </div>
+
+        <div class="social-icon" onclick="window.open('https://facebook.com/CoreTeam', '_blank')" title="Facebook">
+            <img src="images/fb_icon.png" style="width: 24px; height: 24px; vertical-align: middle;">
+        </div>
+    </div>
+</div>
+</div>
+<div id="home-menu" style="display: block;">
+    <div class="desktop-home-wrap">
+    <div id="desktop-home-layout">
+        <div class="desktop-side-stack">
+            <div class="desktop-panel desktop-ad-panel">
+                <div class="desktop-panel-title">KHU QUẢNG CÁO / SỰ KIỆN</div>
+                <div class="desktop-panel-sub">
+                    Chỗ này mầy thay bằng banner giải đấu, nhà tài trợ, thông báo hệ thống hoặc lịch sự kiện.
+                </div>
+            </div>
+
+           <div class="desktop-panel desktop-ranking-panel" onclick="openRankingModal(event)">
+                <div class="desktop-panel-title">DANH SÁCH BÀN CỜ TƯỚNG</div>
+                <div class="desktop-panel-sub">Bấm vào bàn phù hợp để vào phòng. Thiếu người sẽ hiện chờ, đủ 2 người sẽ hiện đang chơi</div>
+                <div id="desktop-ranking-preview"></div>
+            </div>
+        </div>
+
+        <div class="desktop-panel desktop-center-panel">
+          <div class="desktop-lobby-title-box">
+    <h2 class="desktop-long-phung-title">SẢNH CHỜ</h2>
+    <p class="desktop-long-phung-sub">TRÚC LÂM TIÊN CẢNH</p>
+</div>
+
+            <div class="desktop-game-grid">
+    <div class="desktop-game-card" onclick="batDauTranDau('tong')">
+        <img src="images/co_tuong_new.png" alt="Cờ Tướng">
+        <p>CỜ TƯỚNG</p>
+        <div class="game-note">Chế độ hiện đang mở</div>
+    </div>
+
+    <div class="desktop-game-card" onclick="batDauTranDau('up')">
+        <img src="images/co_up_new.png" alt="Cờ Úp">
+        <p>CỜ ÚP</p>
+        <div class="game-note">Chế độ hiện đang mở</div>
+    </div>
+
+    <div class="desktop-game-card placeholder">
+        <img src="" alt="Game dự kiến 1">
+        <p>GAME DỰ KIẾN 01</p>
+        <div class="game-note">Để sẵn ô chờ ý tưởng mới của mầy</div>
+    </div>
+
+    <div class="desktop-game-card placeholder">
+        <img src="" alt="Game dự kiến 2">
+        <p>GAME DỰ KIẾN 02</p>
+        <div class="game-note">Sau này chỉ cần đổi ảnh, tên và onclick</div>
+    </div>
+</div>
+        </div>
+
+        <div class="desktop-panel desktop-friend-panel">
+    <div class="desktop-panel-title">BẠN BÈ</div>
+    <div class="friend-top-tabs">
+    <button id="desktop-friend-tab-friends" class="friend-top-tab active" onclick="switchFriendTab('friends')">
+        BẠN BÈ
+        <span id="desktop-friend-tab-friends-count" class="friend-top-tab-count">0</span>
+    </button>
+    <button id="desktop-friend-tab-requests" class="friend-top-tab" onclick="switchFriendTab('requests')">
+        NGƯỜI LẠ
+        <span id="desktop-friend-tab-requests-count" class="friend-top-tab-count">0</span>
+    </button>
+</div>
+
+    <div class="friend-box-row">
+        <input type="text" id="desktop-friend-name-input" placeholder="Nhập tên user">
+    </div>
+
+    <div class="friend-box-actions">
+        <button onclick="addFriend()">KẾT BẠN</button>
+        <button onclick="removeFriend()">XÓA BẠN</button>
+    </div>
+
+    <div id="desktop-friend-list" class="friend-sections"></div>
+</div>
+    </div>
+</div>
+
+    <div class="mobile-home-wrap">
+    <div id="mobile-friend-wrap">
+    <div id="mobile-friend-toggle" onclick="toggleFriendBox(event)">
+        👥
+        <span id="mobile-friend-badge" class="friend-badge-dot">0</span>
+    </div>
+
+    <div id="mobile-friend-box">
+        <div class="friend-box-header">
+            <span class="friend-box-title">BẠN BÈ</span>
+            <span class="friend-close" onclick="closeFriendBox()">✖</span>
+        </div>
+<div class="friend-top-tabs mobile-friend-top-tabs">
+    <button id="mobile-friend-tab-friends" class="friend-top-tab active" onclick="switchFriendTab('friends')">
+        BẠN BÈ
+        <span id="mobile-friend-tab-friends-count" class="friend-top-tab-count">0</span>
+    </button>
+    <button id="mobile-friend-tab-requests" class="friend-top-tab" onclick="switchFriendTab('requests')">
+        NGƯỜI LẠ
+        <span id="mobile-friend-tab-requests-count" class="friend-top-tab-count">0</span>
+    </button>
+</div>
+        <div class="friend-box-row">
+            <input type="text" id="friend-name-input" placeholder="Nhập tên user">
+        </div>
+
+        <div class="friend-box-actions">
+            <button onclick="addFriend()">KẾT BẠN</button>
+            <button onclick="removeFriend()">XÓA BẠN</button>
+        </div>
+
+        <div id="friend-list" class="friend-sections"></div>
+    </div>
+</div>
+<div id="mobile-lobby-title" class="lobby-title-box lobby-title-mobile">
+    <div class="lobby-main-title">SẢNH CHỜ</div>
+    <div class="lobby-sub-title">TRÚC LÂM TIÊN CẢNH</div>
+</div>
+
+<!-- NGUYÊN CỤC QUẢNG CÁO CHUẨN ĐƯỢC GÓI GỌN Ở ĐÂY -->
+<div id="mobile-ad-zone">
+    <div class="mobile-ad-banner">
+        
+        <!-- BẮT ĐẦU SLIDER QUẢNG CÁO NẰM BÊN TRONG BANNER -->
+        <div class="ad-slider-container">
+            <div class="ad-slider-track" id="ad-slider-track">
+                <div class="ad-slide ad-bg-1" onclick="handleAdClick(1)">
+                    <h3 style="color: #ff7675;">🔥 KHUYẾN MÃI NẠP PI</h3>
+                    <p>1 Pi = 500 PMC! Nạp ngay để sắm Skin xịn và tham gia các trận cược lớn!</p>
+                    <div class="ad-btn">NẠP NGAY ➔</div>
+                </div>
+                <div class="ad-slide ad-bg-2" onclick="handleAdClick(2)">
+                    <h3 style="color: #a29bfe;">🐉 RA MẮT LONG VƯƠNG</h3>
+                    <p>Khẳng định đẳng cấp Đại Gia với Skin Long Vương & Phượng Hoàng chớp sáng!</p>
+                    <div class="ad-btn">VÀO SHOP ➔</div>
+                </div>
+                <div class="ad-slide ad-bg-3" onclick="handleAdClick(3)">
+                    <h3 style="color: #55efc4;">🎯 CÀY NHIỆM VỤ NHẬN PMC</h3>
+                    <p>Hoàn thành nhiệm vụ hàng ngày, nhận ngay PMC miễn phí chảy thẳng vào ví!</p>
+                    <div class="ad-btn">NHẬN THƯỞNG ➔</div>
+                </div>
+                <div class="ad-slide ad-bg-4" onclick="handleAdClick(4)">
+                    <h3 style="color: #f1c40f;">🏆 ĐUA TOP CAO THỦ</h3>
+                    <p>Ghi danh lên Bảng Vàng! Đánh bại các Kỳ Vương khác để giành vinh quang!</p>
+                    <div class="ad-btn">XEM BẢNG TOP ➔</div>
+                </div>
+                <div class="ad-slide ad-bg-5" onclick="handleAdClick(5)">
+                    <h3 style="color: #fd79a8;">👥 THÊM BẠN THÊM VUI</h3>
+                    <p>Mời hảo hữu cùng tham gia, lập phòng kín solo riêng tư cực gắt!</p>
+                    <div class="ad-btn">MỜI BẠN NGAY ➔</div>
+                </div>
+                <div class="ad-slide ad-bg-6" onclick="handleAdClick(6)">
+                    <h3 style="color: #74b9ff;">🎁 MỞ RƯƠNG THĂNG CẤP</h3>
+                    <p>Thắng là có EXP! Lên cấp mở rương nhận PMC và Lượt đánh Miễn Phí!</p>
+                    <div class="ad-btn">XEM TIẾN ĐỘ ➔</div>
+                </div>
+            </div>
+            
+            <div class="ad-dots">
+                <div class="ad-dot active" onclick="goToAdSlide(0)"></div>
+                <div class="ad-dot" onclick="goToAdSlide(1)"></div>
+                <div class="ad-dot" onclick="goToAdSlide(2)"></div>
+                <div class="ad-dot" onclick="goToAdSlide(3)"></div>
+                <div class="ad-dot" onclick="goToAdSlide(4)"></div>
+                <div class="ad-dot" onclick="goToAdSlide(5)"></div>
+            </div>
+        </div>
+        <!-- KẾT THÚC SLIDER QUẢNG CÁO -->
+
+    </div>
+
+    <!-- DANH SÁCH BÀN CỜ TƯỚNG -->
+    <div class="mobile-rank-card" onclick="openRankingModal(event)">
+        <div class="rank-board-icon">♟</div>
+        <div class="rank-board-text">
+            <strong>DANH SÁCH BÀN CỜ TƯỚNG</strong>
+            <small>Bấm vào bàn phù hợp để vào phòng. Thiếu người sẽ hiện chờ, đủ 2 người sẽ hiện đang chơi</small>
+        </div>
+    </div>
+</div>
+
+<div id="mobile-game-row">
+<!-- ... ĐOẠN NÀY LÀ CÁC NÚT VÀO GAME CỦA MẦY GIỮ NGUYÊN ... -->
+            <div class="mobile-game-card" onclick="batDauTranDau('tong')">
+                <img src="images/co_tuong_new.png" alt="Cờ Tướng">
+                <span>CỜ TƯỚNG</span>
+            </div>
+
+            <div class="mobile-game-card" onclick="batDauTranDau('up')">
+                <img src="images/co_up_new.png" alt="Cờ Úp">
+                <span>CỜ ÚP</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="ranking-modal" class="rank-modal">
+    <div class="rank-modal-box">
+        <div class="rank-modal-header">
+            <span>DANH SÁCH BÀN CỜ</span>
+            <span class="rank-close" onclick="closeRankingModal()">✖</span>
+        </div>
+
+        <div class="room-top-tabs">
+            <button id="room-tab-co-tuong"
+                    class="room-top-tab active"
+                    onclick="switchLobbyRoomTab('co-tuong')">
+                CỜ TƯỚNG
+                <span id="room-tab-co-tuong-count" class="room-top-tab-count">0</span>
+            </button>
+
+            <button id="room-tab-co-up"
+                    class="room-top-tab"
+                    onclick="switchLobbyRoomTab('co-up')">
+                CỜ ÚP
+                <span id="room-tab-co-up-count" class="room-top-tab-count">0</span>
+            </button>
+        </div>
+
+        <div class="invite-join-box">
+            <div class="invite-join-title">NHẬP MÃ MỜI ĐỂ VÀO ĐÚNG PHÒNG</div>
+            <div class="invite-join-row">
+                <input
+                    id="invite-code-input"
+                    type="text"
+                    maxlength="8"
+                    placeholder="Ví dụ: A1B2C3D4"
+                    onkeydown="if(event.key==='Enter'){ joinRoomByInviteCode(); }"
+                >
+                <button class="invite-join-btn" onclick="joinRoomByInviteCode()">VÀO</button>
+            </div>
+            <div class="invite-join-note">
+                Chủ phòng gửi mã nào thì nhập mã đó để vào cùng phòng.
+            </div>
+        </div>
+
+        <div id="ranking-list"></div>
+    </div>
+</div>
+
+<div id="arena-top-modal" class="top-modal">
+    <div class="top-modal-box">
+        <div class="top-modal-header">
+            <span>BẢNG TOP CAO THỦ</span>
+            <span class="top-close" onclick="closeArenaTopModal()">✖</span>
+        </div>
+
+        <div class="top-tabs">
+            <button id="top-tab-level" class="top-tab active" onclick="switchArenaTopTab('level')">TOP LEVER</button>
+            <button id="top-tab-skin" class="top-tab" onclick="switchArenaTopTab('skin')">TOP SKIN</button>
+            <button id="top-tab-record" class="top-tab" onclick="switchArenaTopTab('record')">TOP THẮNG/THUA</button>
+            <button id="top-tab-pi" class="top-tab" onclick="switchArenaTopTab('pi')">TOP PI</button>
+            <button id="top-tab-pmc" class="top-tab" onclick="switchArenaTopTab('pmc')">TOP PMC</button>
+        </div>
+
+        <div id="arena-top-list">
+            <div class="top-empty">Đang tải bảng Top...</div>
+        </div>
+    </div>
+</div>
+
+<div id="top-challenge-modal">
+    <div class="top-challenge-box">
+        <div class="top-challenge-title">THÁCH ĐẤU TRONG BẢNG TOP</div>
+        <div id="top-challenge-target" class="top-challenge-target">Đối thủ: ---</div>
+
+        <div class="top-challenge-mode-row">
+            <button id="top-challenge-mode-tuong" class="top-challenge-mode-btn active" onclick="pickTopChallengeMode('co-tuong')">CỜ TƯỚNG</button>
+            <button id="top-challenge-mode-up" class="top-challenge-mode-btn" onclick="pickTopChallengeMode('co-up')">CỜ ÚP</button>
+        </div>
+
+        <input id="top-challenge-stake-input" type="number" min="1" step="1" placeholder="Nhập số PMC cược / ván">
+        <div id="top-challenge-my-pmc" class="top-challenge-note">Số dư PMC của mầy: ---</div>
+        <div class="top-challenge-note">
+            Bấm OK là tạo phòng riêng và gửi lời mời. Nếu đối thủ từ chối, phòng tự mở ra sảnh để ai cũng vào được.
+        </div>
+
+        <div class="top-challenge-actions">
+            <button class="top-challenge-cancel" onclick="closeTopChallengeModal()">HỦY</button>
+            <button class="top-challenge-ok" onclick="confirmTopChallengeInvite()">OK GỬI MỜI</button>
+        </div>
+    </div>
+</div>
+
+<div id="game-arena" style="display: none; padding: 10px;">
+<div class="game-wrapper">
+<div id="ready-overlay">
+<div id="ready-box">
+<div id="ready-title">SẴN SÀNG</div>
+<div id="ready-countdown">30</div>
+
+<div id="ready-side-text">ĐANG CHỜ 2 NGƯỜI XÁC NHẬN</div>
+
+<div id="ready-button-row">
+    <button id="ready-main-btn" onclick="setReady()">SẴN SÀNG</button>
+</div>
+</div>
+</div>
+<div class="board-side">
+    <div class="player-timer-row top-row">
+       <div class="player-slot">
+    <div class="player-chip-row" onclick="openPlayerStats('den')">
+        <img id="player-den-avatar" class="player-avatar-outside" src="images/do_tuong.png" alt="Đen">
+
+        <div class="player-chip-stack">
+            <div class="player-chip-inline">
+                <div class="player-chip-meta">
+                    <span id="player-den-name" class="player-chip-name">BÊN ĐEN</span>
+                    <span id="player-den-rank" class="player-chip-rank">0 / 4500</span>
+                </div>
+            </div>
+
+            <div class="player-balance-row">
+                <div id="player-den-pi-balance" class="player-balance-box player-balance-pi">0.00 π</div>
+                <div id="player-den-pmc-balance" class="player-balance-box player-balance-pmc">0 PMC</div>
+            </div>
+
+            <div id="player-den-invite" class="player-invite-code"></div>
+        </div>
+    </div>
+</div>
+
+        <div id="timer-den" class="timer-box timer-inline">09:00</div>
+    </div>
+
+    <div id="board" class="game-container">
+        <div id="viewer-count-badge" title="Số người đang xem">👁️ <span id="viewer-count-number">0</span></div>
+        <div id="victory-wrap">
+    <div class="victory-banner">
+        <h1 id="main-result">CHIẾN THẮNG</h1>
+        <span id="sub-result">BÊN ĐỎ THẮNG</span>
+
+        <div id="victory-actions" style="margin-top:16px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+            <button onclick="playNextMatch()">TIẾP TỤC</button>
+            <button onclick="exitAfterMatch()" style="background:#e17055;">THOÁT TRẬN</button>
+        </div>
+    </div>
+</div>
+    </div>
+
+    <div class="turn-row">
+        <div id="turn-box" style="color: #55efc4;">Lượt: ĐỎ</div>
+    </div>
+
+    <div class="player-timer-row bottom-row">
+        <div id="timer-do" class="timer-box active-do timer-inline">09:00</div>
+
+       <div class="player-slot">
+    <div class="player-chip-row" onclick="openPlayerStats('do')">
+        <img id="player-do-avatar" class="player-avatar-outside" src="images/do_tuong.png" alt="Đỏ">
+
+        <div class="player-chip-stack">
+            <div class="player-chip-inline">
+                <div class="player-chip-meta">
+                    <span id="player-do-name" class="player-chip-name">BÊN ĐỎ</span>
+                    <span id="player-do-rank" class="player-chip-rank">0 / 4500</span>
+                </div>
+            </div>
+
+            <div class="player-balance-row">
+                <div id="player-do-pi-balance" class="player-balance-box player-balance-pi">0.00 π</div>
+                <div id="player-do-pmc-balance" class="player-balance-box player-balance-pmc">0 PMC</div>
+            </div>
+
+            <div id="player-do-invite" class="player-invite-code"></div>
+        </div>
+    </div>
+</div>
+    </div>
+</div>
+
+<div class="chat-side">
+<div id="match-chat-popup">
+<div class="chat-header">
+💬 PHÒNG CHAT
+<span class="close-chat-mobile" onclick="toggleMatchChat()">✖</span>
+</div>
+
+<div id="match-content-popup">
+<p style="color:#55efc4;">Hệ thống: Vào việc đi mậy!</p>
+</div>
+
+<div id="emoji-menu" style="display:none; position:absolute; bottom:55px; left:10px; background:#222; border:1px solid #55efc4; padding:10px; border-radius:8px; z-index:10; grid-template-columns:repeat(4, 1fr); gap:10px;">
+<span onclick="sendQuickMsg('🏳️ (Đầu hàng)')" style="cursor:pointer; font-size:20px;">🏳️</span>
+<span onclick="sendQuickMsg('🤣')" style="cursor:pointer; font-size:20px;">🤣</span>
+<span onclick="sendQuickMsg('🙏')" style="cursor:pointer; font-size:20px;">🙏</span>
+<span onclick="sendQuickMsg('🔥')" style="cursor:pointer; font-size:20px;">🔥</span>
+<span onclick="sendQuickMsg('🤡')" style="cursor:pointer; font-size:20px;">🤡</span>
+<span onclick="sendQuickMsg('🤐')" style="cursor:pointer; font-size:20px;">🤐</span>
+<span onclick="sendQuickMsg('💪')" style="cursor:pointer; font-size:20px;">💪</span>
+<span onclick="sendQuickMsg('🤔')" style="cursor:pointer; font-size:20px;">🤔</span>
+<span onclick="sendQuickMsg('🥳')" style="cursor:pointer; font-size:20px;">🥳</span>
+<span onclick="sendQuickMsg('😱')" style="cursor:pointer; font-size:20px;">😱</span>
+<span onclick="sendQuickMsg('😎')" style="cursor:pointer; font-size:20px;">😎</span>
+<span onclick="sendQuickMsg('😡')" style="cursor:pointer; font-size:20px;">😡</span>
+<span onclick="sendQuickMsg('👍')" style="cursor:pointer; font-size:20px;">👍</span>
+<span onclick="sendQuickMsg('👎')" style="cursor:pointer; font-size:20px;">👎</span>
+<span onclick="sendQuickMsg('💩')" style="cursor:pointer; font-size:20px;">💩</span>
+<span onclick="sendQuickMsg('👻')" style="cursor:pointer; font-size:20px;">👻</span>
+</div>
+
+<div style="padding:5px; background:#111; display:grid; grid-template-columns:1fr 1fr; gap:4px; border-top:1px solid #444; flex-shrink:0;">
+<button onclick="sendQuickMsg('Thua đi bác ơi!')" style="font-size:10px; background:#444; color:white; border:none; padding:4px; cursor:pointer;">Thua đi bác</button>
+<button onclick="sendQuickMsg('Nước đó rất cao!')" style="font-size:10px; background:#444; color:white; border:none; padding:4px; cursor:pointer;">Nước rất cao</button>
+<button onclick="sendQuickMsg('Làm ván nữa nhé?')" style="font-size:10px; background:#444; color:white; border:none; padding:4px; cursor:pointer;">Ván nữa nhé</button>
+<button onclick="sendQuickMsg('Nhanh đi lâu vậy!')" style="font-size:10px; background:#444; color:white; border:none; padding:4px; cursor:pointer;">Nhanh đi cha</button>
+<button onclick="sendQuickMsg('Chơi hay nghỉ đây?')" style="font-size:10px; background:#444; color:white; border:none; padding:4px; cursor:pointer;">Chơi hay nghỉ</button>
+<button onclick="sendQuickMsg('Mở quân đỏ thế!')" style="font-size:10px; background:#444; color:white; border:none; padding:4px; cursor:pointer;">Đỏ thế!</button>
+</div>
+
+<div class="chat-input-box">
+<button id="toggle-emoji-btn" onclick="toggleEmojiMenu()" style="background:none; border:none; cursor:pointer; font-size:20px; color:#55efc4;">☰</button>
+<input type="text" id="match-input-popup" placeholder="Nhập tin...">
+<button onclick="sendMatchChat()">Gửi</button>
+</div>
+</div>
+
+<div id="desktop-match-actions">
+    <button class="action-thoat" onclick="handleMatchAction('thoat')">THOÁT TRẬN</button>
+    <button class="action-dauhang" onclick="handleMatchAction('dauhang')">ĐẦU HÀNG</button>
+    <button class="action-hoa" onclick="handleMatchAction('hoa')">XIN HÒA</button>
+    <button class="action-doitran" onclick="changeMatch()">ĐỔI TRẬN</button>
+    <!-- THÊM 2 NÚT TẮT ÂM THANH CHO PC Ở ĐÂY -->
+    <div style="display: flex; gap: 5px; grid-column: 1 / -1; margin-top: 2px;">
+        <button id="btn-toggle-bgm-desk" class="sound-toggle-btn" onclick="toggleBGM(event)" style="flex:1; padding: 6px; font-size: 14px;">🎵 Nhạc Nền</button>
+        <button id="btn-toggle-sfx-desk" class="sound-toggle-btn" onclick="toggleSFX(event)" style="flex:1; padding: 6px; font-size: 14px;">🔊 Tiếng Cờ</button>
+    </div>
+</div>
+</div>
+
+<div id="match-chat-btn" onclick="toggleMatchChat()">💬</div>
+
+<div id="arena-friend-btn" onclick="toggleArenaFriendBox(event)">
+    👥
+    <span id="arena-friend-badge" class="friend-badge-dot">0</span>
+</div>
+<div id="arena-skin-btn" onclick="openAvatarSkinShop()">🛒</div>
+<div id="arena-top-btn" onclick="openArenaTopModal(event)">🏆</div>
+
+<div id="arena-friend-box">
+    <div class="arena-friend-header">
+        <span>MỜI BẠN VÀO PHÒNG</span>
+        <span class="arena-friend-close" onclick="closeArenaFriendBox()">✖</span>
+    </div>
+    <div class="arena-friend-note">
+        Chỉ mời được khi mày đang là chủ phòng chờ và phòng chưa đủ người.
+    </div>
+    <div id="arena-friend-list"></div>
+</div>
+
+<div id="mobile-match-actions">
+    <div id="mobile-action-menu">
+        <div class="mobile-action-close" onclick="closeActionMenu()">✖</div>
+        <button onclick="handleMatchAction('thoat')">🏁 THOÁT TRẬN</button>
+        <button onclick="handleMatchAction('dauhang')">🏳️ ĐẦU HÀNG</button>
+        <button onclick="handleMatchAction('hoa')">🤝 XIN HÒA</button>
+        <button class="action-doitran" onclick="changeMatch()">🔁 ĐỔI TRẬN</button>
+        
+        <!-- THÊM 2 NÚT TẮT ÂM THANH CHO ĐIỆN THOẠI Ở ĐÂY -->
+        <div style="display: flex; gap: 6px; margin-top: 4px;">
+            <button id="btn-toggle-bgm-mob" class="sound-toggle-btn" onclick="toggleBGM(event)" style="flex:1; padding: 8px; font-size: 14px;">🎵 Nhạc</button>
+            <button id="btn-toggle-sfx-mob" class="sound-toggle-btn" onclick="toggleSFX(event)" style="flex:1; padding: 8px; font-size: 14px;">🔊 Tiếng</button>
+        </div>
+    </div>
+    <div id="mobile-action-main" onclick="toggleActionMenu(event)">☰</div>
+</div>
+</div>
+</div>
+<div id="room-invite-overlay" style="display:none;">
+    <div class="room-invite-card">
+        <div class="room-invite-title">THÁCH ĐẤU BẠN BÈ</div>
+        <div id="room-invite-from" class="room-invite-line">Người mời: ---</div>
+        <div id="room-invite-mode" class="room-invite-line">Chế độ: ---</div>
+        <div id="room-invite-stake" class="room-invite-line">Cược: --- PMC</div>
+        <div id="room-invite-code" class="room-invite-line">Mã phòng: ---</div>
+
+        <div class="room-invite-actions">
+            <button class="room-invite-accept" onclick="acceptRoomInvite()">CHẤP NHẬN</button>
+            <button class="room-invite-decline" onclick="declineRoomInvite('declined')">TỪ CHỐI</button>
+        </div>
+    </div>
+</div>
+<div id="exchange-modal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <span class="close" onclick="closeExchangeModal()">&times;</span>
+        <div class="room-mode-title">ĐỔI PI → PMC</div>
+
+        <div style="font-size:13px; color:#dfe6e9;">Tỷ lệ cố định: <b style="color:#7dffb3;">1 Pi = 500 PMC</b></div>
+
+       <input id="exchange-pi-input" class="modal-input-dark" type="number" min="0" step="0.01" placeholder="Nhập số Pi muốn đổi">
+
+        <div id="exchange-preview" class="exchange-preview">Nhận: 0 PMC</div>
+
+        <div class="pmc-note">
+            PMC là xu nội bộ / demo để vào phòng. Không tự đổi ngược theo thắng thua.
+        </div>
+
+        <div class="stake-actions">
+            <button type="button" class="stake-cancel-btn" onclick="closeExchangeModal()">HỦY</button>
+            <button type="button" class="stake-ok-btn" onclick="submitExchangeToPMC()">XÁC NHẬN ĐỔI</button>
+        </div>
+    </div>
+</div>
+<div id="pmc-to-pi-modal" class="modal" style="display:none;">
+    <div class="modal-box">
+        <div class="room-mode-title">ĐỔI PMC → PI</div>
+
+        <div class="pmc-note" style="margin-top:0;">
+            Tỷ lệ hiện tại: <strong id="pmc-to-pi-rate-label"> PMC = 1 Pi</strong>
+        </div>
+
+        <input
+    id="pmc-to-pi-input"
+    class="modal-input-dark"
+    type="number"
+    min="0"
+    step="1"
+    placeholder="Nhập số PMC muốn đổi"
+    oninput="previewPmcToPiExchange()"
+>
+
+        <div id="pmc-to-pi-preview" class="exchange-preview">
+            Bạn sẽ nhận: 0 Pi
+        </div>
+
+        <div class="pmc-note">
+    Chỉ preview ở client, khi bấm xác nhận sẽ gửi yêu cầu lên server.
+</div>
+
+        <div class="stake-actions">
+            <button class="stake-cancel-btn" onclick="closePmcToPiModal()">HỦY</button>
+            <button class="stake-ok-btn" onclick="confirmPmcToPiExchange()">XÁC NHẬN</button>
+        </div>
+    </div>
+</div>
+<div id="stake-room-modal" class="modal" style="display:none;">
+    <div class="modal-content" style="width:min(92vw, 420px);">
+        <span class="close" onclick="closeStakeRoomModal()">&times;</span>
+        <div id="stake-room-title" class="room-mode-title">CHỌN PHÒNG</div>
+
+        <div style="font-size:13px; color:#dfe6e9;">
+            Số dư PMC hiện có: <b id="stake-pmc-now" style="color:#7dffb3;">0 PMC</b>
+        </div>
+
+        <div class="stake-grid">
+            <button class="stake-chip" onclick="pickStakePMC(50, this)">50</button>
+            <button class="stake-chip" onclick="pickStakePMC(100, this)">100</button>
+            <button class="stake-chip" onclick="pickStakePMC(250, this)">250</button>
+            <button class="stake-chip" onclick="pickStakePMC(500, this)">500</button>
+            <button class="stake-chip" onclick="pickStakePMC(800, this)">800</button>
+            <button class="stake-chip" onclick="pickStakePMC(1000, this)">1000</button>
+            <button class="stake-chip" onclick="pickStakePMC(2500, this)">2500</button>
+            <button class="stake-chip" onclick="pickStakePMC(5000, this)">5000</button>
+            <button class="stake-chip" onclick="pickStakePMC(10000, this)">10000</button>
+            <button class="stake-chip" onclick="pickStakePMC(100000, this)">100000</button>
+            <button class="stake-chip" onclick="pickStakePMC(1000000, this)">1000000</button>
+            <button class="stake-chip" onclick="pickStakePMC(10000000, this)">10000000</button>
+        </div>
+
+        <input id="custom-stake-pmc" class="modal-input-dark" type="number" min="1" step="1" placeholder="Hoặc nhập PMC tự chọn">
+
+        <div id="stake-preview" class="exchange-preview">Mức đã chọn: 0 PMC</div>
+
+        <div class="stake-actions">
+            <button type="button" class="stake-cancel-btn" onclick="closeStakeRoomModal()">HỦY</button>
+            <button type="button" class="stake-ok-btn" onclick="confirmStakeSelection()">TIẾP TỤC</button>
+        </div>
+    </div>
+</div>
+<div id="withdraw-amount-modal" style="display:none;">
+    <div class="withdraw-amount-box">
+        <div class="withdraw-amount-icon">💸</div>
+        <div class="withdraw-amount-title">RÚT PI</div>
+        <div id="withdraw-amount-sub" class="withdraw-amount-sub">
+            Nhập số Pi muốn rút
+        </div>
+
+        <input id="withdraw-amount-input" type="number" min="1" step="0.01" placeholder="Ví dụ: 100">
+
+        <div class="withdraw-amount-note">
+            <div>• Tối đa mỗi lần: <strong>1000 Pi</strong></div>
+            <div>• Số lần còn lại hôm nay: <strong id="withdraw-left-count">0</strong></div>
+        </div>
+
+        <div class="withdraw-amount-actions">
+            <button type="button" class="amount-cancel-btn" onclick="closeWithdrawAmount(null)">HỦY</button>
+            <button type="button" class="amount-ok-btn" onclick="submitWithdrawAmount()">XÁC NHẬN</button>
+        </div>
+    </div>
+</div>
+<div id="chat-box"
+style="display: none; position: fixed; bottom: 80px; right: 20px; width: 260px; background: #1a1a1a; border: 2px solid #55efc4; border-radius: 12px; z-index: 30000; box-shadow: 0 0 15px rgba(0,0,0,0.8); font-family: Arial, sans-serif;">
+<div
+style="background: #55efc4; color: #000; padding: 10px; display: flex; justify-content: space-between; border-radius: 10px 10px 0 0; font-weight: bold; font-size: 0.8rem;">
+<span>🎧 HỖ TRỢ BONSAI PI</span>
+<span onclick="closeChat()" style="cursor: pointer; font-size: 20px;">&times;</span>
+</div>
+<div id="chat-content"
+style="height: 180px; padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; color: white; font-size: 0.75rem;">
+<div
+style="background: #333; padding: 8px; border-radius: 8px; align-self: flex-start; border: 1px solid #444;">
+Chào mậy! Tao là Admin đây. Cần hỗ trợ gì cứ nhắn nhé!
+</div>
+</div>
+<div style="display: flex; padding: 8px; border-top: 1px solid #333; gap: 5px;">
+<input type="text" id="user-msg" placeholder="Nhập tin nhắn..."
+style="flex: 1; background: #000; color: #fff; border: 1px solid #444; padding: 6px; border-radius: 5px; outline: none; font-size: 0.75rem;">
+<button onclick="sendMsg()"
+style="background: #55efc4; border: none; padding: 5px 12px; border-radius: 5px; font-weight: bold; cursor: pointer;">Gửi</button>
+</div>
+</div>
+
+<script>
+// --- FIREBASE (GIỮ NGUYÊN) ---
+const firebaseConfig = {
+apiKey: "AIzaSyA2P3yh0o-Jr2zCDkFxBg4YTrFSTpeS8P0",
+authDomain: "bonsaipi224.firebaseapp.com",
+databaseURL: "https://bonsaipi224-default-rtdb.firebaseio.com",
+projectId: "bonsaipi224",
+storageBucket: "bonsaipi224.firebasestorage.app",
+messagingSenderId: "818801429743",
+appId: "1:818801429743:web:27ed0c854b8be5c8a95f1a"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.database();
+const provider = new firebase.auth.GoogleAuthProvider();
+let readyServerOffsetMs = 0;
+
+db.ref(".info/serverTimeOffset").on("value", snap => {
+    readyServerOffsetMs = Number(snap.val() || 0) || 0;
+});
+
+function readyNowMs() {
+    return Date.now() + readyServerOffsetMs;
+}
+
+function getReadySecondsLeft(deadlineAt) {
+    const left = Math.ceil((Number(deadlineAt || 0) - readyNowMs()) / 1000);
+
+    // Chặn tuyệt đối vụ nhảy 38, 40, 45 giây
+    return Math.max(0, Math.min(30, left));
+}
+
+let currentRoomId = null;
+let currentRoomMode = null;
+let mySide = null;
+let roomValueRef = null;
+let roomChatRef = null;
+let lastRoomBoardHash = "";
+let lastDrawRequestAt = 0;
+const ACTIVE_MATCH_KEY = "co_tuong_active_match_v1";
+let matchChatPeekTimer = null;
+
+function escapeChatPeekText(value = "") {
+    const div = document.createElement("div");
+    div.textContent = String(value || "");
+    return div.innerHTML;
+}
+
+function showMatchChatPeek(msg = {}) {
+    const btn = document.getElementById("match-chat-btn");
+    if (!btn) return;
+
+    // Chỉ hiện khi icon chat đang hiện. PC đang mở khung chat sẵn thì khỏi hiện.
+    if (getComputedStyle(btn).display === "none") return;
+
+    const chat = document.getElementById("match-chat-popup");
+    if (chat && getComputedStyle(chat).display !== "none") return;
+
+    let box = document.getElementById("match-chat-peek");
+    if (!box) {
+        box = document.createElement("div");
+        box.id = "match-chat-peek";
+        document.body.appendChild(box);
+    }
+
+    const name = String(msg.name || "Đối thủ").trim().slice(0, 18);
+    const text = String(msg.text || "").trim().slice(0, 90);
+
+    box.innerHTML = `
+        <div class="match-chat-peek-title">💬 ${escapeChatPeekText(name)} nhắn:</div>
+        <div class="match-chat-peek-text">${escapeChatPeekText(text)}</div>
+    `;
+
+    box.classList.remove("show");
+    void box.offsetWidth;
+    box.classList.add("show");
+
+    clearTimeout(matchChatPeekTimer);
+    matchChatPeekTimer = setTimeout(() => {
+        box.classList.remove("show");
+    }, 5200);
+}
+function readActiveMatchSnapshot() {
+    try {
+        return JSON.parse(localStorage.getItem(ACTIVE_MATCH_KEY) || "null");
+    } catch {
+        return null;
+    }
+}
+
+function saveActiveMatchSnapshot(payload = {}) {
+    const safe = {
+        roomId: payload.roomId || currentRoomId || null,
+        mode: payload.mode || currentRoomMode || null,
+        side: payload.side || mySide || null,
+        savedAt: Date.now()
+    };
+
+    if (!safe.roomId) return;
+    localStorage.setItem(ACTIVE_MATCH_KEY, JSON.stringify(safe));
+}
+
+function clearActiveMatchSnapshot(roomId = null) {
+    const current = readActiveMatchSnapshot();
+    if (!current) return;
+    if (roomId && current.roomId && current.roomId !== roomId) return;
+    localStorage.removeItem(ACTIVE_MATCH_KEY);
+}
+
+function prepareRealtimeArenaUI() {
+    if (isSpectatorMode) cleanupRoomListeners();
+    hideHomeUI();
+    document.getElementById("game-arena").style.display = "block";
+
+    const chatPopup = document.getElementById("match-chat-popup");
+    const chatBtn = document.getElementById("match-chat-btn");
+
+    if (window.innerWidth <= 600) {
+        if (chatPopup) chatPopup.style.display = "none";
+        if (chatBtn) chatBtn.style.display = "flex";
+    } else {
+        if (chatPopup) chatPopup.style.display = "flex";
+        if (chatBtn) chatBtn.style.display = "none";
+    }
+
+    setPlayerPresence("arena");
+    touchCurrentLobbyHeartbeat().catch(() => {});
+    closeArenaFriendBox();
+    renderRoomInviteOverlay();
+}
+
+async function tryResumeRealtimeMatch(preferredMode = null) {
+    const saved = readActiveMatchSnapshot();
+    if (!saved || !saved.roomId) return false;
+
+    const me = getCurrentPlayerProfile();
+    const snap = await db.ref("matches/" + saved.roomId).once("value");
+    const room = snap.val();
+
+    if (!room) {
+        clearActiveMatchSnapshot(saved.roomId);
+        return false;
+    }
+
+    if (preferredMode && room.mode && room.mode !== preferredMode) {
+        return false;
+    }
+
+    const isDo = room.players?.do?.uid === me.uid;
+    const isDen = room.players?.den?.uid === me.uid;
+    const canResume = !room.winner && (room.status === "playing" || room.status === "waiting");
+
+    if (!canResume || (!isDo && !isDen)) {
+        clearActiveMatchSnapshot(saved.roomId);
+        return false;
+    }
+
+    mySide = isDo ? "do" : "den";
+    currentRoomId = saved.roomId;
+    currentRoomMode = room.mode || saved.mode || preferredMode || null;
+    currentRoomStakePMC = Math.max(0, Math.floor(Number(room.stakePMC || 0) || 0));
+currentRoomBucket = room.roomBucket || makeStakeBucket(currentRoomMode, currentRoomStakePMC);
+
+    saveActiveMatchSnapshot({
+        roomId: saved.roomId,
+        mode: currentRoomMode,
+        side: mySide
+    });
+
+    prepareRealtimeArenaUI();
+    bindRoom(saved.roomId);
+
+    // 🔥 KHI B TỰ PHỤC HỒI/NHẬN PHÒNG MỚI, ÉP NÓ TỰ BƠM NHỊP TIM LIÊN TỤC
+    if (mySide === "do") {
+        touchCurrentLobbyHeartbeat();
+    }
+
+    return true;
+}
+
+provider.setCustomParameters({
+    prompt: 'select_account'
+});
+function applyLoggedInUI(displayName, photoURL) {
+    const safeName = displayName || "Người chơi";
+    const safePhoto = photoURL || "images/do_tuong.png";
+
+    const loginScreen = document.getElementById("login-screen");
+    const userDisplay = document.getElementById("user-display");
+    const homeMenu = document.getElementById("home-menu");
+    const gameArena = document.getElementById("game-arena");
+    const userNameDisplay = document.getElementById("user-name-display");
+    const userName = document.getElementById("user-name");
+    const userPhoto = document.getElementById("user-photo");
+
+    if (loginScreen) loginScreen.style.display = "none";
+    if (userDisplay) userDisplay.style.display = "flex";
+    if (homeMenu) homeMenu.style.display = "block";
+    if (gameArena) gameArena.style.display = "none";
+
+    if (userNameDisplay) userNameDisplay.innerText = safeName;
+    if (userName) userName.innerText = safeName;
+    if (userPhoto) userPhoto.src = safePhoto;
+
+    localStorage.setItem("user-name-display", safeName);
+localStorage.setItem("user-photo", safePhoto);
+
+currentWalletBalance = 0;
+currentPmcBalance = 0;
+updateBalanceUI(0);
+updatePmcUI(0);
+
+loadWalletBalance()
+    .then(() => loadAvatarSkinState())
+    .catch(err => console.error("Lỗi tải ví/skin:", err));
+
+showHomeUI();
+setPlayerPresence("home");
+startPresenceHeartbeat();
+renderRoomInviteOverlay();
+}
+
+function showLoginChoices() {
+    const topBtn = document.getElementById("arena-top-btn");
+    if (topBtn) topBtn.style.display = "none";
+    closeDeveloperRules();
+
+    const piBtn = document.getElementById("welcome-pi-btn");
+    const googleBtn = document.getElementById("welcome-google-btn");
+    const piNote = document.getElementById("pi-browser-note");
+    const oldPiBtn = document.getElementById("pi-login-btn");
+    const oldGoogleBtn = document.getElementById("google-login-btn");
+    const guestBtn = document.getElementById("guest-login-btn");
+
+    const isPi = !!window.Pi;
+
+    if (piBtn) piBtn.style.display = isPi ? "inline-flex" : "none";
+    if (googleBtn) googleBtn.style.display = "inline-flex";
+    if (piNote) piNote.style.display = isPi ? "none" : "block";
+
+    if (oldPiBtn) oldPiBtn.style.display = "none";
+    if (oldGoogleBtn) oldGoogleBtn.style.display = "none";
+    if (guestBtn) guestBtn.style.display = "none";
+}
+
+function loginGuest() {
+    applyLoggedInUI(
+        localStorage.getItem("user-name-display") || "Khách test",
+        localStorage.getItem("user-photo") || "images/do_tuong.png"
+    );
+}
+
+function savePiUser(userName) {
+    localStorage.setItem("pi-user-name", userName || "Pi User");
+    localStorage.setItem("pi-user-photo", "images/do_tuong.png");
+}
+function isRealPiBrowser() {
+    const ua = navigator.userAgent || "";
+    return !!window.Pi && /pibrowser|pi browser|minepi/i.test(ua);
+}
+function loginGoogle() {
+    localStorage.removeItem("pi-user-name");
+    localStorage.removeItem("pi-user-photo");
+
+    auth.signInWithPopup(provider)
+        .then((result) => {
+            const user = result.user;
+            if (!user) return;
+
+            const displayName = user.displayName || "Người chơi";
+            const photoURL = user.photoURL || "images/do_tuong.png";
+
+            localStorage.setItem("user-name-display", displayName);
+            localStorage.setItem("user-photo", photoURL);
+
+            applyLoggedInUI(displayName, photoURL);
+            ensureFriendProfileSynced()
+    .then(() => bindFriendSystem())
+    .catch(err => console.error("Lỗi sync bạn bè sau login Google:", err));
+        })
+
+        .catch((err) => {
+            console.error("Lỗi đăng nhập Google:", err);
+            alert("Đăng nhập Google lỗi: " + (err.message || err.code || err));
+        });
+}
+
+function logout() {
+    document.querySelectorAll(".profile-menu").forEach(m => m.classList.remove("show"));
+
+    localStorage.removeItem("pi-user-name");
+    localStorage.removeItem("pi-user-photo");
+    localStorage.removeItem("user-name-display");
+    localStorage.removeItem("user-photo");
+    localStorage.removeItem("currentUsername");
+
+    auth.signOut()
+        .then(() => location.reload())
+        .catch(err => {
+            console.error("Lỗi đăng xuất:", err);
+            alert("Đăng xuất không thành công.");
+        });
+}
+
+function switchAccount() {
+    document.querySelectorAll(".profile-menu").forEach(m => {
+        m.classList.remove("show");
+    });
+
+    const chatBox = document.getElementById("chat-box");
+    if (chatBox) chatBox.style.display = "none";
+
+    localStorage.removeItem("pi-user-name");
+    localStorage.removeItem("pi-user-photo");
+    localStorage.removeItem("user-name-display");
+    localStorage.removeItem("user-photo");
+    localStorage.removeItem("currentUsername");
+
+    if (window.Pi) {
+        loginPi();
+        return;
+    }
+
+    alert("Muốn đổi tài khoản Pi, vui lòng mở app trong Pi Browser.");
+    location.reload();
+}
+
+
+// --- HỆ THỐNG ÂM THANH (KHỚP VỚI HÌNH THƯ MỤC CỦA MÀY) ---
+const sounds = {
+welcome: new Audio('sounds/welcome.mp3'),
+click: new Audio('sounds/click.mp3'),
+capture: new Audio('sounds/capture.mp3'),
+check: new Audio('sounds/check.mp3'),
+win: new Audio('sounds/win.mp3'),
+lose: new Audio('sounds/lose.mp3'),
+heartbeat: new Audio('sounds/heartbeat.mp3'),
+timeout: new Audio('sounds/timeout.mp3'),
+bgm: new Audio('sounds/bgm.mp3')
+};
+sounds.bgm.loop = true;
+sounds.bgm.volume = 0.4;
+sounds.heartbeat.loop = true; 
+
+// --- QUẢN LÝ BẬT TẮT ÂM THANH ---
+window.isBgmMuted = localStorage.getItem('bgm_muted') === 'true';
+window.isSfxMuted = localStorage.getItem('sfx_muted') === 'true';
+
+function playSnd(name) {
+    if (!sounds[name]) return;
     
-    // Nếu ngày/tuần/tháng mới đến, currentPeriodKey sẽ tự động đổi.
-    // Lúc đó Firebase check cái ID mới này đéo thấy (vì chưa claim), tự động 'claimed' sẽ = false! Xong bài!
-    const claimed = !!(claimVal && claimVal.status === 'done');
-    const ready = !claimed && progress >= target && rewardPmc > 0 && treasuryPmc >= rewardPmc;
-
-    if (ready) {
-      claimableTotalPmc += rewardPmc;
-      claimableCount += 1;
+    // Nếu là Nhạc Nền (bgm)
+    if (name === 'bgm') {
+        if (window.isBgmMuted) return; // Mày tắt rồi thì im re
+        sounds.bgm.currentTime = 0;
+        sounds.bgm.play().catch(e => console.log("Chờ tương tác để phát nhạc..."));
+        return;
     }
 
-    tabs[def.tab].push({
-      id: def.id,
-      title: def.title,
-      desc: def.desc,
-      target,
-      progress,
-      progressText: `${Math.min(progress, target)}/${target}`,
-      progressPercent,
-      rewardPmc,
-      rewardText: formatRewardText(rewardPmc),
-      note: def.note,
-      ready,
-      claimed,
-      claimedAt: claimVal?.claimedAt || null,
-      periodKey: periodKeyForMission(def, now)
+    // Nếu là Âm Thanh cờ / nút bấm (sfx)
+    if (window.isSfxMuted) return; // Mày tắt hiệu ứng rồi thì câm luôn
+    
+    sounds[name].currentTime = 0;
+    sounds[name].play().catch(e => console.log("Chờ tương tác để phát nhạc..."));
+}
+
+window.toggleBGM = function(e) {
+    if(e) e.stopPropagation();
+    window.isBgmMuted = !window.isBgmMuted;
+    localStorage.setItem('bgm_muted', window.isBgmMuted);
+    
+    if (window.isBgmMuted) {
+        sounds.bgm.pause(); // Tắt ngay lập tức nếu đang phát
+    } else {
+        // Bật lại nếu đang trong trận
+        if (currentRoomId && currentRoomStatus === 'playing' && !isGameOver) {
+            sounds.bgm.play().catch(()=>{});
+        }
+    }
+    window.updateSoundIcons();
+};
+
+window.toggleSFX = function(e) {
+    if(e) e.stopPropagation();
+    window.isSfxMuted = !window.isSfxMuted;
+    localStorage.setItem('sfx_muted', window.isSfxMuted);
+    
+    // Nếu tắt SFX thì cũng phải dập luôn tiếng tim đập bùm bụp chiếu tướng
+    if (window.isSfxMuted && sounds.heartbeat) {
+        sounds.heartbeat.pause();
+    }
+    window.updateSoundIcons();
+};
+
+window.updateSoundIcons = function() {
+    // Cập nhật gạch chéo đỏ cho cả PC lẫn Mobile
+    const bgmBtns = [document.getElementById('btn-toggle-bgm-desk'), document.getElementById('btn-toggle-bgm-mob')];
+    const sfxBtns = [document.getElementById('btn-toggle-sfx-desk'), document.getElementById('btn-toggle-sfx-mob')];
+    
+    bgmBtns.forEach(b => {
+        if(!b) return;
+        if(window.isBgmMuted) b.classList.add('muted-audio');
+        else b.classList.remove('muted-audio');
     });
-  }
-
-  return {
-    ok: true,
-    walletKey,
-    walletName: String(walletVal.name || walletVal.username || 'Người chơi'),
-    treasury: {
-      walletKey: safeKey(ADMIN_TREASURY_WALLET_KEY),
-      treasuryPmc,
-      missionPoolPmc,
-      shareRatio: TREASURY_SHARE_RATIO
-    },
-    metrics,
-    tabs,
-    claimableTotalPmc,
-    claimableCount,
-    generatedAt: now
-  };
-}
-
-function walletTxnRef(db) {
-  return db.ref('walletTransactions');
-}
-
-function missionTxnRef(db) {
-  return db.ref('missionRewardLogsV1');
-}
-
-async function txAdjustPmc(ref, delta, extra = {}, preRead = null) {
-  let afterBalance = 0;
-
-  const result = await new Promise((resolve, reject) => {
-    ref.transaction(
-      current => {
-        const baseCurrent =
-          current && typeof current === 'object'
-            ? current
-            : (preRead && typeof preRead === 'object' ? preRead : {});
-
-        const currentPmc = readPmcBalance(baseCurrent);
-        const nextPmc = currentPmc + Math.floor(Number(delta || 0));
-
-        if (nextPmc < 0) return;
-
-        afterBalance = nextPmc;
-
-        return {
-          ...baseCurrent,
-          ...extra,
-          pmcBalance: nextPmc,
-          updatedAt: nowMs()
-        };
-      },
-      (err, committed) => {
-        if (err) return reject(err);
-        resolve({ committed, afterBalance });
-      },
-      false
-    );
-  });
-
-  return result;
-}
-
-async function claimMission(db, walletKey, missionId, now = Date.now()) {
-  const def = missionDefinitions().find(item => item.id === missionId);
-  if (!def) {
-    throw new Error('Không tìm thấy nhiệm vụ.');
-  }
-
-  const board = await buildBoard(db, walletKey, now);
-  const mission = (board.tabs[def.tab] || []).find(item => item.id === missionId);
-  if (!mission) {
-    throw new Error('Nhiệm vụ không tồn tại trong bảng hiện tại.');
-  }
-  if (mission.claimed) {
-    throw new Error('Nhiệm vụ này đã nhận rồi.');
-  }
-  if (!mission.ready) {
-    throw new Error('Chưa đủ điều kiện nhận nhiệm vụ này.');
-  }
-
-  const claimRef = missionClaimRef(db, walletKey, def, now);
-  const lock = await new Promise((resolve, reject) => {
-    claimRef.transaction(
-      current => {
-        if (current && current.status === 'done') return;
-        if (current && current.status === 'processing') return;
-        return {
-          status: 'processing',
-          missionId,
-          walletKey,
-          lockedAt: now
-        };
-      },
-      (err, committed) => {
-        if (err) return reject(err);
-        resolve({ committed });
-      },
-      false
-    );
-  });
-
-  if (!lock.committed) {
-    throw new Error('Nhiệm vụ đang được xử lý hoặc đã nhận rồi.');
-  }
-
-  const treasuryRef = db.ref(`wallets/${safeKey(ADMIN_TREASURY_WALLET_KEY)}`);
-  const userRef = db.ref(`wallets/${walletKey}`);
-
-  const [treasuryPreSnap, userPreSnap] = await Promise.all([
-    treasuryRef.once('value'),
-    userRef.once('value')
-  ]);
-
-  const treasuryPreRead =
-    treasuryPreSnap.val() && typeof treasuryPreSnap.val() === 'object'
-      ? treasuryPreSnap.val()
-      : {};
-
-  const userPreRead =
-    userPreSnap.val() && typeof userPreSnap.val() === 'object'
-      ? userPreSnap.val()
-      : {};
-
-  try {
-    const treasuryTx = await txAdjustPmc(
-      treasuryRef,
-      -mission.rewardPmc,
-      { name: 'Ví phí hệ thống' },
-      treasuryPreRead
-    );
-
-    if (!treasuryTx.committed) {
-      await claimRef.remove().catch(() => {});
-      throw new Error('Ví phí hệ thống hiện không đủ quỹ để trả thưởng.');
-    }
-
-    const userTx = await txAdjustPmc(userRef, mission.rewardPmc, {}, userPreRead);
-    if (!userTx.committed) {
-      await txAdjustPmc(
-        treasuryRef,
-        mission.rewardPmc,
-        { name: 'Ví phí hệ thống' },
-        treasuryPreRead
-      ).catch(() => {});
-      await claimRef.remove().catch(() => {});
-      throw new Error('Không cộng được thưởng vào ví người chơi.');
-    }
-
-    const txPayload = {
-      type: 'mission_reward_pmc',
-      missionId,
-      missionTitle: mission.title,
-      walletKey,
-      sourceWalletKey: safeKey(ADMIN_TREASURY_WALLET_KEY),
-      amountPMC: mission.rewardPmc,
-      periodKey: mission.periodKey,
-      createdAt: now,
-      status: 'done'
-    };
-
-   await Promise.all([
-      walletTxnRef(db).push().set(txPayload),
-      missionTxnRef(db).push().set(txPayload),
-      // BẮT BUỘC lưu với cấu trúc ID kèm Khóa chu kỳ để nó tự động reset
-      db.ref(`missionClaimsV1/${walletKey}/${def.id}__${mission.periodKey}`).set({
-        status: 'done',
-        missionId: def.id,  // Giữ ID gốc để dễ tìm
-        fullKey: `${def.id}__${mission.periodKey}`, // Khóa chu kỳ hiện tại
-        walletKey,
-        amountPmc: mission.rewardPmc,
-        periodKey: mission.periodKey,
-        claimedAt: now
-      })
-    ]);
-
-    return {
-      ok: true,
-      missionId,
-      missionTitle: mission.title,
-      amountPmc: mission.rewardPmc,
-      newPmcBalance: userTx.afterBalance,
-      periodKey: mission.periodKey
-    };
-  } catch (err) {
-    await claimRef.remove().catch(() => {});
-    throw err;
-  }
-}
-
-// ===== SHOP SKIN + TÚI ĐỒ + RƯƠNG CẤP GỘP VÀO MISSIONS-V1 =====
-// Không tạo thêm route /api/cosmetics-v1 để né giới hạn Vercel Hobby.
-const SHOP_LEVEL_MAX = 160;
-const CHEST_TREASURY_MAX_RATIO = Number(process.env.CHEST_TREASURY_MAX_RATIO || 0.05);
-
-function getShopLevelXpNeedFromLevel(level) {
-  const lv = Math.max(1, Math.min(SHOP_LEVEL_MAX - 1, Math.floor(Number(level || 1))));
-  return Math.floor(16 * Math.pow(1.035, lv - 1) + lv);
-}
-
-function buildShopLevelTable() {
-  const rows = [];
-  let xp = 0;
-  for (let lv = 1; lv <= SHOP_LEVEL_MAX; lv += 1) {
-    rows.push({ level: lv, xp });
-    if (lv < SHOP_LEVEL_MAX) xp += getShopLevelXpNeedFromLevel(lv);
-  }
-  return rows;
-}
-
-const SHOP_LEVEL_TABLE = buildShopLevelTable();
-
-function shopLevelByXp(xpValue) {
-  const xp = Math.max(0, Number(xpValue || 0) || 0);
-  let current = SHOP_LEVEL_TABLE[0];
-  for (const row of SHOP_LEVEL_TABLE) {
-    if (xp >= row.xp) current = row;
-    else break;
-  }
-  return current.level;
-}
-
-function shopSkinCatalog() {
-  return [
-    { id:'skin_bamboo_gold', type:'avatar_skin', name:'Viền Trúc Kim', icon:'🎋', pricePmc:25000, unlockLevel:10, desc:'Viền vàng xanh cho avatar, mốc đầu cho người chăm cày.' },
-    { id:'skin_dragon_purple', type:'avatar_skin', name:'Long Ảnh Tím', icon:'🐉', pricePmc:80000, unlockLevel:30, desc:'Hiệu ứng tím cao thủ, mua được nhưng cày Lv.30 cũng mở.' },
-    { id:'skin_phoenix_red', type:'avatar_skin', name:'Phượng Hỏa Đỏ', icon:'🔥', pricePmc:150000, unlockLevel:50, desc:'Viền đỏ rực cho người thích nổi bật.' },
-    { id:'skin_diamond_blue', type:'avatar_skin', name:'Kim Cương Lam', icon:'💎', pricePmc:300000, unlockLevel:80, desc:'Khung xanh kim cương, dành cho tài khoản mạnh.' },
-    { id:'skin_king_rainbow', type:'avatar_skin', name:'Vương Giả Ngũ Sắc', icon:'👑', pricePmc:800000, unlockLevel:120, desc:'Skin nhà giàu hoặc người cày lâu năm.' },
-    { id:'skin_god_neon', type:'avatar_skin', name:'Thần Quang Neon', icon:'⚡', pricePmc:1500000, unlockLevel:160, desc:'Mốc tối thượng Lv.160, mua rất đắt để đốt PMC.' }
-  ];
-}
-
-function shopLevelChestMilestones() {
-  const arr = [];
-  for (let lv = 10; lv <= SHOP_LEVEL_MAX; lv += 10) arr.push(lv);
-  return arr;
-}
-
-function shopRandomInt(min, max) {
-  return crypto.randomInt(min, max + 1);
-}
-
-function shopRollChestRewardPmc(treasuryPmc) {
-  // Rương vui, jackpot 30k cực hiếm, và bị cap theo ví phí hệ thống để không cháy quỹ.
-  const roll = shopRandomInt(1, 10000);
-  let raw = 100;
-
-  if (roll <= 7000) raw = shopRandomInt(100, 300);          // 70%
-  else if (roll <= 9000) raw = shopRandomInt(301, 1000);    // 20%
-  else if (roll <= 9800) raw = shopRandomInt(1001, 5000);   // 8%
-  else if (roll <= 9980) raw = shopRandomInt(5001, 15000);  // 1.8%
-  else raw = shopRandomInt(15001, 30000);                   // 0.2%
-
-  const safeTreasury = Math.max(0, Math.floor(Number(treasuryPmc || 0) || 0));
-  const treasuryCap = Math.max(100, Math.floor(safeTreasury * CHEST_TREASURY_MAX_RATIO));
-  return Math.max(100, Math.min(raw, treasuryCap, safeTreasury));
-}
-
-async function getShopUserLevelAndWallet(db, walletKey) {
-  const snap = await db.ref(`wallets/${walletKey}`).once('value');
-  const wallet = snap.val() && typeof snap.val() === 'object' ? snap.val() : {};
-  const meta = wallet.levelMeta && typeof wallet.levelMeta === 'object' ? wallet.levelMeta : {};
-  const xp = Math.max(0, Number(meta.xp || 0) || 0);
-
-  return {
-    wallet,
-    pmcBalance: readPmcBalance(wallet),
-    level: shopLevelByXp(xp),
-    xp
-  };
-}
-
-async function buildShopBoard(db, walletKey) {
-  const [{ wallet, pmcBalance, level }, invSnap, chestSnap] = await Promise.all([
-    getShopUserLevelAndWallet(db, walletKey),
-    db.ref(`cosmeticsInventoryV1/${walletKey}`).once('value'),
-    db.ref(`cosmeticLevelChestClaimsV1/${walletKey}`).once('value')
-  ]);
-
-  const inventory = invSnap.val() && typeof invSnap.val() === 'object' ? invSnap.val() : {};
-  const chestClaims = chestSnap.val() && typeof chestSnap.val() === 'object' ? chestSnap.val() : {};
-  const equippedAvatarSkin = String(wallet.equippedAvatarSkin || wallet.equippedSkin || 'skin_default');
-
-  const catalog = shopSkinCatalog().map(item => {
-    const owned = !!inventory[item.id];
-    const levelUnlocked = level >= Number(item.unlockLevel || 9999);
-    return {
-      ...item,
-      owned,
-      levelUnlocked,
-      usable: owned || levelUnlocked,
-      equipped: equippedAvatarSkin === item.id
-    };
-  });
-
-  const levelChests = shopLevelChestMilestones().map(lv => {
-    const claim = chestClaims[`lv_${lv}`] || null;
-    const claimed = !!(claim && claim.status === 'done');
-    const canClaim = level >= lv && !claimed;
-    return {
-      level: lv,
-      claimed,
-      canClaim,
-      rewardPmc: claim?.rewardPmc || 0,
-      claimedAt: claim?.claimedAt || null,
-      progressText: `Lv.${level}/${lv}`
-    };
-  });
-
-  return {
-    ok: true,
-    walletKey,
-    level,
-    pmcBalance,
-    equippedAvatarSkin,
-    catalog,
-    inventory,
-    levelChests,
-    generatedAt: nowMs()
-  };
-}
-
-async function shopBuyItem(db, walletKey, itemId) {
-  const item = shopSkinCatalog().find(x => x.id === itemId);
-  if (!item) throw new Error('Skin không tồn tại.');
-
-  const invRef = db.ref(`cosmeticsInventoryV1/${walletKey}/${item.id}`);
-  const lock = await new Promise((resolve, reject) => {
-    invRef.transaction(
-      current => {
-        if (current && current.owned) return;
-        return { owned: false, processing: true, lockedAt: nowMs() };
-      },
-      (err, committed) => err ? reject(err) : resolve({ committed }),
-      false
-    );
-  });
-
-  if (!lock.committed) {
-    return { ok: true, itemId: item.id, itemName: item.name, alreadyOwned: true };
-  }
-
-  const userRef = db.ref(`wallets/${walletKey}`);
-  const treasuryRef = db.ref(`wallets/${safeKey(ADMIN_TREASURY_WALLET_KEY)}`);
-  const [userPre, treasuryPre] = await Promise.all([
-    userRef.once('value'),
-    treasuryRef.once('value')
-  ]);
-
-  try {
-    const debit = await txAdjustPmc(userRef, -item.pricePmc, {}, userPre.val());
-    if (!debit.committed) {
-      await invRef.remove().catch(() => {});
-      throw new Error(`Không đủ PMC để mua ${item.name}.`);
-    }
-
-    const credit = await txAdjustPmc(
-      treasuryRef,
-      item.pricePmc,
-      { name: 'Ví phí hệ thống' },
-      treasuryPre.val()
-    );
-
-    if (!credit.committed) {
-      await txAdjustPmc(userRef, item.pricePmc, {}, userPre.val()).catch(() => {});
-      await invRef.remove().catch(() => {});
-      throw new Error('Không cộng được phí shop vào ví hệ thống, đã hoàn tiền.');
-    }
-
-    await invRef.set({
-      owned: true,
-      itemId: item.id,
-      itemName: item.name,
-      pricePmc: item.pricePmc,
-      boughtAt: nowMs()
+    
+    sfxBtns.forEach(b => {
+        if(!b) return;
+        if(window.isSfxMuted) b.classList.add('muted-audio');
+        else b.classList.remove('muted-audio');
     });
+};
 
-    await db.ref('walletTransactions').push().set({
-      type: 'cosmetic_shop_buy',
-      walletKey,
-      itemId: item.id,
-      itemName: item.name,
-      amountPMC: -item.pricePmc,
-      treasuryWalletKey: safeKey(ADMIN_TREASURY_WALLET_KEY),
-      createdAt: nowMs(),
-      status: 'done'
-    });
+// Gọi update icon khi vừa vào trang
+document.addEventListener("DOMContentLoaded", () => {
+    setTimeout(window.updateSoundIcons, 500);
+});
+// ---------------------------------
 
-    await db.ref('cosmeticShopLogsV1').push().set({
-      walletKey,
-      itemId: item.id,
-      itemName: item.name,
-      pricePmc: item.pricePmc,
-      createdAt: nowMs(),
-      status: 'done'
-    });
+function sendMessage() {
+// 1. Tìm ô nhập liệu
+var input = document.getElementById('match-input');
+if (!input) return;
 
-    return { ok: true, itemId: item.id, itemName: item.name, newPmcBalance: debit.afterBalance };
-  } catch (err) {
-    await invRef.remove().catch(() => {});
-    throw err;
-  }
+// 2. Lấy nội dung chữ
+var message = input.value.trim();
+
+// 3. Nếu có chữ mới gửi
+if (message !== "") {
+// Chỗ này mậy dán lệnh gửi lên Firebase của mậy vào
+// Ví dụ: database.ref('chats').push({ text: message });
+
+console.log("Đã gửi tin nhắn: " + message);
+
+// 4. Gửi xong thì xóa trắng ô nhập
+input.value = "";
+input.focus();
+
 }
-
-async function shopEquipItem(db, walletKey, itemId) {
-  const item = shopSkinCatalog().find(x => x.id === itemId);
-  if (!item) throw new Error('Skin không tồn tại.');
-
-  const [{ level }, invSnap] = await Promise.all([
-    getShopUserLevelAndWallet(db, walletKey),
-    db.ref(`cosmeticsInventoryV1/${walletKey}/${item.id}`).once('value')
-  ]);
-
-  const owned = !!(invSnap.val() && invSnap.val().owned);
-  const levelUnlocked = level >= item.unlockLevel;
-
-  if (!owned && !levelUnlocked) {
-    throw new Error(`Chưa sở hữu skin này. Mua bằng PMC hoặc đạt Lv.${item.unlockLevel}.`);
-  }
-
-  await Promise.all([
-    db.ref(`wallets/${walletKey}`).update({ equippedAvatarSkin: item.id, updatedAt: nowMs() }),
-    db.ref(`cosmeticsEquippedV1/${walletKey}`).set({
-      avatarSkin: item.id,
-      itemName: item.name,
-      equippedAt: nowMs()
+}
+// --- ĐIỀU HƯỚNG ---
+// --- SỬA ĐOẠN DÒNG 732 ĐẾN 745 ---
+auth.getRedirectResult()
+    .then((result) => {
+        if (result && result.user) {
+            const user = result.user;
+            localStorage.setItem("user-name-display", user.displayName || "Người chơi");
+            localStorage.setItem("user-photo", user.photoURL || "images/do_tuong.png");
+        }
     })
-  ]);
+    .catch((err) => {
+        console.error("Lỗi redirect:", err);
+        alert("Đăng nhập Google bị lỗi: " + (err.message || err.code || err));
+    });
+auth.onAuthStateChanged(async user => {
+    const piName = localStorage.getItem("pi-user-name");
+    const piPhoto = localStorage.getItem("pi-user-photo");
 
-  return { ok: true, equippedAvatarSkin: item.id, itemName: item.name };
+    if (piName) {
+        applyLoggedInUI(piName, piPhoto || "images/do_tuong.png");
+
+        await ensureFriendProfileSynced().catch(err => {
+            console.error("Lỗi sync bạn bè khi khôi phục Pi:", err);
+        });
+        await bindFriendSystem().catch(err => {
+            console.error("Lỗi bind bạn bè khi khôi phục Pi:", err);
+        });
+
+        await tryResumeRealtimeMatch();
+        return;
+    }
+
+    if (user) {
+        const displayName = user.displayName || localStorage.getItem("user-name-display") || "MC Phan Hieu";
+        const photoURL = user.photoURL || localStorage.getItem("user-photo") || "images/do_tuong.png";
+        applyLoggedInUI(displayName, photoURL);
+
+        await ensureFriendProfileSynced().catch(err => {
+            console.error("Lỗi sync bạn bè khi khôi phục Google:", err);
+        });
+        await bindFriendSystem().catch(err => {
+            console.error("Lỗi bind bạn bè khi khôi phục Google:", err);
+        });
+
+        await tryResumeRealtimeMatch();
+    } else {
+        clearActiveMatchSnapshot();
+        document.getElementById("login-screen").style.display = "flex";
+        document.getElementById("user-display").style.display = "none";
+        document.getElementById("home-menu").style.display = "none";
+        document.getElementById("game-arena").style.display = "none";
+        const topBtn = document.getElementById("arena-top-btn");
+        if (topBtn) topBtn.style.display = "none";
+        showLoginChoices();
+    }
+});
+function hideHomeUI() {
+    document.body.classList.add("in-match");
+
+    const homeMenu = document.getElementById("home-menu");
+    if (homeMenu) homeMenu.style.display = "none";
+
+    // Ẩn cụm góc trái khi vào phòng/vào game: 3 gạch + SĐT/tên + Pi + PMC
+    const userDisplay = document.getElementById("user-display");
+    if (userDisplay) userDisplay.style.display = "none";
+
+    const profileDropdown = document.getElementById("profile-dropdown");
+    if (profileDropdown) profileDropdown.classList.remove("show");
+
+    const mobileLobbyTitle = document.getElementById("mobile-lobby-title");
+    if (mobileLobbyTitle) mobileLobbyTitle.style.display = "none";
+        // Ẩn icon nhiệm vụ + shop khi vào phòng / vào game
+    const missionBtn = document.getElementById("arena-mission-btn");
+    if (missionBtn) missionBtn.style.display = "none";
+
+    const skinBtn = document.getElementById("arena-skin-btn");
+    if (skinBtn) skinBtn.style.display = "none";
+
+    const topBtn = document.getElementById("arena-top-btn");
+    if (topBtn) topBtn.style.display = "none";
+
+    const missionBadge = document.getElementById("arena-mission-badge");
+    if (missionBadge) {
+        missionBadge.classList.remove("show");
+        missionBadge.textContent = "0";
+    }
+if (mobileLobbyTitle) mobileLobbyTitle.style.display = "none";
+    const friendWrap = document.getElementById("mobile-friend-wrap");
+if (friendWrap) friendWrap.style.display = "none";
+
+const friendBox = document.getElementById("mobile-friend-box");
+if (friendBox) friendBox.classList.remove("show");
+
+    const adZone = document.getElementById("mobile-ad-zone");
+    if (adZone) adZone.style.display = "none";
+
+    const gameRow = document.getElementById("mobile-game-row");
+    if (gameRow) gameRow.style.display = "none";
+
+    const rankingModal = document.getElementById("ranking-modal");
+    if (rankingModal) rankingModal.classList.remove("show");
+
+    const topModal = document.getElementById("arena-top-modal");
+    if (topModal) topModal.classList.remove("show");
+
+    const topChallengeModal = document.getElementById("top-challenge-modal");
+    if (topChallengeModal) topChallengeModal.classList.remove("show");
+
 }
 
-async function shopOpenLevelChest(db, walletKey, level) {
-  const lv = Math.max(0, Math.floor(Number(level || 0) || 0));
-  if (!shopLevelChestMilestones().includes(lv)) throw new Error('Mốc rương không hợp lệ.');
+function showHomeUI() {
+    document.body.classList.remove("in-match");
 
-  const { level: userLevel } = await getShopUserLevelAndWallet(db, walletKey);
-  if (userLevel < lv) throw new Error(`Chưa đạt Lv.${lv}.`);
+    const homeMenu = document.getElementById("home-menu");
+    if (homeMenu) homeMenu.style.display = "block";
 
-  const claimRef = db.ref(`cosmeticLevelChestClaimsV1/${walletKey}/lv_${lv}`);
-  const lock = await new Promise((resolve, reject) => {
-    claimRef.transaction(
-      current => {
-        if (current && current.status === 'done') return;
-        if (current && current.status === 'processing') return;
-        return { status: 'processing', walletKey, level: lv, lockedAt: nowMs() };
-      },
-      (err, committed) => err ? reject(err) : resolve({ committed }),
-      false
-    );
-  });
+    // Ra sảnh thì hiện lại cụm góc trái
+    const userDisplay = document.getElementById("user-display");
+    if (userDisplay) userDisplay.style.display = "flex";
 
-  if (!lock.committed) throw new Error('Rương này đã mở hoặc đang xử lý.');
-
-  const treasuryRef = db.ref(`wallets/${safeKey(ADMIN_TREASURY_WALLET_KEY)}`);
-  const userRef = db.ref(`wallets/${walletKey}`);
-  const [treasuryPre, userPre] = await Promise.all([
-    treasuryRef.once('value'),
-    userRef.once('value')
-  ]);
-
-  const treasuryPmc = readPmcBalance(treasuryPre.val() || {});
-  if (treasuryPmc < 100) {
-    await claimRef.remove().catch(() => {});
-    throw new Error('Ví phí hệ thống chưa đủ quỹ mở rương.');
-  }
-
-  const rewardPmc = shopRollChestRewardPmc(treasuryPmc);
-
-  try {
-    const treasuryTx = await txAdjustPmc(
-      treasuryRef,
-      -rewardPmc,
-      { name: 'Ví phí hệ thống' },
-      treasuryPre.val()
-    );
-
-    if (!treasuryTx.committed) {
-      await claimRef.remove().catch(() => {});
-      throw new Error('Ví phí hệ thống không đủ quỹ trả rương.');
+    if (window.innerWidth <= 600) {
+        const friendWrap = document.getElementById("mobile-friend-wrap");
+        if (friendWrap) friendWrap.style.display = "block";
     }
 
-    const userTx = await txAdjustPmc(userRef, rewardPmc, {}, userPre.val());
+    // Ra sảnh thì hiện lại icon nhiệm vụ + shop
+    const missionBtn = document.getElementById("arena-mission-btn");
+    if (missionBtn) missionBtn.style.display = "flex";
 
-    if (!userTx.committed) {
-      await txAdjustPmc(
-        treasuryRef,
-        rewardPmc,
-        { name: 'Ví phí hệ thống' },
-        treasuryPre.val()
-      ).catch(() => {});
-      await claimRef.remove().catch(() => {});
-      throw new Error('Không cộng được quà rương vào ví người chơi.');
+    const skinBtn = document.getElementById("arena-skin-btn");
+    if (skinBtn) skinBtn.style.display = "flex";
+
+    const topBtn = document.getElementById("arena-top-btn");
+    if (topBtn) topBtn.style.display = "flex";
+
+    if (typeof refreshMissionLobbyBadgeSilently === "function") {
+        refreshMissionLobbyBadgeSilently();
     }
 
-    const payload = {
-      status: 'done',
-      walletKey,
-      level: lv,
-      rewardPmc,
-      claimedAt: nowMs(),
-      treasuryWalletKey: safeKey(ADMIN_TREASURY_WALLET_KEY)
+    const friendBox = document.getElementById("mobile-friend-box");
+    if (friendBox) friendBox.classList.remove("show");
+
+    const adZone = document.getElementById("mobile-ad-zone");
+    if (adZone) adZone.style.display = "flex";
+
+    const gameRow = document.getElementById("mobile-game-row");
+    if (gameRow) gameRow.style.display = "flex";
+}
+function selectGame(mode) {
+    isCoUp = (mode === 'co-up');
+    hideHomeUI();
+    document.getElementById("game-arena").style.display = "block";
+}
+
+// --- BỘ NÚT THOÁT CHUẨN CHỈ, CHỐNG ĐƠ MÁY ---
+
+// Hàm này chuyên dùng để dọn dẹp hậu trường và cút ra sảnh
+async function processExitToLobby() {
+    if (isSpectatorMode) {
+        cleanupRoomListeners();
+        clearActiveMatchSnapshot();
+        currentRoomId = null;
+        mySide = null;
+        viewSide = "do";
+        currentRoomMode = null;
+        currentRoomStakePMC = 0;
+        currentRoomBucket = null;
+        currentRoomStatus = null;
+        await setPlayerPresence("home").catch(() => {});
+        showHomeUI();
+        document.getElementById("game-arena").style.display = "none";
+        clearInterval(interval);
+        clearInterval(readyInterval);
+        document.body.classList.remove("spectator-mode");
+        isSpectatorMode = false;
+        return;
+    }
+
+    await leaveRealtimeMatch();
+    await setPlayerPresence("home").catch(() => {});
+    showHomeUI();
+    closeArenaFriendBox();
+    renderRoomInviteOverlay();
+    document.getElementById("game-arena").style.display = "none";
+    clearInterval(interval);
+    clearInterval(readyInterval);
+    sounds.bgm.pause();
+    sounds.heartbeat.pause();
+
+    const overlay = document.getElementById("ready-overlay");
+    if (overlay) overlay.style.display = "none";
+
+    const chatContent = document.getElementById("match-content-popup");
+    if (chatContent) {
+        chatContent.innerHTML = '<p style="color:#55efc4;">Hệ thống: Vào việc đi mậy!</p>';
+    }
+}
+
+function exitAfterMatch() {
+    backToMenu(); // Chạy thẳng vào logic an toàn ở trên
+}
+function shuffle(array) {
+let currentIndex = array.length, randomIndex;
+while (currentIndex != 0) {
+randomIndex = Math.floor(Math.random() * currentIndex);
+currentIndex--;
+[array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+}
+return array;
+}
+
+// --- LOGIC GAME ---
+const board = document.getElementById("board"), turnBox = document.getElementById("turn-box");
+const timerDoEl = document.getElementById("timer-do"), timerDenEl = document.getElementById("timer-den");
+const columns = [7.6, 18.2, 28.8, 39.4, 50, 60.6, 71.2, 81.8, 92.4];
+const rows = [7.5, 17, 26, 35.1, 44.3, 53.8, 63, 72.7, 81.9, 91.4];
+
+let selectedPiece = null, luotDi = 'do', isGameOver = false, timeDo = 30, timeDen = 30, interval = null;
+let isCoUp = false;
+let lastMoveFrom = null;
+let lastMoveTo = null;
+let viewSide = 'do'; // 'do' = góc nhìn đỏ, 'den' = góc nhìn đen
+
+let pendingGameMode = 'co-tuong';
+let readyDo = false; 
+let readyDen = false;
+let readyTime = 30;
+let readyInterval = null;
+let readyOverlayWaitingShown = false;
+let readyOverlayRoomKey = "";
+let readyOverlayOpeningLock = false;
+let readyDeadlineAt = 0; // mốc hết giờ SS chung lấy từ Firebase
+let currentRoomStatus = null;
+let isSpectatorMode = false;
+let currentViewerRef = null;
+let currentViewerCountRef = null;
+let currentViewerWalletKey = "";
+let presenceHeartbeatTimer = null;
+
+
+function updateViewerCountBadge(count = 0) {
+    const badge = document.getElementById("viewer-count-badge");
+    const num = document.getElementById("viewer-count-number");
+    const safeCount = Math.max(0, Math.floor(Number(count || 0) || 0));
+    if (num) num.innerText = String(safeCount);
+    if (badge) badge.classList.toggle("show", safeCount > 0 || isSpectatorMode);
+}
+
+async function startSpectatorPresence(roomId) {
+    const meFriend = getCurrentFriendProfile();
+    const meGame = getCurrentPlayerProfile();
+    const walletKey = String(meFriend.walletKey || meGame.walletKey || meGame.uid || "").trim();
+    if (!roomId || !walletKey) return;
+
+    currentViewerWalletKey = walletKey;
+    currentViewerRef = db.ref("matches/" + roomId + "/viewers/" + walletKey);
+    currentViewerCountRef = db.ref("matches/" + roomId + "/viewers");
+
+    const viewerPayload = {
+        uid: meGame.uid || meFriend.uid || "",
+        walletKey,
+        name: meFriend.displayName || meFriend.username || meGame.name || "Khán giả",
+        photo: meFriend.photo || meGame.photo || "images/do_tuong.png",
+        at: firebase.database.ServerValue.TIMESTAMP
     };
 
-    await Promise.all([
-      claimRef.set(payload),
-      db.ref('walletTransactions').push().set({
-        type: 'level_chest_reward_pmc',
-        walletKey,
-        amountPMC: rewardPmc,
-        level: lv,
-        sourceWalletKey: safeKey(ADMIN_TREASURY_WALLET_KEY),
-        createdAt: nowMs(),
-        status: 'done'
-      }),
-      db.ref('levelChestRewardLogsV1').push().set(payload)
-    ]);
+    await currentViewerRef.set(viewerPayload).catch(() => {});
+    currentViewerRef.onDisconnect().remove();
 
-    return { ok: true, level: lv, rewardPmc, newPmcBalance: userTx.afterBalance };
-  } catch (err) {
-    await claimRef.remove().catch(() => {});
-    throw err;
-  }
+    currentViewerCountRef.on("value", snap => {
+        updateViewerCountBadge(snap.numChildren ? snap.numChildren() : 0);
+    });
 }
 
-module.exports = async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ ok: false, error: 'Method not allowed' });
-  }
+function renderSpectatorRoomSnapshot(room = {}, roomId = "") {
+    currentRoomMode = room.mode || currentRoomMode || "co-tuong";
+    currentRoomStatus = room.status || null;
+    mySide = null;
+    viewSide = "do";
+    isGameOver = !!room.winner;
 
-  try {
-    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-    const action = String(body.action || 'board').trim().toLowerCase();
-    const rawWalletKey = String(req.headers['x-wallet-key'] || body.walletKey || '').trim();
-    const walletKey = safeKey(rawWalletKey);
+    if (typeof applyBoardPerspective === "function") applyBoardPerspective();
+    renderPlayersFromRoom(room);
+    closeReadyOverlay();
 
-    if (!walletKey) {
-      return res.status(400).json({ ok: false, error: 'Thiếu walletKey.' });
+    const turnText = room.turn === "den" ? "ĐEN" : "ĐỎ";
+    if (turnBox) turnBox.innerText = room.winner ? "Bàn đã kết thúc" : ("Lượt: " + turnText + " • Đang xem");
+
+    const chatContent = document.getElementById("match-content-popup");
+    if (chatContent && !chatContent.dataset.spectatorNoteAdded) {
+        chatContent.dataset.spectatorNoteAdded = "1";
+        chatContent.innerHTML = '<p class="spectator-room-note">👁️ Mầy đang xem bàn này. Có thể chat, nhưng không thể đi cờ.</p>';
     }
 
-    const adminApp = adminBundle.app || adminBundle;
-    const db = getDatabase(adminApp);
+    const canRenderLiveBoard =
+        room.status === "playing" &&
+        !!room.players?.do &&
+        !!room.players?.den &&
+        Array.isArray(room.board) &&
+        room.board.length > 0;
 
-    if (action === 'shop_board') {
-      const shopBoard = await buildShopBoard(db, walletKey);
-      return res.status(200).json(shopBoard);
+    if (!canRenderLiveBoard) {
+        clearRealtimeBoardVisualOnly();
+        renderTimerUI();
+        return;
     }
 
-    if (action === 'shop_buy') {
-      const itemId = String(body.itemId || '').trim();
-      const bought = await shopBuyItem(db, walletKey, itemId);
-      return res.status(200).json(bought);
+    const newBoardHash = JSON.stringify(room.board || []);
+    if (newBoardHash !== lastRoomBoardHash) {
+        lastRoomBoardHash = newBoardHash;
+        applyBoardStateFromRoom(room.board || []);
+        isCoUp = !!room.isCoUp;
+        luotDi = room.turn || "do";
+        timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
+        timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
+        lastMoveFrom = room.lastMoveFrom || null;
+        lastMoveTo = room.lastMoveTo || null;
+        updateTurnUIOnly();
+        if (lastMoveFrom && lastMoveTo) drawLastMoveMarks();
     }
 
-    if (action === 'shop_equip') {
-      const itemId = String(body.itemId || '').trim();
-      const equipped = await shopEquipItem(db, walletKey, itemId);
-      return res.status(200).json(equipped);
+    renderTimerUI();
+}
+
+function formatTime(s) {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return String(m).padStart(2, '0') + ":" + String(sec).padStart(2, '0');
+}
+
+function startTimer() {
+    clearInterval(interval);
+    renderTimerUI();
+
+    if (!currentRoomId || currentRoomStatus !== "playing" || isGameOver) {
+        return;
     }
 
-    if (action === 'shop_open_chest') {
-      const opened = await shopOpenLevelChest(db, walletKey, body.level);
-      return res.status(200).json(opened);
+    interval = setInterval(() => {
+        if (isGameOver || !currentRoomId || currentRoomStatus !== "playing") {
+            clearInterval(interval);
+            return;
+        }
+
+        if (luotDi === 'do') {
+            timeDo--;
+            if (timeDo === 30) playSnd('timeout');
+            renderTimerUI();
+            if (timeDo <= 0) {
+                if (currentRoomId) {
+                    db.ref("matches/" + currentRoomId).update({
+                        winner: "den",
+                        winReason: "timeout",
+                        finishedAt: firebase.database.ServerValue.TIMESTAMP,
+                        updatedAt: firebase.database.ServerValue.TIMESTAMP
+                    });
+                } else {
+                    endGame("HẾT GIỜ", "ĐEN THẮNG");
+                }
+            }
+        } else {
+            timeDen--;
+            if (timeDen === 30) playSnd('timeout');
+            renderTimerUI();
+            if (timeDen <= 0) {
+                if (currentRoomId) {
+                    db.ref("matches/" + currentRoomId).update({
+                        winner: "do",
+                        winReason: "timeout",
+                        finishedAt: firebase.database.ServerValue.TIMESTAMP,
+                        updatedAt: firebase.database.ServerValue.TIMESTAMP
+                    });
+                } else {
+                    endGame("HẾT GIỜ", "ĐỎ THẮNG");
+                }
+            }
+        }
+    }, 1000);
+}
+const FULL_TURN_SECONDS = 9 * 60;
+function renderTimerUI() {
+    const isBlackView = mySide === "den";
+
+    // timerDenEl = ô timer phía TRÊN
+    // timerDoEl  = ô timer phía DƯỚI
+    const topSeconds = isBlackView ? timeDo : timeDen;
+    const bottomSeconds = isBlackView ? timeDen : timeDo;
+
+    timerDenEl.innerText = formatTime(topSeconds);
+    timerDoEl.innerText = formatTime(bottomSeconds);
+
+    timerDoEl.className = "timer-box timer-inline";
+    timerDenEl.className = "timer-box timer-inline";
+
+    const activeEl =
+        luotDi === "do"
+            ? (isBlackView ? timerDenEl : timerDoEl)
+            : (isBlackView ? timerDoEl : timerDenEl);
+
+    activeEl.classList.add(luotDi === "do" ? "active-do" : "active-den");
+
+    if (typeof refreshTimerRings === "function") {
+        refreshTimerRings();
+    }
+}
+function updateSingleTimerRing(timerEl, secondsLeft) {
+    if (!timerEl) return;
+
+    const safeSeconds = Math.max(0, Number(secondsLeft) || 0);
+    const pct = Math.max(0, Math.min(1, safeSeconds / FULL_TURN_SECONDS));
+
+    timerEl.style.setProperty("--timer-pct", `${pct}turn`);
+    timerEl.classList.toggle("danger-time", safeSeconds > 0 && safeSeconds <= 30);
+}
+
+function refreshTimerRings() {
+    const isBlackView = mySide === "den";
+
+    // timerDenEl = ô timer phía TRÊN
+    // timerDoEl  = ô timer phía DƯỚI
+    const topSeconds = isBlackView ? timeDo : timeDen;
+    const bottomSeconds = isBlackView ? timeDen : timeDo;
+
+    updateSingleTimerRing(timerDenEl, topSeconds);
+    updateSingleTimerRing(timerDoEl, bottomSeconds);
+}
+
+
+function endGame(main, sub) {
+    isGameOver = true;
+    clearInterval(interval);
+    clearInterval(readyInterval);
+
+    // --- BẢN FIX MỚI: SỬA LỖI HÒA BỊ TRỪ ĐIỂM ---
+    if (!isSpectatorMode) {
+        if (sub.includes("HÒA") || sub.includes("KHÔNG PHÂN")) {
+            // Hòa thì không trừ cũng không cộng (hoặc mầy muốn cộng thì thêm lệnh vào đây)
+        } else if (sub.includes("THẮNG")) {
+            let winnerSide = sub.includes("ĐỎ") ? "do" : "den";
+            if (mySide === winnerSide) {
+                window.pendingSessionEXP = (window.pendingSessionEXP || 0) + window.getExpByResult('win'); 
+            } else {
+                window.pendingSessionEXP = (window.pendingSessionEXP || 0) + window.getExpByResult('loss'); 
+            }
+        }
+    }
+    // ------------------------------------------
+
+    if (sounds.bgm) sounds.bgm.pause();
+    if (sounds.heartbeat) sounds.heartbeat.pause();
+
+    const wrap = document.getElementById("victory-wrap");
+    const banner = wrap ? wrap.querySelector(".victory-banner") : null;
+    const mainEl = document.getElementById("main-result");
+    const subEl = document.getElementById("sub-result");
+
+    if (mainEl) mainEl.innerText = main;
+    if (subEl) subEl.innerText = sub;
+
+    let winnerSide = null;
+    if (sub.includes("ĐỎ THẮNG")) winnerSide = "do";
+    else if (sub.includes("ĐEN THẮNG")) winnerSide = "den";
+
+    const myLocalSide = mySide || viewSide || null;
+    const isDraw = !winnerSide;
+
+    if (banner) {
+        banner.classList.remove("win-local", "lose-local", "draw-local");
+
+        if (isDraw) {
+            banner.classList.add("draw-local");
+        } else if (myLocalSide && myLocalSide === winnerSide) {
+            banner.classList.add("win-local");
+        } else {
+            banner.classList.add("lose-local");
+        }
     }
 
-    if (action === 'claim') {
-      const missionId = String(body.missionId || '').trim();
-      if (!missionId) {
-        return res.status(400).json({ ok: false, error: 'Thiếu missionId.' });
+    if (!isDraw) {
+        if (myLocalSide && myLocalSide === winnerSide) playSnd('win');
+        else playSnd('lose');
+    }
+
+    if (wrap) {
+        wrap.style.transform = "translate(-50%, -50%) scale(1)";
+        wrap.style.pointerEvents = "auto";
+    }
+}
+function hideVictoryPopup() {
+    const wrap = document.getElementById("victory-wrap");
+    if (!wrap) return;
+
+    const banner = wrap.querySelector(".victory-banner");
+    if (banner) {
+        banner.classList.remove("win-local", "lose-local", "draw-local");
+    }
+
+    wrap.style.transform = "translate(-50%, -50%) scale(0)";
+    wrap.style.pointerEvents = "none";
+}
+// --- BỘ ĐẾM NGƯỢC 5 GIÂY THÔNG MINH (XỬ LÝ NGẦM CHỐNG LAG LÊN ĐẾN TẬN CÙNG) ---
+let exitCountdownTimer = null;
+let pendingExitAction = null; 
+
+// HÀM 1: Chạy ngầm tống hết dữ liệu lên Server TRONG LÚC đang đếm ngược
+async function preloadNextMatchData() {
+    const roomId = currentRoomId;
+    if (!roomId) return;
+    
+    try {
+        // 1. Dành ra tối đa 3 giây để ép hệ thống chờ Firebase trả thưởng PMC xong xuôi
+        for (let i = 0; i < 15; i++) {
+            const snap = await db.ref("matches/" + roomId).once("value");
+            const room = snap.val() || {};
+            
+            const stake = Math.max(0, Math.floor(Number(room.stakePMC || 0)));
+            if (!room.winner || room.winner === "hoa" || stake === 0) break;
+            if (room.settlement && room.settlement.paid === true) break;
+            
+            await new Promise(r => setTimeout(r, 200)); // Nhấp nháy check liên tục
+        }
+
+        // 2. Tiền đã vào túi -> Đẩy lệnh dọn sạch bàn trên Firebase (không để UI phải đợi)
+        const snap2 = await db.ref("matches/" + roomId).once("value");
+        const room2 = snap2.val() || {};
+
+        if (room2.winner || room2.status === "finished") {
+            await db.ref("matches/" + roomId).update({
+                status: "waiting",
+                turn: "do",
+                board: null,
+                winner: null,
+                winReason: null,
+                drawRequest: null,
+                settlement: null,
+                refunds: null,
+                readyDeadlineAt: null,
+                lastMoveFrom: null,
+                lastMoveTo: null,
+                "ready/do": false,
+                "ready/den": false,
+                "stakeLocked/do": false,
+                "stakeLocked/den": false,
+                updatedAt: firebase.database.ServerValue.TIMESTAMP
+            });
+        }
+
+        // 3. Tải lại ví ngầm để chuẩn bị cho trận sau
+        await loadWalletBalance().catch(()=>{});
+    } catch (err) {
+        console.error("Lỗi đồng bộ ngầm Firebase:", err);
+    }
+}
+
+// HÀM 2: Dọn dẹp ngầm nếu bấm Thoát Trận
+async function preloadExitData() {
+    if (isSpectatorMode) return;
+    await leaveRealtimeMatch().catch(()=>{});
+    await setPlayerPresence("home").catch(()=>{});
+}
+
+// HÀM HIỂN THỊ: Giao diện đếm 5s
+function showExitCountdown(action) {
+    hideVictoryPopup();
+    const overlay = document.getElementById("ready-overlay");
+    if (overlay) overlay.style.display = "none";
+    
+    pendingExitAction = action;
+    const modal = document.getElementById('exit-countdown-modal');
+    const numEl = document.getElementById('exit-countdown-number');
+    const btnEl = document.getElementById('exit-countdown-btn');
+    const titleEl = document.getElementById('exit-countdown-title');
+    
+    if(!modal) return;
+    
+    // 🔥 GỌI XỬ LÝ NGẦM LẬP TỨC (UI đếm cứ đếm, Server xử lý cứ xử lý)
+    if (action === 'tieptuc') {
+        titleEl.innerText = "ĐANG DỌN BÀN...";
+        preloadNextMatchData(); // <--- Lệnh chạy ngầm thần thánh
+    } else {
+        titleEl.innerText = "ĐANG LƯU KẾT QUẢ...";
+        preloadExitData();      // <--- Lệnh chạy ngầm thần thánh
+    }
+
+    modal.style.display = 'flex';
+    btnEl.disabled = true;
+    btnEl.style.background = '#636e72';
+    btnEl.style.color = '#dfe6e9';
+    btnEl.style.cursor = 'not-allowed';
+    btnEl.innerText = "ĐANG ĐỒNG BỘ...";
+    
+    let timeLeft = 5; 
+    numEl.innerText = timeLeft;
+    numEl.style.color = "#ff7675";
+    
+    clearInterval(exitCountdownTimer);
+    exitCountdownTimer = setInterval(() => {
+        timeLeft--;
+        numEl.innerText = timeLeft;
+        
+        if (timeLeft <= 0) {
+            clearInterval(exitCountdownTimer);
+            numEl.innerText = "OK";
+            numEl.style.color = "#55efc4";
+            
+            btnEl.disabled = false;
+            btnEl.style.background = 'linear-gradient(180deg, #00c38a, #008f67)';
+            btnEl.style.color = '#fff';
+            btnEl.style.cursor = 'pointer';
+            
+            if(action === 'tieptuc') {
+                btnEl.innerText = "BẤM VÀO ĐÂY ĐỂ CHƠI TIẾP";
+            } else {
+                btnEl.innerText = "BẤM VÀO ĐÂY ĐỂ RA SẢNH";
+            }
+            
+            btnEl.onclick = function() {
+                modal.style.display = 'none';
+                if (pendingExitAction === 'thoat') {
+                    executeBackToMenu();
+                } else if (pendingExitAction === 'tieptuc') {
+                    executePlayNextMatch();
+                }
+            };
+        }
+    }, 1000);
+}
+
+// ----------------------------------------------------
+// NÚT BẤM TIẾP TỤC SAU KHI XONG VÁN
+function playNextMatch() {
+    showExitCountdown('tieptuc'); 
+}
+
+// Xử lý Giao diện tức thì (chạy sau khi đếm xong, lúc này Firebase đã sạch bách)
+function executePlayNextMatch() {
+    clearInterval(interval);
+    clearInterval(readyInterval);
+    readyOverlayWaitingShown = false;
+    readyOverlayRoomKey = "";
+    readyOverlayOpeningLock = false;
+    readyTime = 30;
+    readyDeadlineAt = 0;
+
+    if (sounds.bgm) sounds.bgm.pause();
+    if (sounds.heartbeat) sounds.heartbeat.pause();
+
+    clearRealtimeBoardVisualOnly(); // Xóa rác bàn cờ UI
+
+    readyDo = false;
+    readyDen = false;
+    isGameOver = false;
+    selectedPiece = null;
+
+    showReadyOverlay(currentRoomMode || "co-tuong", true);
+}
+
+// ----------------------------------------------------
+// NÚT BẤM THOÁT TRẬN 
+function backToMenu() {
+    if (isSpectatorMode) {
+        executeBackToMenu();
+        return;
+    }
+
+    if (!isGameOver && currentRoomStatus === 'playing') {
+        if (!confirm("Thoát ván đấu này? Mày sẽ bị xử thua đó!")) return;
+        
+        // --- BẢN FIX MỚI: BỎ CHẠY TRỪ EXP NGAY LẬP TỨC TRƯỚC KHI DỌN BÀN ---
+        window.pendingSessionEXP = (window.pendingSessionEXP || 0) + window.getExpByResult('loss');
+    }
+
+    showExitCountdown('thoat'); 
+}
+
+// Xử lý Giao diện tức thì khi ra sảnh
+function executeBackToMenu() {
+    document.getElementById("game-arena").style.display = "none";
+    showHomeUI();
+    closeArenaFriendBox();
+    renderRoomInviteOverlay();
+
+    // Hiện bảng báo cáo EXP
+    if (window.pendingSessionEXP && window.pendingSessionEXP !== 0) {
+        if (typeof window.applyPendingExpToDatabase === 'function') {
+            window.applyPendingExpToDatabase();
+        }
+    }
+
+    if (isSpectatorMode) {
+        cleanupRoomListeners();
+        clearActiveMatchSnapshot();
+        currentRoomId = null;
+        mySide = null;
+        viewSide = "do";
+        currentRoomMode = null;
+        currentRoomStakePMC = 0;
+        currentRoomBucket = null;
+        currentRoomStatus = null;
+        setPlayerPresence("home").catch(() => {});
+        document.body.classList.remove("spectator-mode");
+        isSpectatorMode = false;
+    } else {
+        // Dữ liệu đã dọn ngầm trong 5s rồi, giờ chỉ cần clear local thôi
+        cleanupRoomListeners();
+        clearActiveMatchSnapshot();
+        currentRoomId = null;
+        mySide = null;
+        currentRoomMode = null;
+        currentRoomStakePMC = 0;
+        currentRoomBucket = null;
+    }
+
+    clearInterval(interval);
+    clearInterval(readyInterval);
+    sounds.bgm.pause();
+    sounds.heartbeat.pause();
+
+    const chatContent = document.getElementById("match-content-popup");
+    if (chatContent) {
+        chatContent.innerHTML = '<p style="color:#55efc4;">Hệ thống: Vào việc đi mậy!</p>';
+    }
+}
+function exitAfterMatch() {
+    hideVictoryPopup();
+    backToMenu();
+}
+function getViewSide() {
+    return mySide === "den" ? "den" : "do";
+}
+
+function mapBoardToView(c, r) {
+    if (getViewSide() === "den") {
+        return { c: 8 - c, r: 9 - r };
+    }
+    return { c, r };
+}
+
+function mapViewToBoard(c, r) {
+    if (getViewSide() === "den") {
+        return { c: 8 - c, r: 9 - r };
+    }
+    return { c, r };
+}
+function makeKingSvg(label, fillColor, textColor) {
+    const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="46" fill="${fillColor}" stroke="#8b5a2b" stroke-width="4"/>
+        <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(0,0,0,0.18)" stroke-width="2"/>
+        <text x="50" y="61" text-anchor="middle"
+              font-size="42" font-weight="700"
+              font-family="serif"
+              fill="${textColor}">${label}</text>
+    </svg>`;
+    return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+}
+
+function isKingPiece(type) {
+    return type === "帥" || type === "將";
+}
+function createPiece(cIdx, rIdx, type, up) {
+    const img = document.createElement("img");
+    img.className = "piece";
+
+    const side = ["帥", "俥", "傌", "相", "仕", "炮", "兵"].includes(type) ? "do" : "den";
+    img.dataset.side = side;
+    img.dataset.type = type;
+    img.dataset.isUp = up ? "true" : "false";
+
+    const names = {
+        '車': 'xe',
+        '馬': 'ma',
+        '象': 'tuong',
+        '士': 'si',
+        '將': 'tuong_soai',
+        '砲': 'phao',
+        '卒': 'tot',
+
+        '俥': 'xe',
+        '傌': 'ma',
+        '相': 'tuong',
+        '仕': 'si',
+        '帥': 'tuong_soai',
+        '炮': 'phao',
+        '兵': 'tot'
+    };
+
+   if (up) {
+    img.src = "images/up_mat_trang.png";
+} else {
+    img.src = `images/${side}_${names[type]}.png`;
+}
+
+    img.onerror = function () {
+    this.onerror = null;
+    this.src = side === "do" ? "images/do_tuong.png" : "images/den_tuong.png";
+};
+
+    img.style.left = columns[cIdx] + "%";
+    img.style.top = rows[rIdx] + "%";
+
+    // ép nổi lên trên cho riêng 2 con Tướng
+    if (isKingPiece(type)) {
+        img.style.zIndex = "30";
+        img.style.opacity = "1";
+        img.style.visibility = "visible";
+        img.style.display = "block";
+    }
+
+    board.appendChild(img);
+}
+function taoMaTran() {
+    let mt = Array(10).fill(null).map(() => Array(9).fill(null));
+
+    document.querySelectorAll(".piece").forEach(p => {
+        const viewC = columns.indexOf(parseFloat(p.style.left));
+        const viewR = rows.indexOf(parseFloat(p.style.top));
+
+        if (viewC === -1 || viewR === -1) return;
+
+        const realPos = mapViewToBoard(viewC, viewR);
+
+        mt[realPos.r][realPos.c] = {
+            side: p.dataset.side,
+            type: p.dataset.type
+        };
+    });
+
+    return mt;
+}
+function getPieceAtBoardPos(c, r) {
+    const viewPos = mapBoardToView(c, r);
+
+    return Array.from(document.querySelectorAll(".piece")).find(p => {
+        const pc = columns.indexOf(parseFloat(p.style.left));
+        const pr = rows.indexOf(parseFloat(p.style.top));
+
+        return pc === viewPos.c && pr === viewPos.r;
+    }) || null;
+}
+function countV(x1, y1, x2, y2, mt) {
+let count = 0;
+if (x1 === x2) { for (let y = Math.min(y1, y2) + 1; y < Math.max(y1, y2); y++) if (mt[y][x1]) count++; }
+else { for (let x = Math.min(x1, x2) + 1; x < Math.max(x1, x2); x++) if (mt[y1][x]) count++; }
+return count;
+}
+function clearMoveHints() {
+    document.querySelectorAll(".move-hint, .move-hint-capture").forEach(el => el.remove());
+}
+
+function clearLastMoveMarks() {
+    document.querySelectorAll(".last-move-from, .last-move-to").forEach(el => el.remove());
+}
+
+function drawLastMoveMarks() {
+    clearLastMoveMarks();
+
+    if (lastMoveFrom) {
+        const fromView = mapBoardToView(lastMoveFrom.c, lastMoveFrom.r);
+
+        const fromMark = document.createElement("div");
+        fromMark.className = "last-move-from";
+        fromMark.style.left = columns[fromView.c] + "%";
+        fromMark.style.top = rows[fromView.r] + "%";
+        board.appendChild(fromMark);
+    }
+
+    if (lastMoveTo) {
+        const toView = mapBoardToView(lastMoveTo.c, lastMoveTo.r);
+
+        const toMark = document.createElement("div");
+        toMark.className = "last-move-to";
+        toMark.style.left = columns[toView.c] + "%";
+        toMark.style.top = rows[toView.r] + "%";
+        board.appendChild(toMark);
+    }
+}
+
+function isMoveSafe(pieceType, pieceSide, c1, r1, c2, r2, mt) {
+    const tempTarget = mt[r2][c2];
+    mt[r2][c2] = { side: pieceSide, type: pieceType };
+    mt[r1][c1] = null;
+
+    const safe = !laBiChieu(pieceSide, mt);
+
+    mt[r1][c1] = { side: pieceSide, type: pieceType };
+    mt[r2][c2] = tempTarget;
+
+    return safe;
+}
+
+function showMoveHints(pieceEl) {
+    clearMoveHints();
+    if (!pieceEl) return;
+
+    const fromViewC = columns.indexOf(parseFloat(pieceEl.style.left));
+    const fromViewR = rows.indexOf(parseFloat(pieceEl.style.top));
+    if (fromViewC === -1 || fromViewR === -1) return;
+
+    const fromReal = mapViewToBoard(fromViewC, fromViewR);
+    const c1 = fromReal.c;
+    const r1 = fromReal.r;
+
+    const mt = taoMaTran();
+
+    for (let tr = 0; tr < 10; tr++) {
+        for (let tc = 0; tc < 9; tc++) {
+            if (!checkLuat(pieceEl.dataset.type, pieceEl.dataset.side, c1, r1, tc, tr, mt)) continue;
+           // if (!isMoveSafe(pieceEl.dataset.type, pieceEl.dataset.side, c1, r1, tc, tr, mt)) continue;
+
+            const viewPos = mapBoardToView(tc, tr);
+
+            const dot = document.createElement("div");
+            dot.className = mt[tr][tc] ? "move-hint-capture" : "move-hint";
+            dot.style.left = columns[viewPos.c] + "%";
+            dot.style.top = rows[viewPos.r] + "%";
+            board.appendChild(dot);
+        }
+    }
+}
+function checkLuat(type, side, c, r, tc, tr, mt) {
+if (tc < 0 || tc > 8 || tr < 0 || tr > 9) return false;
+const dx = Math.abs(tc - c), dy = Math.abs(tr - r);
+if (mt[tr][tc] && mt[tr][tc].side === side) return false;
+
+let luatType = type;
+// XÁC ĐỊNH LUẬT CỜ ÚP DỰA TRÊN VỊ TRÍ XUẤT PHÁT
+const pieceAtPos = getPieceAtBoardPos(c, r);
+if (isCoUp && pieceAtPos && pieceAtPos.dataset.isUp === "true") {
+if (r === 0 || r === 9) {
+if (c === 0 || c === 8) luatType = (side === 'do' ? '俥' : '車');
+else if (c === 1 || c === 7) luatType = (side === 'do' ? '傌' : '馬');
+else if (c === 2 || c === 6) luatType = (side === 'do' ? '相' : '象');
+else if (c === 3 || c === 5) luatType = (side === 'do' ? '仕' : '士');
+} else if ((r === 2 && side === 'den') || (r === 7 && side === 'do')) {
+if (c === 1 || c === 7) luatType = (side === 'do' ? '炮' : '砲');
+} else if ((r === 3 && side === 'den') || (r === 6 && side === 'do')) {
+if (c % 2 === 0) luatType = (side === 'do' ? '兵' : '卒');
+}
+}
+
+switch (luatType) {
+case '帥': case '將': return dx + dy === 1 && tc >= 3 && tc <= 5 && (side === 'do' ? tr >= 7 : tr <= 2);
+case '仕': case '士':
+    return dx === 1
+        && dy === 1
+        && tc >= 3 && tc <= 5
+        && (side === 'do' ? tr >= 7 : tr <= 2);
+case '相': case '象':
+if (!isCoUp && (side === 'do' ? tr < 5 : tr > 4)) return false;
+if (dx !== 2 || dy !== 2) return false;
+return !mt[(r + tr) / 2][(c + tc) / 2]; // Tượng đi tự do nếu là cờ úp
+case '傌': case '馬':
+if (!((dx === 1 && dy === 2) || (dx === 2 && dy === 1))) return false;
+return !mt[r + (dy === 2 ? (tr > r ? 1 : -1) : 0)][c + (dx === 2 ? (tc > c ? 1 : -1) : 0)];
+case '俥': case '車':
+if (dx !== 0 && dy !== 0) return false;
+return countV(c, r, tc, tr, mt) === 0;
+case '炮': case '砲':
+const v = countV(c, r, tc, tr, mt);
+return (mt[tr][tc] ? v === 1 : v === 0) && (dx === 0 || dy === 0);
+
+case '兵': case '卒': {
+    const daQuaSong = (side === 'do') ? (r <= 4) : (r >= 5);
+
+    const diTien = (side === 'do')
+        ? (dx === 0 && dy === 1 && tr < r)
+        : (dx === 0 && dy === 1 && tr > r);
+
+    const diNgang = (dx === 1 && dy === 0);
+
+    // Chưa qua sông: chỉ được đi tới
+    if (!daQuaSong) return diTien;
+
+    // Qua sông rồi: được đi tới hoặc đi ngang, không được lùi
+    return diTien || diNgang;
+}
+}
+
+return false;
+}
+
+function laBiChieu(side, mt) {
+let tPos = null;
+for (let r = 0; r < 10; r++) {
+for (let c = 0; c < 9; c++) {
+if (mt[r][c] && mt[r][c].side === side && (mt[r][c].type === '帥' || mt[r][c].type === '將')) {
+tPos = { c, r }; break;
+}
+}
+if (tPos) break;
+}
+if (!tPos) return false;
+for (let r = 0; r < 10; r++) {
+for (let c = 0; c < 9; c++) {
+if (mt[r][c] && mt[r][c].side !== side) {
+if (checkLuat(mt[r][c].type, mt[r][c].side, c, r, tPos.c, tPos.r, mt)) return true;
+}
+}
+}
+return false;
+}
+
+function checkMate(side) {
+let mt = taoMaTran();
+for (let r1 = 0; r1 < 10; r1++) for (let c1 = 0; c1 < 9; c1++) {
+if (mt[r1][c1] && mt[r1][c1].side === side) {
+for (let r2 = 0; r2 < 10; r2++) for (let c2 = 0; c2 < 9; c2++) {
+if (checkLuat(mt[r1][c1].type, side, c1, r1, c2, r2, mt)) {
+let temp = mt[r2][c2]; mt[r2][c2] = mt[r1][c1]; mt[r1][c1] = null;
+let safe = !laBiChieu(side, mt);
+mt[r1][c1] = mt[r2][c2]; mt[r2][c2] = temp;
+if (safe) return false;
+}
+}
+}
+}
+return true;
+}
+
+board.onclick = (e) => {
+    console.log("CLICK", { mySide, luotDi, currentRoomId });
+    const overlay = document.getElementById("ready-overlay");
+    
+    if (overlay && getComputedStyle(overlay).display !== "none") return;
+
+    if (isSpectatorMode) return;
+    if (isGameOver) return;
+    if (currentRoomId && mySide && luotDi !== mySide) return;
+    if (sounds.bgm.paused) playSnd('bgm');
+
+    const rect = board.getBoundingClientRect();
+    const clickX = ((e.clientX - rect.left) / rect.width) * 100;
+    const clickY = ((e.clientY - rect.top) / rect.height) * 100;
+
+    const fX = columns.reduce((p, c) =>
+        Math.abs(c - clickX) < Math.abs(p - clickX) ? c : p
+    );
+    const fY = rows.reduce((p, c) =>
+        Math.abs(c - clickY) < Math.abs(p - clickY) ? c : p
+    );
+
+    const viewC = columns.indexOf(fX);
+    const viewR = rows.indexOf(fY);
+    const toReal = mapViewToBoard(viewC, viewR);
+    const c2 = toReal.c;
+    const r2 = toReal.r;
+
+    const target = Array.from(document.querySelectorAll(".piece")).find(p =>
+    
+        p.style.left === fX + "%" && p.style.top === fY + "%"
+    );
+const isOwnTurnPiece = target && mySide && luotDi === mySide && target.dataset.side === mySide;
+if (isOwnTurnPiece) {
+    try {
+        sounds.click.pause();
+        sounds.click.currentTime = 0;
+        sounds.click.play().catch(() => {});
+    } catch (e) {}
+}
+    if (!selectedPiece) {
+    if (target && target.dataset.side === luotDi) {
+        selectedPiece = target;
+        selectedPiece.classList.add("selected");
+        showMoveHints(selectedPiece);
+        playSnd('click');
+    }
+    return;
+}
+
+    const fromViewC = columns.indexOf(parseFloat(selectedPiece.style.left));
+    const fromViewR = rows.indexOf(parseFloat(selectedPiece.style.top));
+    const fromReal = mapViewToBoard(fromViewC, fromViewR);
+    const c1 = fromReal.c;
+    const r1 = fromReal.r;
+
+    if (target && target.dataset.side === luotDi) {
+    selectedPiece.classList.remove("selected");
+    selectedPiece = target;
+    selectedPiece.classList.add("selected");
+    showMoveHints(selectedPiece);
+    playSnd('click');
+    return;
+}
+
+    if (!checkLuat(selectedPiece.dataset.type, selectedPiece.dataset.side, c1, r1, c2, r2, taoMaTran())) {
+        selectedPiece.classList.remove("selected");
+        selectedPiece = null;
+        clearMoveHints();
+        return;
+    }
+
+    let mt = taoMaTran();
+    mt[r2][c2] = { side: selectedPiece.dataset.side, type: selectedPiece.dataset.type };
+    mt[r1][c1] = null;
+
+    if (laBiChieu(luotDi, mt)) {
+    alert("Không được để Tướng bị chiếu!");
+    return;
+}
+
+    if (target) {
+    target.remove();
+    try {
+        sounds.capture.pause();
+        sounds.capture.currentTime = 0;
+        sounds.capture.play().catch(() => {});
+    } catch (e) {}
+} else {
+    playSnd('click');
+}
+
+    lastMoveFrom = { c: c1, r: r1 };
+    lastMoveTo = { c: c2, r: r2 };
+
+    const newViewPos = mapBoardToView(c2, r2);
+    selectedPiece.style.left = columns[newViewPos.c] + "%";
+    selectedPiece.style.top = rows[newViewPos.r] + "%";
+    selectedPiece.classList.remove("selected");
+
+    luotDi = (luotDi === 'do') ? 'den' : 'do';
+
+    if (isCoUp && selectedPiece.dataset.isUp === "true") {
+        selectedPiece.dataset.isUp = "false";
+        const side = selectedPiece.dataset.side;
+        const type = selectedPiece.dataset.type;
+        const names = {
+            '車': 'xe', '馬': 'ma', '象': 'tuong', '士': 'si', '將': 'tuong_soai', '砲': 'phao', '卒': 'tot',
+            '俥': 'xe', '傌': 'ma', '相': 'tuong', '仕': 'si', '帥': 'tuong_soai', '炮': 'phao', '兵': 'tot'
+        };
+        selectedPiece.src = `images/${side}_${names[type]}.png`;
+    }
+
+    turnBox.innerText = `Lượt: ${luotDi === 'do' ? 'ĐỎ' : 'ĐEN'}`;
+    timerDoEl.className = "timer-box timer-inline";
+    timerDenEl.className = "timer-box timer-inline";
+    if (luotDi === 'do') {
+        timerDoEl.classList.add("active-do");
+    } else {
+        timerDenEl.classList.add("active-den");
+    }
+refreshTimerRings();
+
+    selectedPiece = null;
+    clearMoveHints();
+    drawLastMoveMarks();
+
+    setTimeout(() => {
+        document.querySelectorAll('.piece').forEach(p => p.classList.remove('is-chieu', 'lightning-chieu'));
+
+        if (laBiChieu(luotDi, taoMaTran())) {
+            playSnd('check');
+            playSnd('heartbeat');
+
+            const pieces = document.querySelectorAll('.piece');
+            pieces.forEach(p => {
+                const type = p.dataset.type;
+                if ((type === '帥' || type === '將') && p.dataset.side === luotDi) {
+                    p.classList.add('is-chieu', 'lightning-chieu');
+                }
+            });
+
+            if (checkMate(luotDi)) {
+                const winnerSide = (luotDi === 'do') ? 'den' : 'do';
+                const resultSub = `BÊN ${winnerSide === 'do' ? 'ĐỎ' : 'ĐEN'} THẮNG`;
+
+                if (currentRoomId) {
+                    db.ref("matches/" + currentRoomId).update({
+                        winner: winnerSide,
+winReason: "checkmate",
+finishedAt: firebase.database.ServerValue.TIMESTAMP,
+updatedAt: firebase.database.ServerValue.TIMESTAMP
+                    });
+                } else {
+                    endGame("CHIẾU BÍ", resultSub);
+                }
+            }
+        } else {
+            if (sounds.heartbeat) sounds.heartbeat.pause();
+        }
+    }, 200);
+
+    if (currentRoomId) {
+        syncRoomFromBoard();
+    }
+};
+
+function resetToStartup() {
+clearInterval(interval);
+playSnd('welcome'); playSnd('bgm');
+isGameOver = false; luotDi = 'do'; timeDo = 540; timeDen = 540;
+document.getElementById("victory-wrap").style.transform = "translate(-50%, -50%) scale(0)";
+document.querySelectorAll(".piece").forEach(p => p.remove());
+clearMoveHints();
+clearLastMoveMarks();
+lastMoveFrom = null;
+lastMoveTo = null;
+selectedPiece = null;
+let den_pieces = ["車", "車", "馬", "馬", "象", "象", "士", "士", "砲", "砲", "卒", "卒", "卒", "卒", "卒"];
+let do_pieces = ["俥", "俥", "傌", "傌", "相", "相", "仕", "仕", "炮", "炮", "兵", "兵", "兵", "兵", "兵"];
+
+if (isCoUp) {
+den_pieces = shuffle(den_pieces);
+do_pieces = shuffle(do_pieces);
+}
+
+const posDen = [{ c: 0, r: 0 }, { c: 8, r: 0 }, { c: 1, r: 0 }, { c: 7, r: 0 }, { c: 2, r: 0 }, { c: 6, r: 0 }, { c: 3, r: 0 }, { c: 5, r: 0 }, { c: 1, r: 2 }, { c: 7, r: 2 }, { c: 0, r: 3 }, { c: 2, r: 3 }, { c: 4, r: 3 }, { c: 6, r: 3 }, { c: 8, r: 3 }];
+const posDo = [{ c: 0, r: 9 }, { c: 8, r: 9 }, { c: 1, r: 9 }, { c: 7, r: 9 }, { c: 2, r: 9 }, { c: 6, r: 9 }, { c: 3, r: 9 }, { c: 5, r: 9 }, { c: 1, r: 7 }, { c: 7, r: 7 }, { c: 0, r: 6 }, { c: 2, r: 6 }, { c: 4, r: 6 }, { c: 6, r: 6 }, { c: 8, r: 6 }];
+
+createPiece(4, 0, "將", false);
+createPiece(4, 9, "帥", false);
+
+posDen.forEach((p, i) => createPiece(p.c, p.r, den_pieces[i], isCoUp));
+posDo.forEach((p, i) => createPiece(p.c, p.r, do_pieces[i], isCoUp));
+
+startTimer();
+}
+function getCurrentPlayerProfile() {
+    const user = auth.currentUser;
+
+    return {
+        uid: user?.uid || ("guest_" + (localStorage.getItem("user-name-display") || "guest")),
+        walletKey: makeWalletDbKey(),
+        name: localStorage.getItem("user-name-display") || user?.displayName || "Người chơi",
+        photo: localStorage.getItem("user-photo") || user?.photoURL || "images/do_tuong.png",
+
+        // GIỮ LẠI SỐ DƯ ĐỂ TẠO PHÒNG / VÀO PHÒNG KHÔNG BỊ BÁO THIẾU PMC
+        balance: getPiBalance(),
+        pmcBalance: getPmcBalance(),
+
+        // SKIN AVATAR
+        avatarSkin: getEquippedAvatarSkin()
+    };
+}
+function updateTurnUIOnly() {
+    turnBox.innerText = `Lượt: ${luotDi === 'do' ? 'ĐỎ' : 'ĐEN'}`;
+    timerDoEl.className = "timer-box timer-inline";
+    timerDenEl.className = "timer-box timer-inline";
+
+    if (luotDi === 'do') {
+        timerDoEl.classList.add("active-do");
+    } else {
+        timerDenEl.classList.add("active-den");
+    }
+}
+function getViewSide() {
+    return mySide === "den" ? "den" : "do";
+}
+
+function mapBoardToView(c, r) {
+    if (getViewSide() === "den") {
+        return { c: 8 - c, r: 9 - r };
+    }
+    return { c, r };
+}
+
+function mapViewToBoard(c, r) {
+    if (getViewSide() === "den") {
+        return { c: 8 - c, r: 9 - r };
+    }
+    return { c, r };
+}
+function exportBoardState() {
+    return Array.from(document.querySelectorAll(".piece")).map(p => {
+        const viewC = columns.indexOf(parseFloat(p.style.left));
+        const viewR = rows.indexOf(parseFloat(p.style.top));
+        const realPos = mapViewToBoard(viewC, viewR);
+
+        return {
+            c: realPos.c,
+            r: realPos.r,
+            side: p.dataset.side,
+            type: p.dataset.type,
+            isUp: p.dataset.isUp === "true",
+            src: p.getAttribute("src") || p.src
+        };
+    });
+}
+
+function applyBoardStateFromRoom(pieces) {
+    isGameOver = false;
+    hideVictoryPopup();
+    document.querySelectorAll(".piece").forEach(p => p.remove());
+    clearMoveHints();
+    clearLastMoveMarks();
+    selectedPiece = null;
+
+    if (sounds.heartbeat) sounds.heartbeat.pause();
+
+    (pieces || []).forEach(item => {
+        const img = document.createElement("img");
+        img.className = "piece";
+        img.dataset.side = item.side;
+        img.dataset.type = item.type;
+        img.dataset.isUp = item.isUp ? "true" : "false";
+        img.src = item.src;
+
+        const viewPos = mapBoardToView(item.c, item.r);
+        img.style.left = columns[viewPos.c] + "%";
+        img.style.top = rows[viewPos.r] + "%";
+
+        board.appendChild(img);
+    });
+
+    updateCheckEffectFromBoard();
+}
+function clearRealtimeBoardVisualOnly() {
+    document.querySelectorAll(".piece").forEach(p => p.remove());
+    clearMoveHints();
+    clearLastMoveMarks();
+
+    selectedPiece = null;
+    lastMoveFrom = null;
+    lastMoveTo = null;
+    lastRoomBoardHash = "";
+
+    clearInterval(interval);
+
+    if (sounds?.heartbeat) {
+        sounds.heartbeat.pause();
+        sounds.heartbeat.currentTime = 0;
+    }
+}
+function scheduleResetWinnerRoomAfterPaid(room, roomId) {
+    if (!roomId || !room?.winner) return;
+    if (room.winner !== mySide) return;
+
+    window.__resetWinnerRoomAfterPaidKey = window.__resetWinnerRoomAfterPaidKey || "";
+
+    const resetKey = [
+        roomId,
+        room.winner || "",
+        room.winReason || "",
+        room.finishedAt || room.updatedAt || ""
+    ].join("|");
+
+    if (window.__resetWinnerRoomAfterPaidKey === resetKey) return;
+    window.__resetWinnerRoomAfterPaidKey = resetKey;
+
+    const tryReset = async (attempt = 0) => {
+        try {
+            const snap = await db.ref("matches/" + roomId).once("value");
+            const fresh = snap.val() || {};
+
+            if (!fresh.winner) return;
+            if (fresh.winner !== mySide) return;
+
+            const paidDone = fresh.settlement && fresh.settlement.paid === true;
+
+            // Chưa cộng tiền xong thì tuyệt đối chưa reset phòng.
+            if (!paidDone) {
+                if (attempt < 30) {
+                    setTimeout(() => tryReset(attempt + 1), 500);
+                } else {
+                    console.warn("Chưa thấy settlement.paid, không dọn phòng để tránh mất PMC:", roomId);
+                }
+                return;
+            }
+
+            const winnerSide = fresh.winner;
+            const winnerPlayer = fresh.players?.[winnerSide];
+
+            if (!winnerPlayer?.uid) return;
+
+            const cleanMode = fresh.mode || currentRoomMode || "co-tuong";
+            const cleanStake = Math.max(0, Math.floor(Number(fresh.stakePMC || currentRoomStakePMC || 0) || 0));
+            const cleanBucket = fresh.roomBucket || currentRoomBucket || makeStakeBucket(cleanMode, cleanStake);
+            const cleanInviteCode = String(fresh.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
+
+            const updates = {};
+
+            // Người thắng giữ phòng, chuyển về phe đỏ/chủ phòng cho ván mới
+           updates[`matches/${roomId}/players/do`] = {
+    ...winnerPlayer,
+    side: "do",
+    updatedAt: firebase.database.ServerValue.TIMESTAMP
+};
+updates[`matches/${roomId}/players/den`] = null;
+updates[`matches/${roomId}/hostUid`] = winnerPlayer.uid || "";
+updates[`matches/${roomId}/hostWalletKey`] = winnerPlayer.walletKey || "";
+updates[`matches/${roomId}/lobbyOpen`] = true;
+updates[`matches/${roomId}/lobbyOwnerUid`] = winnerPlayer.uid || "";
+updates[`matches/${roomId}/lobbyOwnerWalletKey`] = winnerPlayer.walletKey || "";
+updates[`matches/${roomId}/lobbyHeartbeatAt`] = firebase.database.ServerValue.TIMESTAMP;
+updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+            updates[`matches/${roomId}/status`] = "waiting";
+            updates[`matches/${roomId}/turn`] = "do";
+            updates[`matches/${roomId}/board`] = null;
+            updates[`matches/${roomId}/moveCount`] = 0;
+            updates[`matches/${roomId}/startedAt`] = null;
+            updates[`matches/${roomId}/finishedAt`] = null;
+            updates[`matches/${roomId}/lastMoveFrom`] = null;
+            updates[`matches/${roomId}/lastMoveTo`] = null;
+
+            updates[`matches/${roomId}/ready/do`] = false;
+            updates[`matches/${roomId}/ready/den`] = false;
+            updates[`matches/${roomId}/stakeLocked/do`] = false;
+            updates[`matches/${roomId}/stakeLocked/den`] = false;
+
+            // Chỉ xóa kết quả sau khi settlement.paid true
+            updates[`matches/${roomId}/winner`] = null;
+            updates[`matches/${roomId}/winReason`] = null;
+            updates[`matches/${roomId}/drawRequest`] = null;
+            updates[`matches/${roomId}/quitSide`] = null;
+            updates[`matches/${roomId}/quitUid`] = null;
+            updates[`matches/${roomId}/quitAt`] = null;
+            updates[`matches/${roomId}/settlement`] = null;
+            updates[`matches/${roomId}/refunds`] = null;
+            updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+            updates[`waitingRooms/${cleanBucket}/${roomId}`] = {
+                roomId,
+                uid: winnerPlayer.uid,
+                    walletKey: winnerPlayer.walletKey || "",
+                name: winnerPlayer.name || "Người chơi",
+                mode: cleanMode,
+                stakePMC: cleanStake,
+                inviteCode: cleanInviteCode,
+                createdAt: Date.now(),
+                claimedBy: null,
+                claimedAt: null
+            };
+
+            await db.ref().update(updates);
+
+           mySide = "do";
+viewSide = "do";
+currentRoomId = roomId;
+currentRoomMode = cleanMode;
+currentRoomStakePMC = cleanStake;
+currentRoomBucket = cleanBucket;
+currentRoomStatus = "waiting";
+
+saveActiveMatchSnapshot({
+    roomId,
+    mode: cleanMode,
+    side: "do"
+});
+
+            clearRealtimeBoardVisualOnly();
+            hideVictoryPopup();
+            closeReadyOverlay();
+            renderTimerUI();
+            updateReadyUI();
+        } catch (err) {
+            console.error("Dọn phòng sau khi settlement paid lỗi:", err);
+        }
+    };
+
+    setTimeout(() => tryReset(0), 500);
+}
+function updateCheckEffectFromBoard() {
+    document.querySelectorAll('.piece').forEach(p => {
+        p.classList.remove('is-chieu', 'lightning-chieu');
+    });
+
+    const mt = taoMaTran();
+
+    ['do', 'den'].forEach(side => {
+        if (!laBiChieu(side, mt)) return;
+
+        document.querySelectorAll('.piece').forEach(p => {
+            const type = p.dataset.type;
+            if (p.dataset.side === side && (type === '帥' || type === '將')) {
+                p.classList.add('is-chieu', 'lightning-chieu');
+            }
+        });
+    });
+}
+function getLocalUidSafe() {
+    return String(
+        firebase.auth().currentUser?.uid ||
+        localStorage.getItem("uid") ||
+        ""
+    ).trim();
+}
+
+function getLocalWalletKeySafe() {
+    return String(makeWalletDbKey() || "").trim();
+}
+
+function isSamePlayerAsMe(p = {}) {
+    const myUid = getLocalUidSafe();
+    const myWalletKey = getLocalWalletKeySafe();
+
+    const pUid = String(p?.uid || "").trim();
+    const pWalletKey = String(p?.walletKey || "").trim();
+
+    return (
+        (myUid && pUid && myUid === pUid) ||
+        (myWalletKey && pWalletKey && myWalletKey === pWalletKey)
+    );
+}
+
+function getMySideFromRoomSafe(room = {}) {
+    if (isSamePlayerAsMe(room?.players?.do)) return "do";
+    if (isSamePlayerAsMe(room?.players?.den)) return "den";
+    return null;
+}
+function syncMyWalletCacheFromRoomPlayer(room = {}) {
+    const realSide = getMySideFromRoomSafe(room);
+    if (!realSide) return;
+
+    const p = room?.players?.[realSide] || {};
+
+    // Chặn tuyệt đối vụ lấy nhầm ví đối thủ.
+    if (!isSamePlayerAsMe(p)) return;
+
+    mySide = realSide;
+    viewSide = realSide;
+
+    const hasPmc = p.pmcBalance !== undefined && p.pmcBalance !== null && p.pmcBalance !== "";
+    const hasPi = (p.piBalance ?? p.balance) !== undefined && (p.piBalance ?? p.balance) !== null && (p.piBalance ?? p.balance) !== "";
+
+    if (hasPmc) {
+        const roomPmc = Math.max(0, Math.floor(Number(p.pmcBalance) || 0));
+
+        if (roomPmc !== getPmcBalance()) {
+            currentPmcBalance = roomPmc;
+            localStorage.setItem(getPmcCacheKey(), String(roomPmc));
+            updatePmcUI(roomPmc);
+        }
+    }
+
+    if (hasPi) {
+        const roomPi = Math.max(0, Number(p.piBalance ?? p.balance) || 0);
+
+        if (roomPi !== getPiBalance()) {
+            currentWalletBalance = roomPi;
+            localStorage.setItem(getBalanceCacheKey(), String(roomPi));
+            updateBalanceUI(roomPi);
+        }
+    }
+}
+const matchAvatarStatsV2Cache = {};
+const matchAvatarStatsV2Pending = {};
+
+function escapeMatchStatsV2Html(text = "") {
+    return String(text || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function setMatchStatsV2Line(el, stats, prefixText = "") {
+    if (!el) return;
+    const prefix = prefixText ? `<div>${escapeMatchStatsV2Html(prefixText)}</div>` : "";
+    const wins = Math.max(0, Math.floor(Number(stats?.wins || 0) || 0));
+    const losses = Math.max(0, Math.floor(Number(stats?.losses || 0) || 0));
+    const matches = Math.max(0, Math.floor(Number(stats?.matches || (wins + losses)) || 0));
+    el.innerHTML = `${prefix}<div class="player-v2-record-line">V2: <span class="v2-win">T ${wins}</span> / <span class="v2-loss">B ${losses}</span> • ${matches} ván</div>`;
+}
+
+async function readWalletStatsV2ForAvatar(walletKey) {
+    walletKey = String(walletKey || "").trim();
+    if (!walletKey) return { wins: 0, losses: 0, matches: 0 };
+
+    const cached = matchAvatarStatsV2Cache[walletKey];
+    if (cached && Date.now() - cached.at < 3000) return cached.stats;
+    if (matchAvatarStatsV2Pending[walletKey]) return cached?.stats || { wins: 0, losses: 0, matches: 0 };
+
+    matchAvatarStatsV2Pending[walletKey] = true;
+    try {
+        const snap = await db.ref("wallets/" + walletKey + "/statsV2").once("value");
+        const statsV2 = snap.val() || {};
+        const stats = {
+            wins: Math.max(0, Math.floor(readTopNumber(statsV2.wins ?? statsV2.totalWins ?? 0, 0))),
+            losses: Math.max(0, Math.floor(readTopNumber(statsV2.losses ?? statsV2.totalLosses ?? 0, 0))),
+            matches: Math.max(0, Math.floor(readTopNumber(statsV2.matches ?? statsV2.totalMatches ?? 0, 0)))
+        };
+        matchAvatarStatsV2Cache[walletKey] = { at: Date.now(), stats };
+        return stats;
+    } catch (err) {
+        console.warn("Không đọc được statsV2 avatar:", walletKey, err);
+        return cached?.stats || { wins: 0, losses: 0, matches: 0 };
+    } finally {
+        delete matchAvatarStatsV2Pending[walletKey];
+    }
+}
+
+function refreshMatchAvatarStatsV2(oppPlayer = {}, myPlayer = {}, oppPrefix = "", myPrefix = "") {
+    const topInvite = document.getElementById("player-den-invite");
+    const bottomInvite = document.getElementById("player-do-invite");
+
+    if (oppPlayer?.walletKey) {
+        readWalletStatsV2ForAvatar(oppPlayer.walletKey).then(stats => {
+            setMatchStatsV2Line(topInvite, stats, oppPrefix);
+        });
+    } else if (topInvite) {
+        setMatchStatsV2Line(topInvite, { wins: 0, losses: 0, matches: 0 }, oppPrefix);
+    }
+
+    if (myPlayer?.walletKey) {
+        readWalletStatsV2ForAvatar(myPlayer.walletKey).then(stats => {
+            setMatchStatsV2Line(bottomInvite, stats, myPrefix);
+        });
+    } else if (bottomInvite) {
+        setMatchStatsV2Line(bottomInvite, { wins: 0, losses: 0, matches: 0 }, myPrefix);
+    }
+}
+
+function renderPlayersFromRoom(room) {
+    const doPlayer = room?.players?.do || {};
+    const denPlayer = room?.players?.den || {};
+
+const topName = document.getElementById("player-den-name");
+const bottomName = document.getElementById("player-do-name");
+const topRank = document.getElementById("player-den-rank");
+const bottomRank = document.getElementById("player-do-rank");
+const topAvatar = document.getElementById("player-den-avatar");
+const bottomAvatar = document.getElementById("player-do-avatar");
+const topInvite = document.getElementById("player-den-invite");
+const bottomInvite = document.getElementById("player-do-invite");
+
+const topPiBox = document.getElementById("player-den-pi-balance");
+const topPmcBox = document.getElementById("player-den-pmc-balance");
+const bottomPiBox = document.getElementById("player-do-pi-balance");
+const bottomPmcBox = document.getElementById("player-do-pmc-balance");
+
+    const doReadyNow = !!room?.ready?.do;
+    const denReadyNow = !!room?.ready?.den;
+    const isPlayingNow = room?.status === "playing";
+
+const safeMySide = getMySideFromRoomSafe(room) || mySide || "do";
+
+if (getMySideFromRoomSafe(room)) {
+    mySide = safeMySide;
+    viewSide = safeMySide;
+}
+
+const myPlayer = safeMySide === "den" ? denPlayer : doPlayer;
+const oppPlayer = safeMySide === "den" ? doPlayer : denPlayer;
+
+const myReady = safeMySide === "den" ? denReadyNow : doReadyNow;
+const oppReady = safeMySide === "den" ? doReadyNow : denReadyNow;
+
+    if (topName) topName.innerText = oppPlayer.name || "ĐỐI THỦ";
+    if (bottomName) bottomName.innerText = myPlayer.name || "TAO";
+
+    if (topAvatar) {
+    topAvatar.src = oppPlayer.photo || "images/do_tuong.png";
+    applyAvatarSkinToElement(topAvatar, oppPlayer.avatarSkin || "none");
+}
+
+if (bottomAvatar) {
+    bottomAvatar.src = myPlayer.photo || "images/do_tuong.png";
+    applyAvatarSkinToElement(bottomAvatar, myPlayer.avatarSkin || getEquippedAvatarSkin());
+}
+
+const topChipRow = topAvatar?.closest(".player-chip-row");
+const bottomChipRow = bottomAvatar?.closest(".player-chip-row");
+
+// Hàng trên luôn là đối thủ theo góc nhìn hiện tại => bấm để xem info/kết bạn
+if (topChipRow) {
+    topChipRow.onclick = function (e) {
+        e.stopPropagation();
+        openOpponentMatchProfile();
+    };
+    topChipRow.style.cursor = "pointer";
+    topChipRow.title = "Xem thông tin đối thủ";
+}
+
+// Hàng dưới là mình => không mở bảng kết bạn
+if (bottomChipRow) {
+    bottomChipRow.onclick = null;
+    bottomChipRow.style.cursor = "default";
+    bottomChipRow.title = "";
+}
+
+const roomStake = Number(room?.stakePMC || 0);
+
+const readPlayerPmc = (p) =>
+    Math.max(0, Math.floor(Number(p?.pmcBalance ?? 0) || 0));
+
+const readPlayerPi = (p) =>
+    Math.max(0, Number(p?.piBalance ?? p?.balance ?? 0) || 0);
+
+// Đối thủ đọc từ room.
+// Bản thân mình đọc ví live/cache hiện tại, để bấm SS / thắng là đổi liền.
+const oppPmc = readPlayerPmc(oppPlayer);
+const oppPi = readPlayerPi(oppPlayer);
+
+// Bản thân mình luôn lấy từ ví/cache thật.
+// Không lấy từ room.players nữa để tránh dính số dư của đối thủ khi chuyển chủ phòng.
+const myPmc = getPmcBalance();
+const myPi = getPiBalance();
+
+if (topPiBox) topPiBox.innerText = oppPi.toFixed(2) + " π";
+if (topPmcBox) topPmcBox.innerText = formatPMC(oppPmc) + " PMC";
+if (bottomPiBox) bottomPiBox.innerText = myPi.toFixed(2) + " π";
+if (bottomPmcBox) bottomPmcBox.innerText = formatPMC(myPmc) + " PMC";
+    if (topRank) {
+        topRank.classList.remove("player-ready-on", "player-ready-off");
+
+        if (isPlayingNow) {
+            topRank.innerText = roomStake > 0
+                ? ("PHÒNG " + formatPMC(roomStake) + " PMC")
+                : (formatPMC(oppPmc) + " PMC");
+            topRank.classList.add("player-ready-on");
+        } else {
+            topRank.innerText = oppReady ? "ĐÃ SS" : "CHƯA SS";
+            topRank.classList.add(oppReady ? "player-ready-on" : "player-ready-off");
+        }
+    }
+
+    if (bottomRank) {
+        bottomRank.classList.remove("player-ready-on", "player-ready-off");
+
+        if (isPlayingNow) {
+            bottomRank.innerText = roomStake > 0
+                ? ("PHÒNG " + formatPMC(roomStake) + " PMC")
+                : (formatPMC(myPmc) + " PMC");
+            bottomRank.classList.add("player-ready-on");
+        } else {
+            bottomRank.innerText = myReady ? "ĐÃ SS" : "CHƯA SS";
+            bottomRank.classList.add(myReady ? "player-ready-on" : "player-ready-off");
+        }
+    }
+
+    const inviteCode = String(
+        room?.inviteCode || makeInviteCodeFromRoomId(currentRoomId || "")
+    ).toUpperCase();
+
+    const hostUid = room?.players?.do?.uid || "";
+
+    const topInvitePrefix = oppPlayer?.uid === hostUid && inviteCode
+        ? ("MÃ MỜI: " + inviteCode)
+        : "";
+    const bottomInvitePrefix = myPlayer?.uid === hostUid && inviteCode
+        ? ("MÃ MỜI: " + inviteCode)
+        : "";
+
+    if (topInvite) topInvite.innerText = topInvitePrefix;
+    if (bottomInvite) bottomInvite.innerText = bottomInvitePrefix;
+
+    // Chỉ hiển thị thành tích V2 dưới avatar, không đọc wins/losses cũ bị rác.
+    refreshMatchAvatarStatsV2(oppPlayer, myPlayer, topInvitePrefix, bottomInvitePrefix);
+}
+
+function cleanupRoomListeners() {
+    if (roomValueRef) roomValueRef.off();
+    if (roomChatRef) roomChatRef.off();
+    if (currentViewerCountRef) currentViewerCountRef.off();
+    if (currentViewerRef) currentViewerRef.remove().catch(() => {});
+    roomValueRef = null;
+    roomChatRef = null;
+    currentViewerRef = null;
+    currentViewerCountRef = null;
+    currentViewerWalletKey = "";
+    lastRoomBoardHash = "";
+    updateViewerCountBadge(0);
+    if (isSpectatorMode) {
+        document.body.classList.remove("spectator-mode");
+        isSpectatorMode = false;
+    }
+}
+// HÀM RÚT LUI VÀ BÀN GIAO PHÒNG (FIX LỖI MẤT PMC KHI ĐẦU HÀNG RỒI THOÁT NHANH)
+async function leaveRealtimeMatch() {
+    const roomId = currentRoomId; 
+    const side = mySide;
+    const mode = currentRoomMode;
+
+    clearActiveMatchSnapshot(roomId);
+    cleanupRoomListeners();
+
+    const roomBucket = currentRoomBucket;
+
+    currentRoomId = null;
+    mySide = null;
+    currentRoomMode = null;
+    currentRoomStakePMC = 0;
+    currentRoomBucket = null;
+
+    await setPlayerPresence("home").catch(()=>{});
+
+    if (!roomId || !side) return;
+
+    try {
+        let roomSnap = await db.ref("matches/" + roomId).once("value");
+        let room = roomSnap.val() || {};
+
+        // 🔥 FIX TRÍ MẠNG Ở ĐÂY: NẾU ĐÃ CÓ KẾT QUẢ MÀ CHƯA CHIA TIỀN XONG -> BẮT BUỘC CHỜ RỒI MỚI ĐƯỢC RỜI/DỌN PHÒNG!
+        const stake = Math.max(0, Math.floor(Number(room.stakePMC || 0) || 0));
+        if (room.winner && room.winner !== "hoa" && stake > 0) {
+            if (room.settlement?.paid !== true) {
+                console.log("Đang chờ Firebase trả thưởng PMC trước khi dọn phòng...");
+                await new Promise((resolve) => {
+                    const paidRef = db.ref("matches/" + roomId + "/settlement/paid");
+                    const timeout = setTimeout(() => { paidRef.off(); resolve(); }, 4000); 
+                    paidRef.on("value", (snap) => {
+                        if (snap.val() === true) {
+                            clearTimeout(timeout);
+                            paidRef.off();
+                            resolve();
+                        }
+                    });
+                });
+                // Đọc lại state mới nhất sau khi chờ tiền về ví đối thủ
+                roomSnap = await db.ref("matches/" + roomId).once("value");
+                room = roomSnap.val() || {};
+            }
+        }
+
+        const otherSide = side === "do" ? "den" : "do";
+        const otherPlayer = room.players?.[otherSide];
+        const stillPlaying = room.status === "playing";
+
+        // NẾU ĐANG ĐÁNH MÀ CHẠY NGANG (CHƯA CÓ KẾT QUẢ) -> XỬ THUA VÀ ĐÓNG CỬA PHÒNG
+        if (stillPlaying && otherPlayer && !room.winner) {
+            const updates = {};
+            updates[`matches/${roomId}/winner`] = otherSide;
+            updates[`matches/${roomId}/winReason`] = "bochay";
+            updates[`matches/${roomId}/finishedAt`] = firebase.database.ServerValue.TIMESTAMP;
+            updates[`matches/${roomId}/quitSide`] = side;
+            updates[`matches/${roomId}/status`] = "finished";
+            updates[`matches/${roomId}/lobbyOpen`] = false;
+            updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+            
+            if (roomBucket) updates[`waitingRooms/${roomBucket}/${roomId}`] = null;
+            
+            await db.ref().update(updates);
+            return; 
+        }
+
+        // Hoàn tiền nếu phòng đang ở sảnh chờ
+        await maybeRefundWaitingStakePMC(roomId, room, side).catch(()=>{});
+
+        const cleanMode = room.mode || mode || "co-tuong";
+        const cleanStake = Math.max(0, Math.floor(Number(room.stakePMC || 0)));
+        const cleanBucket = room.roomBucket || roomBucket || makeStakeBucket(cleanMode, cleanStake);
+        const cleanInviteCode = String(room.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
+
+        // NẾU CHỈ CÓ 1 MÌNH -> DỌN LUÔN PHÒNG
+        if (!otherPlayer) {
+            await db.ref("waitingRooms/" + cleanBucket + "/" + roomId).remove().catch(()=>{});
+            await db.ref("matches/" + roomId).remove().catch(()=>{});
+            return;
+        }
+
+        // ĐỐI THỦ CÒN ĐÓ -> NHƯỜNG LUÔN PHÒNG ĐANG CÓ CHO NÓ
+        const updates = {};
+        
+        // Mình cút khỏi ghế
+        updates[`matches/${roomId}/players/${side}`] = null;
+        updates[`matches/${roomId}/ready/${side}`] = false;
+        updates[`matches/${roomId}/stakeLocked/${side}`] = false;
+
+        // Bốc thằng kia lên làm chủ (Đỏ) nếu nó đang ở Đen
+        if (otherSide === "den") {
+            updates[`matches/${roomId}/players/do`] = { ...otherPlayer, side: "do", updatedAt: firebase.database.ServerValue.TIMESTAMP };
+            updates[`matches/${roomId}/players/den`] = null; 
+            updates[`matches/${roomId}/ready/do`] = false;
+            updates[`matches/${roomId}/ready/den`] = false;
+            updates[`matches/${roomId}/stakeLocked/do`] = false;
+            updates[`matches/${roomId}/stakeLocked/den`] = false;
+        }
+
+        updates[`matches/${roomId}/hostUid`] = otherPlayer.uid || "";
+        updates[`matches/${roomId}/hostWalletKey`] = otherPlayer.walletKey || "";
+        updates[`matches/${roomId}/lobbyOpen`] = true;
+        updates[`matches/${roomId}/lobbyOwnerUid`] = otherPlayer.uid || "";
+        updates[`matches/${roomId}/lobbyOwnerWalletKey`] = otherPlayer.walletKey || "";
+        updates[`matches/${roomId}/lobbyHeartbeatAt`] = firebase.database.ServerValue.TIMESTAMP;
+        updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+        
+        // Reset dọn phòng cho ván mới
+        updates[`matches/${roomId}/status`] = "waiting";
+        updates[`matches/${roomId}/turn`] = "do";
+        updates[`matches/${roomId}/board`] = null;
+        updates[`matches/${roomId}/winner`] = null;
+        updates[`matches/${roomId}/winReason`] = null;
+        updates[`matches/${roomId}/settlement`] = null; 
+        updates[`matches/${roomId}/refunds`] = null;
+        updates[`matches/${roomId}/readyDeadlineAt`] = null; 
+        updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+        updates[`waitingRooms/${cleanBucket}/${roomId}`] = {
+            roomId: roomId,
+            uid: otherPlayer.uid || "",
+            walletKey: otherPlayer.walletKey || "",
+            name: otherPlayer.name || "Người chơi",
+            mode: cleanMode,
+            stakePMC: cleanStake,
+            inviteCode: cleanInviteCode,
+            createdAt: Date.now(),
+            claimedBy: null,
+            claimedAt: null
+        };
+
+        await db.ref().update(updates);
+
+    } catch (err) {
+        console.error("Rời phòng bị lỗi:", err);
+    }
+}
+function syncRoomFromBoard(extra = {}) {
+    if (!currentRoomId) return;
+
+    db.ref("matches/" + currentRoomId).update({
+        board: exportBoardState(),
+        turn: luotDi,
+        isCoUp,
+        timeDo,
+        timeDen,
+        lastMoveFrom: lastMoveFrom || null,
+        lastMoveTo: lastMoveTo || null,
+        moveCount: firebase.database.ServerValue.increment ? firebase.database.ServerValue.increment(1) : ((window.__localMoveCountFallback = (window.__localMoveCountFallback || 0) + 1)),
+        updatedAt: firebase.database.ServerValue.TIMESTAMP,
+        ...extra
+    });
+}
+
+
+function getRoundResultCoreId(room, roomId) {
+    if (!roomId || !room) return "";
+    if (room.activeRoundId) return String(room.activeRoundId);
+
+    const stableStart = room.startedAt || room.createdAt || "nostart";
+    const stableFinish = room.finishedAt || room.winnerAt || "nofinish";
+    return [roomId, stableStart, stableFinish, room.winner || "nowinner", room.winReason || "win"].join("_");
+}
+
+function buildRoundResultCore(room, roomId) {
+    if (!roomId || !room || !room.winner) return null;
+
+    const red = room.players?.do || null;
+    const black = room.players?.den || null;
+    const hasBothPlayers = !!red?.uid && !!black?.uid;
+    const roundId = getRoundResultCoreId(room, roomId);
+    if (!roundId || !hasBothPlayers) return null;
+
+    const winnerSide = room.winner === "do" || room.winner === "den" ? room.winner : "hoa";
+    const loserSide = winnerSide === "do" ? "den" : (winnerSide === "den" ? "do" : null);
+    const winnerPlayer = winnerSide === "do" ? red : (winnerSide === "den" ? black : null);
+    const loserPlayer = loserSide === "do" ? red : (loserSide === "den" ? black : null);
+    const moveCount = Math.max(0, Math.floor(Number(room.moveCount || 0) || 0));
+    const statusWasPlaying = room.status === "playing" || room.status === "finished" || !!room.startedAt || !!room.activeRoundId;
+    const validForStats = !!(
+        hasBothPlayers &&
+        statusWasPlaying &&
+        winnerSide &&
+        (winnerSide === "hoa" || winnerPlayer?.uid) &&
+        moveCount >= 1
+    );
+
+    return {
+        roundId,
+        roomId,
+        roundNo: Math.max(0, Math.floor(Number(room.roundNo || 0) || 0)),
+        mode: room.mode || currentRoomMode || "co-tuong",
+        stakePMC: Math.max(0, Math.floor(Number(room.stakePMC || 0) || 0)),
+        redUid: red.uid || "",
+        redWalletKey: red.walletKey || "",
+        redName: red.name || "Đỏ",
+        blackUid: black.uid || "",
+        blackWalletKey: black.walletKey || "",
+        blackName: black.name || "Đen",
+        winnerSide,
+        loserSide: loserSide || "",
+        winnerUid: winnerPlayer?.uid || "",
+        winnerWalletKey: winnerPlayer?.walletKey || "",
+        winnerName: winnerPlayer?.name || "",
+        loserUid: loserPlayer?.uid || "",
+        loserWalletKey: loserPlayer?.walletKey || "",
+        loserName: loserPlayer?.name || "",
+        reason: room.winReason || (winnerSide === "hoa" ? "hoa" : "win"),
+        moveCount,
+        startedAt: room.startedAt || null,
+        finishedAt: room.finishedAt || firebase.database.ServerValue.TIMESTAMP,
+        validForStats,
+        coreOnly: true,
+        committedAt: firebase.database.ServerValue.TIMESTAMP
+    };
+}
+
+async function commitRoundResultCoreOnce(room, roomId = currentRoomId) {
+    try {
+        const result = buildRoundResultCore(room, roomId);
+        if (!result) return false;
+
+        // CHỐT CỨNG CHỐNG ĐỨNG HÌNH:
+        // Hàm này đang chạy trong listener matches/{roomId}.on("value").
+        // Nếu cứ ghi lastRoundResultCore/roundCoreLocks bằng ServerValue.TIMESTAMP mỗi snapshot,
+        // Firebase sẽ bắn snapshot mới liên tục -> Pi Browser bị đứng cứng sau chiếu bí.
+        window.__roundResultCoreDone = window.__roundResultCoreDone || {};
+        window.__roundResultCorePending = window.__roundResultCorePending || {};
+
+        if (window.__roundResultCoreDone[result.roundId]) return true;
+        if (window.__roundResultCorePending[result.roundId]) return false;
+
+        const roomResultRef = db.ref("matches/" + roomId + "/roundResults/" + result.roundId);
+        const roomResultSnap = await roomResultRef.once("value").catch(() => null);
+
+        if (roomResultSnap && roomResultSnap.exists && roomResultSnap.exists()) {
+            window.__roundResultCoreDone[result.roundId] = true;
+            return true;
+        }
+
+        window.__roundResultCorePending[result.roundId] = true;
+
+        const roomUpdates = {};
+        roomUpdates[`matches/${roomId}/roundResults/${result.roundId}`] = result;
+        roomUpdates[`matches/${roomId}/lastRoundResultCore`] = result;
+        roomUpdates[`matches/${roomId}/roundCoreLocks/${result.roundId}`] = {
+            locked: true,
+            resultWritten: true,
+            at: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        // Chỉ ghi 1 lần khi result chưa tồn tại.
+        await db.ref().update(roomUpdates);
+
+        const globalUpdates = {};
+        globalUpdates[`matchHistoryCore/${result.roundId}`] = result;
+        globalUpdates[`matchHistoryByRoom/${roomId}/${result.roundId}`] = result;
+
+        await db.ref().update(globalUpdates).catch(err => {
+            console.warn("Không ghi được nhánh tổng matchHistoryCore/matchHistoryByRoom, nhưng roundResults trong matches đã ghi OK:", err);
+        });
+
+        window.__roundResultCoreDone[result.roundId] = true;
+        console.log("Đã ghi lõi lịch sử ván:", result.roundId, result);
+        return true;
+    } catch (err) {
+        console.error("Lỗi ghi lõi lịch sử ván:", err);
+        return false;
+    } finally {
+        try {
+            const safeRoomId = roomId || currentRoomId || "";
+            const safeRoundId = room?.activeRoundId || getRoundResultCoreId(room, safeRoomId);
+            if (safeRoundId && window.__roundResultCorePending) {
+                delete window.__roundResultCorePending[safeRoundId];
+            }
+        } catch (_) {}
+    }
+}
+
+// ===== STATS V2: cộng thắng/thua từ roundResults, không đụng SS/PMC/owner =====
+function statsV2SafeNum(value, fallback = 0) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+}
+
+function statsV2MonthKey(ts = Date.now()) {
+    const d = new Date(Number(ts) || Date.now());
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    return `${y}-${m}`;
+}
+
+function buildStatsV2ResultFromRoom(room, roomId = currentRoomId) {
+    const result = buildRoundResultCore(room, roomId);
+    if (!result) return null;
+    if (!result.validForStats) return null;
+    if (result.winnerSide !== "do" && result.winnerSide !== "den") return null;
+    if (!result.winnerWalletKey || !result.loserWalletKey) return null;
+    if (result.winnerWalletKey === result.loserWalletKey) return null;
+    return result;
+}
+
+function makeStatsV2HistoryEntry(result, role) {
+    const now = Date.now();
+    return {
+        done: true,
+        role,
+        result: role === "winner" ? "win" : "loss",
+        roomId: result.roomId || "",
+        side: role === "winner" ? result.winnerSide : result.loserSide,
+        opponentWalletKey: role === "winner" ? result.loserWalletKey : result.winnerWalletKey,
+        reason: result.reason || "",
+        mode: result.mode || "",
+        stakePMC: Math.max(0, Math.floor(Number(result.stakePMC || 0) || 0)),
+        roundNo: result.roundNo || 0,
+        // Lấy thời điểm kết thúc ván làm mốc tháng. Nếu thiếu thì mới dùng now.
+        at: Number(result.finishedAt || result.committedAt || result.startedAt || now) || now
+    };
+}
+
+function summarizeStatsV2History(history = {}, fallbackMonthKey = statsV2MonthKey()) {
+    const out = {
+        wins: 0,
+        losses: 0,
+        matches: 0,
+        monthWins: 0,
+        monthLosses: 0,
+        monthMatches: 0,
+        monthKey: fallbackMonthKey,
+        months: {}
+    };
+
+    Object.keys(history || {}).forEach(roundId => {
+        const h = history[roundId] || {};
+        if (!h.done) return;
+        const res = String(h.result || "").toLowerCase();
+        const role = String(h.role || "").toLowerCase();
+        const isWin = res === "win" || role === "winner";
+        const isLoss = res === "loss" || role === "loser";
+        if (!isWin && !isLoss) return;
+
+        const at = Number(h.at || h.updatedAt || Date.now()) || Date.now();
+        const mKey = statsV2MonthKey(at);
+        if (!out.months[mKey]) {
+            out.months[mKey] = { wins: 0, losses: 0, matches: 0, updatedAt: at };
+        }
+
+        out.matches += 1;
+        out.months[mKey].matches += 1;
+        out.months[mKey].updatedAt = Math.max(Number(out.months[mKey].updatedAt || 0), at);
+
+        if (isWin) {
+            out.wins += 1;
+            out.months[mKey].wins += 1;
+        }
+        if (isLoss) {
+            out.losses += 1;
+            out.months[mKey].losses += 1;
+        }
+    });
+
+    const cur = out.months[fallbackMonthKey] || { wins: 0, losses: 0, matches: 0 };
+    out.monthWins = Math.max(0, Math.floor(Number(cur.wins || 0) || 0));
+    out.monthLosses = Math.max(0, Math.floor(Number(cur.losses || 0) || 0));
+    out.monthMatches = Math.max(0, Math.floor(Number(cur.matches || 0) || 0));
+    return out;
+}
+
+// ===== HOTFIX STATS V2 V3: không rebuild đè tổng, chỉ cộng dồn an toàn =====
+function statsV2ClampInt(value, fallback = 0) {
+    const n = Number(value);
+    const safe = Number.isFinite(n) ? n : fallback;
+    return Math.max(0, Math.floor(safe || 0));
+}
+
+function statsV2ReadTotals(stats = {}) {
+    const s = stats && typeof stats === "object" ? stats : {};
+    const wins = statsV2ClampInt(s.wins ?? s.totalWins ?? 0);
+    const losses = statsV2ClampInt(s.losses ?? s.totalLosses ?? 0);
+    const matches = Math.max(
+        statsV2ClampInt(s.matches ?? s.totalMatches ?? 0),
+        wins + losses
+    );
+    return { wins, losses, matches };
+}
+
+function statsV2ReadMonth(stats = {}, monthKey = statsV2MonthKey()) {
+    const s = stats && typeof stats === "object" ? stats : {};
+    const monthObj = s.months && s.months[monthKey] && typeof s.months[monthKey] === "object"
+        ? s.months[monthKey]
+        : {};
+    const wins = statsV2ClampInt(monthObj.wins ?? s.monthWins ?? 0);
+    const losses = statsV2ClampInt(monthObj.losses ?? s.monthLosses ?? 0);
+    const matches = Math.max(
+        statsV2ClampInt(monthObj.matches ?? s.monthMatches ?? 0),
+        wins + losses
+    );
+    return { wins, losses, matches };
+}
+
+function applyStatsV2ResultToWalletData(wallet, result, role) {
+    const w = wallet && typeof wallet === "object" ? { ...wallet } : {};
+    const roundId = String(result?.roundId || "").trim();
+    if (!roundId) return w;
+
+    const normalizedRole = String(role || "").toLowerCase();
+    const isWinner = normalizedRole === "winner";
+    const isLoser = normalizedRole === "loser";
+    if (!isWinner && !isLoser) return w;
+
+    const now = Date.now();
+    const monthKey = statsV2MonthKey(result.finishedAt || result.committedAt || result.startedAt || now);
+    const oldStats = w.statsV2 && typeof w.statsV2 === "object" ? { ...w.statsV2 } : {};
+    const oldHistory = w.matchHistoryV2 && typeof w.matchHistoryV2 === "object"
+        ? { ...w.matchHistoryV2 }
+        : {};
+
+    // roundId là khóa chống cộng trùng. App reset/mở lại listener bao nhiêu lần cũng không + lại ván cũ.
+    const alreadyCounted = !!oldHistory[roundId];
+    const historyEntry = oldHistory[roundId]
+        ? { ...oldHistory[roundId] }
+        : makeStatsV2HistoryEntry(result, normalizedRole);
+    const mergedHistory = { ...oldHistory, [roundId]: historyEntry };
+
+    const oldTotals = statsV2ReadTotals(oldStats);
+    const oldMonth = statsV2ReadMonth(oldStats, monthKey);
+
+    const addMatch = alreadyCounted ? 0 : 1;
+    const addWin = !alreadyCounted && isWinner ? 1 : 0;
+    const addLoss = !alreadyCounted && isLoser ? 1 : 0;
+
+    // Chỉ dùng history làm "sàn sửa lỗi" nếu stats cũ bị thiếu, tuyệt đối không cho rebuild kéo số xuống.
+    const historyFloor = summarizeStatsV2History(mergedHistory, monthKey);
+
+    const finalWins = Math.max(oldTotals.wins + addWin, historyFloor.wins);
+    const finalLosses = Math.max(oldTotals.losses + addLoss, historyFloor.losses);
+    const finalMatches = Math.max(oldTotals.matches + addMatch, historyFloor.matches, finalWins + finalLosses);
+
+    const finalMonthWins = Math.max(oldMonth.wins + addWin, historyFloor.monthWins);
+    const finalMonthLosses = Math.max(oldMonth.losses + addLoss, historyFloor.monthLosses);
+    const finalMonthMatches = Math.max(oldMonth.matches + addMatch, historyFloor.monthMatches, finalMonthWins + finalMonthLosses);
+
+    const oldMonths = oldStats.months && typeof oldStats.months === "object" ? oldStats.months : {};
+    const oldThisMonth = oldMonths[monthKey] && typeof oldMonths[monthKey] === "object" ? oldMonths[monthKey] : {};
+    const safeMonths = {
+        ...oldMonths,
+        ...(historyFloor.months && typeof historyFloor.months === "object" ? historyFloor.months : {}),
+        [monthKey]: {
+            ...oldThisMonth,
+            ...(historyFloor.months && historyFloor.months[monthKey] && typeof historyFloor.months[monthKey] === "object" ? historyFloor.months[monthKey] : {}),
+            wins: finalMonthWins,
+            losses: finalMonthLosses,
+            matches: finalMonthMatches,
+            updatedAt: now
+        }
+    };
+
+    w.statsV2 = {
+        ...oldStats,
+        wins: finalWins,
+        losses: finalLosses,
+        matches: finalMatches,
+        totalWins: finalWins,
+        totalLosses: finalLosses,
+        totalMatches: finalMatches,
+        monthWins: finalMonthWins,
+        monthLosses: finalMonthLosses,
+        monthMatches: finalMonthMatches,
+        monthKey,
+        lastResult: isWinner ? "win" : "loss",
+        lastRoundId: roundId,
+        lastRoomId: result.roomId || "",
+        lastReason: result.reason || "",
+        lastAlreadyCounted: alreadyCounted,
+        updatedAt: now,
+        source: "statsV2_endgame_incremental_v3_no_rebuild",
+        months: safeMonths
+    };
+
+    w.matchHistoryV2 = mergedHistory;
+    w.updatedAt = now;
+    return w;
+}
+
+async function hasStatsV2History(walletKey, roundId) {
+    walletKey = String(walletKey || "").trim();
+    roundId = String(roundId || "").trim();
+    if (!walletKey || !roundId) return false;
+    try {
+        const snap = await db.ref("wallets/" + walletKey + "/matchHistoryV2/" + roundId).once("value");
+        return !!(snap && snap.exists && snap.exists());
+    } catch (_) {
+        return false;
+    }
+}
+
+window.applyStatsV2WalletOnce = async function(walletKey, result, role) {
+    walletKey = String(walletKey || "").trim();
+    if (!walletKey || !result?.roundId) return false;
+
+    const walletRef = db.ref("wallets/" + walletKey);
+    const monthKey = new Date().toISOString().slice(0, 7); // YYYY-MM
+    const isWin = (role === "winner");
+    const reason = result.reason || "";
+    const roomId = result.roomId || "";
+
+    try {
+        // 1. CHỐNG CỘNG TRÙNG VÁN: Kiểm tra xem ván này đã lưu chưa
+        const historySnap = await walletRef.child(`matchHistoryV2/${result.roundId}`).once("value");
+        if (historySnap.exists()) {
+            return true; // Đã lưu rồi thì cút, an toàn 100%
+        }
+
+        const updates = {};
+
+        // 2. CỘNG DỒN (+1) CHUẨN XÁC BẰNG LỆNH MÁY CHỦ
+        // (Cách này bảo toàn 100% PMC và EXP, đéo bao giờ bị ghi đè hay tạo khoảng mù)
+        updates[`statsV2/matches`] = firebase.database.ServerValue.increment(1);
+        updates[`statsV2/totalMatches`] = firebase.database.ServerValue.increment(1);
+        updates[`statsByMonth/${monthKey}/matches`] = firebase.database.ServerValue.increment(1);
+
+        if (isWin) {
+            updates[`statsV2/wins`] = firebase.database.ServerValue.increment(1);
+            updates[`statsV2/totalWins`] = firebase.database.ServerValue.increment(1);
+            updates[`statsByMonth/${monthKey}/wins`] = firebase.database.ServerValue.increment(1);
+        } else {
+            updates[`statsV2/losses`] = firebase.database.ServerValue.increment(1);
+            updates[`statsV2/totalLosses`] = firebase.database.ServerValue.increment(1);
+            updates[`statsByMonth/${monthKey}/losses`] = firebase.database.ServerValue.increment(1);
+        }
+
+        // 3. LƯU LỊCH SỬ VÁN ĐỂ THEO DÕI
+        updates[`matchHistoryV2/${result.roundId}`] = {
+            roomId: roomId,
+            result: isWin ? "win" : "loss",
+            role: role,
+            reason: reason,
+            opponentWalletKey: isWin ? result.loserWalletKey : result.winnerWalletKey,
+            mode: result.mode || "co-tuong",
+            stakePMC: result.stakePMC || 0,
+            at: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        // 4. CẬP NHẬT TRẠNG THÁI CUỐI
+        updates[`statsV2/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+        updates[`statsByMonth/${monthKey}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+        updates[`statsV2/monthKey`] = monthKey;
+
+        updates[`statsV2/lastResult`] = isWin ? "win" : "loss";
+        updates[`statsV2/lastReason`] = reason;
+        updates[`statsV2/lastRoomId`] = roomId;
+        updates[`statsV2/lastRoundId`] = result.roundId;
+        updates[`statsV2/source`] = "update_fixed_v5_no_blind_spot";
+
+        // VẢ LỆNH LÊN FIREBASE (Chỉ cập nhật đúng nhánh stats, đéo đụng chạm tới PMC)
+        await walletRef.update(updates);
+        return true;
+
+    } catch (err) {
+        console.error("Lỗi cập nhật statsV2:", err);
+        return false;
+    }
+};
+
+async function commitStatsV2FromRoundRoomOnce(room, roomId = currentRoomId) {
+    try {
+        const result = buildStatsV2ResultFromRoom(room, roomId);
+        if (!result) return false;
+
+        window.__statsV2Done = window.__statsV2Done || {};
+        window.__statsV2Pending = window.__statsV2Pending || {};
+
+        if (window.__statsV2Pending[result.roundId]) return false;
+
+        // Không return cứng khi marker đã tồn tại nữa.
+        // Marker có thể tồn tại nhưng ví chưa kịp ghi/ghi thiếu; gọi apply lại vẫn an toàn
+        // vì ví có matchHistoryV2/<roundId> chống cộng trùng.
+        window.__statsV2Pending[result.roundId] = true;
+
+        const winnerApplied = await applyStatsV2WalletOnce(result.winnerWalletKey, result, "winner");
+        const loserApplied = await applyStatsV2WalletOnce(result.loserWalletKey, result, "loser");
+
+        const winnerHasHistory = await hasStatsV2History(result.winnerWalletKey, result.roundId);
+        const loserHasHistory = await hasStatsV2History(result.loserWalletKey, result.roundId);
+
+        const marker = {
+            done: true,
+            source: "statsV2_endgame_incremental_v3_no_rebuild",
+            roundId: result.roundId,
+            roomId: result.roomId || roomId || "",
+            winnerWalletKey: result.winnerWalletKey || "",
+            loserWalletKey: result.loserWalletKey || "",
+            winnerSide: result.winnerSide || "",
+            loserSide: result.loserSide || "",
+            winnerApplied: !!winnerHasHistory,
+            loserApplied: !!loserHasHistory,
+            repairedTotals: true,
+            reason: result.reason || "",
+            at: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        await db.ref(`matches/${roomId}/statsV2Results/${result.roundId}`).set(marker).catch(err => {
+            console.warn("StatsV2 đã sửa ví, nhưng không ghi được marker trong phòng:", err);
+        });
+
+        await db.ref(`statsV2Results/${result.roundId}`).set(marker).catch(err => {
+            console.warn("StatsV2 marker tổng bị rules chặn, bỏ qua:", err);
+        });
+
+        if (winnerHasHistory && loserHasHistory) {
+            window.__statsV2Done[result.roundId] = true;
+        }
+
+        // Nếu bảng Top đang mở trên chính máy này thì tải lại ngay,
+        // tránh nhìn số cũ vì arenaTopCache còn giữ snapshot lúc mở modal.
+        try {
+            const topModal = document.getElementById("arena-top-modal");
+            if (topModal && topModal.classList.contains("show") && typeof loadArenaTopPlayers === "function" && typeof renderArenaTopList === "function") {
+                await loadArenaTopPlayers();
+                renderArenaTopList();
+            }
+        } catch (_) {}
+
+        console.log("Đã commit/sửa statsV2:", result.roundId, { winnerApplied, loserApplied, winnerHasHistory, loserHasHistory });
+        return !!(winnerHasHistory && loserHasHistory);
+    } catch (err) {
+        console.error("commitStatsV2FromRoundRoomOnce lỗi:", err);
+        return false;
+    } finally {
+        try {
+            const safeRoomId = roomId || currentRoomId || "";
+            const safeRoundId = room?.activeRoundId || getRoundResultCoreId(room, safeRoomId);
+            if (safeRoundId && window.__statsV2Pending) {
+                delete window.__statsV2Pending[safeRoundId];
+            }
+        } catch (_) {}
+    }
+}
+
+
+async function maybeStartRoomFromHost(room, roomId = currentRoomId) {
+    if (!(room.stakeLocked?.do && room.stakeLocked?.den)) return;
+    if (!roomId) return;
+    if (room.status === "playing") return;
+    if (mySide !== "do") return;
+    if (room.status !== "waiting") return;
+    if (!room.players?.do || !room.players?.den) return;
+    if (!(room.ready?.do && room.ready?.den)) return;
+    if (Array.isArray(room.board) && room.board.length) return;
+    if (!(room.stakeLocked?.do && room.stakeLocked?.den)) return;
+
+    isCoUp = room.mode === "co-up";
+    resetToStartup();
+
+    const freshBoard = exportBoardState();
+    const nextRoundNo = Math.max(1, Math.floor(Number(room.roundNo || 0) || 0) + 1);
+    const nextRoundId = roomId + "_r" + nextRoundNo + "_" + Date.now();
+const waitingRoomRef = db.ref("waitingRooms/" + room.roomBucket + "/" + roomId);
+await waitingRoomRef.remove().catch(() => {});
+    await db.ref("matches/" + roomId).update({
+        status: "playing",
+        isCoUp,
+        board: freshBoard,
+        activeRoundId: nextRoundId,
+        roundNo: nextRoundNo,
+        startedAt: firebase.database.ServerValue.TIMESTAMP,
+        moveCount: 0,
+        turn: "do",
+        timeDo: 540,
+        timeDen: 540,
+        lastMoveFrom: null,
+        lastMoveTo: null,
+        winner: null,
+        winReason: null,
+        drawRequest: null,
+        ready: {
+            do: false,
+            den: false
+        },
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+    });
+}
+function appendMatchChatMessage(msg) {
+    const content = document.getElementById("match-content-popup");
+    if (!content || !msg) return;
+
+    const row = document.createElement("div");
+    row.style.marginBottom = "6px";
+    row.style.wordBreak = "break-word";
+
+    const isMine = msg.uid && auth.currentUser && msg.uid === auth.currentUser.uid;
+    const labelColor =
+        msg.side === "do" ? "#ff7675" :
+        msg.side === "den" ? "#ffeaa7" :
+        "#55efc4";
+
+    const who = isMine ? "Mầy" : (msg.name || "Đối thủ");
+
+    row.innerHTML = `<b style="color:${labelColor};">${who}:</b> <span>${msg.text || ""}</span>`;
+    content.appendChild(row);
+    content.scrollTop = content.scrollHeight;
+}
+function bindRoom(roomId, skipInitialCleanup = false) {
+    if (skipInitialCleanup) {
+        if (roomValueRef) roomValueRef.off();
+        if (roomChatRef) roomChatRef.off();
+        roomValueRef = null;
+        roomChatRef = null;
+        lastRoomBoardHash = "";
+    } else {
+        cleanupRoomListeners();
+    }
+    const listeningRoomId = roomId;
+    let roomUiVersion = 0;
+
+    currentRoomId = listeningRoomId;
+roomValueRef = db.ref("matches/" + listeningRoomId);
+roomChatRef = db.ref("matches/" + listeningRoomId + "/chat");
+
+    const content = document.getElementById("match-content-popup");
+    if (content) {
+        content.innerHTML = '<p style="color:#55efc4;">Hệ thống: Đang ghép phòng...</p>';
+    }
+
+   roomValueRef.on("value", async (snap) => {
+        if (currentRoomId !== listeningRoomId) return;
+
+        const uiVersion = ++roomUiVersion;
+
+        const room = snap.val();
+        if (!room) return;
+        window.__lastBoundRoom = room;
+        window.__lastBoundRoomId = listeningRoomId;
+
+if (isSpectatorMode) {
+    renderSpectatorRoomSnapshot(room, listeningRoomId);
+    return;
+}
+
+const me = getCurrentPlayerProfile();
+
+const detectedSide = getMySideFromRoomSafe(room);
+
+// Nếu mình là B/đen, nhưng Firebase đã xóa players/den
+// nghĩa là A đã đá B vì hết 30 giây chưa SS.
+// Chỉ xử lý local cho B văng về sảnh, KHÔNG gọi leaveRealtimeMatch nữa.
+const iWasKickedByReadyTimeout =
+    mySide === "den" &&
+    !detectedSide &&
+    room.status === "waiting" &&
+    !room.winner &&
+    !!room.players?.do &&
+    !room.players?.den;
+
+if (iWasKickedByReadyTimeout) {
+    clearInterval(readyInterval);
+    readyInterval = null;
+
+    closeReadyOverlay();
+
+    alert("Hết thời gian sẵn sàng!");
+
+    clearActiveMatchSnapshot(listeningRoomId);
+    cleanupRoomListeners();
+
+    currentRoomId = null;
+    mySide = null;
+    viewSide = "do";
+    currentRoomMode = null;
+    currentRoomStakePMC = 0;
+    currentRoomBucket = null;
+    currentRoomStatus = null;
+
+    readyDo = false;
+    readyDen = false;
+    readyDeadlineAt = 0;
+    readyTime = 30;
+    readyOverlayWaitingShown = false;
+    readyOverlayRoomKey = "";
+    readyOverlayOpeningLock = false;
+
+    showHomeUI();
+
+    const arena = document.getElementById("game-arena");
+    if (arena) arena.style.display = "none";
+
+    return;
+}
+
+if (detectedSide) {
+    mySide = detectedSide;
+    viewSide = detectedSide;
+} else {
+    viewSide = mySide || "do";
+}
+
+if (typeof applyBoardPerspective === "function") {
+    applyBoardPerspective();
+}
+
+        currentRoomMode = room.mode || currentRoomMode;
+        currentRoomStatus = room.status || null;
+        readyDo = !!room.ready?.do;
+        readyDen = !!room.ready?.den;
+
+        if (mySide) {
+            saveActiveMatchSnapshot({
+                roomId: listeningRoomId,
+                mode: currentRoomMode,
+                side: mySide
+            });
+        }
+
+        let didSettleWinnerNow = false;
+
+if (room.winner) {
+    // LÕI LỊCH SỬ: chỉ ghi biên bản ván, không cộng PMC, không đụng SS.
+    commitRoundResultCoreOnce(room, listeningRoomId).catch(err => console.error("commitRoundResultCoreOnce lỗi:", err));
+
+    // STATS V2: chỉ cộng thắng/thua từ roundResults, không đụng ready/SS/PMC/owner.
+    commitStatsV2FromRoundRoomOnce(room, listeningRoomId).catch(err => console.error("commitStatsV2FromRoundRoomOnce lỗi:", err));
+
+    // Hiện popup thắng/thua NGAY khi thấy winner.
+    // Không đợi settle PMC, vì bên thắng settle xong có thể bị return sớm.
+    window.__shownVictoryKeys = window.__shownVictoryKeys || {};
+
+    const victoryKey = [
+        listeningRoomId,
+        room.winner || "",
+        room.winReason || "",
+        room.finishedAt || room.settlement?.paidAt || ""
+    ].join("|");
+
+    if (!window.__shownVictoryKeys[victoryKey] && !isGameOver) {
+        window.__shownVictoryKeys[victoryKey] = true;
+
+        if (room.winner === "hoa") {
+            endGame("HÒA CỜ", "2 BÊN HÒA");
+        } else {
+            let title = "CHIẾU BÍ";
+
+            if (room.winReason === "dauhang") {
+                title = "ĐẦU HÀNG";
+            }
+
+            if (room.winReason === "bochay") {
+                title = "ĐỐI THỦ THOÁT";
+            }
+
+            endGame(
+                title,
+                `BÊN ${room.winner === "do" ? "ĐỎ" : "ĐEN"} THẮNG`
+            );
+        }
+    }
+// A/B bỏ chạy ngang khi đang đánh:
+            if (room.winReason === "bochay" && room.winner === mySide) {
+                scheduleResetWinnerRoomAfterPaid(room, listeningRoomId);
+            }
+// 🔥 BỎ CHỮ AWAIT: Gọi chia tiền chạy ngầm, luồng UI chạy tiếp bật bảng SS luôn!
+        maybeSettleStakeRoom(room, listeningRoomId).catch(err => console.error("Settle lỗi:", err));
+
+        // 🔥 FIX GIAO DIỆN KHÔNG CỘNG TIỀN KHI ĐẦU HÀNG/CHIẾU BÍ:
+        // Bắt tín hiệu "đã trả thưởng xong" từ Firebase để ép máy tải lại ví!
+        if (room.settlement && room.settlement.paid === true) {
+            const syncKey = `__wallet_synced_${listeningRoomId}_${room.winner}`;
+            if (!window[syncKey]) {
+                window[syncKey] = true;
+                setTimeout(() => {
+                    console.log("💰 Firebase báo chia tiền xong, tải lại ví mới nhất!");
+                    loadWalletBalance().then(() => {
+                        if (mySide) syncMyMatchBalanceToRoomNow();
+                    });
+                }, 800); // Đợi 800ms cho chắc ăn Firebase đã lưu xong xuôi
+            }
+        }
+
+        // Tách riêng khối bàn giao phòng sau bỏ chạy.
+        if (
+            room.winner === mySide &&
+            room.winReason === "bochay"
+        ) {
+            scheduleResetWinnerRoomAfterPaid(room, listeningRoomId);
+        }
+
+            // 🔥 FIX TRÍ MẠNG LỖI ĐẦU HÀNG ĐÉO CỘNG TIỀN:
+            // Khi máy người thua chia tiền xong, nó báo "paid = true" lên Firebase.
+            // Máy người thắng thấy chữ "paid = true" thì lập tức load lại ví mới nhất!
+            if (room.settlement?.paid === true || room.settlement?.done === true) {
+                const syncKey = `__wallet_synced_${listeningRoomId}_${room.winner}`;
+                if (!window[syncKey]) {
+                    window[syncKey] = true;
+                    setTimeout(() => {
+                        console.log("Firebase báo đã chia tiền xong, tải lại ví mới nhất!");
+                        loadWalletBalance().then(() => {
+                            if (mySide) syncMyMatchBalanceToRoomNow();
+                        });
+                    }, 800); // Chờ 800ms cho Firebase ghi DB dứt điểm
+                }
+            }
+
+        } // Đóng ngoặc của cái if (room.winner) ở tít trên
+    
+    // Khi chưa có winner thì đồng bộ ví bình thường. 
+    if (!room.winner) {
+        syncMyWalletCacheFromRoomPlayer(room);
+    }
+// Trường hợp B thoát/phòng rớt mạng, A đang chờ mà đã bị trừ SS:
+// A tự kiểm tra và tự hoàn lại cho chính mình, tránh kẹt tiền tới khi reset.
+if (
+    mySide === "do" &&
+    room.status === "waiting" &&
+    !room.players?.den &&
+    room.stakeLocked?.do &&
+    !room.refunds?.do?.done
+) {
+    maybeRefundWaitingStakePMC(listeningRoomId, room, "do")
+        .then(async (nextPmc) => {
+            if (nextPmc != null) {
+                currentPmcBalance = nextPmc;
+                localStorage.setItem(getPmcCacheKey(), String(nextPmc));
+                updatePmcUI(nextPmc);
+                refreshMyMatchBalanceBoxesNow(getPiBalance(), nextPmc);
+            }
+
+            await loadWalletBalance().catch(() => {});
+            await syncMyMatchBalanceToRoomNow().catch(() => {});
+        })
+        .catch(err => console.error("A tự hoàn PMC khi B thoát lỗi:", err));
+}
+
+renderPlayersFromRoom(room);
+updateReadyUI();
+
+const hasEnoughPlayersWaiting =
+    !!room.players?.do &&
+    !!room.players?.den &&
+    room.status === "waiting" &&
+    !room.winner;
+
+if (hasEnoughPlayersWaiting) {
+    isGameOver = false;
+    selectedPiece = null;
+    clearMoveHints();
+    hideVictoryPopup();
+    renderTimerUI();
+
+    // Mở bảng SS ổn định, không cho Firebase snapshot làm chớp tắt
+    ensureReadyOverlayForWaitingRoom(room, listeningRoomId);
+} else {
+    // Chỉ đóng bảng SS khi thật sự đã vào trận hoặc phòng không còn đủ người.
+    // Không đóng/mở theo mấy update phụ như số dư, ready, stakeLocked.
+    const reallyMustCloseReady =
+        room.status === "playing" ||
+        !!room.winner ||
+        !room.players?.do ||
+        !room.players?.den;
+
+    if (reallyMustCloseReady) {
+        closeReadyOverlay();
+        readyOverlayRoomKey = "";
+    }
+
+    renderTimerUI();
+}
+
+if (room.status === "playing" && !room.winner) {
+    readyOverlayWaitingShown = false;
+    readyOverlayRoomKey = "";
+    readyOverlayOpeningLock = false;
+    isGameOver = false;
+
+    // Ván mới rồi thì cho phép hiện hiệu ứng thắng/thua của ván mới
+    window.__shownVictoryKeys = {};
+
+    const overlay = document.getElementById("ready-overlay");
+    if (overlay) overlay.style.display = "none";
+
+    clearInterval(readyInterval);
+}
+const hasBothPlayersInRoom = !!room.players?.do && !!room.players?.den;
+const canRenderLiveBoard =
+    room.status === "playing" &&
+    hasBothPlayersInRoom &&
+    Array.isArray(room.board) &&
+    room.board.length > 0;
+
+if (!canRenderLiveBoard) {
+    clearRealtimeBoardVisualOnly();
+} else {
+    const newBoardHash = JSON.stringify(room.board || []);
+
+    if (newBoardHash !== lastRoomBoardHash) {
+        lastRoomBoardHash = newBoardHash;
+
+        applyBoardStateFromRoom(room.board || []);
+        isCoUp = !!room.isCoUp;
+        luotDi = room.turn || "do";
+        timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
+        timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
+
+        timerDoEl.innerText = formatTime(timeDo);
+        timerDenEl.innerText = formatTime(timeDen);
+
+        lastMoveFrom = room.lastMoveFrom || null;
+        lastMoveTo = room.lastMoveTo || null;
+
+        updateTurnUIOnly();
+
+        if (lastMoveFrom && lastMoveTo) {
+            drawLastMoveMarks();
+        }
+
+        startTimer();
+    }
+}
+
+        if (room.drawRequest && room.drawRequest.from !== mySide && room.drawRequest.at !== lastDrawRequestAt) {
+            lastDrawRequestAt = room.drawRequest.at;
+
+            const ok = confirm("Đối thủ xin hòa. Đồng ý không?");
+            if (ok) {
+                await db.ref("matches/" + roomId).update({
+                    winner: "hoa",
+                    winReason: "hoa",
+                    drawRequest: null,
+                    finishedAt: firebase.database.ServerValue.TIMESTAMP,
+                    updatedAt: firebase.database.ServerValue.TIMESTAMP
+                });
+            } else {
+                await db.ref("matches/" + roomId + "/drawRequest").remove();
+            }
+        }
+        
+        if (room.winner) {
+    window.__shownVictoryKeys = window.__shownVictoryKeys || {};
+
+    const victoryKey = [
+        listeningRoomId,
+        room.winner || "",
+        room.winReason || "",
+        room.finishedAt || room.settlement?.paidAt || ""
+    ].join("|");
+
+    if (!window.__shownVictoryKeys[victoryKey] && !isGameOver) {
+        window.__shownVictoryKeys[victoryKey] = true;
+
+        if (room.winner === "hoa") {
+            endGame("HÒA CỜ", "2 BÊN HÒA");
+        } else {
+            let title = "CHIẾU BÍ";
+            if (room.winReason === "dauhang") title = "ĐẦU HÀNG";
+            if (room.winReason === "bochay") title = "ĐỐI THỦ THOÁT";
+
+            endGame(
+    title,
+    `BÊN ${room.winner === "do" ? "ĐỎ" : "ĐEN"} THẮNG`
+);
+
+if (room.winReason === "bochay") {
+    scheduleResetWinnerRoomAfterPaid(room, listeningRoomId);
+}
+        }
+    }
+}
+
+        if (!room.winner && !isSpectatorMode) {
+    await maybeStartRoomFromHost(room, listeningRoomId);
+}
+    });
+
+const chatBindAt = typeof readyNowMs === "function" ? readyNowMs() : Date.now();
+
+roomChatRef.on("child_added", (snap) => {
+    if (currentRoomId !== listeningRoomId) return;
+
+    const data = snap.val();
+    const content = document.getElementById("match-content-popup");
+    if (!data || !content) return;
+
+    const mineByUid =
+        !!data.uid &&
+        !!auth.currentUser &&
+        data.uid === auth.currentUser.uid;
+
+    const mineBySide =
+        !!data.side &&
+        !!mySide &&
+        data.side === mySide;
+
+    const mine = mineByUid || mineBySide;
+
+    const msg = document.createElement("div");
+    msg.style.marginBottom = "6px";
+    msg.innerHTML = `<b style="color:${mine ? "#55efc4" : "#ffeaa7"};">${mine ? "Mầy" : (data.name || "Đối thủ")}:</b> <span style="word-break:break-word;">${data.text || ""}</span>`;
+    content.appendChild(msg);
+    content.scrollTop = content.scrollHeight;
+
+    // Chỉ báo bong bóng cho tin nhắn mới của đối thủ.
+    // Chặn tin nhắn cũ lúc vừa bindRoom không tự bật lên.
+    const msgAt = Number(data.at || 0) || 0;
+    const isNewOpponentMsg =
+        !mine &&
+        msgAt &&
+        msgAt >= chatBindAt - 3000;
+
+    if (isNewOpponentMsg) {
+        showMatchChatPeek(data);
+    }
+});
+}
+function normalizeInviteCode(value = "") {
+    return String(value)
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, "");
+}
+
+function makeInviteCodeFromRoomId(roomId = "") {
+    const clean = String(roomId)
+        .replace(/[^a-zA-Z0-9]/g, "")
+        .toUpperCase();
+    return clean.slice(-8);
+}
+
+// HÀM DỌN PHÒNG CHỜ CŨ CỦA MÌNH
+// Đã fix lỗi: Tuyệt đối không được đóng cái phòng mà mình đang ngồi bên trong!
+async function closeMyOtherOpenWaitingRooms(keepRoomId = null) {
+    try {
+        const me = getCurrentPlayerProfile();
+        const myUid = String(me?.uid || "");
+        const myWalletKey = String(me?.walletKey || makeWalletDbKey() || "");
+
+        if (!myUid && !myWalletKey) return;
+
+        // Ép lấy thêm cái currentRoomId hiện tại để bảo vệ phòng đang ngồi
+        const safeKeepRoomId = keepRoomId || currentRoomId || null;
+
+        const snap = await db.ref("matches")
+            .orderByChild("createdAt")
+            .limitToLast(120)
+            .once("value");
+
+        const updates = {};
+
+        snap.forEach(child => {
+            const roomId = child.key;
+            const room = child.val() || {};
+
+            if (!roomId) return;
+            
+            // BẢO VỆ TUYỆT ĐỐI: Không được chạm vào phòng mình đang muốn giữ, HOẶC phòng mình đang ngồi trong đó!
+            if (safeKeepRoomId && roomId === safeKeepRoomId) return;
+
+            if (room.winner || room.status !== "waiting" || room.lobbyOpen !== true) return;
+
+            // Phòng đã có khách thì không động vào, tránh phá phòng đang chuẩn bị SS.
+            if (room.players?.den) return;
+
+            const host = room.players?.do || {};
+            const ownerUid = String(room.lobbyOwnerUid || host.uid || "");
+            const ownerWalletKey = String(room.lobbyOwnerWalletKey || host.walletKey || "");
+
+            // Xác định xem phòng này có phải của mình làm chủ không
+            const mine =
+                (myUid && ownerUid && ownerUid === myUid) ||
+                (myWalletKey && ownerWalletKey && ownerWalletKey === myWalletKey) ||
+                (myUid && host.uid && host.uid === myUid); // Đề phòng lỗi thiếu ownerUid
+
+            if (!mine) return;
+
+            const bucket = room.roomBucket || makeStakeBucket(room.mode, room.stakePMC);
+            
+            // Xóa sổ cái phòng cũ này đi
+            updates[`matches/${roomId}/lobbyOpen`] = false;
+            updates[`matches/${roomId}/lobbyClosedReason`] = "duplicate_host_room";
+            updates[`matches/${roomId}/lobbyClosedAt`] = firebase.database.ServerValue.TIMESTAMP;
+            updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+            updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+            if (bucket) {
+                updates[`waitingRooms/${bucket}/${roomId}`] = null;
+            }
+        });
+
+        if (Object.keys(updates).length) {
+            await db.ref().update(updates);
+            console.log("Đã dọn dẹp các phòng chờ ảo cũ của mầy.");
+        }
+    } catch (err) {
+        console.error("Dọn phòng chờ cũ của chính mình lỗi:", err);
+    }
+}
+
+async function touchCurrentLobbyHeartbeat() {
+    try {
+        if (!currentRoomId || mySide !== "do") return;
+
+        const me = getCurrentPlayerProfile();
+        const myUid = String(me?.uid || "");
+        const myWalletKey = String(me?.walletKey || makeWalletDbKey() || "");
+
+        const roomRef = db.ref("matches/" + currentRoomId);
+        const snap = await roomRef.once("value");
+        const room = snap.val() || null;
+
+        // Cực quan trọng: không update mù, nếu không Firebase sẽ tạo lại node matches đã bị xóa.
+        if (!room || room.winner || room.status !== "waiting" || room.lobbyOpen !== true || room.players?.den) return;
+
+        const host = room.players?.do || {};
+        const isHost =
+            (myUid && host.uid && String(host.uid) === myUid) ||
+            (myWalletKey && host.walletKey && String(host.walletKey) === myWalletKey);
+
+        if (!isHost) return;
+
+       await roomRef.update({
+            lobbyHeartbeatAt: firebase.database.ServerValue.TIMESTAMP, // 🔥 FIX: Bơm nhịp tim bằng giờ Server
+            lobbyOwnerUid: myUid || room.lobbyOwnerUid || "",
+            lobbyOwnerWalletKey: myWalletKey || room.lobbyOwnerWalletKey || ""
+        });
+    } catch (err) {
+        console.error("Cập nhật heartbeat phòng chờ lỗi:", err);
+    }
+}
+
+async function joinExistingWaitingRoom(waitingRoomRef, roomId, me, mode, stakePMC) {
+    roomId = String(roomId || "").trim();
+    if (!roomId || !me?.uid) return false;
+
+    const roomRef = db.ref("matches/" + roomId);
+    const roomSnap = await roomRef.once("value");
+    const room = roomSnap.val();
+
+    const roomMode = room?.mode || mode || "co-tuong";
+    const roomStake = Math.max(0, Math.floor(Number(room?.stakePMC ?? stakePMC ?? 0) || 0));
+
+    // CHẶN phòng ảo/phòng cũ/phòng đang chơi/phòng đã có kết quả
+    if (
+        !room ||
+        roomMode !== mode ||
+        room.winner ||
+        room.status !== "waiting" ||
+isGhostLobbyRoom(room) ||
+room.lobbyOpen !== true ||
+!room.players?.do ||
+room.players?.den
+    ) {
+        const currentWaiting = await waitingRoomRef.once("value").then(s => s.val()).catch(() => null);
+        if (currentWaiting && currentWaiting.roomId === roomId && currentWaiting.claimedBy === me.uid) {
+            await waitingRoomRef.remove().catch(() => {});
+        }
+        return false;
+    }
+
+    // Không tự vào lại bàn của chính mình
+    if (room.players?.do?.uid === me.uid || room.players?.do?.walletKey === me.walletKey) {
+        return false;
+    }
+
+    const denProfile = {
+        ...me,
+        side: "den",
+        pmcBalance: Math.max(0, Math.floor(Number(me.pmcBalance || getPmcBalance() || 0) || 0)),
+        balance: Math.max(0, Number(me.balance ?? getPiBalance() ?? 0) || 0),
+        piBalance: Math.max(0, Number(me.piBalance ?? me.balance ?? getPiBalance() ?? 0) || 0),
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+    };
+
+    const denRef = db.ref("matches/" + roomId + "/players/den");
+
+    const denJoinResult = await denRef.transaction((current) => {
+        if (current && current.uid && current.uid !== me.uid) return;
+        return denProfile;
+    }, undefined, false);
+
+    const joinedDen = denJoinResult.snapshot?.val?.() || null;
+
+    if (!denJoinResult.committed || !joinedDen || joinedDen.uid !== me.uid) {
+        const currentWaiting = await waitingRoomRef.once("value").then(s => s.val()).catch(() => null);
+        if (currentWaiting && currentWaiting.roomId === roomId && currentWaiting.claimedBy === me.uid) {
+            await waitingRoomRef.remove().catch(() => {});
+        }
+        return false;
+    }
+
+   await db.ref().update({
+    [`matches/${roomId}/ready/den`]: false,
+    [`matches/${roomId}/stakeLocked/den`]: false,
+
+    // Đủ 2 người rồi thì không cho hiện ngoài danh sách bàn nữa
+    [`matches/${roomId}/lobbyOpen`]: false,
+    [`matches/${roomId}/lobbyJoinedBy`]: me.uid || "",
+    [`matches/${roomId}/lobbyUpdatedAt`]: firebase.database.ServerValue.TIMESTAMP,
+
+    [`matches/${roomId}/updatedAt`]: firebase.database.ServerValue.TIMESTAMP
+});
+
+    const currentWaiting = await waitingRoomRef.once("value").then(s => s.val()).catch(() => null);
+    if (currentWaiting && currentWaiting.roomId === roomId && currentWaiting.claimedBy === me.uid) {
+        await waitingRoomRef.remove().catch(() => {});
+    }
+
+    mySide = "den";
+    viewSide = "den";
+    currentRoomId = roomId;
+    currentRoomMode = roomMode;
+    currentRoomStakePMC = roomStake;
+    currentRoomBucket = room?.roomBucket || makeStakeBucket(roomMode, roomStake);
+
+    saveActiveMatchSnapshot({
+        roomId,
+        mode: roomMode,
+        side: "den"
+    });
+
+    bindRoom(roomId);
+    return true;
+}
+
+async function createAndPublishWaitingRoom(me, mode, stakePMC, bucket) {
+    // Mỗi tài khoản chỉ được mở 1 phòng chờ công khai.
+    // Tạo phòng mới thì đóng các phòng chờ cũ để không sinh phòng ảo.
+    await closeMyOtherOpenWaitingRooms().catch(err => console.error("Dọn phòng cũ trước khi tạo phòng mới lỗi:", err));
+
+    const newRoomRef = db.ref("matches").push();
+    const newRoomId = newRoomRef.key;
+    const waitingRoomRef = db.ref("waitingRooms/" + bucket + "/" + newRoomId);
+    const inviteCode = makeInviteCodeFromRoomId(newRoomId);
+
+    await newRoomRef.set({
+        mode,
+        stakePMC,
+        roomBucket: bucket,
+        inviteCode,
+        status: "waiting",
+        lobbyOpen: true,
+        lobbyOwnerUid: me.uid || "",
+        lobbyOwnerWalletKey: me.walletKey || "",
+        lobbyHeartbeatAt: Date.now(),
+        lobbyUpdatedAt: firebase.database.ServerValue.TIMESTAMP,
+        turn: "do",
+        isCoUp: mode === "co-up",
+        timeDo: 540,
+        timeDen: 540,
+        createdAt: firebase.database.ServerValue.TIMESTAMP,
+        players: {
+            do: me,
+            den: null
+        },
+        ready: {
+            do: false,
+            den: false
+        },
+        stakeLocked: {
+            do: false,
+            den: false
+        },
+        board: null,
+        lastMoveFrom: null,
+        lastMoveTo: null,
+        winner: null,
+        winReason: null,
+        drawRequest: null
+    });
+
+    await waitingRoomRef.set({
+        roomId: newRoomId,
+        uid: me.uid,
+        name: me.name,
+            walletKey: me.walletKey || "",
+        mode,
+        stakePMC,
+        inviteCode,
+        createdAt: Date.now(),
+        claimedBy: null,
+        claimedAt: null
+    });
+
+    mySide = "do";
+    currentRoomId = newRoomId;
+    currentRoomMode = mode;
+    currentRoomStakePMC = stakePMC;
+
+    saveActiveMatchSnapshot({ roomId: newRoomId, mode, side: "do" });
+    bindRoom(newRoomId);
+    return true;
+}
+async function joinOrCreateRealtimeMatch(mode, stakePMC = 0) {
+    if (await tryResumeRealtimeMatch(mode)) return;
+
+    const safeStake = Math.max(0, Math.floor(Number(stakePMC) || 0));
+    const me = getCurrentPlayerProfile();
+
+    if (safeStake <= 0) {
+        alert("Mức PMC không hợp lệ.");
+        return;
+    }
+
+    if ((me.pmcBalance || 0) < safeStake) {
+        alert("PMC không đủ để vào phòng này.");
+        return;
+    }
+
+    prepareRealtimeArenaUI();
+    clearInterval(interval);
+
+    currentRoomStatus = "waiting";
+    isGameOver = false;
+    luotDi = "do";
+    timeDo = 540;
+    timeDen = 540;
+    timerDoEl.innerText = formatTime(timeDo);
+    timerDenEl.innerText = formatTime(timeDen);
+
+    currentRoomMode = mode;
+    currentRoomStakePMC = safeStake;
+    currentRoomBucket = makeStakeBucket(mode, safeStake);
+   const waitingBucketRef = db.ref("waitingRooms/" + currentRoomBucket);
+const waitingSnap = await waitingBucketRef.once("value");
+const waitingMap = waitingSnap.val() || {};
+
+const waitingList = Object.entries(waitingMap)
+    .map(([id, value]) => ({ id, ...(value || {}) }))
+    .filter(item =>
+        item.roomId &&
+        item.uid !== me.uid &&
+        !item.claimedBy
+    )
+    .sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0));
+
+let joined = false;
+
+for (const waiting of waitingList) {
+    const waitingRoomRef = db.ref("waitingRooms/" + currentRoomBucket + "/" + waiting.id);
+
+    const claimed = await waitingRoomRef.transaction((current) => {
+        if (!current || !current.roomId) return current;
+        if (current.uid === me.uid) return current;
+        if (current.claimedBy && current.claimedBy !== me.uid) return;
+        return {
+            ...current,
+            claimedBy: me.uid,
+            claimedAt: Date.now()
+        };
+    }, undefined, false);
+
+    const claimedWaiting = claimed.snapshot.val();
+    const iClaimedIt = claimed.committed &&
+        claimedWaiting &&
+        claimedWaiting.roomId === waiting.roomId &&
+        claimedWaiting.claimedBy === me.uid;
+
+    if (!iClaimedIt) continue;
+
+    joined = await joinExistingWaitingRoom(
+        waitingRoomRef,
+        waiting.roomId,
+        me,
+        mode,
+        safeStake
+    );
+
+   if (joined) {
+    // B vừa vào phòng thành công thì phải hiện bảng SS liền,
+    // không được closeReadyOverlay ở đây nữa.
+    const freshSnap = await db.ref("matches/" + waiting.roomId).once("value").catch(() => null);
+    const freshRoom = freshSnap?.val?.() || null;
+
+    if (
+        freshRoom &&
+        freshRoom.status === "waiting" &&
+        freshRoom.players?.do &&
+        freshRoom.players?.den &&
+        !freshRoom.winner
+    ) {
+        currentRoomStatus = "waiting";
+        readyDo = !!freshRoom.ready?.do;
+        readyDen = !!freshRoom.ready?.den;
+        window.__lastBoundRoom = freshRoom;
+        window.__lastBoundRoomId = waiting.roomId;
+        showReadyOverlay(freshRoom.mode || mode);
+    } else {
+        closeReadyOverlay();
+        updateReadyUI();
+    }
+
+    return;
+}
+}
+
+const created = await createAndPublishWaitingRoom(
+    me,
+    mode,
+    safeStake,
+    currentRoomBucket
+);
+
+    closeReadyOverlay();
+    readyOverlayWaitingShown = false;
+    updateReadyUI();
+}
+function toggleProfileMenu(event) {
+    event.stopPropagation();
+    const menu = document.getElementById("profile-dropdown");
+    if (!menu) return;
+    menu.classList.toggle("show");
+}
+
+document.addEventListener("click", function (event) {
+    const menu = document.getElementById("profile-dropdown");
+    const userDisplay = document.getElementById("user-display");
+    if (!menu || !userDisplay) return;
+
+    if (!userDisplay.contains(event.target)) {
+        menu.classList.remove("show");
+    }
+});
+document.querySelectorAll("#profile-dropdown .menu-item").forEach(item => {
+    item.addEventListener("touchstart", function () {
+        this.classList.remove("touch-release");
+        this.classList.add("touch-active");
+    }, { passive: true });
+
+    item.addEventListener("touchend", function () {
+        this.classList.remove("touch-active");
+        this.classList.add("touch-release");
+
+        setTimeout(() => {
+            this.classList.remove("touch-release");
+        }, 140);
+    });
+
+    item.addEventListener("touchcancel", function () {
+        this.classList.remove("touch-active");
+        this.classList.remove("touch-release");
+    });
+});
+const MAX_WITHDRAW_PER_DAY = 50;
+const MAX_WITHDRAW_PER_TX = 10000;
+
+const WITHDRAW_PASS_KEY = "pi_withdraw_password_hash";
+const PI_BALANCE_KEY = "pi-balance"; // key cũ, giữ lại để migrate 1 lần
+const BALANCE_CACHE_KEY = "wallet_balance_cache";
+const PMC_BALANCE_KEY = "pmc_balance_cache";
+const PMC_RATE = 500;   // 1 Pi = 500 PMC
+
+let withdrawLockResolve = null;
+let withdrawLockMode = "verify"; // verify | create
+let currentWalletBalance = 0;
+let currentPmcBalance = 0;
+let selectedRoomStakePMC = 0;
+let selectedRoomMode = "co-tuong";
+let currentRoomStakePMC = 0;
+let currentRoomBucket = null;
+let isJoiningStakeRoom = false;
+
+function getAccountKey() {
+    const user = auth.currentUser;
+    if (user?.uid) return `google_${user.uid}`;
+
+    const piName = localStorage.getItem("pi-user-name");
+    if (piName) return `pi_${piName.trim().toLowerCase()}`;
+
+    const guestName =
+        localStorage.getItem("currentUsername") ||
+        localStorage.getItem("user-name-display") ||
+        "guest";
+
+    return `guest_${guestName.trim().toLowerCase().replace(/\s+/g, "_")}`;
+}
+
+function makeWalletDbKey() {
+    return getAccountKey().replace(/[.#$\[\]\/]/g, "_");
+}
+
+function scopedKey(base) {
+    return `${base}:${getAccountKey()}`;
+}
+
+function getWithdrawPassKey() {
+    return scopedKey(WITHDRAW_PASS_KEY);
+}
+
+function getBalanceCacheKey() {
+    return scopedKey(BALANCE_CACHE_KEY);
+}
+function getPmcCacheKey() {
+    return scopedKey(PMC_BALANCE_KEY);
+}
+function walletRef() {
+    return db.ref("wallets/" + makeWalletDbKey());
+}
+
+function updateBalanceUI(amount) {
+    const safeAmount = Math.max(0, Number(amount) || 0);
+    const balanceEl = document.getElementById("user-balance");
+    if (balanceEl) {
+        balanceEl.innerText = safeAmount.toFixed(2) + " π";
+    }
+}
+
+function updatePmcUI(amount) {
+    const safeAmount = Math.max(0, Math.floor(Number(amount) || 0));
+    const pmcEl = document.getElementById("user-pmc-balance");
+    if (pmcEl) {
+        pmcEl.innerText = safeAmount.toLocaleString("vi-VN") + " PMC";
+    }
+}
+
+function formatPMC(amount) {
+    return Math.max(0, Math.floor(Number(amount) || 0)).toLocaleString("vi-VN");
+}
+
+function makeStakeBucket(mode, stakePMC) {
+    return `${mode}__${Math.max(0, Math.floor(Number(stakePMC) || 0))}`;
+}
+function makeInviteCodeFromRoomId(roomId = "") {
+    const clean = String(roomId || "")
+        .replace(/[^a-zA-Z0-9]/g, "")
+        .toUpperCase();
+
+    return clean.slice(-8) || "PHONG888";
+}
+function getTodayWithdrawKey() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    return scopedKey(`pi_withdraw_${y}-${m}-${d}`);
+}
+
+function getWithdrawState() {
+    return JSON.parse(localStorage.getItem(getTodayWithdrawKey()) || '{"count":0,"history":[]}');
+}
+
+function saveWithdrawState(state) {
+    localStorage.setItem(getTodayWithdrawKey(), JSON.stringify(state));
+}
+
+async function loadWalletBalance() {
+    try {
+        const snap = await walletRef().once("value");
+        const data = snap.val() || {};
+
+        let piAmount = 0;
+        if (data.balance != null) {
+            piAmount = Number(data.balance) || 0;
+        } else {
+            const scopedCache = localStorage.getItem(getBalanceCacheKey());
+            const legacy = localStorage.getItem(PI_BALANCE_KEY);
+            piAmount = Number(scopedCache ?? legacy ?? 0) || 0;
+        }
+
+        let pmcAmount = 0;
+        if (data.pmcBalance != null) {
+            pmcAmount = Math.floor(Number(data.pmcBalance) || 0);
+        } else {
+            pmcAmount = Math.floor(Number(localStorage.getItem(getPmcCacheKey()) || 0) || 0);
+        }
+
+        currentWalletBalance = Math.max(0, piAmount);
+        currentPmcBalance = Math.max(0, pmcAmount);
+
+        localStorage.setItem(getBalanceCacheKey(), String(currentWalletBalance));
+        localStorage.setItem(getPmcCacheKey(), String(currentPmcBalance));
+
+        // 👇👇 BẮT ĐẦU FIX LỖI F5 MẤT TÊN 👇👇
+        // 1. Nếu Database đã có tên/ảnh do mầy tự đổi, thì phải kéo nó về đè lên màn hình
+        const nameToSave = data.name || localStorage.getItem("user-name-display") || "Người chơi";
+        const photoToSave = data.photo || localStorage.getItem("user-photo") || "images/do_tuong.png";
+
+        if (data.name) {
+            localStorage.setItem("user-name-display", data.name);
+            localStorage.setItem("currentUsername", data.name);
+            const nameDisplay = document.getElementById("user-name-display");
+            const userName = document.getElementById("user-name");
+            if (nameDisplay) nameDisplay.innerText = data.name;
+            if (userName) userName.innerText = data.name;
+        }
+        
+        if (data.photo) {
+            localStorage.setItem("user-photo", data.photo);
+            const userPhoto = document.getElementById("user-photo");
+            const editUserPhoto = document.getElementById("edit-user-photo");
+            if (userPhoto) userPhoto.src = data.photo;
+            if (editUserPhoto) editUserPhoto.src = data.photo;
+        }
+
+        // 2. Chốt lại: Cập nhật Firebase bằng tên gốc của Database, không cho ghi đè bậy bạ nữa!
+        await walletRef().update({
+            balance: currentWalletBalance,
+            pmcBalance: currentPmcBalance,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP,
+            name: nameToSave,
+            photo: photoToSave
+        });
+        // 👆👆 KẾT THÚC FIX LỖI 👆👆
+
+        updateBalanceUI(currentWalletBalance);
+        updatePmcUI(currentPmcBalance);
+
+        // 🔥 THÊM ĐOẠN NÀY VÀO: ĐỂ THANH EXP CẬP NHẬT ĐÚNG CẤP LÚC MỚI VÀO GAME
+        if (typeof window.updateExpBarUI === 'function') {
+            // FIX TRIỆT ĐỂ: Chỉ tải EXP đúng 1 lần lúc mới vào game.
+            // Cấm tải đè lung tung trong lúc chơi để chống giật lùi!
+            if (!window.__expBarInitialized) {
+                window.updateExpBarUI(data.exp || 0);
+                window.__expBarInitialized = true;
+            }
+        }
+
+        return { pi: currentWalletBalance, pmc: currentPmcBalance };
+    } catch (err) {
+        console.error("Lỗi load ví:", err);
+
+        currentWalletBalance = Math.max(0, Number(localStorage.getItem(getBalanceCacheKey()) || 0) || 0);
+        currentPmcBalance = Math.max(0, Math.floor(Number(localStorage.getItem(getPmcCacheKey()) || 0) || 0));
+
+        updateBalanceUI(currentWalletBalance);
+        updatePmcUI(currentPmcBalance);
+        return { pi: currentWalletBalance, pmc: currentPmcBalance };
+    }
+}
+
+function getPiBalance() {
+    const cached = Number(localStorage.getItem(getBalanceCacheKey()) || currentWalletBalance || 0) || 0;
+    return Math.max(0, cached);
+}
+
+function getPmcBalance() {
+    const cached = Math.floor(Number(localStorage.getItem(getPmcCacheKey()) || currentPmcBalance || 0) || 0);
+    return Math.max(0, cached);
+}
+
+function setPiBalance(amount) {
+    const safeAmount = Math.max(0, Number(amount) || 0);
+    currentWalletBalance = safeAmount;
+
+    localStorage.setItem(getBalanceCacheKey(), String(safeAmount));
+    updateBalanceUI(safeAmount);
+
+    walletRef().update({
+        balance: safeAmount,
+        pmcBalance: getPmcBalance(),
+        updatedAt: firebase.database.ServerValue.TIMESTAMP,
+        name: localStorage.getItem("user-name-display") || "Người chơi",
+        photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+    }).catch(err => {
+        console.error("Lỗi sync số dư Pi:", err);
+    });
+}
+function refreshMyMatchBalanceBoxesNow(piAmount = getPiBalance(), pmcAmount = getPmcBalance()) {
+    const bottomPiBox = document.getElementById("player-do-pi-balance");
+    const bottomPmcBox = document.getElementById("player-do-pmc-balance");
+    const topPiBox = document.getElementById("player-den-pi-balance");
+    const topPmcBox = document.getElementById("player-den-pmc-balance");
+
+    // Trong render hiện tại: dưới luôn là mình, trên là đối thủ
+    if (bottomPiBox) bottomPiBox.innerText = Math.max(0, Number(piAmount) || 0).toFixed(2) + " π";
+    if (bottomPmcBox) bottomPmcBox.innerText = formatPMC(pmcAmount) + " PMC";
+
+    // Nếu có lúc UI chưa đảo đúng, vẫn ép theo mySide cho chắc
+    if (mySide === "den") {
+        if (topPiBox) topPiBox.innerText = Math.max(0, Number(piAmount) || 0).toFixed(2) + " π";
+        if (topPmcBox) topPmcBox.innerText = formatPMC(pmcAmount) + " PMC";
+    }
+}
+
+window.syncMyMatchBalanceToRoomNow = async function() {
+    if (!currentRoomId || !mySide) return;
+
+    const piAmount = getPiBalance();
+    const pmcAmount = getPmcBalance();
+
+    refreshMyMatchBalanceBoxesNow(piAmount, pmcAmount);
+
+    // LỚP KHIÊN THÉP: Kiểm tra xem cái ghế này có người ngồi không trước khi ném tiền vào!
+    // Chống tuyệt đối vụ tạo ra "Bóng ma" sau khi đối thủ đã thoát.
+    const snap = await db.ref("matches/" + currentRoomId + "/players/" + mySide).once("value");
+    if (!snap.exists()) return; 
+
+    await db.ref("matches/" + currentRoomId + "/players/" + mySide).update({
+        balance: piAmount,
+        piBalance: piAmount,
+        pmcBalance: pmcAmount,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+    }).catch(err => console.error("Lỗi sync số dư vào phòng:", err));
+};
+function setPmcBalance(amount) {
+    const safeAmount = Math.max(0, Math.floor(Number(amount) || 0));
+    currentPmcBalance = safeAmount;
+
+    localStorage.setItem(getPmcCacheKey(), String(safeAmount));
+    updatePmcUI(safeAmount);
+
+    walletRef().update({
+        balance: getPiBalance(),
+        pmcBalance: safeAmount,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP,
+        name: localStorage.getItem("user-name-display") || "Người chơi",
+        photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+    }).catch(err => {
+        console.error("Lỗi sync số dư PMC:", err);
+    });
+}
+/* ===== SHOP SKIN VIỀN AVATAR - CHỈ GẮN AVATAR MENU/HỒ SƠ ===== */
+const AVATAR_SKIN_MIN_PRICE = 5000;
+const SYSTEM_FEE_WALLET_KEY = "pi_admin_master"; // ví phí hệ thống nhận PMC từ shop skin
+
+const AVATAR_SKINS = [
+    {
+        id: "none",
+        name: "Mặc định",
+        price: 0,
+        frameImage: "images/avatar_frames/none.png",
+        desc: "Avatar mặc định."
+    },
+    {
+        id: "bronze",
+        name: "Hào Quang Đồng",
+        price: 5000,
+        frameImage: "images/avatar_frames/bronze-crown.png",
+        desc: "Vương miện đồng + hoa văn cổ."
+    },
+    {
+        id: "jade",
+        name: "Ngọc Lục Bảo",
+        price: 10000,
+        frameImage: "images/avatar_frames/jade-flower.png",
+        desc: "Khung ngọc xanh, hoa văn ôm avatar."
+    },
+    {
+        id: "dragon",
+        name: "Long Vương",
+        price: 20000,
+        frameImage: "images/avatar_frames/dragon-frame.png",
+        desc: "Rồng vàng ôm avatar, skin VIP."
+    },
+    {
+        id: "phoenix",
+        name: "Phượng Hoàng",
+        price: 50000,
+        frameImage: "images/avatar_frames/phoenix-frame.png",
+        desc: "Phượng hoàng tím hồng, skin cao cấp."
+    }
+];
+
+function getAvatarSkinCacheKey() {
+    return scopedKey("avatar_skin_equipped");
+}
+
+function getOwnedAvatarSkinsCacheKey() {
+    return scopedKey("avatar_skin_owned");
+}
+
+function getAvatarSkinById(id) {
+    return AVATAR_SKINS.find(s => s.id === id) || AVATAR_SKINS[0];
+}
+
+function normalizeOwnedAvatarSkins(raw) {
+    const owned = { none: true };
+
+    if (!raw) return owned;
+
+    if (typeof raw === "string") {
+        try {
+            raw = JSON.parse(raw);
+        } catch (_) {
+            return owned;
+        }
+    }
+
+    if (Array.isArray(raw)) {
+        raw.forEach(id => {
+            if (getAvatarSkinById(id)) owned[id] = true;
+        });
+        return owned;
+    }
+
+    if (typeof raw === "object") {
+        Object.keys(raw).forEach(id => {
+            if (raw[id] !== false && getAvatarSkinById(id)) {
+                owned[id] = true;
+            }
+        });
+    }
+
+    owned.none = true;
+    return owned;
+}
+
+function getOwnedAvatarSkins() {
+    return normalizeOwnedAvatarSkins(localStorage.getItem(getOwnedAvatarSkinsCacheKey()));
+}
+
+function getEquippedAvatarSkin() {
+    const owned = getOwnedAvatarSkins();
+    const saved = localStorage.getItem(getAvatarSkinCacheKey()) || "none";
+
+    if (!owned[saved]) return "none";
+    return getAvatarSkinById(saved).id;
+}
+
+function saveAvatarSkinLocal(equippedId, ownedMap) {
+    const owned = normalizeOwnedAvatarSkins(ownedMap);
+    let equipped = getAvatarSkinById(equippedId).id;
+
+    if (!owned[equipped]) equipped = "none";
+
+    localStorage.setItem(getAvatarSkinCacheKey(), equipped);
+    localStorage.setItem(getOwnedAvatarSkinsCacheKey(), JSON.stringify(owned));
+
+    return { equipped, owned };
+}
+
+function ensureAvatarFrameShell(imgEl) {
+    if (!imgEl) return null;
+
+    const isMatchAvatar =
+        imgEl.id === "player-do-avatar" ||
+        imgEl.id === "player-den-avatar" ||
+        imgEl.classList.contains("player-avatar-outside");
+
+    const isShopAvatar = imgEl.classList.contains("avatar-shop-preview");
+    const isMenuAvatar = imgEl.id === "user-photo" || imgEl.id === "edit-user-photo";
+
+    let shell = imgEl.parentElement;
+
+    if (!shell || !shell.classList.contains("avatar-frame-shell")) {
+        const computed = getComputedStyle(imgEl);
+
+        shell = document.createElement("div");
+        shell.className = "avatar-frame-shell";
+
+        if (isMatchAvatar) shell.classList.add("avatar-match-shell");
+        if (isShopAvatar) shell.classList.add("avatar-shop-shell");
+        if (isMenuAvatar) shell.classList.add("avatar-menu-shell");
+
+        shell.style.width = isMatchAvatar ? "34px" : (computed.width || "42px");
+        shell.style.height = isMatchAvatar ? "34px" : (computed.height || "42px");
+        shell.style.display = "inline-flex";
+        shell.style.position = "relative";
+        shell.style.overflow = "visible";
+
+        imgEl.parentNode.insertBefore(shell, imgEl);
+        shell.appendChild(imgEl);
+
+        imgEl.classList.add("avatar-core");
+        if (isMatchAvatar) imgEl.classList.add("avatar-match-core");
+
+        const frame = document.createElement("img");
+        frame.className = "avatar-frame-overlay";
+        frame.alt = "";
+        shell.appendChild(frame);
+    } else {
+        imgEl.classList.add("avatar-core");
+
+        if (isMatchAvatar) {
+            shell.classList.add("avatar-match-shell");
+            imgEl.classList.add("avatar-match-core");
+        }
+
+        if (!shell.querySelector(".avatar-frame-overlay")) {
+            const frame = document.createElement("img");
+            frame.className = "avatar-frame-overlay";
+            frame.alt = "";
+            shell.appendChild(frame);
+        }
+    }
+
+    return shell;
+}
+
+function forceImportantStyle(el, prop, value) {
+    if (!el) return;
+    el.style.setProperty(prop, value, "important");
+}
+
+function applyAvatarSkinToElement(imgEl, skinId) {
+    if (!imgEl) return;
+    // Không bao giờ bọc chính ảnh frame/skin, nếu không skin sẽ tự chui vào trong avatar
+if (imgEl.classList.contains("avatar-frame-overlay")) return;
+
+    const shell = ensureAvatarFrameShell(imgEl);
+    if (!shell) return;
+
+    const skin = getAvatarSkinById(skinId || "none");
+    const frame = shell.querySelector(".avatar-frame-overlay");
+
+    const isMatchAvatar =
+        imgEl.id === "player-do-avatar" ||
+        imgEl.id === "player-den-avatar" ||
+        imgEl.classList.contains("player-avatar-outside") ||
+        shell.classList.contains("avatar-match-shell");
+
+    shell.setAttribute("data-skin", skin.id);
+
+    if (isMatchAvatar) {
+        shell.classList.add("avatar-match-shell");
+        imgEl.classList.add("avatar-core", "avatar-match-core");
+
+        // ÉP LẠI NGAY, KHÔNG CẦN LOAD APP
+        forceImportantStyle(shell, "width", "34px");
+        forceImportantStyle(shell, "height", "34px");
+        forceImportantStyle(shell, "min-width", "34px");
+        forceImportantStyle(shell, "flex", "0 0 34px");
+        forceImportantStyle(shell, "margin", "0 5px 0 0");
+        forceImportantStyle(shell, "padding", "0");
+        forceImportantStyle(shell, "position", "relative");
+        forceImportantStyle(shell, "display", "inline-flex");
+        forceImportantStyle(shell, "align-items", "center");
+        forceImportantStyle(shell, "justify-content", "center");
+        forceImportantStyle(shell, "overflow", "visible");
+        forceImportantStyle(shell, "transform", "none");
+
+        forceImportantStyle(imgEl, "position", "absolute");
+        forceImportantStyle(imgEl, "left", "50%");
+        forceImportantStyle(imgEl, "top", "50%");
+        forceImportantStyle(imgEl, "width", "24px");
+        forceImportantStyle(imgEl, "height", "24px");
+        forceImportantStyle(imgEl, "min-width", "24px");
+        forceImportantStyle(imgEl, "max-width", "24px");
+        forceImportantStyle(imgEl, "max-height", "24px");
+        forceImportantStyle(imgEl, "margin", "0");
+        forceImportantStyle(imgEl, "padding", "0");
+        forceImportantStyle(imgEl, "transform", "translate(-50%, -50%)");
+        forceImportantStyle(imgEl, "object-fit", "cover");
+        forceImportantStyle(imgEl, "border-radius", "50%");
+        forceImportantStyle(imgEl, "z-index", "2");
+        forceImportantStyle(imgEl, "box-sizing", "border-box");
+    }
+
+    if (frame) {
+        frame.src = skin.frameImage || "";
+        frame.style.display = skin.id === "none" ? "none" : "block";
+
+        if (isMatchAvatar) {
+            const bigSkin = skin.id === "dragon" || skin.id === "phoenix";
+            const frameSize = bigSkin ? "52px" : "46px";
+
+            forceImportantStyle(frame, "position", "absolute");
+            forceImportantStyle(frame, "left", "50%");
+            forceImportantStyle(frame, "top", "50%");
+            forceImportantStyle(frame, "width", frameSize);
+            forceImportantStyle(frame, "height", frameSize);
+            forceImportantStyle(frame, "max-width", "none");
+            forceImportantStyle(frame, "max-height", "none");
+            forceImportantStyle(frame, "margin", "0");
+            forceImportantStyle(frame, "padding", "0");
+            forceImportantStyle(frame, "transform", "translate(-50%, -50%)");
+            forceImportantStyle(frame, "object-fit", "contain");
+            forceImportantStyle(frame, "z-index", "6");
+            forceImportantStyle(frame, "pointer-events", "none");
+        }
+    }
+}
+
+function refreshOwnAvatarSkinUI() {
+    const skinId = getEquippedAvatarSkin();
+
+    applyAvatarSkinToElement(document.getElementById("user-photo"), skinId);
+    applyAvatarSkinToElement(document.getElementById("edit-user-photo"), skinId);
+
+    renderAvatarSkinShop();
+}
+
+async function loadAvatarSkinState() {
+    try {
+        const snap = await walletRef().once("value");
+        const data = snap.val() || {};
+
+        const localOwned = getOwnedAvatarSkins();
+        const owned = normalizeOwnedAvatarSkins(data.ownedAvatarSkins || localOwned);
+        let equipped = data.avatarSkin || localStorage.getItem(getAvatarSkinCacheKey()) || "none";
+
+        if (!owned[equipped]) equipped = "none";
+
+        saveAvatarSkinLocal(equipped, owned);
+        refreshOwnAvatarSkinUI();
+    } catch (err) {
+        console.error("Lỗi tải skin avatar:", err);
+        refreshOwnAvatarSkinUI();
+    }
+}
+
+function openAvatarSkinShop() {
+    document.querySelectorAll(".profile-menu").forEach(m => m.classList.remove("show"));
+
+    const modal = document.getElementById("avatar-skin-shop-modal");
+    if (modal) modal.style.display = "flex";
+
+    loadWalletBalance()
+        .then(() => loadAvatarSkinState())
+        .then(() => renderAvatarSkinShop())
+        .catch(err => {
+            console.error("Lỗi mở shop skin:", err);
+            renderAvatarSkinShop();
+        });
+}
+
+function closeAvatarSkinShop() {
+    const modal = document.getElementById("avatar-skin-shop-modal");
+    if (modal) modal.style.display = "none";
+}
+
+function avatarShopEscape(text) {
+    return String(text || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+let avatarSkinShopTab = "shop";
+
+window.avatarSkinShopTab = "shop";
+
+window.setAvatarSkinShopTab = function(tab) {
+    window.avatarSkinShopTab = tab; // Có thể là "shop", "bag", hoặc "exp"
+    window.renderAvatarSkinShop();
+}
+
+window.refreshAvatarSkinShopTabs = function() {
+    const shopTab = document.getElementById("avatar-shop-tab-shop");
+    const bagTab = document.getElementById("avatar-shop-tab-bag");
+    const expTab = document.getElementById("avatar-shop-tab-exp");
+
+    if (shopTab) shopTab.classList.toggle("active", window.avatarSkinShopTab === "shop");
+    if (bagTab) bagTab.classList.toggle("active", window.avatarSkinShopTab === "bag");
+    if (expTab) expTab.classList.toggle("active", window.avatarSkinShopTab === "exp");
+}
+
+window.renderAvatarSkinShop = function() {
+    const list = document.getElementById("avatar-skin-shop-list");
+    const balance = document.getElementById("avatar-skin-shop-balance");
+    if (!list) return;
+
+    window.refreshAvatarSkinShopTabs();
+    const currentPmc = getPmcBalance();
+    if (balance) balance.innerText = "Số dư: " + formatPMC(currentPmc) + " PMC";
+
+    if (window.avatarSkinShopTab === "exp") {
+        // 6 GÓI EXP ĐỂ CÀY LÊN MAX CẤP 180 - TỔNG ĐÚNG 60 VÉ
+        const expPackages = [
+            { id: "exp1", name: "Gói Tân Binh", exp: 1000, price: 1000, desc: "+1.000 EXP <br><b style='color:#00c38a'>+2 Lượt Miễn Phí</b>", tickets: 2, icon: "🌱" },
+            { id: "exp2", name: "Gói Thương Gia", exp: 5000, price: 4800, desc: "+5.000 EXP <br><b style='color:#00c38a'>+4 Lượt Miễn Phí</b>", tickets: 4, icon: "💰" },
+            { id: "exp3", name: "Gói Tinh Nhuệ", exp: 20000, price: 18500, desc: "+20.000 EXP <br><b style='color:#00c38a'>+8 Lượt Miễn Phí</b>", tickets: 8, icon: "⚔️" },
+            { id: "exp4", name: "Gói Đại Cao Thủ", exp: 100000, price: 85000, desc: "+100.000 EXP <br><b style='color:#00c38a'>+12 Lượt Miễn Phí</b>", tickets: 12, icon: "🐉" },
+            { id: "exp5", name: "Gói Tông Sư", exp: 500000, price: 400000, desc: "+500.000 EXP <br><b style='color:#00c38a'>+16 Lượt Miễn Phí</b>", tickets: 16, icon: "👑" },
+            { id: "exp6", name: "Gói Thiên Vương", exp: 1650000, price: 1200000, desc: "LÊN THẲNG MAX CẤP 180<br><b style='color:#ff7675'>+18 Lượt Miễn Phí (Miễn Trảm)</b>", tickets: 18, icon: "🏆" }
+        ];
+
+        list.innerHTML = expPackages.map(pkg => {
+            const canBuy = currentPmc >= pkg.price;
+            const btnClass = canBuy ? "avatar-shop-btn" : "avatar-shop-btn locked";
+            const btnAttr = canBuy ? `onclick="window.buyExpDirectly(${pkg.exp}, ${pkg.price}, ${pkg.tickets})"` : "disabled";
+            const btnText = canBuy ? "MUA" : "THIẾU PMC";
+            
+            return `
+                <div class="avatar-shop-card">
+                    <div style="width:48px;height:48px; display:flex; align-items:center; justify-content:center; background:#111; border-radius:50%; border:1px solid #f4c542; font-size:24px;">
+                        ${pkg.icon}
+                    </div>
+                    <div>
+                        <div class="avatar-shop-name" style="color:#f4c542;">${pkg.name}</div>
+                        <div class="avatar-shop-desc">${pkg.desc}</div>
+                        <div class="avatar-shop-price">${formatPMC(pkg.price)} PMC</div>
+                    </div>
+                    <button class="${btnClass}" ${btnAttr}>${btnText}</button>
+                </div>
+            `;
+        }).join("");
+        return;
+    }
+
+    // ... (Đoạn mã tab skin và tab túi giữ nguyên như hôm qua) ...
+    const owned = getOwnedAvatarSkins();
+    const equipped = getEquippedAvatarSkin();
+    const rawUserPhoto = (localStorage.getItem("user-photo") || "").trim();
+    const isDefaultChessAvatar = !rawUserPhoto || rawUserPhoto.includes("do_tuong") || rawUserPhoto.includes("den_tuong");
+    const currentPhoto = isDefaultChessAvatar ? "" : rawUserPhoto;
+    const avatarPreviewStyle = currentPhoto ? "" : "display:none;";
+
+    let skinsToRender = [];
+    if (window.avatarSkinShopTab === "bag") {
+        skinsToRender = AVATAR_SKINS.filter(skin => owned[skin.id]);
+    } else {
+        skinsToRender = AVATAR_SKINS.filter(skin => skin.id !== "none");
+    }
+
+    if (skinsToRender.length === 0) {
+        list.innerHTML = `<div class="avatar-shop-empty">Túi skin đang trống.<br>Qua tab SHOP mua skin trước.</div>`;
+        return;
+    }
+
+    list.innerHTML = skinsToRender.map(skin => {
+        const isOwned = !!owned[skin.id];
+        const isEquipped = equipped === skin.id;
+        const canBuy = currentPmc >= skin.price;
+        let btnText = "", btnClass = "avatar-shop-btn", btnAttr = "", extraLabel = "";
+
+        if (window.avatarSkinShopTab === "bag") {
+            if (isEquipped) { btnText = "ĐANG GẮN"; btnClass += " equipped"; btnAttr = "disabled"; } 
+            else { btnText = "GẮN"; btnAttr = `onclick="equipAvatarSkin('${skin.id}')"`; }
+        } else {
+            if (isOwned) { btnText = "ĐÃ CÓ"; btnClass += " equipped"; btnAttr = "disabled"; extraLabel = `<div class="avatar-shop-owned-label">Đã nằm trong túi</div>`; } 
+            else { btnText = canBuy ? "MUA" : "THIẾU PMC"; btnClass += canBuy ? "" : " locked"; btnAttr = canBuy ? `onclick="buyAvatarSkin('${skin.id}')"` : "disabled"; }
+        }
+        const priceText = skin.price <= 0 ? "Miễn phí" : formatPMC(skin.price) + " PMC";
+        return `
+            <div class="avatar-shop-card">
+                <div class="avatar-frame-shell" data-skin="${skin.id}" style="width:48px;height:48px;">
+                    <img class="avatar-core avatar-shop-preview" src="${avatarShopEscape(currentPhoto)}" alt="${avatarShopEscape(skin.name)}" style="${avatarPreviewStyle}">
+                    <img class="avatar-frame-overlay" src="${avatarShopEscape(skin.frameImage || "")}" alt="" style="${skin.id === "none" ? "display:none;" : ""}">
+                </div>
+                <div>
+                    <div class="avatar-shop-name">${avatarShopEscape(skin.name)}</div>
+                    <div class="avatar-shop-desc">${avatarShopEscape(skin.desc)}</div>
+                    <div class="avatar-shop-price">${priceText}</div>
+                    ${extraLabel}
+                </div>
+                <button class="${btnClass}" ${btnAttr}>${btnText}</button>
+            </div>`;
+    }).join("");
+};
+
+window.buyExpDirectly = async function(expAmount, pmcCost, bonusTickets) {
+    if (window.isBuyingExp) return;
+    const currentPmc = getPmcBalance();
+    if (currentPmc < pmcCost) { alert("Mầy không đủ PMC!"); return; }
+
+    let ticketMsg = bonusTickets > 0 ? `\n🎁 ĐƯỢC TẶNG KÈM: ${bonusTickets} Lượt Đánh Miễn Phí!` : "";
+    if (!confirm(`Đại gia muốn dùng ${pmcCost.toLocaleString('vi-VN')} PMC để đổi lấy ${expAmount.toLocaleString('vi-VN')} EXP?${ticketMsg}`)) return;
+
+    window.isBuyingExp = true;
+    try {
+        const walletKey = makeWalletDbKey();
+        const adminWallet = "pi_admin_master"; 
+        const paid = await adjustPmcWalletByKey(walletKey, -pmcCost);
+        if (paid == null) throw new Error("Thanh toán lỗi");
+
+        try {
+            await adjustPmcWalletByKey(adminWallet, pmcCost);
+            await db.ref("walletTransactions").push({
+                type: "buy_exp_package", walletKey: walletKey, adminWalletKey: adminWallet,
+                feePMC: pmcCost, expGained: expAmount, createdAt: Date.now(), status: "done"
+            });
+        } catch(e) {} 
+
+        const userRef = db.ref("wallets/" + walletKey);
+        await userRef.transaction((current) => {
+            if (!current) current = {}; 
+            current.exp = (Number(current.exp) || 0) + expAmount;
+            current.level = window.getLevelFromExp(current.exp); 
+            // CỘNG VÉ MIỄN PHÍ VÀO VÍ
+            if (bonusTickets > 0) {
+                current.freeTickets = (Number(current.freeTickets) || 0) + bonusTickets;
+            }
+            return current;
+        });
+
+        await loadWalletBalance();
+        if (typeof window.spawnExpEffect === 'function') {
+            for(let i=0; i<3; i++) setTimeout(() => window.spawnExpEffect(true), i * 300);
+        }
+
+        alert(`Chúc mừng! Đã bơm thành công ${expAmount.toLocaleString('vi-VN')} EXP vào người!`);
+        window.renderAvatarSkinShop(); 
+    } catch(err) {
+        console.error("Lỗi mua EXP:", err);
+        alert("Có lỗi xảy ra khi giao dịch.");
+    } finally {
+        window.isBuyingExp = false;
+    }
+};
+
+function refreshRoomAvatarSkinUI() {
+    const skinId = getEquippedAvatarSkin();
+
+    // Chỉ lấy avatar thật của mình, tuyệt đối không quét tất cả img trong player-chip
+    let myAvatar = null;
+
+    if (mySide === "do") {
+        myAvatar = document.getElementById("player-do-avatar");
+    } else if (mySide === "den") {
+        myAvatar = document.getElementById("player-den-avatar");
+    }
+
+    if (myAvatar && !myAvatar.classList.contains("avatar-frame-overlay")) {
+        applyAvatarSkinToElement(myAvatar, skinId);
+        return;
+    }
+
+    // Fallback nếu bản UI nào đó không có id do/den
+    document.querySelectorAll(".player-avatar-outside").forEach(img => {
+        if (img.classList.contains("avatar-frame-overlay")) return;
+        applyAvatarSkinToElement(img, skinId);
+    });
+}
+
+async function equipAvatarSkin(skinId) {
+    const skin = getAvatarSkinById(skinId);
+    const owned = getOwnedAvatarSkins();
+
+    if (!owned[skin.id]) {
+        alert("Mầy chưa mua skin này.");
+        return;
+    }
+
+saveAvatarSkinLocal(skin.id, owned);
+
+refreshOwnAvatarSkinUI();
+refreshRoomAvatarSkinUI();
+
+await syncEquippedAvatarSkinToRoom(skin.id);
+
+await walletRef().update({
+    avatarSkin: skin.id,
+    ownedAvatarSkins: owned,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP,
+    name: localStorage.getItem("user-name-display") || "Người chơi",
+    photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+}).catch(err => console.error("Lỗi lưu skin avatar:", err));
+
+refreshOwnAvatarSkinUI();
+refreshRoomAvatarSkinUI();
+renderAvatarSkinShop();
+}
+function safeWalletKeyForPath(walletKey) {
+    return String(walletKey || makeWalletDbKey()).replace(/[.#$\[\]\/]/g, "_");
+}
+
+function getSkinBuyerWalletKey() {
+    return makeWalletDbKey();
+}
+let isBuyingAvatarSkin = false;
+
+async function buyAvatarSkin(skinId) {
+    if (isBuyingAvatarSkin) return;
+    isBuyingAvatarSkin = true;
+
+    try {
+        const skin = getAvatarSkinById(skinId);
+        const owned = getOwnedAvatarSkins();
+
+        if (!skin || skin.id === "none") {
+            return;
+        }
+
+        if (skin.price < AVATAR_SKIN_MIN_PRICE) {
+            alert("Skin trả phí thấp nhất phải từ " + formatPMC(AVATAR_SKIN_MIN_PRICE) + " PMC.");
+            return;
+        }
+
+        if (owned[skin.id]) {
+            avatarSkinShopTab = "bag";
+            renderAvatarSkinShop();
+            alert("Skin này đã có trong túi rồi.");
+            return;
+        }
+
+        const currentPmc = getPmcBalance();
+
+        if (currentPmc < skin.price) {
+            alert("Không đủ PMC. Cần " + formatPMC(skin.price) + " PMC.");
+            renderAvatarSkinShop();
+            return;
+        }
+
+        const ok = confirm(
+    "Mua skin " + skin.name + " giá " + formatPMC(skin.price) + " PMC?\n\n" +
+    "Skin sẽ nằm trong TÚI, chưa tự gắn."
+);
+
+        if (!ok) return;
+
+        const walletKey = makeWalletDbKey();
+
+        const res = await fetch("/api/pmc/settle?v=" + Date.now(), {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "x-wallet-key": walletKey
+            },
+            body: JSON.stringify({
+                action: "avatar-skin-buy",
+                walletKey: walletKey,
+                skinId: skin.id,
+                name: localStorage.getItem("user-name-display") || "Người chơi",
+                photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+            })
+        });
+
+        const raw = await res.text();
+        let data = {};
+
+        try {
+            data = raw ? JSON.parse(raw) : {};
+        } catch (parseErr) {
+            console.error("API mua skin raw response:", raw);
+            throw new Error("API mua skin không trả JSON. Response: " + String(raw || "").slice(0, 200));
+        }
+
+        if (!res.ok || !data.ok) {
+    console.error("BUY SKIN API ERROR:", data);
+
+    throw new Error(
+        data.error ||
+        (
+            "Mua skin thất bại. Ví server đọc được: " +
+            formatPMC(data.currentPmc || 0) +
+            " PMC"
+        )
+    );
+}
+
+        const newPmc = Math.max(0, Math.floor(Number(data.newPmcBalance || 0) || 0));
+        const newOwned = normalizeOwnedAvatarSkins(data.ownedAvatarSkins || owned);
+        const currentEquipped = data.avatarSkin || getEquippedAvatarSkin();
+
+        currentPmcBalance = newPmc;
+        localStorage.setItem(getPmcCacheKey(), String(newPmc));
+        updatePmcUI(newPmc);
+
+        saveAvatarSkinLocal(currentEquipped, newOwned);
+
+        avatarSkinShopTab = "bag";
+        renderAvatarSkinShop();
+
+        alert(
+    "Đã mua skin " + skin.name + " thành công!\n" +
+    "Đã trừ " + formatPMC(skin.price) + " PMC.\n\n" +
+    "Skin đã nằm trong TÚI. Vào TÚI bấm GẮN để thay skin."
+);
+    } catch (err) {
+        console.error("Lỗi mua skin avatar:", err);
+        alert("Lỗi mua skin: " + (err.message || "Không rõ lỗi"));
+    } finally {
+        isBuyingAvatarSkin = false;
+    }
+}
+function walletRefByKey(walletKey) {
+    return db.ref("wallets/" + String(walletKey || makeWalletDbKey()).replace(/[.#$\[\]\/]/g, "_"));
+}
+
+function runRefTransaction(ref, updater) {
+    return new Promise((resolve, reject) => {
+        ref.transaction(
+            updater,
+            (error, committed, snapshot) => {
+                if (error) {
+                    reject(error);
+                    return;
+                }
+                resolve({ committed, snapshot });
+            },
+            false
+        );
+    });
+}
+
+async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
+    const ref = walletRefByKey(walletKey);
+
+    const snap = await ref.once("value");
+    const safeCurrent = snap.val() && typeof snap.val() === "object" ? snap.val() : {};
+
+    const currentPi = Number(safeCurrent.balance ?? 0) || 0;
+    const currentPmc = Math.floor(Number(safeCurrent.pmcBalance ?? 0) || 0);
+    const nextPmc = currentPmc + Math.floor(Number(delta || 0));
+
+    if (nextPmc < 0) return null;
+
+    // 🔥 ĐÃ XÓA DÒNG TỘI ĐỒ ...safeCurrent
+    // Giờ nó chỉ update đúng PMC, KHÔNG BAO GIỜ chạm vào hay ghi đè StatsV2 nữa
+    await ref.update({
+        balance: currentPi,
+        pmcBalance: nextPmc,
+        updatedAt: Date.now(),
+        name: profile.name || safeCurrent.name || localStorage.getItem("user-name-display") || "Người chơi",
+        photo: profile.photo || safeCurrent.photo || localStorage.getItem("user-photo") || "images/do_tuong.png"
+    });
+
+    console.log("PMC DIRECT UPDATE OK", {
+        walletKey,
+        delta,
+        before: currentPmc,
+        after: nextPmc
+    });
+
+    if (walletKey === makeWalletDbKey()) {
+        currentPmcBalance = nextPmc;
+        localStorage.setItem(getPmcCacheKey(), String(nextPmc));
+        updatePmcUI(nextPmc);
+    }
+
+    return nextPmc;
+}
+async function settlePmcViaApi(roomId) {
+    try {
+        console.log("firebase uid:", firebase.auth().currentUser?.uid);
+console.log("local uid:", localStorage.getItem("uid"));
+console.log("walletKey:", walletKey);
+        const res = await fetch("/api/pmc/settle", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ roomId })
+        });
+
+        const rawText = await res.text();
+let data = {};
+
+try {
+    data = rawText ? JSON.parse(rawText) : {};
+} catch (parseErr) {
+    console.error("PMC→PI raw response =", rawText);
+    throw new Error(
+        "API không trả JSON. Response thật: " +
+        String(rawText || "").slice(0, 200)
+    );
+}
+
+        if (!res.ok || data.ok === false) {
+            console.error("Lỗi settle PMC qua API:", data);
+            return;
+        }
+
+        console.log("Settle PMC qua API OK:", data);
+await loadWalletBalance().catch(() => {});
+await syncMyMatchBalanceToRoomNow();
+    } catch (err) {
+        console.error("Lỗi gọi API settle PMC:", err);
+    }
+}
+async function maybeRefundWaitingStakePMC(roomId, room, side) {
+    const stake = Math.max(0, Math.floor(Number(room?.stakePMC || currentRoomStakePMC || 0) || 0));
+    if (!roomId || !side || !stake) return null;
+    if (room?.status === "playing" || room?.winner) return null;
+
+    const lock = room?.stakeLocked?.[side];
+    if (!lock) return null;
+
+    const player = room?.players?.[side] || {};
+    const walletKey = (typeof lock === "object" && lock.walletKey) ? lock.walletKey : player.walletKey;
+    if (!walletKey) return null;
+
+    const refundRef = db.ref(`matches/${roomId}/refunds/${side}`);
+    const result = await runRefTransaction(refundRef, current => {
+        if (current && current.done) return;
+        return { done: true, side, walletKey, stake, at: Date.now(), uid: player.uid || "" };
+    });
+
+    if (!result.committed) return null;
+
+    // NẾU LÚC NÃY XÀI VÉ -> TRẢ LẠI 1 VÉ
+    if (lock.isTicketUsed) {
+        const ticketRef = db.ref(`wallets/${walletKey}/freeTickets`);
+        await ticketRef.transaction((tks) => (Number(tks) || 0) + 1);
+        await db.ref(`matches/${roomId}/ready/${side}`).set(false).catch(() => {});
+        await db.ref(`matches/${roomId}/stakeLocked/${side}`).set(false).catch(() => {});
+        console.log("Đã hoàn LƯỢT MIỄN PHÍ");
+        return currentPmcBalance; // Trả về số dư PMC cũ để UI ko bị rách
+    }
+
+    // NẾU LÚC NÃY XÀI PMC -> TRẢ LẠI PMC
+    const nextPmc = await adjustPmcWalletByKey(walletKey, stake, {
+        name: player.name || "Người chơi", photo: player.photo || "images/do_tuong.png"
+    });
+
+    if (nextPmc == null) return null;
+
+    await db.ref(`matches/${roomId}/players/${side}`).update({ pmcBalance: nextPmc, updatedAt: firebase.database.ServerValue.TIMESTAMP }).catch(() => {});
+    await db.ref(`matches/${roomId}/ready/${side}`).set(false).catch(() => {});
+    await db.ref(`matches/${roomId}/stakeLocked/${side}`).set(false).catch(() => {});
+
+    if (walletKey === makeWalletDbKey()) {
+        currentPmcBalance = nextPmc;
+        localStorage.setItem(getPmcCacheKey(), String(nextPmc));
+        updatePmcUI(nextPmc);
+        if (typeof refreshMyMatchBalanceBoxesNow === "function") refreshMyMatchBalanceBoxesNow(getPiBalance(), nextPmc);
+    }
+    return nextPmc;
+}
+async function transferWaitingRoomHost(roomId, room, roomBucket) {
+    if (!roomId || !room) return false;
+
+    const newHost = room?.players?.den;
+    if (!newHost?.uid) return false;
+
+    const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
+    const inviteCode = String(room?.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
+
+    // Nếu người được mời đã từng bị lock stake khi SS rồi, hoàn lại để họ làm chủ mới từ đầu cho sạch state
+    if (room?.stakeLocked?.den && newHost.walletKey) {
+        await adjustPmcWalletByKey(newHost.walletKey, stake, {
+            name: newHost.name || "Người chơi",
+            photo: newHost.photo || "images/do_tuong.png"
+        }).catch(err => console.error("Refund new host lỗi:", err));
+    }
+
+    const updates = {};
+
+    // Chuyển người bên den thành chủ mới
+    updates[`matches/${roomId}/players/do`] = {
+    ...newHost,
+    side: "do",
+    updatedAt: firebase.database.ServerValue.TIMESTAMP
+};
+updates[`matches/${roomId}/players/den`] = null;
+
+updates[`matches/${roomId}/hostUid`] = newHost.uid || "";
+updates[`matches/${roomId}/hostWalletKey`] = newHost.walletKey || "";
+
+updates[`matches/${roomId}/lobbyOpen`] = true;
+updates[`matches/${roomId}/lobbyOwnerUid`] = newHost.uid || "";
+updates[`matches/${roomId}/lobbyOwnerWalletKey`] = newHost.walletKey || "";
+updates[`matches/${roomId}/lobbyHeartbeatAt`] = firebase.database.ServerValue.TIMESTAMP;
+updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+    // Reset trạng thái chờ cho sạch
+    updates[`matches/${roomId}/ready/do`] = false;
+    updates[`matches/${roomId}/ready/den`] = false;
+    updates[`matches/${roomId}/stakeLocked/do`] = false;
+    updates[`matches/${roomId}/stakeLocked/den`] = false;
+    updates[`matches/${roomId}/readyDeadlineAt`] = null;
+    updates[`matches/${roomId}/status`] = "waiting";
+    updates[`matches/${roomId}/turn`] = "do";
+    updates[`matches/${roomId}/board`] = null;
+    updates[`matches/${roomId}/lastMoveFrom`] = null;
+    updates[`matches/${roomId}/lastMoveTo`] = null;
+    updates[`matches/${roomId}/winner`] = null;
+    updates[`matches/${roomId}/winReason`] = null;
+    updates[`matches/${roomId}/drawRequest`] = null;
+    updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+    // Bàn giao luôn room chờ trong waitingRooms cho chủ mới
+    if (roomBucket) {
+        updates[`waitingRooms/${roomBucket}/${roomId}`] = {
+    roomId,
+    uid: newHost.uid,
+    walletKey: newHost.walletKey || "",
+    name: newHost.name || "Người chơi",
+            mode: room.mode || "co-tuong",
+            stakePMC: stake,
+            inviteCode,
+            createdAt: Date.now(),
+            claimedBy: null,
+            claimedAt: null
+        };
+    }
+
+    await db.ref().update(updates);
+    return true;
+    
+}
+async function handoffFinishedRoomToRemainingPlayer(roomId, room, leavingSide, roomBucket) {
+    if (!roomId || !room || !leavingSide) return false;
+
+    const keepSide = leavingSide === "do" ? "den" : "do";
+    let freshRoom = room;
+    let newHost = freshRoom?.players?.[keepSide];
+
+    if (!newHost?.uid) return false;
+
+    const stake = Math.max(0, Math.floor(Number(freshRoom?.stakePMC || 0) || 0));
+
+    // Nếu ván có tiền cược, chờ settlement.paid xong rồi mới bàn giao.
+    // Không xóa phòng, không reset winner sớm, tránh hư cộng PMC.
+    if (
+        freshRoom?.winner &&
+        freshRoom.winner !== "hoa" &&
+        stake > 0 &&
+        freshRoom?.settlement?.paid !== true
+    ) {
+        for (let i = 0; i < 20; i++) {
+            await new Promise(resolve => setTimeout(resolve, 250));
+
+            const snap = await db.ref("matches/" + roomId).once("value").catch(() => null);
+            const latest = snap?.val?.();
+
+            if (!latest) return false;
+
+            freshRoom = latest;
+            newHost = freshRoom?.players?.[keepSide] || newHost;
+
+            if (freshRoom?.settlement?.paid === true) break;
+        }
+
+        if (freshRoom?.settlement?.paid !== true) {
+            console.warn("Chưa paid xong, chưa bàn giao phòng:", roomId);
+            return false;
+        }
+    }
+
+    if (!newHost?.uid) return false;
+
+    const cleanMode = freshRoom.mode || room.mode || currentRoomMode || "co-tuong";
+    const cleanStake = Math.max(0, Math.floor(Number(freshRoom.stakePMC || room.stakePMC || currentRoomStakePMC || 0) || 0));
+    const cleanBucket = freshRoom.roomBucket || room.roomBucket || roomBucket || makeStakeBucket(cleanMode, cleanStake);
+    const inviteCode = String(freshRoom.inviteCode || room.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
+
+    const updates = {};
+
+    // Người còn lại luôn thành chủ phòng mới.
+    // A rời thì B thành do.
+    // B rời thì A thành do.
+    updates[`matches/${roomId}/players/do`] = {
+        ...newHost,
+        side: "do",
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+    };
+    updates[`matches/${roomId}/players/den`] = null;
+
+    updates[`matches/${roomId}/hostUid`] = newHost.uid || "";
+    updates[`matches/${roomId}/hostWalletKey`] = newHost.walletKey || "";
+
+    updates[`matches/${roomId}/roomBucket`] = cleanBucket;
+    updates[`matches/${roomId}/status`] = "waiting";
+    updates[`matches/${roomId}/lobbyOpen`] = true;
+    updates[`matches/${roomId}/lobbyOwnerUid`] = newHost.uid || "";
+    updates[`matches/${roomId}/lobbyOwnerWalletKey`] = newHost.walletKey || "";
+    updates[`matches/${roomId}/lobbyHeartbeatAt`] = firebase.database.ServerValue.TIMESTAMP;
+    updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+    // Dọn ván cũ, nhưng không đụng ví PMC.
+    updates[`matches/${roomId}/turn`] = "do";
+    updates[`matches/${roomId}/board`] = null;
+    updates[`matches/${roomId}/moveCount`] = 0;
+    updates[`matches/${roomId}/startedAt`] = null;
+    updates[`matches/${roomId}/finishedAt`] = null;
+    updates[`matches/${roomId}/lastMoveFrom`] = null;
+    updates[`matches/${roomId}/lastMoveTo`] = null;
+
+    updates[`matches/${roomId}/ready/do`] = false;
+    updates[`matches/${roomId}/ready/den`] = false;
+    updates[`matches/${roomId}/stakeLocked/do`] = false;
+    updates[`matches/${roomId}/stakeLocked/den`] = false;
+
+    updates[`matches/${roomId}/winner`] = null;
+    updates[`matches/${roomId}/winReason`] = null;
+    updates[`matches/${roomId}/drawRequest`] = null;
+    updates[`matches/${roomId}/quitSide`] = null;
+    updates[`matches/${roomId}/quitUid`] = null;
+    updates[`matches/${roomId}/quitAt`] = null;
+    updates[`matches/${roomId}/settlement`] = null;
+    updates[`matches/${roomId}/refunds`] = null;
+    updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+    // Nếu bucket cũ khác bucket mới thì xóa waitingRooms cũ, nhưng KHÔNG xóa matches.
+    if (roomBucket && roomBucket !== cleanBucket) {
+        updates[`waitingRooms/${roomBucket}/${roomId}`] = null;
+    }
+
+    // Mở lại đúng phòng đó ngoài danh sách bàn.
+    updates[`waitingRooms/${cleanBucket}/${roomId}`] = {
+        roomId,
+        uid: newHost.uid || "",
+        walletKey: newHost.walletKey || "",
+        name: newHost.name || "Người chơi",
+        mode: cleanMode,
+        stakePMC: cleanStake,
+        inviteCode,
+        createdAt: Date.now(),
+        claimedBy: null,
+        claimedAt: null
+    };
+
+    await db.ref().update(updates);
+    return true;
+}
+async function ensureInviteHostControl(roomId = currentRoomId) {
+    if (!roomId) return null;
+
+    const me = getCurrentPlayerProfile();
+    let roomSnap = await db.ref("matches/" + roomId).once("value");
+    let room = roomSnap.val() || {};
+
+    if (!room || room.winner) return null;
+
+    // Nếu đã là host rồi thì khỏi làm gì
+    if (room?.players?.do?.uid === me.uid) {
+        return room;
+    }
+
+    // Chỉ xét cướp quyền host khi:
+    // - mình đang là người được mời (den)
+    // - phòng vẫn đang chờ
+    if (room.status !== "waiting") return room;
+    if (room?.players?.den?.uid !== me.uid) return room;
+
+    const oldHost = room?.players?.do || null;
+    let oldHostState = null;
+
+    if (oldHost?.walletKey) {
+        oldHostState = (await db.ref("social/playerState/" + oldHost.walletKey).once("value")).val();
+    }
+
+const hostStillInThisRoom =
+    !!oldHost &&
+    oldHostState?.state === "arena" &&
+    oldHostState?.roomId === roomId;
+    // Host cũ không còn ở room này nữa thì bàn giao
+    if (!hostStillInThisRoom) {
+        const transferred = await transferWaitingRoomHost(roomId, room, room.roomBucket || currentRoomBucket);
+        if (transferred) {
+            roomSnap = await db.ref("matches/" + roomId).once("value");
+            room = roomSnap.val() || {};
+        }
+    }
+
+    return room;
+}
+async function maybeSettleStakeRoom(room, roomId) {
+    const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
+    if (!roomId || !stake || !room?.winner) return;
+
+    const localWalletKey = makeWalletDbKey();
+
+    // ===== TRƯỜNG HỢP HÒA CỜ (MẠNH THẰNG NÀO THẰNG NẤY TỰ HOÀN TIỀN) =====
+    if (room.winner === "hoa") {
+        if (!mySide) return; // Khán giả thì nghỉ
+
+        // Ghi log để tránh 1 thằng tự hoàn tiền 2 lần
+        const refundRef = db.ref(`matches/${roomId}/settlement/refund_${mySide}`);
+        const result = await runRefTransaction(refundRef, current => {
+            if (current && current.done) return;
+            return { done: true, stakePMC: stake, at: Date.now() };
+        });
+
+        if (!result.committed) return; // Đã hoàn tiền cho mình rồi thì thôi
+
+        // Tự cộng tiền lại vào ví của chính mình (100% không bị Firebase chặn quyền)
+        await adjustPmcWalletByKey(localWalletKey, stake, {
+            name: localStorage.getItem("user-name-display") || "Người chơi",
+            photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+        });
+
+        await loadWalletBalance().catch(() => {});
+        await syncMyMatchBalanceToRoomNow();
+        return;
+    }
+
+    // ===== TRƯỜNG HỢP CÓ NGƯỜI THẮNG =====
+    const winnerSide = String(room.winner || "").trim();
+
+    // 🔥 FIX LỖI MẤT TIỀN KHI ĐẦU HÀNG Ở ĐÂY:
+    // Thằng thua tuyệt đối KHÔNG ĐƯỢC thọc tay vào cộng tiền cho thằng thắng!
+    if (winnerSide !== mySide) {
+        console.log("Tao là người thua, nhường máy thằng thắng tự bốc tiền!");
+        return false; 
+    }
+
+    // --- TỪ DÒNG NÀY TRỞ XUỐNG CHỈ CÓ MÁY CỦA THẰNG THẮNG MỚI ĐƯỢC CHẠY ---
+    const winnerPlayer = room?.players?.[winnerSide] || {};
+    const winnerWalletKey = localWalletKey; 
+
+    // Đặt lệnh xí chỗ, chống cộng 2 lần
+    const winnerPaidRef = db.ref(`matches/${roomId}/settlement/winnerPaid`);
+    const winLock = await runRefTransaction(winnerPaidRef, current => {
+        if (current && current.done) return;
+        return {
+            done: true,
+            side: winnerSide,
+            winner: winnerSide,
+            stakePMC: stake,
+            at: Date.now(),
+            uid: getCurrentPlayerProfile().uid || ""
+        };
+    });
+
+    if (!winLock.committed) {
+        await loadWalletBalance().catch(() => {});
+        await syncMyMatchBalanceToRoomNow().catch(() => {});
+        return false;
+    }
+
+    const totalPot = stake * 2;
+    const feePMC = Math.max(0, Math.floor(totalPot * 0.02));
+    const winnerReceivePMC = totalPot - feePMC;
+    const adminWalletKey = "pi_admin_master";
+
+    try {
+        // 1) Cộng tiền thưởng cho chính mình (Vì là ví của mình nên thao tác này trơn tru 100%)
+        const paid = await adjustPmcWalletByKey(winnerWalletKey, winnerReceivePMC, {
+            name: localStorage.getItem("user-name-display") || "Người chơi",
+            photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+        });
+
+        if (paid == null) {
+            console.error("Lỗi cộng ví người thắng");
+            return;
+        }
+
+        currentPmcBalance = paid;
+        localStorage.setItem(getPmcCacheKey(), String(paid));
+        updatePmcUI(paid);
+        refreshMyMatchBalanceBoxesNow(getPiBalance(), paid);
+
+        // Cập nhật số dư hiện trên bàn cờ luôn
+        await db.ref(`matches/${roomId}/players/${winnerSide}`).update({
+            pmcBalance: paid,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        }).catch(()=>{});
+
+        // 2) Trích % cho Admin (Bọc Try/Catch để lỡ Firebase chặn ghi ví Admin thì mày vẫn nhận đc tiền)
+        if (feePMC > 0) {
+            try {
+                await adjustPmcWalletByKey(adminWalletKey, feePMC, { name: "Ví phí hệ thống", photo: "images/do_tuong.png" });
+                await db.ref("walletTransactions").push({
+                    type: "match_fee_credit", roomId, walletKey: adminWalletKey,
+                    feePMC, winnerWalletKey, stakePMC: stake, totalPot,
+                    createdAt: Date.now(), status: "done"
+                });
+            } catch (adminErr) {
+                console.warn("Bỏ qua lỗi cộng phí admin (kệ mẹ admin, tiền vào túi mình là được):", adminErr);
+            }
+        }
+
+        // 3) Báo cáo lên phòng là đã chia tiền xong
+        await db.ref(`matches/${roomId}/settlement`).update({
+            paid: true,
+            paidAt: Date.now(),
+            winner: winnerSide,
+            stakePMC: stake,
+            totalPot,
+            feePMC,
+            winnerReceivePMC,
+            adminWalletKey
+        });
+
+        await loadWalletBalance().catch(() => {});
+        await syncMyMatchBalanceToRoomNow().catch(() => {});
+
+        return true;
+    } catch (err) {
+        console.error("LỖI CHIA TIỀN TRONG TRY CATCH:", err);
+    }
+}
+// 🔥 FIX LỖI ẢO TƯỞNG THIẾU PMC: ÉP LẤY ĐÚNG VÍ CỦA THẰNG ĐANG BẤM ĐIỆN THOẠI!
+async function chargeStakeForReady(roomId, side) {
+    try {
+        if (!roomId || !side) return { ok: false, stage: "input" };
+
+        const roomSnap = await db.ref("matches/" + roomId).once("value");
+        const room = roomSnap.val() || {};
+
+        const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
+        if (!stake) return { ok: true, stage: "no_stake" };
+        if (room?.stakeLocked?.[side]) return { ok: true, stage: "already_locked" };
+
+        const localProfile = getCurrentPlayerProfile();
+        const targetWalletKey = localProfile.walletKey;
+
+        await db.ref("matches/" + roomId + "/players/" + side).update({
+            walletKey: localProfile.walletKey, name: localProfile.name, photo: localProfile.photo, uid: localProfile.uid || ""
+        });
+
+        const safeWalletKey = String(targetWalletKey || "").replace(/[.#$\[\]\/]/g, "_");
+        const targetWalletSnap = await db.ref("wallets/" + safeWalletKey).once("value");
+        const targetWallet = targetWalletSnap.val() || {};
+        const targetPmc = Math.max(0, Math.floor(Number(targetWallet.pmcBalance || 0) || 0));
+        
+        // KIỂM TRA XEM CÓ VÉ MIỄN PHÍ KHÔNG
+        const freeTickets = Math.max(0, Math.floor(Number(targetWallet.freeTickets || 0)));
+
+        if (!targetWalletKey) return { ok: false, stage: "wallet_key_missing" };
+
+        // NẾU CÓ VÉ VÀ PHÒNG <= 10.000 PMC -> HỎI XEM CÓ XÀI KHÔNG
+        let useTicket = false;
+        if (stake > 0 && stake <= 10000 && freeTickets > 0) {
+            useTicket = confirm(`🎁 Mày đang có ${freeTickets} LƯỢT ĐÁNH MIỄN PHÍ (Áp dụng bàn <= 10.000 PMC).\n\nCó muốn dùng 1 lượt để MIỄN TRỪ ${formatPMC(stake)} PMC cho ván này không?\n(Nếu chọn Cancel sẽ trừ PMC như bình thường)`);
+        }
+
+        if (useTicket) {
+            // NẾU ĐỒNG Ý DÙNG VÉ: TRỪ VÉ (ĐÉO TRỪ TIỀN)
+            await db.ref("wallets/" + safeWalletKey + "/freeTickets").set(freeTickets - 1);
+            
+            // Vẫn lock phòng bình thường, nhưng đánh dấu là 'isTicketUsed: true'
+            await db.ref("matches/" + roomId + "/stakeLocked/" + side).set({
+                done: true,
+                walletKey: targetWalletKey,
+                stake,
+                isTicketUsed: true, // Cờ quan trọng để lúc Hủy thì trả vé chứ đéo trả tiền
+                at: firebase.database.ServerValue.TIMESTAMP,
+                uid: localProfile.uid || ""
+            });
+            return { ok: true, stage: "done", walletKey: targetWalletKey, paid: targetPmc };
+        }
+
+        // NẾU KHÔNG CÓ VÉ HOẶC KHÔNG XÀI -> TRỪ TIỀN NHƯ CŨ
+        if (targetPmc < stake) return { ok: false, stage: "insufficient_wallet" };
+
+        const paid = await adjustPmcWalletByKey(targetWalletKey, -stake, {
+            name: localProfile.name || "Người chơi", photo: localProfile.photo || "images/do_tuong.png"
+        });
+
+        if (paid == null) return { ok: false, stage: "tx_not_committed" };
+
+        currentPmcBalance = paid;
+        localStorage.setItem(getPmcCacheKey(), String(paid));
+        updatePmcUI(paid);
+        refreshMyMatchBalanceBoxesNow(getPiBalance(), paid);
+
+        await db.ref("matches/" + roomId + "/players/" + side).update({
+            pmcBalance: paid, updatedAt: firebase.database.ServerValue.TIMESTAMP
+        }).catch(()=>{});
+
+        await db.ref("matches/" + roomId + "/stakeLocked/" + side).set({
+            done: true, walletKey: targetWalletKey, stake,
+            at: firebase.database.ServerValue.TIMESTAMP, uid: localProfile.uid || ""
+        });
+
+        return { ok: true, stage: "done", walletKey: targetWalletKey, paid };
+    } catch (err) {
+        console.error("chargeStakeForReady error:", err);
+        return { ok: false, stage: "exception", error: String(err) };
+    }
+}
+let withdrawAmountResolve = null;
+async function ensurePiSdkReady() {
+  if (!window.Pi) {
+    await new Promise((resolve, reject) => {
+      const old = document.getElementById("pi-sdk-js");
+      if (old) {
+        old.addEventListener("load", resolve, { once: true });
+        old.addEventListener("error", () => reject(new Error("Không tải được Pi SDK.")), { once: true });
+        return;
       }
 
-      const claimed = await claimMission(db, walletKey, missionId, nowMs());
-      return res.status(200).json(claimed);
-    }
-
-    const board = await buildBoard(db, walletKey, nowMs());
-    return res.status(200).json(board);
-  } catch (err) {
-    console.error('MISSIONS_V1_FAIL:', err);
-    return res.status(500).json({
-      ok: false,
-      error: err?.message || 'Lỗi hệ thống nhiệm vụ.'
+      const s = document.createElement("script");
+      s.id = "pi-sdk-js";
+      s.src = "https://sdk.minepi.com/pi-sdk.js";
+      s.async = true;
+      s.onload = resolve;
+      s.onerror = () => reject(new Error("Không tải được Pi SDK."));
+      document.head.appendChild(s);
     });
   }
+
+  if (!window.Pi) {
+    throw new Error("Pi SDK chưa sẵn sàng.");
+  }
+
+  if (!window.__piSdkInited) {
+    window.Pi.init({
+      version: "2.0",
+      sandbox: location.hostname.includes("sandbox.minepi.com")
+    });
+    window.__piSdkInited = true;
+  }
+
+  return window.Pi;
+}
+
+function getCurrentWalletKeyForPi() {
+  if (typeof makeWalletDbKey === "function") {
+    const k = String(makeWalletDbKey() || "").trim();
+    if (k) return k;
+  }
+  return "";
+}
+
+async function getPiLinkState() {
+  const walletKey = getCurrentWalletKeyForPi();
+
+  if (!walletKey) {
+    return {
+      ok: false,
+      error: "Không xác định được walletKey hiện tại."
+    };
+  }
+
+  if (!window.firebase || !firebase.database) {
+    return {
+      ok: false,
+      error: "Firebase client chưa sẵn sàng."
+    };
+  }
+
+  const snap = await firebase.database().ref("wallets/" + walletKey).once("value");
+  const val = snap.val() || {};
+
+  return {
+    ok: true,
+    walletKey,
+    piVerified: val.piVerified === true,
+    piUid: String(val.piUid || "").trim(),
+    piUsername: String(val.piUsername || "").trim(),
+    piWalletAddress: String(val.piWalletAddress || "").trim()
+  };
+}
+async function linkPiBrowser() {
+  const Pi = await ensurePiSdkReady();
+  const state = await getPiLinkState();
+  const walletKey = state.walletKey || getCurrentWalletKeyForPi();
+
+  if (!walletKey) {
+    throw new Error("Không xác định được walletKey.");
+  }
+
+  if (!window.firebase || !firebase.database) {
+    throw new Error("Firebase client chưa sẵn sàng.");
+  }
+
+  let auth;
+  try {
+    // Link ví chỉ cần scope tối thiểu
+    auth = await Pi.authenticate(["username", "wallet_address"]);
+  } catch (err) {
+    console.error("PI_LINK_AUTH_FAIL", err);
+    const msg = String(err?.message || err || "").trim();
+
+    if (/cancelled|canceled|consent/i.test(msg)) {
+      throw new Error(
+        "Pi Browser chưa xác nhận hoàn tất. Hãy mở bằng app Pi Browser thật, bấm Allow xong chờ 2-3 giây rồi quay lại."
+      );
+    }
+
+    throw new Error(msg || "Liên kết Pi Browser thất bại.");
+  }
+
+  const linkedPiUid = String(
+    auth?.user?.uid ||
+    auth?.uid ||
+    state?.piUid ||
+    ""
+  ).trim();
+
+  const linkedPiUsername = String(
+    auth?.user?.username ||
+    auth?.username ||
+    state?.piUsername ||
+    ""
+  ).trim();
+
+  let linkedWalletAddress = String(
+    auth?.user?.wallet?.address ||
+    auth?.user?.wallet_address ||
+    auth?.user?.walletAddress ||
+    auth?.user?.payment_address ||
+    auth?.user?.credentials?.wallet_address ||
+    auth?.user?.credentials?.walletAddress ||
+    auth?.user?.credentials?.address ||
+    auth?.wallet?.address ||
+    auth?.wallet_address ||
+    auth?.walletAddress ||
+    auth?.publicKey ||
+    auth?.public_key ||
+    auth?.user?.publicKey ||
+    state?.piWalletAddress ||
+    ""
+  ).trim();
+
+  if (!linkedWalletAddress) {
+    const typed = prompt(
+      "Pi Browser chưa trả ví tự động.\n" +
+      "Dán địa chỉ ví Pi nhận tiền của bạn vào đây (bắt đầu bằng G):"
+    );
+    linkedWalletAddress = String(typed || "").trim();
+  }
+
+  if (!linkedPiUid) {
+    throw new Error("Không lấy được Pi UID từ Pi Browser.");
+  }
+
+  if (!linkedPiUsername) {
+    throw new Error("Không lấy được username Pi từ Pi Browser.");
+  }
+
+  if (!linkedWalletAddress) {
+    throw new Error("Chưa có địa chỉ ví Pi để lưu.");
+  }
+
+  if (!/^G[A-Z2-7]{20,}$/i.test(linkedWalletAddress)) {
+    throw new Error("Địa chỉ ví Pi không hợp lệ.");
+  }
+
+  const now = Date.now();
+  const updatePayload = {
+    walletKey,
+    piUid: linkedPiUid,
+    piUsername: linkedPiUsername,
+    piVerified: true,
+    verifiedAt: now,
+    piLinkSource: "frontend_pi_browser",
+
+    piWalletAddress: linkedWalletAddress,
+    linkedWalletAddress: linkedWalletAddress,
+    piBrowserWalletAddress: linkedWalletAddress,
+
+    linkedWallet: {
+      address: linkedWalletAddress,
+      linkedAt: now,
+      source: "frontend_pi_browser"
+    },
+
+    piLink: {
+      walletAddress: linkedWalletAddress,
+      linkedAt: now,
+      source: "frontend_pi_browser"
+    },
+
+    updatedAt: now
+  };
+
+  await firebase.database().ref("wallets/" + walletKey).update(updatePayload);
+
+  const verifySnap = await firebase.database().ref("wallets/" + walletKey).once("value");
+  const verifyVal = verifySnap.val() || {};
+
+  return {
+    ok: true,
+    walletKey,
+    piUid: String(verifyVal.piUid || linkedPiUid || "").trim(),
+    piUsername: String(verifyVal.piUsername || linkedPiUsername || "").trim(),
+    piWalletAddress: String(
+      verifyVal.piWalletAddress ||
+      verifyVal.linkedWalletAddress ||
+      verifyVal.piBrowserWalletAddress ||
+      linkedWalletAddress ||
+      ""
+    ).trim()
+  };
+}
+
+async function ensurePiLinkBeforeWithdraw() {
+  const state = await getPiLinkState();
+
+  if (state.ok && state.piVerified && state.piUid && state.piWalletAddress) {
+    return state;
+  }
+
+  // Không dùng confirm trước authenticate nữa
+  return await linkPiBrowser();
+}
+async function openWithdrawAmount(leftCount) {
+      try {
+    const linkState = await ensurePiLinkBeforeWithdraw();
+    if (!linkState || !linkState.piVerified) {
+      return null;
+    }
+  } catch (err) {
+    alert("Liên kết Pi Browser thất bại: " + (err?.message || String(err)));
+    return null;
+  }
+    const modal = document.getElementById("withdraw-amount-modal");
+    const input = document.getElementById("withdraw-amount-input");
+    const left = document.getElementById("withdraw-left-count");
+
+    if (!modal || !input || !left) return Promise.resolve(null);
+
+    input.value = "";
+    left.innerText = leftCount;
+    modal.style.display = "flex";
+
+    setTimeout(() => input.focus(), 50);
+
+    return new Promise(resolve => {
+        withdrawAmountResolve = resolve;
+    });
+}
+
+function closeWithdrawAmount(value = null) {
+    const modal = document.getElementById("withdraw-amount-modal");
+    if (modal) modal.style.display = "none";
+
+    if (withdrawAmountResolve) {
+        withdrawAmountResolve(value);
+        withdrawAmountResolve = null;
+    }
+}
+
+function submitWithdrawAmount() {
+    const input = document.getElementById("withdraw-amount-input");
+    if (!input) return;
+
+    const value = input.value.trim();
+    if (value === "") {
+        alert("Nhập số Pi muốn rút trước đã.");
+        return;
+    }
+
+    closeWithdrawAmount(Number(value));
+}
+
+document.getElementById("withdraw-amount-input")?.addEventListener("keypress", function(e) {
+    if (e.key === "Enter") submitWithdrawAmount();
+});
+async function syncPiPendingBeforeWithdraw() {
+  return;
+}
+async function processWithdraw() {
+    const state = getWithdrawState();
+    if (state.count >= MAX_WITHDRAW_PER_DAY) {
+        alert("Hôm nay đã rút đủ 5 lần rồi. Mai quay lại nhé!");
+        return;
+    }
+
+    const amount = await openWithdrawAmount(MAX_WITHDRAW_PER_DAY - state.count);
+    if (amount === null) return;
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+        alert("Số Pi rút không hợp lệ.");
+        return;
+    }
+
+    if (amount > MAX_WITHDRAW_PER_TX) {
+        alert(`Mỗi lần chỉ được rút tối đa ${MAX_WITHDRAW_PER_TX} Pi.`);
+        return;
+    }
+
+    const currentBalance = Number(getPiBalance() || 0);
+    if (amount > currentBalance) {
+        alert(`Số dư không đủ. Hiện còn ${currentBalance.toFixed(2)} Pi.`);
+        return;
+    }
+
+    const linkState = await getPiLinkState().catch(() => ({ ok: false }));
+
+const walletKey = String(
+    linkState?.walletKey ||
+    (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "") ||
+    ""
+).trim();
+
+const piUid = String(linkState?.piUid || "").trim();
+const piUsername = String(linkState?.piUsername || "").trim();
+
+if (!walletKey) {
+    alert("Thiếu walletKey nội bộ.");
+    return;
+}
+
+const withdrawUrl = "/api/pi/withdraw-auto-v2?v=" + Date.now();
+
+try {
+    const res = await fetch(withdrawUrl, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "x-wallet-key": walletKey
+        },
+        body: JSON.stringify({
+            amount,
+            piUid,
+            piUsername,
+            walletKey
+        })
+    });
+
+    const raw = await res.text();
+
+    let data = {};
+    try {
+        data = raw ? JSON.parse(raw) : {};
+    } catch (_) {
+        throw new Error("API rút Pi trả dữ liệu không hợp lệ.");
+    }
+
+    if (data?.pendingAdmin) {
+        alert(
+            data.message ||
+            "Lệnh rút đã được đưa vào hàng duyệt. Admin sẽ xử lý sớm."
+        );
+        return;
+    }
+
+    if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || "Rút Pi thất bại.");
+    }
+
+    state.count += 1;
+    if (!Array.isArray(state.history)) state.history = [];
+    state.history.push({
+        amount,
+        time: new Date().toISOString(),
+        withdrawId: data.withdrawId || "",
+        paymentId: data.paymentId || "",
+        txid: data.txid || ""
+    });
+    saveWithdrawState(state);
+
+    if (typeof data.newBalance === "number") {
+        setPiBalance(data.newBalance);
+    } else if (typeof data.currentBalance === "number") {
+        setPiBalance(data.currentBalance);
+    } else if (typeof loadWalletBalance === "function") {
+        await loadWalletBalance().catch(() => {});
+    }
+
+    alert(
+        "Rút Pi thành công!\n" +
+        `Số Pi rút: ${amount.toFixed(2)} Pi\n` +
+        `txid: ${data.txid || "N/A"}\n` +
+        `Đã rút hôm nay: ${state.count}/${MAX_WITHDRAW_PER_DAY} lượt.`
+    );
+} catch (err) {
+    console.error("RÚT PI LỖI:", err);
+    alert("Rút Pi lỗi: " + (err.name || "") + " | " + (err.message || "Không rõ lỗi"));
+ }
+}
+
+async function openWallet(type) {
+    if (type === "nap") {
+        const napSo = prompt("Nhập số Pi muốn nạp:");
+        if (napSo === null) return;
+
+        const amount = Number(napSo);
+        if (!Number.isFinite(amount) || amount <= 0) {
+            alert("Số Pi nạp không hợp lệ.");
+            return;
+        }
+
+        await startPiDeposit(amount);
+        return;
+    }
+
+    if (type === "rut") {
+        await processWithdraw();
+    }
+}
+// Dòng 708: Hàm mở bảng chỉnh sửa
+function openEditProfile() {
+document.getElementById("edit-profile-modal").style.display = "flex";
+document.getElementById("new-username").value = document.getElementById("user-name-display").innerText;
+document.getElementById("edit-user-photo").src = document.getElementById("user-photo").src;
+applyAvatarSkinToElement(document.getElementById("edit-user-photo"), getEquippedAvatarSkin());
+
+const lastRename = localStorage.getItem("lastRenameDate");
+if (lastRename) {
+const daysPassed = Math.floor((new Date() - new Date(lastRename)) / (1000 * 60 * 60 * 24));
+if (daysPassed < 30) {
+document.getElementById("new-username").disabled = true;
+document.getElementById("rename-notice").innerText = `Bạn cần đợi thêm ${30 - daysPassed} ngày để đổi tên tiếp.`;
+} else {
+document.getElementById("new-username").disabled = false;
+document.getElementById("rename-notice").innerText = "";
+}
+}
+}
+
+// Dòng 724: Hàm đóng bảng
+function closeEditProfile() {
+document.getElementById("edit-profile-modal").style.display = "none";
+}
+
+// Dòng 728: Xem trước ảnh khi chọn file
+function previewAvatar(event) {
+const reader = new FileReader();
+reader.onload = function () {
+document.getElementById("edit-user-photo").src = reader.result;
 };
+reader.readAsDataURL(event.target.files[0]);
+}
+
+// Dòng 738: Lưu thông tin
+function saveProfile() {
+    const newName = document.getElementById("new-username").value.trim();
+    const newPhoto = document.getElementById("edit-user-photo").src;
+
+    if (!newName) {
+        alert("Tên không được để trống!");
+        return;
+    }
+
+    // 1. Đổi giao diện
+    document.getElementById("user-name-display").innerText = newName;
+    document.getElementById("user-name").innerText = newName;
+    document.getElementById("user-photo").src = newPhoto;
+    refreshOwnAvatarSkinUI();
+
+    // 2. Chặn đổi tên liên tục 30 ngày
+    const oldName = localStorage.getItem("currentUsername") || "ĐẦU TIÊN TV";
+    if (newName !== oldName) {
+        localStorage.setItem("lastRenameDate", new Date().toISOString());
+        localStorage.setItem("currentUsername", newName);
+    }
+
+    // 3. Cập nhật Local Storage
+    localStorage.setItem("user-name-display", newName);
+    localStorage.setItem("user-photo", newPhoto);
+
+    // 4. 🔥 ÉP GHI THẲNG TÊN MỚI LÊN FIREBASE TẠI ĐÂY (Chống F5 mất tên)
+    const walletKey = makeWalletDbKey();
+    db.ref("wallets/" + walletKey).update({
+        name: newName,
+        photo: newPhoto,
+        username: newName,
+        usernameNorm: normalizeFriendName(newName),
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+    });
+
+    // 5. Cập nhật hệ thống bạn bè
+    ensureFriendProfileSynced()
+        .then(() => bindFriendSystem())
+        .catch(err => console.error("Lỗi sync profile bạn bè:", err));
+        
+    alert("Cập nhật hồ sơ thành công!");
+    closeEditProfile();
+}
+function openChat() {
+    document.querySelectorAll(".profile-menu").forEach(m => {
+        m.classList.remove("show");
+    });
+
+    const chatBox = document.getElementById("chat-box");
+    if (!chatBox) {
+        alert("Không thấy khung chat admin.");
+        return;
+    }
+
+    chatBox.style.display = "block";
+}
+// Hàm đóng khung chat
+function closeChat() {
+document.getElementById("chat-box").style.display = "none";
+} function sendMsg() {
+const msgInput = document.getElementById("user-msg");
+const chatContent = document.getElementById("chat-content");
+const message = msgInput.value.trim();
+
+if (message !== "") {
+// Tạo phần tử hiển thị tin nhắn mới
+const msgDiv = document.createElement("div");
+msgDiv.style.color = "white";
+msgDiv.style.marginBottom = "10px";
+msgDiv.style.padding = "5px";
+msgDiv.style.background = "#444";
+msgDiv.style.borderRadius = "5px";
+msgDiv.style.alignSelf = "flex-end"; // Đẩy tin nhắn người dùng sang phải
+msgDiv.innerText = "Bạn: " + message;
+
+// Thêm vào khung nội dung chat
+chatContent.appendChild(msgDiv);
+
+// Xóa nội dung trong ô nhập sau khi gửi
+msgInput.value = "";
+
+// Tự động cuộn xuống cuối khung chat
+chatContent.scrollTop = chatContent.scrollHeight;
+}
+}// Hàm đóng mở chat trên Mobile
+function toggleMobileChat() {
+const chatBox = document.getElementById("game-chat-box");
+if (chatBox.style.display === "none" || chatBox.style.display === "") {
+chatBox.style.display = "flex";
+} else {
+chatBox.style.display = "none";
+}
+}
+function toggleActionMenu(event) {
+if (event) event.stopPropagation();
+const menu = document.getElementById("mobile-action-menu");
+if (!menu) return;
+menu.classList.toggle("show");
+}
+
+function closeActionMenu() {
+const menu = document.getElementById("mobile-action-menu");
+if (menu) menu.classList.remove("show");
+}
+
+function hoaTran() {
+    isGameOver = true;
+    clearInterval(interval);
+    clearInterval(readyInterval);
+
+    if (sounds.bgm) sounds.bgm.pause();
+    if (sounds.heartbeat) sounds.heartbeat.pause();
+
+    const wrap = document.getElementById("victory-wrap");
+    document.getElementById("main-result").innerText = "HÒA CỜ";
+    document.getElementById("sub-result").innerText = "KHÔNG PHÂN THẮNG BẠI";
+    wrap.style.transform = "translate(-50%, -50%) scale(1)";
+}
+function handleMatchAction(type) {
+    closeActionMenu();
+
+    if (isSpectatorMode && type !== "thoat") {
+        alert("Mầy đang xem bàn, chỉ được chat và thoát xem thôi.");
+        return;
+    }
+
+    if (type === "thoat") {
+        backToMenu();
+        return;
+    }
+
+    if (!currentRoomId || !mySide) return;
+
+    if (type === "dauhang") {
+        if (confirm("Đầu hàng ván này?")) {
+            db.ref("matches/" + currentRoomId).update({
+                winner: mySide === "do" ? "den" : "do",
+winReason: "dauhang",
+finishedAt: firebase.database.ServerValue.TIMESTAMP,
+updatedAt: firebase.database.ServerValue.TIMESTAMP
+            });
+        }
+        return;
+    }
+
+    if (type === "hoa") {
+        if (confirm("Gửi xin hòa cho đối thủ?")) {
+            db.ref("matches/" + currentRoomId + "/drawRequest").set({
+                from: mySide,
+                at: Date.now()
+            });
+        }
+    }
+}
+
+document.addEventListener("click", function (e) {
+const wrap = document.getElementById("mobile-match-actions");
+if (!wrap) return;
+
+if (!wrap.contains(e.target)) {
+closeActionMenu();
+}
+});
+// Hàm gửi tin nhắn (dùng chung PC & Mobile)
+function sendGameMsg() {
+const input = document.getElementById("game-chat-input");
+const content = document.getElementById("game-chat-content");
+const user = localStorage.getItem("currentUsername") || "Khách";
+
+if (input.value.trim() !== "") {
+const msg = document.createElement("div");
+msg.innerHTML = `<b style="color:#55efc4">${user}:</b> ${input.value}`;
+content.appendChild(msg);
+input.value = "";
+content.scrollTop = content.scrollHeight;
+}
+}
+
+function sendQuickMsg(text) {
+    if (!text) return;
+
+    if (!currentRoomId || !roomChatRef) return;
+
+    const me = getCurrentPlayerProfile();
+
+    roomChatRef.push({
+        uid: me.uid || "",
+        name: me.name || "Người chơi",
+        side: mySide || "",
+        text: text,
+        at: firebase.database.ServerValue.TIMESTAMP
+    });
+
+    // ✅ TẮT MENU ICON SAU KHI CHỌN
+    const menu = document.getElementById("emoji-menu");
+    if (menu) menu.style.display = "none";
+}
+function updateReadyUI() {
+    const btn = document.getElementById("ready-main-btn");
+    const sideText = document.getElementById("ready-side-text");
+    const countdownEl = document.getElementById("ready-countdown");
+if (countdownEl) {
+    countdownEl.textContent = Math.max(0, readyTime);
+}
+    if (!btn || !sideText) return;
+    
+
+    btn.classList.remove("ready-btn-do", "ready-btn-den");
+
+    if (mySide === "do") {
+        btn.classList.add("ready-btn-do");
+        btn.textContent = readyDo ? "ĐÃ SẴN SÀNG" : "ĐỎ SẴN SÀNG";
+        sideText.textContent = readyDo ? "MÀY ĐÃ XÁC NHẬN" : "MÀY ĐANG CẦM QUÂN ĐỎ";
+    } else if (mySide === "den") {
+        btn.classList.add("ready-btn-den");
+        btn.textContent = readyDen ? "ĐÃ SẴN SÀNG" : "ĐEN SẴN SÀNG";
+        sideText.textContent = readyDen ? "MÀY ĐÃ XÁC NHẬN" : "MÀY ĐANG CẦM QUÂN ĐEN";
+    } else {
+        btn.textContent = "SẴN SÀNG";
+        sideText.textContent = "ĐANG CHỜ NHẬN PHE";
+    }
+
+    if ((mySide === "do" && readyDo) || (mySide === "den" && readyDen)) {
+        btn.disabled = true;
+        btn.style.opacity = "0.72";
+        btn.style.cursor = "default";
+    } else {
+        btn.disabled = false;
+        btn.style.opacity = "1";
+        btn.style.cursor = "pointer";
+    }
+}
+function closeReadyOverlay() {
+    const overlay = document.getElementById("ready-overlay");
+    if (overlay) overlay.style.display = "none";
+
+    // Reset sạch trạng thái bảng SS.
+    // Nếu không reset 2 biến này, Firebase bắn snapshot đúng lúc sẽ làm A bị chớp rồi mất bảng.
+    readyOverlayWaitingShown = false;
+    readyOverlayRoomKey = "";
+    readyOverlayOpeningLock = false;
+
+    clearInterval(readyInterval);
+}
+async function failReadyAndBackHome() {
+    const roomId = currentRoomId;
+    const side = mySide;
+
+    readyDeadlineAt = 0;
+    readyTime = 30;
+    readyOverlayWaitingShown = false;
+    readyOverlayRoomKey = "";
+    readyOverlayOpeningLock = false;
+
+    clearInterval(readyInterval);
+    readyInterval = null;
+    closeReadyOverlay();
+
+    if (!roomId || !side) {
+        clearActiveMatchSnapshot();
+        cleanupRoomListeners();
+        showHomeUI();
+
+        const arena = document.getElementById("game-arena");
+        if (arena) arena.style.display = "none";
+        return;
+    }
+
+    let room = null;
+    try {
+        const snap = await db.ref("matches/" + roomId).once("value");
+        room = snap.val();
+    } catch (err) {
+        console.error("Đọc phòng khi hết giờ SS lỗi:", err);
+    }
+
+    if (!room) {
+        clearActiveMatchSnapshot(roomId);
+        cleanupRoomListeners();
+
+        currentRoomId = null;
+        mySide = null;
+        currentRoomMode = null;
+        currentRoomStakePMC = 0;
+        currentRoomBucket = null;
+        currentRoomStatus = null;
+
+        showHomeUI();
+        const arena = document.getElementById("game-arena");
+        if (arena) arena.style.display = "none";
+        return;
+    }
+
+    const doReady = !!room.ready?.do;
+    const denReady = !!room.ready?.den;
+
+    // CHỦ PHÒNG A / phe đỏ: KHÔNG VĂNG.
+    // Nếu B không SS thì đá riêng B ra, A vẫn ở phòng chờ.
+    if (side === "do") {
+        const updates = {};
+        const bucket = room.roomBucket || currentRoomBucket || makeStakeBucket(room.mode || currentRoomMode, room.stakePMC || currentRoomStakePMC);
+        const inviteCode = String(room.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
+
+        if (room.players?.den && !denReady) {
+            updates[`matches/${roomId}/players/den`] = null;
+            updates[`matches/${roomId}/ready/den`] = false;
+            updates[`matches/${roomId}/stakeLocked/den`] = false;
+        }
+
+        // reset deadline cũ để người C/D/B vào lại thì tạo 30 giây mới
+        updates[`matches/${roomId}/readyDeadlineAt`] = null;
+        updates[`matches/${roomId}/ready/do`] = false;
+        updates[`matches/${roomId}/status`] = "waiting";
+        updates[`matches/${roomId}/lobbyOpen`] = true;
+        updates[`matches/${roomId}/lobbyOwnerUid`] = room.players?.do?.uid || "";
+        updates[`matches/${roomId}/lobbyOwnerWalletKey`] = room.players?.do?.walletKey || "";
+        updates[`matches/${roomId}/lobbyHeartbeatAt`] = firebase.database.ServerValue.TIMESTAMP;
+        updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+        updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+        updates[`waitingRooms/${bucket}/${roomId}`] = {
+            roomId,
+            uid: room.players?.do?.uid || "",
+            name: room.players?.do?.name || "Chủ phòng",
+            mode: room.mode || currentRoomMode,
+            stakePMC: Math.max(0, Math.floor(Number(room.stakePMC || currentRoomStakePMC || 0) || 0)),
+            inviteCode,
+            createdAt: Date.now(),
+            claimedBy: null,
+            claimedAt: null
+        };
+
+        await db.ref().update(updates).catch(err => {
+            console.error("Reset phòng khi B hết giờ SS lỗi:", err);
+        });
+
+        readyDo = false;
+        readyDen = false;
+        currentRoomStatus = "waiting";
+
+        // A vẫn ở trong phòng, không showHomeUI, không xóa currentRoomId
+        return;
+    }
+
+    // B / phe đen: hết giờ không SS thì bị đá ra khỏi phòng.
+    if (side === "den") {
+        if (!denReady) {
+            await maybeRefundWaitingStakePMC(roomId, room, "den").catch(err => {
+                console.error("Hoàn PMC khi B hết giờ SS lỗi:", err);
+            });
+
+            const bucket = room.roomBucket || currentRoomBucket || makeStakeBucket(room.mode || currentRoomMode, room.stakePMC || currentRoomStakePMC);
+            const inviteCode = String(room.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
+
+            const updates = {};
+            updates[`matches/${roomId}/players/den`] = null;
+            updates[`matches/${roomId}/ready/den`] = false;
+            updates[`matches/${roomId}/stakeLocked/den`] = false;
+            updates[`matches/${roomId}/readyDeadlineAt`] = null;
+            updates[`matches/${roomId}/status`] = "waiting";
+            updates[`matches/${roomId}/lobbyOpen`] = true;
+            updates[`matches/${roomId}/lobbyHeartbeatAt`] = firebase.database.ServerValue.TIMESTAMP;
+            updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+            updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+            updates[`waitingRooms/${bucket}/${roomId}`] = {
+                roomId,
+                uid: room.players?.do?.uid || "",
+                name: room.players?.do?.name || "Chủ phòng",
+                mode: room.mode || currentRoomMode,
+                stakePMC: Math.max(0, Math.floor(Number(room.stakePMC || currentRoomStakePMC || 0) || 0)),
+                inviteCode,
+                createdAt: Date.now(),
+                claimedBy: null,
+                claimedAt: null
+            };
+
+            await db.ref().update(updates).catch(err => {
+                console.error("Đá B khỏi phòng khi hết giờ SS lỗi:", err);
+            });
+        }
+
+        alert("Hết thời gian sẵn sàng!");
+
+        clearActiveMatchSnapshot(roomId);
+        cleanupRoomListeners();
+
+        currentRoomId = null;
+        mySide = null;
+        currentRoomMode = null;
+        currentRoomStakePMC = 0;
+        currentRoomBucket = null;
+        currentRoomStatus = null;
+
+        readyDo = false;
+        readyDen = false;
+
+        showHomeUI();
+        const arena = document.getElementById("game-arena");
+        if (arena) arena.style.display = "none";
+    }
+}
+function startReadyCountdown() {
+    clearInterval(readyInterval);
+    readyInterval = null;
+
+    const tickReadyCountdown = () => {
+        const overlay = document.getElementById("ready-overlay");
+
+        // Nếu overlay đã tắt thì dừng countdown luôn
+        if (!overlay || overlay.style.display === "none") {
+            clearInterval(readyInterval);
+            readyInterval = null;
+            return;
+        }
+
+        // Có deadline chung thì tính theo deadline chung.
+        // Như vậy 2 máy sẽ hiện cùng 1 số, không còn lệch 17/18.
+if (readyDeadlineAt) {
+    readyTime = getReadySecondsLeft(readyDeadlineAt);
+} else {
+    // Fallback cũ nếu chưa có deadline
+    readyTime = Math.max(0, Math.floor(Number(readyTime) || 0) - 1);
+}
+
+        updateReadyUI();
+
+if (readyTime <= 0) {
+    clearInterval(readyInterval);
+    readyInterval = null;
+
+    if (!overlay || overlay.style.display === "none") return;
+
+    const iAmReady =
+        (mySide === "do" && readyDo) ||
+        (mySide === "den" && readyDen);
+
+    // Chủ phòng A/Đỏ luôn được quyền xử lý hết giờ:
+    // A không văng, nhưng A sẽ đá B/Đen nếu B chưa SS.
+    if (mySide === "do") {
+        Promise.resolve(failReadyAndBackHome()).catch(err => {
+            console.error("HOST_READY_TIMEOUT_CLEANUP_FAIL:", err);
+        });
+        return;
+    }
+
+    // B/Đen nếu đã SS rồi thì không tự văng.
+    if (mySide === "den" && iAmReady) {
+        updateReadyUI();
+        return;
+    }
+
+    // B/Đen chưa SS thì bị đá ra.
+    Promise.resolve(failReadyAndBackHome()).catch(err => {
+        console.error("GUEST_READY_TIMEOUT_LEAVE_FAIL:", err);
+    });
+}
+    };
+
+    updateReadyUI();
+    readyInterval = setInterval(tickReadyCountdown, 1000);
+}
+function getCurrentMode() {
+    return isCoUp ? 'co-up' : 'co-tuong';
+}
+
+async function changeMatch() {
+    closeActionMenu();
+
+    if (!confirm("Đổi sang bàn mới để tìm đối thủ khác?")) return;
+
+    clearInterval(interval);
+    clearInterval(readyInterval);
+    sounds.bgm.pause();
+    sounds.heartbeat.pause();
+
+    isGameOver = false;
+    selectedPiece = null;
+
+    document.getElementById("victory-wrap").style.transform = "translate(-50%, -50%) scale(0)";
+
+    const oldMode = currentRoomMode || getCurrentMode();
+
+    await leaveRealtimeMatch();
+    await joinOrCreateRealtimeMatch(oldMode);
+}
+
+function autoResetNextMatch() {
+    setTimeout(() => {
+        document.getElementById("victory-wrap").style.transform = "translate(-50%, -50%) scale(0)";
+        showReadyOverlay(getCurrentMode());
+    }, 5000);
+}
+
+function showReadyOverlay(mode, forceResetTime = false) {
+    pendingGameMode = mode || pendingGameMode || currentRoomMode || "tong";
+    const overlay = document.getElementById("ready-overlay");
+    if (!overlay) return;
+
+    // Chặn lỗi mới tạo phòng / chỉ còn 1 người mà bảng SS tự bật bên Đen.
+    // Bảng SS chỉ được hiện khi Firebase xác nhận đủ Đỏ + Đen trong phòng đang chờ.
+    const guardRoom = window.__lastBoundRoom || null;
+    const guardRoomId = window.__lastBoundRoomId || "";
+    if (currentRoomId && guardRoom && guardRoomId === currentRoomId) {
+        const enoughPlayers = !!guardRoom.players?.do && !!guardRoom.players?.den && guardRoom.status === "waiting" && !guardRoom.winner;
+        if (!enoughPlayers) {
+            overlay.style.display = "none";
+            readyOverlayWaitingShown = false;
+            readyOverlayRoomKey = "";
+            readyOverlayOpeningLock = false;
+            clearInterval(readyInterval);
+            readyInterval = null;
+            return;
+        }
+    }
+
+    // Nếu nó đang hiện rồi thì KHÔNG reset lại thời gian, KHÔNG chạy lại interval
+    if (overlay.style.display === "flex" && !forceResetTime) {
+        readyOverlayWaitingShown = true;
+        updateReadyUI();
+        return;
+    }
+
+    readyOverlayWaitingShown = true;
+    overlay.style.display = "flex";
+
+if (forceResetTime || !readyTime || readyTime <= 0) {
+    if (readyDeadlineAt) {
+        readyTime = getReadySecondsLeft(readyDeadlineAt);
+    } else {
+        readyTime = 30;
+    }
+}
+
+    updateReadyUI();
+    startReadyCountdown();
+}
+function ensureReadyOverlayForWaitingRoom(room = {}, roomId = currentRoomId) {
+    const overlay = document.getElementById("ready-overlay");
+    if (!overlay) return;
+
+    const hasEnoughPlayersWaiting =
+        !!room.players?.do &&
+        !!room.players?.den &&
+        room.status === "waiting" &&
+        !room.winner;
+
+    if (!hasEnoughPlayersWaiting) return;
+
+const key = [
+    roomId || "",
+    room.players?.do?.uid || room.players?.do?.walletKey || "",
+    room.players?.den?.uid || room.players?.den?.walletKey || "",
+    room.status || "",
+    Number(room.readyDeadlineAt || 0)
+].join("|");
+
+// 🔥 FIX LỖI VÀO PHÒNG BỊ HẾT GIỜ: Kể cả có deadline mà là của ván cũ (đã qua) thì ép tạo 30s mới!
+    const now = readyNowMs();
+    const currentDeadline = Number(room.readyDeadlineAt || 0);
+
+    if (!currentDeadline || currentDeadline <= now) {
+        db.ref("matches/" + roomId + "/readyDeadlineAt").transaction((current) => {
+            // Chỉ giữ lại nếu đang có 1 deadline hợp lệ trong tương lai
+            if (current && current > now) return current;
+            return readyNowMs() + 30000;
+        }, undefined, false);
+
+        return;
+    }
+
+    readyDeadlineAt = currentDeadline;
+    readyTime = getReadySecondsLeft(readyDeadlineAt);
+
+    const oldKey = readyOverlayRoomKey || "";
+    const alreadyVisible = overlay.style.display === "flex";
+
+    readyOverlayWaitingShown = true;
+    readyOverlayRoomKey = key;
+
+    // Nếu bảng SS đang hiện rồi thì không mở lại, chỉ cập nhật số giây + nút.
+    if (alreadyVisible) {
+        readyOverlayOpeningLock = false;
+        updateReadyUI();
+
+        if (!readyInterval) {
+            startReadyCountdown();
+        }
+
+        return;
+    }
+
+    readyOverlayOpeningLock = false;
+
+    const needResetTime =
+        oldKey !== key ||
+        !readyTime ||
+        readyTime <= 0;
+
+    showReadyOverlay(room.mode || currentRoomMode, needResetTime);
+}
+async function setReady() {
+    if (isSpectatorMode) return;
+    if (!currentRoomId || !mySide) return;
+
+    // 🔥 TỐI ƯU 3: CHỐNG SPAM CLICK LÀM KẸT ĐƯỜNG TRUYỀN
+    const btn = document.getElementById("ready-main-btn");
+    if (btn) {
+        if (btn.disabled) return; // Đang ấn rồi thì cấm ấn tiếp
+        btn.disabled = true;
+        btn.textContent = "ĐANG XỬ LÝ...";
+        btn.style.opacity = "0.6";
+    }
+
+    const result = await chargeStakeForReady(currentRoomId, mySide);
+
+    if (!result.ok) {
+        console.error("READY FAIL:", result);
+        
+        // 🔥 HIỆN RÕ LÝ DO CHO NGƯỜI CHƠI BIẾT ĐỂ ĐỠ HOANG MANG
+        if (result.stage === "insufficient_wallet") {
+            alert("Số dư PMC của mày không đủ để đánh ván này!");
+        } else if (result.stage === "exception" || result.stage === "tx_not_committed") {
+            alert("Lỗi trừ PMC do nghẽn mạng, mày bấm Sẵn Sàng lại thử xem!");
+        }
+        
+        // Trả lại trạng thái nút Sẵn Sàng để bấm lại được
+        if (btn) {
+            btn.disabled = false;
+            btn.style.opacity = "1";
+            updateReadyUI(); 
+        }
+        return;
+    }
+
+    // Gửi lệnh SS thành công lên Firebase
+    await db.ref("matches/" + currentRoomId + "/ready/" + mySide).set(true);
+}
+
+async function batDauTranDau(loai) {
+    const mode = loai === "up" ? "co-up" : "co-tuong";
+    openStakeRoomModal(mode);
+}
+
+function openExchangeModal() {
+    const modal = document.getElementById("exchange-modal");
+    const input = document.getElementById("exchange-pi-input");
+    const preview = document.getElementById("exchange-preview");
+    if (!modal || !input || !preview) return;
+
+    input.value = "";
+    preview.innerText = "Nhận: 0 PMC";
+    modal.style.display = "flex";
+    setTimeout(() => input.focus(), 50);
+}
+
+function closeExchangeModal() {
+    const modal = document.getElementById("exchange-modal");
+    if (modal) modal.style.display = "none";
+}
+
+function updateExchangePreview() {
+    const input = document.getElementById("exchange-pi-input");
+    const preview = document.getElementById("exchange-preview");
+    if (!input || !preview) return;
+
+    const pi = Number(input.value || 0);
+    const pmc = Math.max(0, Math.floor(pi * PMC_RATE));
+    preview.innerText = "Nhận: " + formatPMC(pmc) + " PMC";
+}
+
+async function submitExchangeToPMC() {
+    const input = document.getElementById("exchange-pi-input");
+    if (!input) return;
+
+    const piAmount = Number(input.value || 0);
+    if (!Number.isFinite(piAmount) || piAmount <= 0) {
+        alert("Nhập số Pi muốn đổi trước đã.");
+        return;
+    }
+
+    const piBalance = getPiBalance();
+    if (piAmount > piBalance) {
+        alert("Pi không đủ. Hiện còn " + piBalance.toFixed(2) + " π");
+        return;
+    }
+
+    const pmcAdd = Math.floor(piAmount * PMC_RATE);
+    if (pmcAdd <= 0) {
+        alert("Số PMC nhận được không hợp lệ.");
+        return;
+    }
+
+    setPiBalance(piBalance - piAmount);
+    setPmcBalance(getPmcBalance() + pmcAdd);
+
+    alert("Đổi thành công " + piAmount.toFixed(2) + " π → " + formatPMC(pmcAdd) + " PMC");
+    closeExchangeModal();
+}
+const PMC_PER_PI = 500;
+const MIN_PMC_TO_PI = 0;
+
+function formatPiExchangeValue(value) {
+    const num = Number(value || 0) || 0;
+    return num.toFixed(6).replace(/\.?0+$/, "");
+}
+
+function calcPiFromPmc(pmcAmount) {
+    const safePmc = Math.max(0, Math.floor(Number(pmcAmount || 0) || 0));
+    return safePmc / PMC_PER_PI;
+}
+
+function openPmcToPiModal() {
+    const modal = document.getElementById("pmc-to-pi-modal");
+    const input = document.getElementById("pmc-to-pi-input");
+    const rateLabel = document.getElementById("pmc-to-pi-rate-label");
+
+    if (rateLabel) {
+        rateLabel.innerText = `${PMC_PER_PI.toLocaleString("vi-VN")} PMC = 1 Pi`;
+    }
+
+    if (input) {
+        input.value = "";
+    }
+
+    previewPmcToPiExchange();
+
+    if (modal) modal.style.display = "flex";
+    closeProfileMenu?.();
+}
+
+function closePmcToPiModal() {
+    const modal = document.getElementById("pmc-to-pi-modal");
+    if (modal) modal.style.display = "none";
+}
+
+function previewPmcToPiExchange() {
+    const input = document.getElementById("pmc-to-pi-input");
+    const preview = document.getElementById("pmc-to-pi-preview");
+
+    const pmcAmount = Math.max(0, Math.floor(Number(input?.value || 0) || 0));
+    const piReceive = calcPiFromPmc(pmcAmount);
+
+    if (!preview) return;
+
+    if (!pmcAmount) {
+        preview.innerText = "Bạn sẽ nhận: 0 Pi";
+        return;
+    }
+
+    preview.innerText = `Bạn sẽ nhận: ${formatPiExchangeValue(piReceive)} Pi`;
+}
+function pmcDebugLog() {}
+function clearPmcDebugLog() {}
+
+async function confirmPmcToPiExchange() {
+    const input = document.getElementById("pmc-to-pi-input");
+    const pmcAmount = Math.max(0, Math.floor(Number(input?.value || 0) || 0));
+
+    if (!pmcAmount || pmcAmount <= 0) {
+        alert("Nhập số PMC muốn đổi trước đã.");
+        return;
+    }
+
+   const walletKey = makeWalletDbKey();
+
+    if (!walletKey) {
+        alert("Không lấy được mã ví để đổi PMC sang Pi.");
+        return;
+    }
+
+    try {
+        const btns = document.querySelectorAll("#pmc-to-pi-modal button");
+        btns.forEach(btn => btn.disabled = true);
+
+        const liveSnap = await walletRefByKey(walletKey).once("value");
+        const liveData = liveSnap.val() && typeof liveSnap.val() === "object" ? liveSnap.val() : {};
+        const livePmc = Math.floor(Number(liveData.pmcBalance ?? 0) || 0);
+
+        if (pmcAmount > livePmc) {
+            alert("PMC trong ví thật không đủ để đổi.");
+            return;
+        }
+
+        const res = await fetch("/api/exchange-pmc-to-pi?v=" + Date.now(), {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "x-wallet-key": walletKey
+            },
+            body: JSON.stringify({
+                pmcAmount,
+                walletKey
+            })
+        });
+
+        const rawText = await res.text();
+        let data = {};
+
+        try {
+            data = rawText ? JSON.parse(rawText) : {};
+        } catch (_) {
+            throw new Error("API trả dữ liệu không hợp lệ.");
+        }
+
+        if (!res.ok || !data?.ok) {
+            throw new Error(data?.error || "Đổi PMC sang Pi thất bại.");
+        }
+
+        if (typeof data.newPmcBalance === "number") {
+            setPmcBalance(data.newPmcBalance);
+        }
+
+        if (typeof data.newPiBalance === "number") {
+            setPiBalance(data.newPiBalance);
+        }
+
+        closePmcToPiModal();
+        alert(
+            `Đổi thành công!\n` +
+            `-${pmcAmount.toLocaleString("vi-VN")} PMC\n` +
+            `+${formatPiExchangeValue(data.piAmount || 0)} Pi`
+        );
+    } catch (err) {
+        alert("Đổi PMC sang Pi lỗi: " + (err.message || "Không rõ lỗi"));
+    } finally {
+        const btns = document.querySelectorAll("#pmc-to-pi-modal button");
+        btns.forEach(btn => btn.disabled = false);
+    }
+}
+const ADMIN_FEE_WALLET_KEY = "pi_admin_master";
+
+function getAdminClientPiKeyList() {
+    return [
+        "pi_0962903406"
+    ];
+}
+
+function isCurrentPiAdminKey() {
+    const currentKey = getAccountKey();
+    return getAdminClientPiKeyList().includes(currentKey);
+}
+
+function syncAdminFeeMenuVisibility() {
+    const menu = document.getElementById("menu-admin-fee-wallet");
+    if (!menu) return;
+    menu.style.display = isCurrentPiAdminKey() ? "flex" : "none";
+}
+
+function closeAdminFeeTreasuryModal() {
+    const modal = document.getElementById("admin-fee-wallet-modal");
+    if (modal) modal.style.display = "none";
+}
+
+function previewAdminFeePmcToPi() {
+    const input = document.getElementById("admin-fee-pmc-input");
+    const preview = document.getElementById("admin-fee-pi-preview");
+    const pmcAmount = Math.max(0, Math.floor(Number(input?.value || 0) || 0));
+    const piReceive = pmcAmount / PMC_RATE;
+
+    if (!preview) return;
+
+    if (!pmcAmount) {
+        preview.innerText = "Bạn sẽ nhận: 0 Pi";
+        return;
+    }
+
+    preview.innerText = `Bạn sẽ nhận: ${formatPiExchangeValue(piReceive)} Pi`;
+}
+
+async function refreshAdminFeeTreasury() {
+  const noteEl = document.getElementById("admin-fee-wallet-note");
+  const balanceEl = document.getElementById("admin-fee-wallet-balance-box");
+  const previewEl = document.getElementById("admin-fee-pi-preview");
+  const inputEl = document.getElementById("admin-fee-pmc-input");
+  const secretEl = document.getElementById("admin-fee-secret-input");
+
+  function setNote(text, color) {
+    if (!noteEl) return;
+    noteEl.textContent = String(text || "");
+    if (color) noteEl.style.color = color;
+  }
+
+  function setBalance(pmcText, piText) {
+    if (!balanceEl) return;
+    balanceEl.innerHTML =
+      "PMC phí hiện có: " + pmcText + "<br>" +
+      "Pi tài khoản admin hiện có: " + piText;
+  }
+
+  function getCurrentAdminWalletKey() {
+    try {
+      if (typeof makeWalletDbKey === "function") {
+        const made = String(makeWalletDbKey() || "").trim();
+        if (made) return made;
+      }
+    } catch (_) {}
+
+    const candidates = [
+      "walletKey",
+      "wallet-key",
+      "current-wallet-key",
+      "pi-wallet-key",
+      "uid",
+      "currentUid"
+    ];
+
+    for (const key of candidates) {
+      const val = String(localStorage.getItem(key) || "").trim();
+      if (val) return val;
+    }
+
+    return "";
+  }
+
+  setNote("Đang tải ví phí hệ thống...", "#7fffd4");
+  setBalance("...", "...");
+  if (previewEl) previewEl.textContent = "Bạn sẽ nhận: 0 Pi";
+
+  try {
+    const walletKey = getCurrentAdminWalletKey();
+    const headers = { "Content-Type": "application/json" };
+    if (walletKey) headers["x-wallet-key"] = walletKey;
+
+    const res = await fetch("/api/convert-fee-pmc-to-pi?v=" + Date.now(), {
+      method: "GET",
+      headers
+    });
+
+    const raw = await res.text();
+    let data = {};
+
+    try {
+      data = raw ? JSON.parse(raw) : {};
+    } catch (_) {
+    console.error("exchange-pmc-to-pi raw response =", rawText);
+    throw new Error(
+        "API không trả JSON. Response thật: " +
+        String(rawText || "").slice(0, 200)
+    );
+}
+
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || "Không tải được ví phí hệ thống.");
+    }
+
+    const pmcBalance = Math.max(0, Math.floor(Number(data.pmcBalance || 0) || 0));
+
+    const livePi = typeof getPiBalance === "function"
+      ? (Number(getPiBalance()) || 0)
+      : (Number(data.piBalance || 0) || 0);
+
+    setBalance(
+      pmcBalance.toLocaleString("vi-VN") + " PMC",
+      (Number(livePi || 0).toFixed(3).replace(/\.?0+$/, "")) + " Pi"
+    );
+
+    setNote("Đã tải ví phí hệ thống.", "#8fffaa");
+
+    if (inputEl) inputEl.value = "";
+    if (secretEl) secretEl.value = "";
+    if (previewEl) previewEl.textContent = "Bạn sẽ nhận: 0 Pi";
+
+    return data;
+  } catch (err) {
+    setBalance("--", "--");
+    setNote(
+      "Không tải được ví phí hệ thống. " + (err && err.message ? err.message : ""),
+      "#ff9b9b"
+    );
+    throw err;
+  }
+}
+async function openAdminFeeTreasuryModal() {
+    const modal = document.getElementById("admin-fee-wallet-modal");
+    const pmcInput = document.getElementById("admin-fee-pmc-input");
+    const secretInput = document.getElementById("admin-fee-secret-input");
+    const preview = document.getElementById("admin-fee-pi-preview");
+
+    if (!isCurrentPiAdminKey()) {
+        alert("Tài khoản Pi này không có quyền mở ví phí hệ thống.");
+        return;
+    }
+
+    if (pmcInput) pmcInput.value = "";
+    if (secretInput) secretInput.value = "";
+    if (preview) preview.innerText = "Bạn sẽ nhận: 0 Pi";
+
+    if (modal) modal.style.display = "flex";
+    if (typeof closeProfileMenu === "function") closeProfileMenu();
+
+    try {
+        await refreshAdminFeeTreasury();
+    } catch (_) {}
+}
+
+async function confirmAdminFeePmcToPi() {
+    const pmcInput = document.getElementById("admin-fee-pmc-input");
+    const secretInput = document.getElementById("admin-fee-secret-input");
+
+    const pmcAmount = Math.max(0, Math.floor(Number(pmcInput?.value || 0) || 0));
+    const adminSecret = String(secretInput?.value || "").trim();
+    const walletKey = makeWalletDbKey();
+
+    if (!isCurrentPiAdminKey()) {
+        alert("Tài khoản Pi này không có quyền đổi ví phí hệ thống.");
+        return;
+    }
+
+    if (!adminSecret) {
+        alert("Nhập mã bí mật admin trước đã.");
+        return;
+    }
+
+    if (!pmcAmount || pmcAmount <= 0) {
+        alert("Nhập số PMC muốn đổi trước đã.");
+        return;
+    }
+
+    const MIN_ADMIN_FEE_PMC_WITHDRAW = 500;
+
+if (pmcAmount < MIN_ADMIN_FEE_PMC_WITHDRAW) {
+    alert(`Mức rút tối thiểu là ${MIN_ADMIN_FEE_PMC_WITHDRAW.toLocaleString("vi-VN")} PMC.`);
+    return;
+}
+
+    try {
+        const btns = document.querySelectorAll("#admin-fee-wallet-modal button");
+        btns.forEach(btn => btn.disabled = true);
+
+        const res = await fetch("/api/convert-fee-pmc-to-pi?v=" + Date.now(), {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "x-wallet-key": walletKey
+            },
+            body: JSON.stringify({
+                pmcAmount,
+                adminSecret
+            })
+        });
+
+        const raw = await res.text();
+        let data = {};
+        try {
+            data = raw ? JSON.parse(raw) : {};
+        } catch (_) {
+            throw new Error("API ví phí trả dữ liệu không hợp lệ.");
+        }
+
+        if (!res.ok || !data?.ok) {
+    const errCode = String(data?.error || "").trim();
+
+    if (errCode === "cancelled_payment") {
+        throw new Error("Mày đã hủy giao dịch trong ví Pi. Bấm rút lại nếu muốn tạo giao dịch mới.");
+    }
+
+    if (errCode === "ongoing_payment_found") {
+        throw new Error("Đang có giao dịch rút Pi trước đó chưa xong. Đợi chút rồi bấm rút lại.");
+    }
+
+    if (errCode === "Thiếu PI_API_KEY.") {
+        throw new Error("Server đang thiếu PI_API_KEY trên Vercel.");
+    }
+
+    if (errCode === "Thiếu DEV_PUBLIC/DEV_SECRET.") {
+        throw new Error("Server đang thiếu DEV_PUBLIC hoặc DEV_SECRET trên Vercel.");
+    }
+
+    throw new Error(errCode || "Rút Pi thất bại.");
+}
+
+        if (typeof data.newPlayerPiBalance === "number") {
+            setPiBalance(data.newPlayerPiBalance);
+        }
+
+        await refreshAdminFeeTreasury();
+
+        if (secretInput) secretInput.value = "";
+        if (pmcInput) pmcInput.value = "";
+
+        alert(
+            `Đổi phí thành công!\n` +
+            `-${pmcAmount.toLocaleString("vi-VN")} PMC từ ví phí hệ thống\n` +
+            `+${formatPiExchangeValue(data.piAmount || 0)} Pi vào tài khoản hiện tại`
+        );
+    } catch (err) {
+        alert("Đổi ví phí lỗi: " + (err.message || "Không rõ lỗi"));
+    } finally {
+        const btns = document.querySelectorAll("#admin-fee-wallet-modal button");
+        btns.forEach(btn => btn.disabled = false);
+    }
+}
+setTimeout(syncAdminFeeMenuVisibility, 0);
+firebase.auth().onAuthStateChanged(() => {
+    syncAdminFeeMenuVisibility();
+});
+function openStakeRoomModal(mode) {
+    selectedRoomMode = mode || "co-tuong";
+    selectedRoomStakePMC = 0;
+
+    const modal = document.getElementById("stake-room-modal");
+    const title = document.getElementById("stake-room-title");
+    const now = document.getElementById("stake-pmc-now");
+    const preview = document.getElementById("stake-preview");
+    const custom = document.getElementById("custom-stake-pmc");
+
+    document.querySelectorAll(".stake-chip").forEach(btn => btn.classList.remove("active"));
+
+    if (title) title.innerText = selectedRoomMode === "co-up" ? "CHỌN PHÒNG CỜ ÚP" : "CHỌN PHÒNG CỜ TƯỚNG";
+    if (now) now.innerText = formatPMC(getPmcBalance()) + " PMC";
+    if (preview) preview.innerText = "Mức đã chọn: 0 PMC";
+    if (custom) custom.value = "";
+
+    if (modal) modal.style.display = "flex";
+}
+
+function closeStakeRoomModal() {
+    const modal = document.getElementById("stake-room-modal");
+    if (modal) modal.style.display = "none";
+}
+
+function pickStakePMC(value, el) {
+    selectedRoomStakePMC = Math.max(0, Math.floor(Number(value) || 0));
+
+    document.querySelectorAll(".stake-chip").forEach(btn => btn.classList.remove("active"));
+    if (el) el.classList.add("active");
+
+    const custom = document.getElementById("custom-stake-pmc");
+    if (custom) custom.value = "";
+
+    const preview = document.getElementById("stake-preview");
+    if (preview) preview.innerText = "Mức đã chọn: " + formatPMC(selectedRoomStakePMC) + " PMC";
+}
+
+async function confirmStakeSelection() {
+    if (isJoiningStakeRoom) return;
+    isJoiningStakeRoom = true;
+
+    const custom = document.getElementById("custom-stake-pmc");
+    const customValue = Math.floor(Number(custom?.value || 0) || 0);
+    const finalStake = customValue > 0 ? customValue : selectedRoomStakePMC;
+
+    if (!Number.isFinite(finalStake) || finalStake <= 0) {
+        isJoiningStakeRoom = false;
+        alert("Chọn hoặc nhập mức PMC trước đã.");
+        return;
+    }
+
+    let livePmc = 0;
+
+    try {
+        const walletKey = makeWalletDbKey();
+        if (!walletKey) {
+            isJoiningStakeRoom = false;
+            alert("Không lấy được mã ví người chơi.");
+            return;
+        }
+
+        const snap = await walletRefByKey(walletKey).once("value");
+        const liveData = snap.val() && typeof snap.val() === "object" ? snap.val() : {};
+        livePmc = Math.floor(Number(liveData.pmcBalance ?? 0) || 0);
+    } catch (e) {
+        console.error("❌ Không đọc được PMC realtime:", e);
+        isJoiningStakeRoom = false;
+        alert("Lỗi đọc số dư PMC.");
+        return;
+    }
+
+    console.log("PMC local =", getPmcBalance());
+    console.log("PMC realtime =", livePmc);
+    console.log("finalStake =", finalStake);
+
+    if (finalStake > livePmc) {
+        isJoiningStakeRoom = false;
+        alert("PMC không đủ (theo server).");
+        return;
+    }
+
+    try {
+        closeStakeRoomModal();
+        await joinOrCreateRealtimeMatch(selectedRoomMode, finalStake);
+    } catch (err) {
+        console.error("Lỗi vào phòng:", err);
+        alert("Vào phòng lỗi: " + (err && err.message ? err.message : err));
+    } finally {
+        isJoiningStakeRoom = false;
+    }
+}
+
+// Thêm sự kiện nhấn phím Enter để gửi
+document.getElementById('match-input-popup')?.addEventListener('keypress', function (e) {
+if (e.key === 'Enter') sendMatchChat();
+});
+function toggleEmojiMenu() {
+    const menu = document.getElementById("emoji-menu");
+    if (!menu) return;
+
+    menu.style.display = menu.style.display === "none" ? "grid" : "none";
+}
+function toggleMatchChat() {
+const chat = document.getElementById("match-chat-popup");
+const menu = document.getElementById("emoji-menu");
+if (!chat) return;
+
+const isOpen = getComputedStyle(chat).display !== "none";
+
+if (isOpen) {
+    chat.style.display = "none";
+    if (menu) menu.style.display = "none";
+} else {
+    chat.style.display = "flex";
+}
+document.addEventListener("click", function (e) {
+    if (window.innerWidth > 600) return;
+
+    const chat = document.getElementById("match-chat-popup");
+    const btn = document.getElementById("match-chat-btn");
+    const menu = document.getElementById("emoji-menu");
+
+    if (!chat || !btn) return;
+    if (getComputedStyle(chat).display === "none") return;
+
+    if (chat.contains(e.target) || btn.contains(e.target)) return;
+
+    chat.style.display = "none";
+    if (menu) menu.style.display = "none";
+
+    e.preventDefault();
+    e.stopPropagation();
+}, true);
+}
+
+function sendMatchChat() {
+    const input = document.getElementById("match-input-popup");
+    if (!input) return;
+
+    const text = input.value.trim();
+    if (!text) return;
+    if (!currentRoomId || !roomChatRef) return;
+
+    const me = getCurrentPlayerProfile();
+    const friend = getCurrentFriendProfile();
+    const chatName = isSpectatorMode
+        ? ((friend.displayName || friend.username || me.name || "Khán giả") + " 👁️")
+        : (me.name || friend.displayName || "Người chơi");
+
+    roomChatRef.push({
+        uid: me.uid || friend.uid || "",
+        name: chatName,
+        side: isSpectatorMode ? "viewer" : (mySide || ""),
+        text,
+        at: firebase.database.ServerValue.TIMESTAMP
+    });
+
+    input.value = "";
+}
+
+document.getElementById("match-input-popup")?.addEventListener("keypress", function(e) {
+if (e.key === "Enter") sendMatchChat();
+});
+
+
+function openDeveloperRules() {
+    const box = document.querySelector(".welcome-commit-box");
+    if (box) box.classList.add("show");
+}
+
+function closeDeveloperRules() {
+    const box = document.querySelector(".welcome-commit-box");
+    if (box) box.classList.remove("show");
+}
+
+let arenaTopActiveTab = "level";
+let arenaTopCache = [];
+let arenaTopPlayerStateCache = {};
+let pendingTopChallengeTarget = null;
+let pendingTopChallengeMode = "co-tuong";
+
+function escapeTopHtml(text = "") {
+    return String(text || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function readTopNumber(value, fallback = 0) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+}
+function readStatsV2Record(wallet = {}) {
+    const statsV2 = wallet?.statsV2 && typeof wallet.statsV2 === "object" ? wallet.statsV2 : {};
+    return {
+        wins: Math.max(0, Math.floor(readTopNumber(statsV2.wins ?? statsV2.totalWins ?? 0, 0))),
+        losses: Math.max(0, Math.floor(readTopNumber(statsV2.losses ?? statsV2.totalLosses ?? 0, 0))),
+        matches: Math.max(0, Math.floor(readTopNumber(statsV2.matches ?? statsV2.totalMatches ?? 0, 0))),
+        monthWins: Math.max(0, Math.floor(readTopNumber(statsV2.monthWins ?? 0, 0))),
+        monthLosses: Math.max(0, Math.floor(readTopNumber(statsV2.monthLosses ?? 0, 0)))
+    };
+}
+
+
+function countOwnedTopSkins(wallet = {}) {
+    const owned = wallet.ownedAvatarSkins || wallet.avatarSkins || wallet.skins || {};
+    if (Array.isArray(owned)) {
+        return owned.filter(Boolean).filter(id => String(id) !== "none").length;
+    }
+    if (owned && typeof owned === "object") {
+        return Object.keys(owned).filter(id => id !== "none" && owned[id]).length;
+    }
+    return wallet.avatarSkin && wallet.avatarSkin !== "none" ? 1 : 0;
+}
+
+function normalizeTopWallet(walletKey, wallet = {}) {
+    const levelMeta = wallet.levelMeta || {};
+    const level = Math.max(1, Math.floor(readTopNumber(
+        levelMeta.level ?? wallet.level ?? wallet.lever ?? 1,
+        1
+    )));
+
+    const exp = Math.max(0, Math.floor(readTopNumber(
+        levelMeta.exp ?? levelMeta.xp ?? wallet.exp ?? wallet.xp ?? 0,
+        0
+    )));
+
+    // TOP thắng/thua chỉ đọc statsV2, không đọc wins/losses cũ bị rác.
+    const recordV2 = readStatsV2Record(wallet);
+    const wins = recordV2.wins;
+    const losses = recordV2.losses;
+
+    const pmc = Math.max(0, Math.floor(readTopNumber(
+        wallet.pmcBalance ?? wallet.pmc ?? wallet.balancePMC ?? 0,
+        0
+    )));
+
+    const pi = Math.max(0, readTopNumber(
+        wallet.piBalance ?? wallet.balance ?? wallet.pi ?? 0,
+        0
+    ));
+
+    const skinCount = countOwnedTopSkins(wallet);
+
+    return {
+        walletKey,
+        name: wallet.name || wallet.displayName || wallet.username || walletKey || "Người chơi",
+        photo: wallet.photo || wallet.avatar || "images/do_tuong.png",
+        title: levelMeta.title || wallet.levelTitle || getSimpleLevelTitle(level),
+        level,
+        exp,
+        wins,
+        losses,
+        pmc,
+        pi,
+        skinCount,
+        equippedSkin: wallet.avatarSkin || "none"
+    };
+}
+
+function isSystemTopWallet(walletKey = "", wallet = {}) {
+    const key = String(walletKey || "").toLowerCase();
+    const name = String(wallet.name || wallet.username || "").toLowerCase();
+    return key.includes("admin") || key.includes("system") || key.includes("master") || name.includes("hệ thống") || name.includes("system");
+}
+
+async function loadArenaTopPlayers() {
+    const [walletSnap, stateSnap] = await Promise.all([
+        db.ref("wallets").limitToLast(250).once("value"),
+        db.ref("social/playerState").once("value").catch(() => null)
+    ]);
+
+    const stateMap = stateSnap?.val?.() || {};
+    arenaTopPlayerStateCache = stateMap || {};
+    const list = [];
+
+    walletSnap.forEach(child => {
+        const wallet = child.val() || {};
+        if (isSystemTopWallet(child.key, wallet)) return;
+        const p = normalizeTopWallet(child.key, wallet);
+        const state = stateMap[p.walletKey] || {};
+        p.liveState = state.state || "home";
+        p.liveRoomId = state.roomId || "";
+        p.liveMode = state.mode || "";
+        p.online = state.online !== false && isTopPlayerFreshOnline(state);
+        p.lastSeenAt = Number(state.updatedAt || 0) || 0;
+        p.viewerCount = 0;
+        list.push(p);
+    });
+
+    const liveRoomIds = Array.from(new Set(
+        list.filter(p => p.liveRoomId && (p.liveState === "arena" || p.liveState === "spectating"))
+            .map(p => String(p.liveRoomId))
+    ));
+
+    const viewerCounts = {};
+    await Promise.all(liveRoomIds.map(async (roomId) => {
+        const snap = await db.ref("matches/" + roomId + "/viewers").once("value").catch(() => null);
+        viewerCounts[roomId] = snap?.numChildren ? snap.numChildren() : 0;
+    }));
+
+    list.forEach(p => {
+        if (p.liveRoomId) p.viewerCount = viewerCounts[String(p.liveRoomId)] || 0;
+    });
+
+    arenaTopCache = list;
+    return list;
+}
+
+function isTopPlayerFreshOnline(state = {}) {
+    const updatedAt = Number(state.updatedAt || 0) || 0;
+    if (!updatedAt) return false;
+    return Date.now() - updatedAt < 90000;
+}
+
+function getArenaTopSorted(tab) {
+    const list = arenaTopCache.slice();
+
+    if (tab === "skin") {
+        return list.sort((a, b) => (b.skinCount - a.skinCount) || (b.level - a.level) || (b.wins - a.wins));
+    }
+    if (tab === "record") {
+        return list.sort((a, b) => (b.wins - a.wins) || (a.losses - b.losses) || (b.level - a.level));
+    }
+    if (tab === "pi") {
+        return list.sort((a, b) => (b.pi - a.pi) || (b.level - a.level));
+    }
+    if (tab === "pmc") {
+        return list.sort((a, b) => (b.pmc - a.pmc) || (b.level - a.level));
+    }
+    return list.sort((a, b) => (b.level - a.level) || (b.exp - a.exp) || (b.wins - a.wins));
+}
+
+function renderArenaTopList() {
+    const listEl = document.getElementById("arena-top-list");
+    if (!listEl) return;
+
+    document.querySelectorAll(".top-tab").forEach(btn => {
+        btn.classList.toggle("active", btn.id === "top-tab-" + arenaTopActiveTab);
+    });
+
+    const me = getCurrentFriendProfile();
+    const myWalletKey = String(me?.walletKey || getCurrentPlayerProfile()?.walletKey || "");
+    const list = getArenaTopSorted(arenaTopActiveTab).slice(0, 100);
+    if (!list.length) {
+        listEl.innerHTML = '<div class="top-empty">Chưa có dữ liệu Top.</div>';
+        return;
+    }
+
+listEl.innerHTML = list.map((p, i) => {
+        let value = "";
+        let sub = `Lever ${p.level} • ${escapeTopHtml(p.title)}`;
+
+        if (arenaTopActiveTab === "skin") {
+            value = `${p.skinCount} skin`;
+            sub += ` • đang dùng: ${escapeTopHtml(p.equippedSkin)}`;
+        } else if (arenaTopActiveTab === "record") {
+            let winHtml = p.wins >= 1 ? `<span style="color: #55efc4;">Thắng ${p.wins}</span>` : `Thắng ${p.wins}`;
+            let lossHtml = p.losses >= 1 ? `<span style="color: #ff7675;">Thua ${p.losses}</span>` : `Thua ${p.losses}`;
+            value = `V2 ${winHtml} / ${lossHtml}`;
+        } else if (arenaTopActiveTab === "pi") {
+            value = `${p.pi.toLocaleString("vi-VN", { maximumFractionDigits: 4 })} π`;
+        } else if (arenaTopActiveTab === "pmc") {
+            value = `${p.pmc.toLocaleString("vi-VN")} PMC`;
+        } else {
+            value = `Lever ${p.level}`;
+            sub += ` • EXP ${p.exp.toLocaleString("vi-VN")}`;
+        }
+
+        const isMe = myWalletKey && String(p.walletKey || "") === myWalletKey;
+        const isPlaying = p.liveState === "arena" && !!p.liveRoomId;
+        const isSpectating = p.liveState === "spectating" && !!p.liveRoomId;
+        const onlineText = p.online ? "ONLINE" : "OFFLINE";
+        let statusHtml = `<span class="top-status-chip ${p.online ? "online" : "offline"}">● ${onlineText}</span>`;
+        if (isPlaying) {
+            statusHtml += ` <span class="top-status-chip playing">⚔️ ĐANG ĐẤU</span>`;
+        } else if (isSpectating) {
+            statusHtml += ` <span class="top-status-chip spectating">👁️ ĐANG XEM</span>`;
+        } else if (p.online) {
+            statusHtml += ` <span class="top-status-chip home">● ĐANG RẢNH</span>`;
+        }
+
+        let challengeBtn = "";
+        if (isMe) {
+            challengeBtn = `<button class="top-challenge-btn" disabled style="opacity:.45;">LÀ MẦY</button>`;
+        } else if (p.online) {
+            challengeBtn = `<button class="top-challenge-btn" onclick="openTopChallengeModal('${escapeTopHtml(p.walletKey)}')">THÁCH ĐẤU</button>`;
+        }
+
+        const watchBtn = isPlaying
+            ? `<button class="top-watch-btn" onclick="watchTopPlayingRoom('${escapeTopHtml(p.liveRoomId)}')">👁️ XEM (${Number(p.viewerCount || 0)})</button>`
+            : "";
+
+        // TẠO CẤU TRÚC ỐP SKIN CHO AVATAR BẢNG TOP
+        const skinData = getAvatarSkinById(p.equippedSkin || "none");
+        const frameSrc = skinData.frameImage || "";
+        const frameDisplay = (p.equippedSkin === "none" || !frameSrc) ? "display:none;" : "";
+        
+        const avatarWithSkinHtml = `
+            <div class="avatar-frame-shell" data-skin="${escapeTopHtml(p.equippedSkin)}" style="width:38px; height:38px; min-width:38px; position:relative; display:inline-flex; align-items:center; justify-content:center;">
+                <img class="avatar-core" src="${escapeTopHtml(p.photo)}" alt="avatar" style="width:70%; height:70%; object-fit:cover; border-radius:50%; border:1px solid rgba(255,209,102,0.8); background:#111;">
+                <img class="avatar-frame-overlay" src="${escapeTopHtml(frameSrc)}" style="position:absolute; width:135%; height:135%; top:50%; left:50%; transform:translate(-50%, -50%); object-fit:contain; pointer-events:none; z-index:6; filter:drop-shadow(0 0 5px rgba(0,0,0,0.8)); ${frameDisplay}">
+            </div>
+        `;
+
+        return `
+            <div class="top-player-row">
+                <div class="top-player-rank">#${i + 1}</div>
+                
+                <!-- BÊ NGUYÊN CỤC AVATAR CÓ SKIN VÀO ĐÂY -->
+                ${avatarWithSkinHtml}
+                
+                <div>
+                    <div class="top-player-name">${escapeTopHtml(p.name)}</div>
+                    <div class="top-player-sub">${sub} ${statusHtml}</div>
+                </div>
+                <div class="top-player-actions">
+                    <div class="top-player-value">${value}</div>
+                    ${challengeBtn}
+                    ${watchBtn}
+                </div>
+            </div>`;
+    }).join("");
+}
+
+
+
+function findTopPlayerByWalletKey(walletKey) {
+    walletKey = String(walletKey || "");
+    return arenaTopCache.find(p => String(p.walletKey || "") === walletKey) || null;
+}
+
+function pickTopChallengeMode(mode) {
+    pendingTopChallengeMode = mode === "co-up" ? "co-up" : "co-tuong";
+    const tuong = document.getElementById("top-challenge-mode-tuong");
+    const up = document.getElementById("top-challenge-mode-up");
+    if (tuong) tuong.classList.toggle("active", pendingTopChallengeMode === "co-tuong");
+    if (up) up.classList.toggle("active", pendingTopChallengeMode === "co-up");
+}
+
+function openTopChallengeModal(walletKey) {
+    const target = findTopPlayerByWalletKey(walletKey);
+    if (!target) {
+        alert("Không tìm thấy người chơi này trong bảng Top.");
+        return;
+    }
+
+    const me = getCurrentFriendProfile();
+    if (String(me?.walletKey || "") === String(target.walletKey || "")) {
+        alert("Không thể tự thách đấu chính mình.");
+        return;
+    }
+
+    if (target.liveState === "arena" && target.liveRoomId) {
+        alert("Người này đang đấu. Mầy có thể bấm XEM BÀN hoặc chờ họ rảnh rồi thách đấu.");
+        return;
+    }
+
+    pendingTopChallengeTarget = target;
+    pendingTopChallengeMode = currentRoomMode || "co-tuong";
+    pickTopChallengeMode(pendingTopChallengeMode);
+
+    const targetEl = document.getElementById("top-challenge-target");
+    const myPmcEl = document.getElementById("top-challenge-my-pmc");
+    const input = document.getElementById("top-challenge-stake-input");
+    const modal = document.getElementById("top-challenge-modal");
+
+    if (targetEl) targetEl.innerText = "Đối thủ: " + (target.name || "Người chơi Top");
+    if (myPmcEl) myPmcEl.innerText = "Số dư PMC của mầy: " + formatPMC(getPmcBalance()) + " PMC";
+    if (input) input.value = "";
+    if (modal) modal.classList.add("show");
+}
+
+function closeTopChallengeModal() {
+    const modal = document.getElementById("top-challenge-modal");
+    if (modal) modal.classList.remove("show");
+    pendingTopChallengeTarget = null;
+}
+
+async function createPrivateTopChallengeRoom(me, mode, stakePMC, target) {
+    const newRoomRef = db.ref("matches").push();
+    const newRoomId = newRoomRef.key;
+    const bucket = makeStakeBucket(mode, stakePMC);
+    const inviteCode = makeInviteCodeFromRoomId(newRoomId);
+
+    await newRoomRef.set({
+        mode,
+        stakePMC,
+        roomBucket: bucket,
+        inviteCode,
+        status: "waiting",
+        lobbyOpen: false,
+        challengeOnly: true,
+        challengeToWalletKey: target.walletKey || "",
+        lobbyOwnerUid: me.uid || "",
+        lobbyOwnerWalletKey: me.walletKey || "",
+        lobbyUpdatedAt: firebase.database.ServerValue.TIMESTAMP,
+        turn: "do",
+        isCoUp: mode === "co-up",
+        timeDo: 540,
+        timeDen: 540,
+        createdAt: firebase.database.ServerValue.TIMESTAMP,
+        players: { do: me, den: null },
+        ready: { do: false, den: false },
+        stakeLocked: { do: false, den: false },
+        board: null,
+        lastMoveFrom: null,
+        lastMoveTo: null,
+        winner: null,
+        winReason: null,
+        drawRequest: null
+    });
+
+    return { roomId: newRoomId, bucket, inviteCode };
+}
+
+async function publishChallengeRoomToLobby(roomId, invite = {}) {
+    if (!roomId) return;
+
+    const roomSnap = await db.ref("matches/" + roomId).once("value").catch(() => null);
+    const room = roomSnap?.val?.() || null;
+    if (!room || room.winner || room.status !== "waiting" || room.players?.den || !room.players?.do) return;
+
+    await closeMyOtherOpenWaitingRooms(roomId).catch(err => console.error("Dọn phòng cũ trước khi mở thách đấu ra lobby lỗi:", err));
+
+    const mode = room.mode || invite.mode || "co-tuong";
+    const stakePMC = Math.max(0, Math.floor(Number(room.stakePMC || invite.stakePMC || 0) || 0));
+    const bucket = room.roomBucket || invite.roomBucket || makeStakeBucket(mode, stakePMC);
+    const inviteCode = String(room.inviteCode || invite.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
+
+    await db.ref().update({
+        [`matches/${roomId}/lobbyOpen`]: true,
+        [`matches/${roomId}/challengeOnly`]: false,
+        [`matches/${roomId}/challengeToWalletKey`]: null,
+        [`matches/${roomId}/readyDeadlineAt`]: null,
+        [`matches/${roomId}/ready/do`]: false,
+        [`matches/${roomId}/ready/den`]: false,
+        [`matches/${roomId}/lobbyHeartbeatAt`]: firebase.database.ServerValue.TIMESTAMP,
+        [`matches/${roomId}/lobbyUpdatedAt`]: firebase.database.ServerValue.TIMESTAMP,
+        [`matches/${roomId}/updatedAt`]: firebase.database.ServerValue.TIMESTAMP,
+        [`waitingRooms/${bucket}/${roomId}`]: {
+            roomId,
+            uid: room.players.do.uid || "",
+            name: room.players.do.name || "Chủ phòng",
+            walletKey: room.players.do.walletKey || "",
+            mode,
+            stakePMC,
+            inviteCode,
+            createdAt: Date.now(),
+            claimedBy: null,
+            claimedAt: null
+        }
+    });
+}
+
+async function confirmTopChallengeInvite() {
+    const target = pendingTopChallengeTarget;
+    const input = document.getElementById("top-challenge-stake-input");
+    const stakePMC = Math.max(0, Math.floor(Number(input?.value || 0) || 0));
+
+    if (!target?.walletKey) {
+        alert("Chưa chọn đối thủ.");
+        return;
+    }
+
+    if (stakePMC <= 0) {
+        alert("Nhập số PMC cược trước đã.");
+        return;
+    }
+
+    const meFriend = getCurrentFriendProfile();
+    const meGame = getCurrentPlayerProfile();
+
+    if ((getPmcBalance() || 0) < stakePMC || (meGame.pmcBalance || 0) < stakePMC) {
+        alert("PMC không đủ để thách đấu mức này.");
+        return;
+    }
+
+    const busy = await isPlayerActuallyBusy(target.walletKey).catch(() => false);
+    if (busy) {
+        alert((target.name || "Người này") + " đang bận hoặc đang đấu.");
+        await loadArenaTopPlayers().catch(() => {});
+        renderArenaTopList();
+        return;
+    }
+
+    try {
+        closeTopChallengeModal();
+        closeArenaTopModal();
+
+        prepareRealtimeArenaUI();
+        clearInterval(interval);
+        currentRoomStatus = "waiting";
+        isGameOver = false;
+        luotDi = "do";
+        timeDo = 540;
+        timeDen = 540;
+        if (timerDoEl) timerDoEl.innerText = formatTime(timeDo);
+        if (timerDenEl) timerDenEl.innerText = formatTime(timeDen);
+
+        const mode = pendingTopChallengeMode || "co-tuong";
+        const roomInfo = await createPrivateTopChallengeRoom(meGame, mode, stakePMC, target);
+
+        mySide = "do";
+        viewSide = "do";
+        currentRoomId = roomInfo.roomId;
+        currentRoomMode = mode;
+        currentRoomStakePMC = stakePMC;
+        currentRoomBucket = roomInfo.bucket;
+        saveActiveMatchSnapshot({ roomId: roomInfo.roomId, mode, side: "do" });
+        bindRoom(roomInfo.roomId);
+        setPlayerPresence("arena").catch(() => {});
+
+        const inviteRef = db.ref("social/roomInvitesInbox/" + target.walletKey).push();
+        const inviteId = inviteRef.key;
+        const payload = {
+            inviteId,
+            roomId: roomInfo.roomId,
+            roomBucket: roomInfo.bucket,
+            inviteCode: roomInfo.inviteCode,
+            mode,
+            stakePMC,
+            fromWalletKey: meFriend.walletKey,
+            fromUid: meFriend.uid,
+            fromName: meFriend.displayName || meFriend.username || meGame.name || "Người chơi",
+            fromPhoto: meFriend.photo || meGame.photo || "images/do_tuong.png",
+            toWalletKey: target.walletKey,
+            toName: target.name || "Cao thủ Top",
+            status: "pending",
+            source: "top_challenge",
+            privateChallenge: true,
+            createdAt: Date.now()
+        };
+
+        const updates = {};
+        updates[`social/roomInvitesInbox/${target.walletKey}/${inviteId}`] = payload;
+        updates[`social/roomInvitesSent/${meFriend.walletKey}/${inviteId}`] = payload;
+        await db.ref().update(updates);
+
+        alert("Đã tạo phòng riêng và gửi lời thách đấu cho " + (target.name || "đối thủ") + ".");
+    } catch (err) {
+        console.error("Lỗi gửi thách đấu Top:", err);
+        alert("Gửi thách đấu lỗi.");
+    }
+}
+
+async function watchTopPlayingRoom(roomId) {
+    roomId = String(roomId || "").trim();
+    if (!roomId) return;
+
+    const snap = await db.ref("matches/" + roomId).once("value").catch(() => null);
+    const room = snap?.val?.() || null;
+    if (!room || room.winner || room.status !== "playing") {
+        alert("Bàn này đã kết thúc hoặc không còn đang đấu.");
+        await loadArenaTopPlayers().catch(() => {});
+        renderArenaTopList();
+        return;
+    }
+
+    closeArenaTopModal();
+    closeRankingModal();
+    closeTopChallengeModal();
+
+    cleanupRoomListeners();
+    isSpectatorMode = true;
+    document.body.classList.add("spectator-mode");
+    mySide = null;
+    viewSide = "do";
+    currentRoomId = roomId;
+    currentRoomMode = room.mode || "co-tuong";
+    currentRoomStakePMC = Math.max(0, Math.floor(Number(room.stakePMC || 0) || 0));
+    currentRoomBucket = room.roomBucket || makeStakeBucket(currentRoomMode, currentRoomStakePMC);
+    currentRoomStatus = room.status || "playing";
+    clearActiveMatchSnapshot(roomId);
+
+    hideHomeUI();
+    const arena = document.getElementById("game-arena");
+    if (arena) arena.style.display = "block";
+
+    const chatPopup = document.getElementById("match-chat-popup");
+    const chatBtn = document.getElementById("match-chat-btn");
+    if (window.innerWidth <= 600) {
+        if (chatPopup) chatPopup.style.display = "none";
+        if (chatBtn) chatBtn.style.display = "flex";
+    } else {
+        if (chatPopup) chatPopup.style.display = "flex";
+        if (chatBtn) chatBtn.style.display = "none";
+    }
+
+    bindRoom(roomId, true);
+    await startSpectatorPresence(roomId).catch(() => {});
+    await setPlayerPresence("spectating").catch(() => {});
+}
+
+let arenaTopUpdateTimer = null;
+let lastTopFetchTime = 0;  // Lưu thời gian lần cuối tải data
+let isFetchingTop = false; // Cờ khóa chống tải chồng chéo
+
+// Hàm Tải Top an toàn (Có khóa chống Spam)
+async function safeFetchAndRenderTop() {
+    // Nếu mạng chậm, đang tải dở chưa xong thì hủy lệnh này, đéo cho chạy đè lên nhau
+    if (isFetchingTop) return; 
+    
+    isFetchingTop = true;
+    try {
+        await loadArenaTopPlayers(); // Hàm kéo data từ Firebase của mày
+        lastTopFetchTime = Date.now(); // Lưu lại mốc thời gian vừa kéo xong
+        renderArenaTopList(); 
+    } catch (err) {
+        console.error("Lỗi tải Top:", err);
+        const listEl = document.getElementById("arena-top-list");
+        if (listEl) listEl.innerHTML = '<div class="top-empty">Không tải được bảng Top.</div>';
+    } finally {
+        isFetchingTop = false; // Tải xong thì mở khóa
+    }
+}
+
+async function openArenaTopModal(e) {
+    if (e) e.stopPropagation();
+    if (document.body.classList.contains("in-match")) return;
+    
+    const modal = document.getElementById("arena-top-modal");
+    if (!modal) return;
+    
+    modal.classList.add("show");
+
+    // Đóng các menu khác cho gọn (nếu mầy có dùng hàm closeProfileMenu thì gọi)
+    document.querySelectorAll(".profile-menu").forEach(m => m.classList.remove("show"));
+
+    const now = Date.now();
+    const listEl = document.getElementById("arena-top-list");
+
+    // 🔥 LỚP BẢO VỆ CACHE: Nếu vừa tải xong chưa quá 30s (30000ms), lôi đồ cũ ra xài luôn, ĐÉO tải lại!
+    if (now - lastTopFetchTime < 30000 && arenaTopCache.length > 0) {
+        renderArenaTopList();
+    } else {
+        // Còn nếu quá 30s hoặc mới vô game chưa có data, thì báo "Đang tải" và gọi Firebase
+        if (listEl && arenaTopCache.length === 0) listEl.innerHTML = '<div class="top-empty">Đang tải bảng Top...</div>';
+        await safeFetchAndRenderTop();
+    }
+
+    // Dọn Timer cũ trước khi cài Timer mới
+    if (arenaTopUpdateTimer) clearInterval(arenaTopUpdateTimer);
+
+    // 🔥 TIMER TỰ ĐỘNG CẬP NHẬT: Quét mỗi 30 giây (30000ms)
+    arenaTopUpdateTimer = setInterval(() => {
+        if (modal && modal.classList.contains("show")) {
+            safeFetchAndRenderTop();
+        } else {
+            clearInterval(arenaTopUpdateTimer);
+            arenaTopUpdateTimer = null;
+        }
+    }, 30000); 
+}
+
+function closeArenaTopModal() {
+    const modal = document.getElementById("arena-top-modal");
+    if (modal) modal.classList.remove("show");
+
+    // 🛑 ĐÓNG BẢNG TOP LÀ RÚT ĐIỆN TIMER NGAY
+    if (arenaTopUpdateTimer) {
+        clearInterval(arenaTopUpdateTimer);
+        arenaTopUpdateTimer = null;
+    }
+}
+
+function switchArenaTopTab(tab) {
+    arenaTopActiveTab = ["level", "skin", "record", "pi", "pmc"].includes(tab) ? tab : "level";
+    renderArenaTopList();
+}
+
+function openRankingModal(e) {
+    if (e) e.stopPropagation();
+    const modal = document.getElementById("ranking-modal");
+    if (!modal) return;
+    modal.style.display = "flex";
+    modal.classList.add("show");
+}
+
+function closeRankingModal() {
+    const modal = document.getElementById("ranking-modal");
+    if (!modal) return;
+    modal.classList.remove("show");
+    modal.style.display = "none";
+}
+function formatRoomStakePMC(stake) {
+    return `${Math.max(0, Math.floor(Number(stake) || 0))} PMC`;
+}
+
+function getRoomLobbyState(room) {
+    const hasDo = !!room?.players?.do;
+    const hasDen = !!room?.players?.den;
+
+    if (room?.winner) return { text: "Đã xong", cls: "done" };
+    if (room?.status === "playing" && hasDo && hasDen) return { text: "Đang trong trận", cls: "playing" };
+    if (hasDo && hasDen) return { text: "Đủ 2 người", cls: "full" };
+    return { text: "Thiếu người", cls: "waiting" };
+}
+
+function canJoinLobbyRoom(room) {
+    const hasDo = !!room?.players?.do;
+    const hasDen = !!room?.players?.den;
+    return room?.lobbyOpen === true && !isGhostLobbyRoom(room) && !room?.winner && room?.status === "waiting" && hasDo && !hasDen;
+}
+
+async function joinRoomFromLobby(roomId) {
+    try {
+        roomId = String(roomId || "").trim();
+        if (!roomId) return;
+
+        const roomSnap = await db.ref("matches/" + roomId).once("value");
+        const room = roomSnap.val();
+
+        if (!room) {
+            alert("Bàn này không còn.");
+            bindLobbyRoomList();
+            return;
+        }
+
+        if (isGhostLobbyRoom(room) || room.lobbyOpen !== true) {
+            await cleanupGhostLobbyRoom(roomId, room).catch(() => {});
+            alert("Bàn này là phòng cũ/phòng ảo, đã dọn khỏi danh sách.");
+            bindLobbyRoomList();
+            return;
+        }
+
+        const me = getCurrentPlayerProfile();
+        const hasDo = !!room?.players?.do;
+        const hasDen = !!room?.players?.den;
+        const stakePMC = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
+        const mode = room?.mode || "co-tuong";
+        const bucket = room?.roomBucket || makeStakeBucket(mode, stakePMC);
+
+        if (room?.winner || room?.status === "finished" || room?.status === "ended") {
+            alert("Bàn này đã kết thúc.");
+            bindLobbyRoomList();
+            return;
+        }
+
+        if (room?.status !== "waiting") {
+            alert("Bàn này đang trong trận.");
+            bindLobbyRoomList();
+            return;
+        }
+
+        if (!hasDo) {
+            alert("Bàn này chưa có chủ bàn.");
+            bindLobbyRoomList();
+            return;
+        }
+
+        if (hasDen) {
+            alert("Bàn này đã đủ 2 người.");
+            bindLobbyRoomList();
+            return;
+        }
+
+        if (room.players?.do?.uid === me.uid || room.players?.do?.walletKey === me.walletKey) {
+            alert("Đây là bàn của mầy rồi.");
+            return;
+        }
+
+        if ((me.pmcBalance || 0) < stakePMC) {
+            alert("PMC không đủ để vào bàn này.");
+            return;
+        }
+
+        // QUAN TRỌNG: phải trỏ đúng roomId, không trỏ nguyên bucket
+        const waitingRef = db.ref("waitingRooms/" + bucket + "/" + roomId);
+
+        const claim = await waitingRef.transaction((current) => {
+            // Nếu waitingRooms bị thiếu do bản cũ, tự dựng lại đúng từ matches
+            const base = current && current.roomId
+                ? current
+                : {
+                    roomId,
+                    uid: room.players.do.uid,
+                    name: room.players.do.name || "Chủ bàn",
+                    mode,
+                    stakePMC,
+                    inviteCode: room.inviteCode || makeInviteCodeFromRoomId(roomId),
+                    createdAt: Date.now(),
+                    claimedBy: null,
+                    claimedAt: null
+                };
+
+            if (!base.roomId || base.roomId !== roomId) return;
+            if (base.uid === me.uid) return;
+            if (base.claimedBy && base.claimedBy !== me.uid) return;
+
+            return {
+                ...base,
+                claimedBy: me.uid,
+                claimedAt: Date.now()
+            };
+        }, undefined, false);
+
+        const claimedWaiting = claim.snapshot?.val?.() || null;
+        const iClaimedIt =
+            claim.committed &&
+            claimedWaiting &&
+            claimedWaiting.roomId === roomId &&
+            claimedWaiting.claimedBy === me.uid;
+
+        if (!iClaimedIt) {
+            alert("Không vào được bàn này, có thể vừa có người khác vào.");
+            bindLobbyRoomList();
+            return;
+        }
+
+        const ok = await joinExistingWaitingRoom(waitingRef, roomId, me, mode, stakePMC);
+
+        if (!ok) {
+            alert("Không vào được bàn này, bàn đã đổi trạng thái.");
+            bindLobbyRoomList();
+            return;
+        }
+
+        closeRankingModal();
+        prepareRealtimeArenaUI();
+        clearInterval(interval);
+
+        currentRoomStatus = "waiting";
+        isGameOver = false;
+        luotDi = "do";
+        timeDo = 540;
+        timeDen = 540;
+
+        if (timerDoEl) timerDoEl.innerText = formatTime(timeDo);
+        if (timerDenEl) timerDenEl.innerText = formatTime(timeDen);
+    } catch (err) {
+        console.error("joinRoomFromLobby lỗi:", err);
+        alert("Vào bàn lỗi.");
+    }
+}
+async function joinRoomByInviteCode() {
+    const input = document.getElementById("invite-code-input");
+    const code = normalizeInviteCode(input?.value || "");
+
+    if (!code) {
+        alert("Nhập mã mời trước đã.");
+        return;
+    }
+
+    try {
+        const snap = await db.ref("matches")
+            .orderByChild("inviteCode")
+            .equalTo(code)
+            .limitToFirst(1)
+            .once("value");
+
+        if (!snap.exists()) {
+            alert("Không tìm thấy phòng với mã này.");
+            return;
+        }
+
+        let roomId = "";
+        let room = null;
+
+        snap.forEach(child => {
+            if (!roomId) {
+                roomId = child.key;
+                room = child.val() || {};
+            }
+        });
+
+        if (!roomId || !room) {
+            alert("Mã mời không hợp lệ.");
+            return;
+        }
+
+        const me = getCurrentPlayerProfile();
+        const hasDo = !!room?.players?.do;
+        const hasDen = !!room?.players?.den;
+        const stakePMC = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
+        const mode = room?.mode || "co-tuong";
+        const bucket = room?.roomBucket || makeStakeBucket(mode, stakePMC);
+
+        if (room?.winner) {
+            alert("Phòng này đã kết thúc.");
+            return;
+        }
+
+        if (!hasDo) {
+            alert("Phòng này không còn chủ bàn.");
+            return;
+        }
+
+        if (room?.players?.do?.uid === me.uid || room?.players?.den?.uid === me.uid) {
+            closeRankingModal();
+            prepareRealtimeArenaUI();
+            clearInterval(interval);
+            currentRoomStatus = room?.status === "playing" ? "playing" : "waiting";
+            isGameOver = false;
+            if (input) input.value = "";
+            bindRoom(roomId);
+            return;
+        }
+
+        if (room?.status === "playing" || (hasDo && hasDen)) {
+            alert("Phòng này đã đủ 2 người hoặc đang chơi.");
+            return;
+        }
+
+        if ((me.pmcBalance || 0) < stakePMC) {
+            alert("PMC không đủ để vào phòng này.");
+            return;
+        }
+
+        const waitingRef = db.ref("waitingRooms/" + bucket + "/" + roomId);
+        const ok = await joinExistingWaitingRoom(waitingRef, roomId, me, mode, stakePMC);
+
+        if (!ok) {
+            alert("Không vào được phòng bằng mã này.");
+            return;
+        }
+
+        closeRankingModal();
+        prepareRealtimeArenaUI();
+        clearInterval(interval);
+
+        currentRoomStatus = "waiting";
+        isGameOver = false;
+        luotDi = "do";
+        timeDo = 540;
+        timeDen = 540;
+
+        if (timerDoEl) timerDoEl.innerText = formatTime(timeDo);
+        if (timerDenEl) timerDenEl.innerText = formatTime(timeDen);
+        if (input) input.value = "";
+    } catch (err) {
+        console.error("joinRoomByInviteCode lỗi:", err);
+        alert("Vào phòng bằng mã bị lỗi.");
+    }
+}
+let activeLobbyRoomTab = "co-tuong";
+let latestLobbyRoomList = [];
+let lobbyRoomListRef = null;
+let lobbyBindSeq = 0;
+let lobbyCleanupInFlight = false;
+
+// HOTFIX PHÒNG ẢO: phòng chờ phải có heartbeat sống.
+// Nếu host tắt app / rớt mạng / tạo nhiều phòng rồi bỏ đó, phòng sẽ tự ẩn và bị đóng lobby.
+const LOBBY_WAITING_STALE_MS = 90 * 1000;
+const LOBBY_PLAYING_STALE_MS = 2 * 60 * 60 * 1000;
+const LOBBY_CLEAN_SCAN_LIMIT = 30;
+
+function syncLobbyRoomTabs(roomList = []) {
+    const coTuongCount = roomList.filter(room => (room?.mode || "co-tuong") !== "co-up").length;
+    const coUpCount = roomList.filter(room => room?.mode === "co-up").length;
+
+    const btnCoTuong = document.getElementById("room-tab-co-tuong");
+    const btnCoUp = document.getElementById("room-tab-co-up");
+    const countCoTuong = document.getElementById("room-tab-co-tuong-count");
+    const countCoUp = document.getElementById("room-tab-co-up-count");
+
+    if (btnCoTuong) btnCoTuong.classList.toggle("active", activeLobbyRoomTab === "co-tuong");
+    if (btnCoUp) btnCoUp.classList.toggle("active", activeLobbyRoomTab === "co-up");
+
+    if (countCoTuong) countCoTuong.textContent = String(coTuongCount);
+    if (countCoUp) countCoUp.textContent = String(coUpCount);
+}
+
+function switchLobbyRoomTab(tab) {
+    activeLobbyRoomTab = (tab === "co-up") ? "co-up" : "co-tuong";
+    renderLobbyRoomList(latestLobbyRoomList);
+}
+
+function buildLobbyRoomHtml(roomList) {
+    return !roomList.length
+        ? `<div style="opacity:.8;font-size:13px;padding:10px;">Chưa có bàn nào</div>`
+        : roomList.map((room, index) => {
+            const state = getRoomLobbyState(room);
+            const hasDo = !!room?.players?.do;
+            const hasDen = !!room?.players?.den;
+            const canJoin = canJoinLobbyRoom(room);
+            const hostName = room?.players?.do?.name || room?.hostName || "Chủ bàn";
+            const modeText = room?.mode === "co-up" ? "Cờ Úp" : "Cờ Tướng";
+
+            return `
+                <div class="lobby-room-row ${canJoin ? "joinable" : ""}"
+                     ${canJoin ? `onclick="joinRoomFromLobby('${room.id}')"` : ""}>
+                    <div class="lobby-room-top">
+                        <strong>Bàn ${index + 1}</strong>
+                        <span class="room-stake-chip">${formatRoomStakePMC(room.stakePMC)}</span>
+                    </div>
+
+                    <div class="lobby-room-mid">
+                        <span>${modeText}</span>
+                        <span class="room-state ${state.cls}">${state.text}</span>
+                    </div>
+
+                    <div class="lobby-room-sub">
+                        <span>Chủ bàn: ${hostName}</span>
+                        <span>${(hasDo ? 1 : 0) + (hasDen ? 1 : 0)}/2 người</span>
+                    </div>
+
+                    ${canJoin ? `<div class="room-join-hint">Bấm để tham gia</div>` : ``}
+                </div>
+            `;
+        }).join("");
+}
+
+function renderLobbyRoomList(roomList) {
+    latestLobbyRoomList = Array.isArray(roomList) ? roomList.slice() : [];
+
+    const preview = document.getElementById("desktop-ranking-preview");
+    if (preview) {
+        preview.innerHTML = buildLobbyRoomHtml(latestLobbyRoomList);
+    }
+
+    const filteredModalList = latestLobbyRoomList.filter(room => {
+        const mode = room?.mode || "co-tuong";
+        return activeLobbyRoomTab === "co-up" ? mode === "co-up" : mode !== "co-up";
+    });
+
+    const modalList = document.getElementById("ranking-list");
+    if (modalList) {
+        modalList.innerHTML = buildLobbyRoomHtml(filteredModalList);
+    }
+
+    syncLobbyRoomTabs(latestLobbyRoomList);
+}
+function readRoomTimeValue(value) {
+    const n = Number(value || 0);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function isPendingServerTimestamp(value) {
+    return value && typeof value === "object";
+}
+
+function getRoomTimeMs(room = {}) {
+    return readRoomTimeValue(room.updatedAt) || readRoomTimeValue(room.createdAt);
+}
+
+function getLobbyAliveTimeMs(room = {}) {
+    if (isPendingServerTimestamp(room.lobbyHeartbeatAt) || isPendingServerTimestamp(room.lobbyUpdatedAt)) {
+        return Date.now();
+    }
+
+    return (
+        readRoomTimeValue(room.lobbyHeartbeatAt) ||
+        readRoomTimeValue(room.lobbyUpdatedAt) ||
+        readRoomTimeValue(room.updatedAt) ||
+        readRoomTimeValue(room.createdAt)
+    );
+}
+
+function getRoomBucketSafe(room = {}) {
+    if (room.roomBucket) return room.roomBucket;
+
+    const mode = room.mode || "co-tuong";
+    const stake = Math.max(0, Math.floor(Number(room.stakePMC || 0) || 0));
+
+    if (typeof makeStakeBucket === "function") {
+        return makeStakeBucket(mode, stake);
+    }
+
+    return `${mode}__${stake}`;
+}
+
+function isGhostLobbyRoom(room = {}) {
+    const now = readyNowMs(); // 🔥 FIX: Lấy giờ chuẩn của máy chủ, đéo xài giờ local nữa
+    const status = String(room.status || "");
+    const hasDo = !!room?.players?.do;
+    const hasDen = !!room?.players?.den;
+    const t = getRoomTimeMs(room);
+    const age = t ? now - t : 999999999;
+
+    // Không có chủ bàn thì là rác.
+    if (!hasDo) return true;
+
+    // Đã có kết quả thì không cần nằm trong danh sách bàn nữa.
+    if (room.winner || status === "finished" || status === "ended" || status === "abandoned") return true;
+
+    // Chỉ xử lý rác đối với phòng chờ công khai chưa có khách.
+    if (status === "waiting" && room.lobbyOpen === true && !hasDen) {
+        const aliveAt = getLobbyAliveTimeMs(room);
+        const aliveAge = aliveAt ? now - aliveAt : 999999999;
+
+        // Host không bắn heartbeat nữa => phòng ảo / phòng cũ.
+        if (aliveAge > LOBBY_WAITING_STALE_MS) return true;
+    }
+
+    // Phòng đang chơi mà treo quá lâu thì không cho lẫn vào lobby.
+    if (status === "playing" && age > LOBBY_PLAYING_STALE_MS) {
+        return true;
+    }
+
+    return false;
+}
+function isRoomHostMe(room = {}) {
+    const myUid = getLocalUidSafe();
+    const myWalletKey = getLocalWalletKeySafe();
+    const host = room?.players?.do || {};
+
+    return !!(
+        (myUid && host.uid && String(host.uid) === myUid) ||
+        (myWalletKey && host.walletKey && String(host.walletKey) === myWalletKey)
+    );
+}
+
+function shouldShowLobbyRoom(room = {}) {
+    const status = String(room.status || "");
+    const hasDo = !!room?.players?.do;
+    const hasDen = !!room?.players?.den;
+
+    if (isGhostLobbyRoom(room)) return false;
+
+    // Chỉ phòng nào chủ động mở lobbyOpen mới được hiện.
+    if (room.lobbyOpen !== true) return false;
+
+    // Không hiện phòng của chính mình trong danh sách để tránh bấm nhầm phòng cũ của mình.
+    if (isRoomHostMe(room)) return false;
+
+    return hasDo && !hasDen && status === "waiting" && !room.winner;
+}
+
+async function cleanupGhostLobbyRoom(roomId, room = {}) {
+    try {
+        if (!roomId || !isGhostLobbyRoom(room)) return;
+
+        const updates = {};
+        const bucket = getRoomBucketSafe(room);
+
+        // Không xóa matches nữa để tránh lệch popup/thống kê. Chỉ đóng lobby và gỡ waitingRooms.
+        updates[`matches/${roomId}/lobbyOpen`] = false;
+        updates[`matches/${roomId}/lobbyClosedReason`] = room.winner ? "finished" : "ghost_or_stale";
+        updates[`matches/${roomId}/lobbyClosedAt`] = firebase.database.ServerValue.TIMESTAMP;
+        updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+        if (room.status === "waiting" && !room?.players?.den && !room.winner) {
+            updates[`matches/${roomId}/status`] = "abandoned";
+        }
+
+        if (bucket) {
+            updates[`waitingRooms/${bucket}/${roomId}`] = null;
+        }
+
+        await db.ref().update(updates);
+    } catch (err) {
+        console.error("Dọn phòng ảo lobby lỗi:", err);
+    }
+}
+let lastCleanupAt = 0;
+
+async function cleanupGhostLobbyRoomsOnce() {
+    const now = Date.now();
+    if (now - lastCleanupAt < 8000) return;
+    lastCleanupAt = now;
+    if (lobbyCleanupInFlight) return;
+    lobbyCleanupInFlight = true;
+
+    try {
+        const snap = await db.ref("matches")
+            .orderByChild("createdAt")
+            .limitToLast(LOBBY_CLEAN_SCAN_LIMIT)
+            .once("value");
+
+        const jobs = [];
+        snap.forEach(child => {
+            const room = child.val() || {};
+            if (isGhostLobbyRoom(room)) {
+                jobs.push(cleanupGhostLobbyRoom(child.key, room));
+            }
+        });
+
+        if (jobs.length) await Promise.allSettled(jobs);
+    } catch (err) {
+        console.error("Quét dọn phòng ảo lỗi:", err);
+    } finally {
+        lobbyCleanupInFlight = false;
+    }
+}
+
+function bindLobbyRoomList() {
+    // tránh bind nhiều lần
+    if (typeof window.lobbyBound !== "undefined" && window.lobbyBound) return;
+    window.lobbyBound = true;
+
+    // clear listener cũ
+    if (lobbyRoomListRef) {
+        lobbyRoomListRef.off();
+    }
+
+    lobbyRoomListRef = db.ref("matches")
+        .orderByChild("createdAt")
+        .limitToLast(50);
+
+    lobbyRoomListRef.on("value", snap => {
+        const roomList = [];
+
+        snap.forEach(child => {
+            const room = child.val();
+            if (!room) return;
+
+            room.id = child.key;
+
+            // 🔥 FIX: Dùng đúng hàm lọc mày đã viết để chặn rác/ẩn phòng của chính mình
+            if (shouldShowLobbyRoom(room)) {
+                roomList.push(room);
+            }
+        });
+
+        renderLobbyRoomList(roomList);
+    });
+}
+let friendListRef = null;
+let friendRequestRef = null;
+let friendSentRef = null;
+let liveFriendCache = [];
+let liveFriendRequestCache = [];
+let liveFriendSentCache = [];
+let activeFriendTab = "friends";
+let roomInviteInboxRef = null;
+let roomInviteSentRef = null;
+let liveRoomInviteCache = [];
+let activeRoomInvite = null;
+let lastHostInviteNotifyKey = "";
+
+function normalizeFriendName(name = "") {
+    return String(name || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function encodeFriendKey(value = "") {
+    return encodeURIComponent(normalizeFriendName(value));
+}
+
+function escapeFriendHtml(text = "") {
+    return String(text || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function getCurrentFriendUsername() {
+    return (
+        localStorage.getItem("currentUsername") ||
+        localStorage.getItem("user-name-display") ||
+        "guest"
+    ).trim();
+}
+
+function getCurrentFriendProfile() {
+    const username = getCurrentFriendUsername();
+    return {
+        walletKey: makeWalletDbKey(),
+        uid: auth.currentUser?.uid || makeWalletDbKey(),
+        username,
+        usernameNorm: normalizeFriendName(username),
+        displayName: localStorage.getItem("user-name-display") || username || "Người chơi",
+        photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+    };
+}
+
+async function ensureFriendProfileSynced() {
+    const me = getCurrentFriendProfile();
+
+    await walletRef().update({
+        // XÓA DÒNG name: me.displayName
+        // XÓA DÒNG photo: me.photo
+        username: me.username,
+        usernameNorm: me.usernameNorm,
+        walletKey: me.walletKey,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+    }).catch(err => {
+        console.error("Lỗi sync wallet profile:", err);
+    });
+
+    return me;
+}
+
+async function findFriendUserByUsername(name = "") {
+    const raw = String(name || "").trim();
+    const norm = normalizeFriendName(raw);
+    if (!norm) return null;
+
+    let found = null;
+
+    const byNormSnap = await db.ref("wallets")
+        .orderByChild("usernameNorm")
+        .equalTo(norm)
+        .limitToFirst(1)
+        .once("value");
+
+    byNormSnap.forEach(child => {
+        if (found) return;
+        const v = child.val() || {};
+        found = {
+            walletKey: child.key,
+            uid: v.uid || child.key,
+            username: v.username || raw,
+            displayName: v.name || v.username || raw,
+            photo: v.photo || "images/do_tuong.png"
+        };
+    });
+
+    if (!found) {
+        const byNameSnap = await db.ref("wallets")
+            .orderByChild("name")
+            .equalTo(raw)
+            .limitToFirst(1)
+            .once("value");
+
+        byNameSnap.forEach(child => {
+            if (found) return;
+            const v = child.val() || {};
+            found = {
+                walletKey: child.key,
+                uid: v.uid || child.key,
+                username: v.username || raw,
+                displayName: v.name || raw,
+                photo: v.photo || "images/do_tuong.png"
+            };
+        });
+    }
+
+    return found;
+}
+let currentMatchOpponentProfile = null;
+
+function getVNMonthKeyForProfile() {
+    const now = new Date(Date.now() + 7 * 60 * 60 * 1000);
+    const y = now.getUTCFullYear();
+    const m = String(now.getUTCMonth() + 1).padStart(2, "0");
+    return `${y}-${m}`;
+}
+
+function getSimpleLevelTitle(level) {
+    level = Math.max(1, Math.floor(Number(level || 1) || 1));
+    if (level >= 140) return "Thiên Vương";
+    if (level >= 130) return "Tông Sư";
+    if (level >= 120) return "Đại Cao Thủ";
+    if (level >= 100) return "Tinh Nhuệ";
+    if (level >= 90) return "Kim Cương";
+    if (level >= 75) return "Tinh Anh";
+    if (level >= 60) return "Bạch Kim";
+    if (level >= 40) return "Kỳ Thủ Vàng";
+    if (level >= 25) return "Kỳ Thủ Bạc";
+    if (level >= 10) return "Kỳ Thủ Đồng";
+    return "Tân Binh";
+}
+
+function ensureMatchOpponentProfileModal() {
+    let modal = document.getElementById("match-opponent-profile-modal");
+    if (modal) return modal;
+
+    modal = document.createElement("div");
+    modal.id = "match-opponent-profile-modal";
+    modal.innerHTML = `
+        <div class="match-opponent-card">
+            <div class="match-opponent-head">
+                <span>THÔNG TIN ĐỐI THỦ</span>
+                <span class="match-opponent-close" onclick="closeMatchOpponentProfile()">✖</span>
+            </div>
+
+            <div class="match-opponent-body" id="match-opponent-profile-body">
+                Đang tải...
+            </div>
+        </div>
+    `;
+
+    modal.addEventListener("click", function (e) {
+        if (e.target === modal) closeMatchOpponentProfile();
+    });
+
+    document.body.appendChild(modal);
+    return modal;
+}
+
+function closeMatchOpponentProfile() {
+    const modal = document.getElementById("match-opponent-profile-modal");
+    if (modal) modal.classList.remove("show");
+}
+
+async function openOpponentMatchProfile() {
+    try {
+        if (!document.body.classList.contains("in-match") || !currentRoomId) {
+            return;
+        }
+
+        const roomSnap = await db.ref("matches/" + currentRoomId).once("value");
+        const room = roomSnap.val();
+
+        if (!room?.players?.do || !room?.players?.den) {
+            alert("Chưa có đủ 2 người trong phòng.");
+            return;
+        }
+
+        const sideNow = getMySideFromRoomSafe(room) || mySide;
+        const oppSide = sideNow === "den" ? "do" : "den";
+        const opp = room.players?.[oppSide];
+
+        if (!opp?.walletKey) {
+            alert("Chưa đọc được ví đối thủ.");
+            return;
+        }
+
+        const walletSnap = await db.ref("wallets/" + opp.walletKey).once("value");
+        const wallet = walletSnap.val() || {};
+
+        const levelMeta = wallet.levelMeta || opp.levelMeta || {};
+        const level = Math.max(1, Math.floor(Number(
+            levelMeta.level ||
+            wallet.level ||
+            opp.level ||
+            1
+        ) || 1));
+
+        const title = levelMeta.title || wallet.levelTitle || opp.levelTitle || getSimpleLevelTitle(level);
+
+        const monthKey = getVNMonthKeyForProfile();
+        const statsV2 = wallet.statsV2 || {};
+        const statsV2Month = statsV2.months?.[monthKey] || {};
+
+        const monthWins = Math.max(0, Math.floor(Number(
+            statsV2Month.wins ??
+            statsV2.monthWins ??
+            0
+        ) || 0));
+
+        const monthLosses = Math.max(0, Math.floor(Number(
+            statsV2Month.losses ??
+            statsV2.monthLosses ??
+            0
+        ) || 0));
+
+        const totalWins = Math.max(0, Math.floor(Number(
+            statsV2.wins ??
+            statsV2.totalWins ??
+            0
+        ) || 0));
+
+        const totalLosses = Math.max(0, Math.floor(Number(
+            statsV2.losses ??
+            statsV2.totalLosses ??
+            0
+        ) || 0));
+
+        currentMatchOpponentProfile = {
+            walletKey: opp.walletKey,
+            uid: opp.uid || wallet.uid || opp.walletKey,
+            username: wallet.username || opp.username || opp.name || "Người chơi",
+            displayName: wallet.name || wallet.displayName || opp.name || "Người chơi",
+            photo: wallet.photo || opp.photo || "images/do_tuong.png",
+            level,
+            title,
+            monthWins,
+            monthLosses,
+            totalWins,
+            totalLosses
+        };
+
+        const alreadyFriend = liveFriendCache.some(f => f.walletKey === opp.walletKey);
+        const alreadySent = liveFriendSentCache.some(f => f.walletKey === opp.walletKey);
+        const alreadyIncoming = liveFriendRequestCache.some(f => f.walletKey === opp.walletKey);
+
+        let btnText = "GỬI LỜI MỜI KẾT BẠN";
+        let disabled = "";
+
+        if (alreadyFriend) {
+            btnText = "ĐÃ LÀ BẠN BÈ";
+            disabled = "disabled";
+        } else if (alreadySent) {
+            btnText = "ĐÃ GỬI LỜI MỜI";
+            disabled = "disabled";
+        } else if (alreadyIncoming) {
+            btnText = "NGƯỜI NÀY ĐÃ MỜI MÀY";
+            disabled = "disabled";
+        }
+
+        const modal = ensureMatchOpponentProfileModal();
+        const body = document.getElementById("match-opponent-profile-body");
+
+        body.innerHTML = `
+            <div class="match-opponent-top">
+                <img class="match-opponent-avatar" src="${escapeFriendHtml(currentMatchOpponentProfile.photo)}" alt="avatar">
+                <div>
+                    <div class="match-opponent-name">${escapeFriendHtml(currentMatchOpponentProfile.displayName)}</div>
+                    <div class="match-opponent-sub">Lever ${level} • ${escapeFriendHtml(title)}</div>
+                </div>
+            </div>
+
+            <div class="match-opponent-grid">
+                <div class="match-opponent-stat">
+                    <strong>${totalWins}</strong>
+                    <span>Tổng thắng</span>
+                </div>
+                <div class="match-opponent-stat">
+                    <strong>${totalLosses}</strong>
+                    <span>Tổng thua</span>
+                </div>
+            </div>
+
+            <button class="match-opponent-friend-btn"
+                    ${disabled}
+                    onclick="sendFriendRequestToMatchOpponent()">
+                ${btnText}
+            </button>
+        `;
+
+        modal.classList.add("show");
+    } catch (err) {
+        console.error("openOpponentMatchProfile lỗi:", err);
+        alert("Không mở được thông tin đối thủ.");
+    }
+}
+
+async function sendFriendRequestToMatchOpponent() {
+    try {
+        const target = currentMatchOpponentProfile;
+        if (!target?.walletKey) {
+            alert("Chưa có thông tin đối thủ.");
+            return;
+        }
+
+        const me = await ensureFriendProfileSynced();
+
+        if (target.walletKey === me.walletKey) {
+            alert("Không thể tự kết bạn với chính mình!");
+            return;
+        }
+
+        const [friendSnap, incomingSnap, outgoingSnap] = await Promise.all([
+            db.ref(`social/friends/${me.walletKey}/${target.walletKey}`).once("value"),
+            db.ref(`social/friendRequests/${me.walletKey}/${target.walletKey}`).once("value"),
+            db.ref(`social/friendRequests/${target.walletKey}/${me.walletKey}`).once("value")
+        ]);
+
+        if (friendSnap.exists()) {
+            alert("Hai người đã là bạn bè rồi!");
+            return;
+        }
+
+        if (incomingSnap.exists()) {
+            alert("Người này đã gửi lời mời cho mày rồi. Bấm icon kết bạn để nhận.");
+            return;
+        }
+
+        if (outgoingSnap.exists()) {
+            alert("Mày đã gửi lời mời trước đó rồi.");
+            return;
+        }
+
+        const updates = {};
+
+        updates[`social/friendRequests/${target.walletKey}/${me.walletKey}`] = {
+            fromWalletKey: me.walletKey,
+            fromUid: me.uid,
+            fromUsername: me.username,
+            fromDisplayName: me.displayName,
+            fromPhoto: me.photo,
+            createdAt: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        updates[`social/friendRequestSent/${me.walletKey}/${target.walletKey}`] = {
+            targetWalletKey: target.walletKey,
+            username: target.username || "",
+            displayName: target.displayName || target.username || "Người chơi",
+            photo: target.photo || "images/do_tuong.png",
+            createdAt: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        await db.ref().update(updates);
+
+        alert("Đã gửi lời mời kết bạn!");
+        closeMatchOpponentProfile();
+    } catch (err) {
+        console.error("sendFriendRequestToMatchOpponent lỗi:", err);
+        alert("Gửi lời mời kết bạn lỗi.");
+    }
+}
+function refreshMobileFriendBadge() {
+    const count = liveFriendRequestCache.length;
+    const text = count > 99 ? "99+" : String(count);
+
+    const badges = [
+        document.getElementById("mobile-friend-badge"),
+        document.getElementById("arena-friend-badge")
+    ];
+
+    badges.forEach(badge => {
+        if (!badge) return;
+
+        badge.textContent = text;
+
+        if (count > 0) {
+            badge.classList.add("show");
+        } else {
+            badge.classList.remove("show");
+        }
+    });
+}
+function switchFriendTab(tab) {
+    activeFriendTab = (tab === "requests") ? "requests" : "friends";
+    renderFriendList();
+}
+function syncFriendTabButtons() {
+    const isFriends = activeFriendTab === "friends";
+
+    const ids = [
+        ["desktop-friend-tab-friends", isFriends],
+        ["desktop-friend-tab-requests", !isFriends],
+        ["mobile-friend-tab-friends", isFriends],
+        ["mobile-friend-tab-requests", !isFriends]
+    ];
+
+    ids.forEach(([id, active]) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.toggle("active", active);
+    });
+
+    const friendCount = liveFriendCache.length;
+    const requestCount = liveFriendRequestCache.length + liveFriendSentCache.length;
+
+    const friendCountIds = [
+        "desktop-friend-tab-friends-count",
+        "mobile-friend-tab-friends-count"
+    ];
+    const requestCountIds = [
+        "desktop-friend-tab-requests-count",
+        "mobile-friend-tab-requests-count"
+    ];
+
+    friendCountIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = String(friendCount);
+    });
+
+    requestCountIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = String(requestCount);
+    });
+}
+
+function switchFriendTab(tab) {
+    activeFriendTab = (tab === "requests") ? "requests" : "friends";
+    renderFriendList();
+}
+function renderFriendList() {
+    const acceptedHtml = liveFriendCache.length
+    ? liveFriendCache.map(item => `
+        <div class="friend-accepted-card compact-friend">
+            <div class="friend-accepted-main">
+                <div class="friend-accepted-name">${escapeFriendHtml(item.displayName || item.username || "Bạn bè")}</div>
+                <div class="friend-accepted-status">Đã kết bạn</div>
+            </div>
+
+            <div class="friend-accepted-actions">
+                <button class="friend-mini-btn friend-invite-btn"
+                        onclick="inviteFriendToRoom('${item.walletKey}', '${escapeFriendHtml(item.displayName || item.username || "Bạn bè")}')">
+                    MỜI
+                </button>
+
+                <button class="friend-trash-btn"
+                        onclick="removeFriend('${item.walletKey}')"
+                        title="Xóa bạn">
+                    🗑
+                </button>
+            </div>
+        </div>
+    `).join("")
+    : `<div class="friend-empty">Chưa có bạn nào.</div>`;
+
+    const incomingHtml = liveFriendRequestCache.length
+    ? liveFriendRequestCache.map(item => `
+        <div class="friend-request-card compact-stranger">
+            <div class="stranger-main">
+                <div class="stranger-name">${escapeFriendHtml(item.displayName || item.username || "Người lạ")}</div>
+                <div class="stranger-status">Đã gửi lời mời cho mày</div>
+            </div>
+
+            <div class="stranger-actions">
+                <button class="stranger-mini-btn stranger-accept-btn"
+                        onclick="acceptFriendRequest('${item.walletKey}')">
+                    NHẬN
+                </button>
+                <button class="stranger-mini-btn stranger-reject-btn"
+                        onclick="rejectFriendRequest('${item.walletKey}')">
+                    TỪ CHỐI
+                </button>
+            </div>
+        </div>
+    `).join("")
+    : `<div class="friend-empty">Chưa có ai gửi lời mời.</div>`;
+
+    const sentHtml = liveFriendSentCache.length
+    ? liveFriendSentCache.map(item => `
+        <div class="friend-sent-card compact-stranger">
+            <div class="stranger-main">
+                <div class="stranger-name">${escapeFriendHtml(item.displayName || item.username || "Người lạ")}</div>
+                <div class="stranger-status">Mày đã gửi lời mời</div>
+            </div>
+
+            <div class="stranger-actions">
+                <button class="stranger-mini-btn stranger-cancel-btn"
+                        onclick="cancelFriendRequest('${item.walletKey}')">
+                    THU HỒI
+                </button>
+            </div>
+        </div>
+    `).join("")
+    : `<div class="friend-empty">Chưa gửi lời mời nào.</div>`;
+
+    let html = "";
+
+    if (activeFriendTab === "friends") {
+        html = `
+            <div class="friend-section">
+                <div class="friend-section-title">
+                    <span>DANH SÁCH BẠN BÈ</span>
+                    <span class="friend-section-count">${liveFriendCache.length}</span>
+                </div>
+                ${acceptedHtml}
+            </div>
+        `;
+    } else {
+        html = `
+            <div class="friend-section">
+                <div class="friend-section-title">
+                    <span>LỜI MỜI ĐÃ NHẬN</span>
+                    <span class="friend-section-count">${liveFriendRequestCache.length}</span>
+                </div>
+                ${incomingHtml}
+            </div>
+
+            <div class="friend-section" style="margin-top:10px;">
+                <div class="friend-section-title">
+                    <span>LỜI MỜI ĐÃ GỬI</span>
+                    <span class="friend-section-count">${liveFriendSentCache.length}</span>
+                </div>
+                ${sentHtml}
+            </div>
+        `;
+    }
+
+    const mobileBox = document.getElementById("friend-list");
+    if (mobileBox) mobileBox.innerHTML = html;
+
+    const desktopBox = document.getElementById("desktop-friend-list");
+    if (desktopBox) desktopBox.innerHTML = html;
+
+    syncFriendTabButtons();
+    refreshMobileFriendBadge();
+}
+async function addFriend() {
+    const mobileInput = document.getElementById("friend-name-input");
+    const desktopInput = document.getElementById("desktop-friend-name-input");
+
+    const rawName = (desktopInput?.value.trim() || mobileInput?.value.trim() || "");
+    if (!rawName) {
+        alert("Nhập tên tài khoản trước đã!");
+        return;
+    }
+
+    try {
+        const me = await ensureFriendProfileSynced();
+        const target = await findFriendUserByUsername(rawName);
+
+        if (!target?.walletKey) {
+            alert("Không tìm thấy tài khoản này!");
+            return;
+        }
+
+        if (target.walletKey === me.walletKey) {
+            alert("Không thể tự kết bạn với chính mình!");
+            return;
+        }
+
+        const alreadyLocal = liveFriendCache.some(f => f.walletKey === target.walletKey);
+        if (alreadyLocal) {
+            alert("Hai người đã là bạn bè rồi!");
+            return;
+        }
+
+        const updates = {};
+        updates[`social/friendRequests/${target.walletKey}/${me.walletKey}`] = {
+            fromWalletKey: me.walletKey,
+            fromUid: me.uid,
+            fromUsername: me.username,
+            fromDisplayName: me.displayName,
+            fromPhoto: me.photo,
+            createdAt: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        updates[`social/friendRequestSent/${me.walletKey}/${target.walletKey}`] = {
+            targetWalletKey: target.walletKey,
+            username: target.username || "",
+            displayName: target.displayName || target.username || "Người chơi",
+            photo: target.photo || "images/do_tuong.png",
+            createdAt: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        await db.ref().update(updates);
+
+        if (mobileInput) mobileInput.value = "";
+        if (desktopInput) desktopInput.value = "";
+
+        alert("Đã gửi lời mời kết bạn!");
+    } catch (err) {
+        console.error("Lỗi addFriend:", err);
+        alert("Gửi lời mời lỗi, xem console.");
+    }
+}
+
+function toggleFriendBox(event) {
+    if (event) event.stopPropagation();
+
+    const box = document.getElementById("mobile-friend-box");
+    if (!box) return;
+
+    box.classList.toggle("show");
+}
+
+function closeFriendBox() {
+    const box = document.getElementById("mobile-friend-box");
+    if (box) box.classList.remove("show");
+}
+
+document.addEventListener("click", function (e) {
+    const wrap = document.getElementById("mobile-friend-wrap");
+    if (!wrap) return;
+
+    if (!wrap.contains(e.target)) {
+        closeFriendBox();
+    }
+});
+
+async function acceptFriendRequest(fromWalletKey) {
+    const me = await ensureFriendProfileSynced();
+    const reqRef = db.ref(`social/friendRequests/${me.walletKey}/${fromWalletKey}`);
+    const reqSnap = await reqRef.once("value");
+    const req = reqSnap.val();
+
+    if (!req) {
+        alert("Lời mời này không còn.");
+        return;
+    }
+
+    const updates = {};
+    updates[`social/friends/${me.walletKey}/${fromWalletKey}`] = {
+        walletKey: fromWalletKey,
+        uid: req.fromUid || fromWalletKey,
+        username: req.fromUsername || "",
+        displayName: req.fromDisplayName || req.fromUsername || "Người chơi",
+        photo: req.fromPhoto || "images/do_tuong.png",
+        addedAt: firebase.database.ServerValue.TIMESTAMP
+    };
+
+    updates[`social/friends/${fromWalletKey}/${me.walletKey}`] = {
+        walletKey: me.walletKey,
+        uid: me.uid,
+        username: me.username,
+        displayName: me.displayName,
+        photo: me.photo,
+        addedAt: firebase.database.ServerValue.TIMESTAMP
+    };
+
+    updates[`social/friendRequests/${me.walletKey}/${fromWalletKey}`] = null;
+    updates[`social/friendRequestSent/${fromWalletKey}/${me.walletKey}`] = null;
+
+    await db.ref().update(updates);
+    alert("Đã chấp nhận kết bạn!");
+}
+
+async function rejectFriendRequest(fromWalletKey) {
+    const me = getCurrentFriendProfile();
+
+    const updates = {};
+    updates[`social/friendRequests/${me.walletKey}/${fromWalletKey}`] = null;
+    updates[`social/friendRequestSent/${fromWalletKey}/${me.walletKey}`] = null;
+
+    await db.ref().update(updates);
+    alert("Đã từ chối lời mời!");
+}
+async function cancelFriendRequest(targetWalletKey) {
+    const me = getCurrentFriendProfile();
+
+    const updates = {};
+    updates[`social/friendRequests/${targetWalletKey}/${me.walletKey}`] = null;
+    updates[`social/friendRequestSent/${me.walletKey}/${targetWalletKey}`] = null;
+
+    await db.ref().update(updates);
+}
+
+async function removeFriend(nameFromButton = "") {
+    const mobileInput = document.getElementById("friend-name-input");
+    const desktopInput = document.getElementById("desktop-friend-name-input");
+
+    const typed = (desktopInput?.value.trim() || mobileInput?.value.trim() || "");
+    const raw = (nameFromButton || typed).trim();
+
+    if (!raw) {
+        alert("Nhập tên user hoặc bấm nút Xóa trong danh sách!");
+        return;
+    }
+
+    const me = getCurrentFriendProfile();
+
+    let target = liveFriendCache.find(f =>
+        f.walletKey === raw ||
+        normalizeFriendName(f.username) === normalizeFriendName(raw) ||
+        normalizeFriendName(f.displayName) === normalizeFriendName(raw)
+    );
+
+    if (!target) {
+        alert("Không tìm thấy bạn này!");
+        return;
+    }
+
+    const updates = {};
+    updates[`social/friends/${me.walletKey}/${target.walletKey}`] = null;
+    updates[`social/friends/${target.walletKey}/${me.walletKey}`] = null;
+
+    await db.ref().update(updates);
+
+    if (mobileInput) mobileInput.value = "";
+    if (desktopInput) desktopInput.value = "";
+}
+function isArenaVisible() {
+    const arena = document.getElementById("game-arena");
+    return !!arena && getComputedStyle(arena).display !== "none";
+}
+
+function isHomeVisible() {
+    const home = document.getElementById("home-menu");
+    return !!home && getComputedStyle(home).display !== "none";
+}
+
+async function setPlayerPresence(state = "home") {
+    try {
+        const me = getCurrentFriendProfile();
+        if (!me?.walletKey) return;
+
+        const stateRef = db.ref("social/playerState/" + me.walletKey);
+        await stateRef.update({
+            state,
+            roomId: currentRoomId || null,
+            mode: currentRoomMode || null,
+            online: true,
+            updatedAt: Date.now()
+        });
+
+        stateRef.onDisconnect().update({
+            online: false,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+    } catch (err) {
+        console.error("Lỗi setPlayerPresence:", err);
+    }
+}
+
+function startPresenceHeartbeat() {
+    clearInterval(presenceHeartbeatTimer);
+
+    const beat = () => {
+        const state = currentRoomId ? (isSpectatorMode ? "spectating" : "arena") : "home";
+        setPlayerPresence(state).catch(() => {});
+        touchCurrentLobbyHeartbeat().catch(() => {});
+    };
+
+    beat();
+    presenceHeartbeatTimer = setInterval(beat, 15000);
+}
+
+window.addEventListener("beforeunload", () => {
+    try {
+        const me = getCurrentFriendProfile();
+        if (me?.walletKey) {
+            db.ref("social/playerState/" + me.walletKey).update({
+                online: false,
+                updatedAt: Date.now()
+            });
+        }
+        if (currentViewerRef) currentViewerRef.remove();
+    } catch (_) {}
+});
+
+async function isPlayerActuallyBusy(walletKey) {
+    const stateRef = db.ref("social/playerState/" + walletKey);
+    const snap = await stateRef.once("value");
+    const targetState = snap.val() || {};
+
+    if (!targetState.state || targetState.state === "home") {
+        return false;
+    }
+
+    // Có state bận nhưng không có roomId -> coi như stale
+    if (!targetState.roomId) {
+        await stateRef.set({
+            state: "home",
+            roomId: null,
+            mode: null,
+            updatedAt: Date.now()
+        }).catch(() => {});
+        return false;
+    }
+
+    const roomSnap = await db.ref("matches/" + targetState.roomId).once("value");
+    const room = roomSnap.val();
+
+    // Room mất rồi / đã kết thúc -> stale
+    if (!room || room.winner) {
+        await stateRef.set({
+            state: "home",
+            roomId: null,
+            mode: null,
+            updatedAt: Date.now()
+        }).catch(() => {});
+        return false;
+    }
+
+    const stillInside =
+        room?.players?.do?.walletKey === walletKey ||
+        room?.players?.den?.walletKey === walletKey;
+
+    if (!stillInside) {
+        await stateRef.set({
+            state: "home",
+            roomId: null,
+            mode: null,
+            updatedAt: Date.now()
+        }).catch(() => {});
+        return false;
+    }
+
+    return true;
+}
+function closeArenaFriendBox() {
+    const box = document.getElementById("arena-friend-box");
+    if (box) box.classList.remove("show");
+}
+
+function renderArenaFriendInviteList() {
+    const box = document.getElementById("arena-friend-list");
+    if (!box) return;
+
+    const html = !liveFriendCache.length
+        ? `<div class="friend-empty">Chưa có bạn nào để mời.</div>`
+        : liveFriendCache.map(item => `
+            <div class="arena-friend-row">
+                <div class="arena-friend-meta">
+                    <div class="arena-friend-name">${escapeFriendHtml(item.displayName || item.username || "Bạn bè")}</div>
+                    <div class="arena-friend-sub">Bấm mời để vào đúng phòng đang chờ</div>
+                </div>
+                <button class="arena-friend-invite-btn"
+                        onclick="inviteFriendToRoom('${item.walletKey}', '${escapeFriendHtml(item.displayName || item.username || "Bạn bè")}')">
+                    MỜI
+                </button>
+            </div>
+        `).join("");
+
+    box.innerHTML = html;
+}
+
+async function toggleArenaFriendBox(event) {
+    if (event) event.stopPropagation();
+
+    if (!currentRoomId) {
+        alert("Mày phải tạo hoặc vào phòng trước đã.");
+        return;
+    }
+
+    const me = getCurrentPlayerProfile();
+    const room = await ensureInviteHostControl(currentRoomId);
+
+    if (!room) {
+        alert("Phòng này không còn.");
+        return;
+    }
+
+    if (!room?.players?.do?.uid || room.players.do.uid !== me.uid) {
+        alert("Chỉ chủ phòng mới mời bạn vào được.");
+        return;
+    }
+
+    if (room.status !== "waiting" || room?.players?.den) {
+        alert("Phòng này không còn ở trạng thái chờ để mời.");
+        return;
+    }
+
+    renderArenaFriendInviteList();
+
+    const box = document.getElementById("arena-friend-box");
+    if (box) box.classList.toggle("show");
+}
+
+document.addEventListener("click", function (e) {
+    const btn = document.getElementById("arena-friend-btn");
+    const box = document.getElementById("arena-friend-box");
+    if (!btn || !box) return;
+    if (box.contains(e.target) || btn.contains(e.target)) return;
+    box.classList.remove("show");
+});
+
+function renderRoomInviteOverlay() {
+    const overlay = document.getElementById("room-invite-overlay");
+    if (!overlay) return;
+
+    if (!activeRoomInvite || !isHomeVisible() || isArenaVisible() || currentRoomId) {
+        overlay.classList.remove("show");
+        overlay.style.display = "none";
+        return;
+    }
+
+    const fromEl = document.getElementById("room-invite-from");
+    const modeEl = document.getElementById("room-invite-mode");
+    const stakeEl = document.getElementById("room-invite-stake");
+    const codeEl = document.getElementById("room-invite-code");
+
+    if (fromEl) fromEl.innerText = "Người mời: " + (activeRoomInvite.fromName || "Người chơi");
+    if (modeEl) modeEl.innerText = "Chế độ: " + (activeRoomInvite.mode === "co-up" ? "Cờ Úp" : "Cờ Tướng");
+    if (stakeEl) stakeEl.innerText = "Cược: " + formatRoomStakePMC(activeRoomInvite.stakePMC || 0);
+    if (codeEl) codeEl.innerText = "Mã phòng: " + (activeRoomInvite.inviteCode || "---");
+
+    overlay.style.display = "flex";
+    overlay.classList.add("show");
+}
+
+async function bindRoomInviteInbox() {
+    const me = await ensureFriendProfileSynced().catch(() => getCurrentFriendProfile());
+    if (!me?.walletKey) return;
+
+    if (roomInviteInboxRef) roomInviteInboxRef.off();
+
+    roomInviteInboxRef = db.ref("social/roomInvitesInbox/" + me.walletKey);
+    roomInviteInboxRef.on("value", snap => {
+        const list = [];
+        snap.forEach(child => {
+            const v = child.val() || {};
+            if ((v.status || "pending") === "pending") {
+                list.push({
+                    inviteId: child.key,
+                    ...v
+                });
+            }
+        });
+
+        list.sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+        liveRoomInviteCache = list;
+        activeRoomInvite = list[0] || null;
+        renderRoomInviteOverlay();
+    });
+
+    setPlayerPresence(currentRoomId ? "arena" : "home");
+}
+async function bindRoomInviteSentWatcher() {
+    const me = await ensureFriendProfileSynced().catch(() => getCurrentFriendProfile());
+    if (!me?.walletKey) return;
+
+    if (roomInviteSentRef) roomInviteSentRef.off();
+
+    roomInviteSentRef = db.ref("social/roomInvitesSent/" + me.walletKey);
+    roomInviteSentRef.on("value", snap => {
+        let newestDeclined = null;
+
+        snap.forEach(child => {
+            const v = child.val() || {};
+            const isDeclined =
+                v.status === "declined" ||
+                v.status === "room_busy" ||
+                v.status === "room_missing";
+
+            if (!isDeclined) return;
+
+            const declinedAt = Number(v.declinedAt || 0);
+            const acceptedAt = Number(v.acceptedAt || 0);
+            const createdAt = Number(v.createdAt || 0);
+            const sortTime = Math.max(declinedAt, acceptedAt, createdAt);
+
+            if (!newestDeclined || sortTime > newestDeclined.sortTime) {
+                newestDeclined = {
+                    inviteId: child.key,
+                    ...v,
+                    sortTime
+                };
+            }
+        });
+
+        if (!newestDeclined) return;
+
+        const notifyKey = `${newestDeclined.inviteId}:${newestDeclined.status}:${newestDeclined.sortTime}`;
+        if (lastHostInviteNotifyKey === notifyKey) return;
+
+        lastHostInviteNotifyKey = notifyKey;
+
+        const targetName = newestDeclined.toName || "Người được mời";
+        const declinedName = newestDeclined.declinedByName || targetName;
+
+        if (newestDeclined.status === "declined") {
+            alert(`${declinedName} đã từ chối lời mời vào phòng.`);
+        } else if (newestDeclined.status === "room_busy") {
+            alert(`${targetName} không vào được vì phòng không còn ở trạng thái chờ.`);
+        } else if (newestDeclined.status === "room_missing") {
+            alert(`${targetName} không vào được vì phòng đã không còn.`);
+        }
+
+        // dọn luôn bản ghi phản hồi sau khi đã báo cho host
+        db.ref(`social/roomInvitesSent/${me.walletKey}/${newestDeclined.inviteId}`).remove().catch(() => {});
+    });
+}
+async function declineRoomInvite(reason = "declined") {
+    if (!activeRoomInvite) return;
+
+    const me = getCurrentFriendProfile();
+    const invite = activeRoomInvite;
+    const updates = {};
+
+    updates[`social/roomInvitesInbox/${me.walletKey}/${invite.inviteId}`] = null;
+    updates[`social/roomInvitesSent/${invite.fromWalletKey}/${invite.inviteId}`] = {
+        ...invite,
+        status: reason,
+        declinedAt: Date.now(),
+        declinedBy: me.walletKey,
+        declinedByName: me.displayName || me.username || "Người chơi"
+    };
+
+    await db.ref().update(updates);
+
+    if (invite.privateChallenge || invite.source === "top_challenge") {
+        await publishChallengeRoomToLobby(invite.roomId, invite).catch(err => {
+            console.error("Mở phòng thách đấu ra sảnh sau khi bị từ chối lỗi:", err);
+        });
+    }
+
+    activeRoomInvite = null;
+    renderRoomInviteOverlay();
+}
+async function acceptRoomInvite() {
+    if (!activeRoomInvite) return;
+
+    const invite = activeRoomInvite;
+    const me = getCurrentPlayerProfile();
+    const meFriend = getCurrentFriendProfile();
+    const stakeNeed = Math.max(0, Number(invite.stakePMC || 0));
+
+    if ((me.pmcBalance || getPmcBalance() || 0) < stakeNeed) {
+        alert("PMC không đủ để nhận thách đấu này.");
+        return;
+    }
+
+    const roomSnap = await db.ref("matches/" + invite.roomId).once("value");
+    const room = roomSnap.val();
+
+    if (!room) {
+        await declineRoomInvite("room_missing");
+        alert("Phòng này không còn.");
+        return;
+    }
+
+    if (room.winner || room.status !== "waiting" || room?.players?.den) {
+        await declineRoomInvite("room_busy");
+        alert("Phòng này không còn ở trạng thái chờ.");
+        return;
+    }
+
+    // THÁCH ĐẤU TỪ BẢNG TOP là phòng riêng: lobbyOpen = false, không có waitingRooms.
+    // Vì vậy KHÔNG được gọi joinRoomFromLobby(), nếu không sẽ báo:
+    // "Không vào được bàn này, bàn đã đổi trạng thái."
+    if (invite.privateChallenge || invite.source === "top_challenge" || room.challengeOnly) {
+        const myWalletKey = String(meFriend.walletKey || me.walletKey || "");
+        const allowedWalletKey = String(room.challengeToWalletKey || invite.toWalletKey || "");
+
+        if (allowedWalletKey && myWalletKey && allowedWalletKey !== myWalletKey) {
+            alert("Lời mời này không phải dành cho tài khoản này.");
+            return;
+        }
+
+        const mode = room.mode || invite.mode || "co-tuong";
+        const stakePMC = Math.max(0, Math.floor(Number(room.stakePMC || invite.stakePMC || 0) || 0));
+        const denProfile = {
+            ...me,
+            side: "den",
+            pmcBalance: Math.max(0, Math.floor(Number(me.pmcBalance || getPmcBalance() || 0) || 0)),
+            balance: Math.max(0, Number(me.balance ?? getPiBalance() ?? 0) || 0),
+            piBalance: Math.max(0, Number(me.piBalance ?? me.balance ?? getPiBalance() ?? 0) || 0),
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        const denRef = db.ref("matches/" + invite.roomId + "/players/den");
+        const denJoinResult = await denRef.transaction((current) => {
+            if (current && current.uid && current.uid !== me.uid) return;
+            return denProfile;
+        }, undefined, false);
+
+        const joinedDen = denJoinResult.snapshot?.val?.() || null;
+        if (!denJoinResult.committed || !joinedDen || joinedDen.uid !== me.uid) {
+            await declineRoomInvite("room_busy");
+            alert("Phòng này đã có người khác vào trước.");
+            return;
+        }
+
+        const updates = {};
+        updates[`social/roomInvitesInbox/${meFriend.walletKey}/${invite.inviteId}`] = null;
+        updates[`social/roomInvitesSent/${invite.fromWalletKey}/${invite.inviteId}`] = {
+            ...invite,
+            status: "accepted",
+            acceptedAt: Date.now()
+        };
+        updates[`matches/${invite.roomId}/challengeOnly`] = false;
+        updates[`matches/${invite.roomId}/challengeAcceptedAt`] = firebase.database.ServerValue.TIMESTAMP;
+        updates[`matches/${invite.roomId}/lobbyOpen`] = false;
+        updates[`matches/${invite.roomId}/lobbyJoinedBy`] = me.uid || "";
+        updates[`matches/${invite.roomId}/ready/do`] = false;
+        updates[`matches/${invite.roomId}/ready/den`] = false;
+        updates[`matches/${invite.roomId}/stakeLocked/do`] = false;
+        updates[`matches/${invite.roomId}/stakeLocked/den`] = false;
+        updates[`matches/${invite.roomId}/readyDeadlineAt`] = null;
+        updates[`matches/${invite.roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+        await db.ref().update(updates);
+
+        activeRoomInvite = null;
+        renderRoomInviteOverlay();
+
+        mySide = "den";
+        viewSide = "den";
+        currentRoomId = invite.roomId;
+        currentRoomMode = mode;
+        currentRoomStakePMC = stakePMC;
+        currentRoomBucket = room.roomBucket || invite.roomBucket || makeStakeBucket(mode, stakePMC);
+        currentRoomStatus = "waiting";
+        isGameOver = false;
+        luotDi = "do";
+        timeDo = Number(room.timeDo || 540);
+        timeDen = Number(room.timeDen || 540);
+
+        saveActiveMatchSnapshot({ roomId: invite.roomId, mode, side: "den" });
+        closeArenaTopModal();
+        closeRankingModal();
+        prepareRealtimeArenaUI();
+        clearInterval(interval);
+        bindRoom(invite.roomId);
+        setPlayerPresence("arena").catch(() => {});
+        return;
+    }
+
+    const updates = {};
+    updates[`social/roomInvitesInbox/${meFriend.walletKey}/${invite.inviteId}`] = null;
+    updates[`social/roomInvitesSent/${invite.fromWalletKey}/${invite.inviteId}`] = {
+        ...invite,
+        status: "accepted",
+        acceptedAt: Date.now()
+    };
+    await db.ref().update(updates);
+
+    activeRoomInvite = null;
+    renderRoomInviteOverlay();
+    await joinRoomFromLobby(invite.roomId);
+}
+
+async function inviteFriendToRoom(walletKey, displayName) {
+    try {
+        if (!currentRoomId) {
+            alert("Mày chưa ở trong phòng nào.");
+            return;
+        }
+
+        const me = getCurrentFriendProfile();
+        const meGame = getCurrentPlayerProfile();
+
+        const room = await ensureInviteHostControl(currentRoomId);
+
+        if (!room || room.winner) {
+            alert("Phòng này không còn.");
+            return;
+        }
+
+        if (room.status !== "waiting" || room?.players?.den) {
+            alert("Phòng này không còn ở trạng thái chờ để mời.");
+            return;
+        }
+
+        if (room?.players?.do?.uid !== meGame.uid) {
+            alert("Chỉ chủ phòng mới mời bạn bè vào được.");
+            return;
+        }
+
+        const reallyBusy = await isPlayerActuallyBusy(walletKey);
+if (reallyBusy) {
+    alert((displayName || "Bạn này") + " đang bận, không mời được.");
+    return;
+}
+
+        const inviteRef = db.ref("social/roomInvitesInbox/" + walletKey).push();
+        const inviteId = inviteRef.key;
+
+        const payload = {
+            inviteId,
+            roomId: currentRoomId,
+            roomBucket: room.roomBucket || currentRoomBucket || null,
+            inviteCode: room.inviteCode || makeInviteCodeFromRoomId(currentRoomId),
+            mode: room.mode || currentRoomMode || "co-tuong",
+            stakePMC: Math.max(0, Math.floor(Number(room.stakePMC || currentRoomStakePMC || 0) || 0)),
+            fromWalletKey: me.walletKey,
+            fromUid: me.uid,
+            fromName: me.displayName || me.username || "Người chơi",
+            fromPhoto: me.photo || "images/do_tuong.png",
+            toWalletKey: walletKey,
+            toName: displayName || "Bạn bè",
+            status: "pending",
+            createdAt: Date.now()
+        };
+
+        const updates = {};
+        updates[`social/roomInvitesInbox/${walletKey}/${inviteId}`] = payload;
+        updates[`social/roomInvitesSent/${me.walletKey}/${inviteId}`] = payload;
+
+        await db.ref().update(updates);
+        alert("Đã gửi lời mời vào phòng cho " + (displayName || "bạn bè") + "!");
+        closeArenaFriendBox();
+    } catch (err) {
+        console.error("Lỗi inviteFriendToRoom:", err);
+        alert("Mời vào phòng lỗi.");
+    }
+}
+
+async function bindFriendSystem() {
+    const me = await ensureFriendProfileSynced().catch(err => {
+        console.error("Lỗi bindFriendSystem:", err);
+        return getCurrentFriendProfile();
+    });
+
+    if (friendListRef) friendListRef.off();
+    if (friendRequestRef) friendRequestRef.off();
+    if (friendSentRef) friendSentRef.off();
+
+    friendListRef = db.ref("social/friends/" + me.walletKey);
+    friendRequestRef = db.ref("social/friendRequests/" + me.walletKey);
+    friendSentRef = db.ref("social/friendRequestSent/" + me.walletKey);
+
+    friendListRef.on("value", snap => {
+        const list = [];
+        snap.forEach(child => {
+            const v = child.val() || {};
+            list.push({
+                walletKey: child.key,
+                username: v.username || "",
+                displayName: v.displayName || v.username || child.key,
+                photo: v.photo || "images/do_tuong.png",
+                addedAt: Number(v.addedAt || 0)
+            });
+        });
+        list.sort((a, b) => Number(b.addedAt || 0) - Number(a.addedAt || 0));
+        liveFriendCache = list;
+        renderFriendList();
+    });
+
+    friendRequestRef.on("value", snap => {
+        const list = [];
+        snap.forEach(child => {
+            const v = child.val() || {};
+            list.push({
+                walletKey: child.key,
+                username: v.fromUsername || "",
+                displayName: v.fromDisplayName || v.fromUsername || child.key,
+                photo: v.fromPhoto || "images/do_tuong.png",
+                createdAt: Number(v.createdAt || 0)
+            });
+        });
+        list.sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+        liveFriendRequestCache = list;
+        renderFriendList();
+    });
+
+    friendSentRef.on("value", snap => {
+        const list = [];
+        snap.forEach(child => {
+            const v = child.val() || {};
+            list.push({
+                walletKey: child.key,
+                username: v.username || "",
+                displayName: v.displayName || v.username || child.key,
+                photo: v.photo || "images/do_tuong.png",
+                createdAt: Number(v.createdAt || 0)
+            });
+        });
+        list.sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+        liveFriendSentCache = list;
+        renderFriendList();
+    });
+    await bindRoomInviteInbox();
+    await bindRoomInviteInbox();
+    await bindRoomInviteSentWatcher();
+}
+bindLobbyRoomList();
+bindFriendSystem();
+
+function hoaTran() {
+    isGameOver = true;
+    clearInterval(interval);
+    sounds.bgm.pause();
+    sounds.heartbeat.pause();
+
+    const wrap = document.getElementById("victory-wrap");
+    document.getElementById("main-result").innerText = "HÒA CỜ";
+    document.getElementById("sub-result").innerText = "KHÔNG PHÂN THẮNG BẠI";
+    wrap.style.transform = "translate(-50%, -50%) scale(1)";
+
+    autoResetNextMatch();
+}
+let piAuth = null;
+
+async function onIncompletePaymentFound(payment) {
+  try {
+    const paymentId = String(payment?.identifier || "").trim();
+    const txid = String(payment?.transaction?.txid || "").trim();
+
+    if (!paymentId) return false;
+
+    alert(
+      "Phát hiện payment Pi đang treo.\n" +
+      "paymentId: " + paymentId + "\n" +
+      "txid: " + (txid || "chưa có")
+    );
+
+    if (!txid) {
+      window.__PI_PENDING_PAYMENT_BLOCKED__ = true;
+      window.__PI_PENDING_PAYMENT_MSG__ =
+        "Đang có payment Pi treo chưa có txid. Dev cần xử lý phía server trước.";
+      alert(window.__PI_PENDING_PAYMENT_MSG__);
+      return true;
+    }
+
+    const res = await fetch("/api/pi/complete?v=" + Date.now(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paymentId, txid })
+    });
+
+    const raw = await res.text();
+    let data = {};
+    try {
+      data = raw ? JSON.parse(raw) : {};
+    } catch (_) {
+      data = { raw };
+    }
+
+    console.log("HTML_INCOMPLETE_PAYMENT_COMPLETE", {
+      paymentId,
+      txid,
+      status: res.status,
+      data
+    });
+
+    if (!res.ok || !data?.ok || data?.note) {
+      window.__PI_PENDING_PAYMENT_BLOCKED__ = true;
+      window.__PI_PENDING_PAYMENT_MSG__ =
+        data?.note ||
+        data?.error ||
+        "Payment Pi cũ chưa được xử lý sạch ở server.";
+      alert(window.__PI_PENDING_PAYMENT_MSG__);
+      return true;
+    }
+
+    window.__PI_PENDING_PAYMENT_BLOCKED__ = false;
+    window.__PI_PENDING_PAYMENT_MSG__ = "";
+    alert("Payment cũ đã complete thật. Giờ mới thử nạp lại.");
+    return true;
+  } catch (e) {
+    console.error("Xử lý incomplete payment lỗi:", e);
+    window.__PI_PENDING_PAYMENT_BLOCKED__ = true;
+    window.__PI_PENDING_PAYMENT_MSG__ =
+      e?.message || "Không xử lý được payment Pi đang treo.";
+    alert(window.__PI_PENDING_PAYMENT_MSG__);
+    return true;
+  }
+}
+async function loginPi() {
+    try {
+        if (!window.Pi) {
+            alert("Nút này chỉ chạy trong Pi Browser.");
+            return null;
+        }
+
+       const scopes = ["username", "payments", "wallet_address"];
+        piAuth = await window.Pi.authenticate(scopes, onIncompletePaymentFound);
+
+        const piName = piAuth?.user?.username || "Pi User";
+        savePiUser(piName);
+        applyLoggedInUI(piName, "images/do_tuong.png");
+ensureFriendProfileSynced()
+    .then(() => bindFriendSystem())
+    .catch(err => console.error("Lỗi sync bạn bè sau login Pi:", err));
+        return piAuth;
+    } catch (err) {
+        console.error("Pi authenticate lỗi:", err);
+        alert("Không đăng nhập Pi được: " + (err.message || err));
+        return null;
+    }
+}
+
+
+ async function startPiDeposit(amount = 1) {
+  try {
+    window.__PI_PENDING_PAYMENT_BLOCKED__ = false;
+    window.__PI_PENDING_PAYMENT_MSG__ = "";
+
+    if (!window.Pi) {
+      alert("Nạp Pi chỉ chạy trong Pi Browser.");
+      return;
+    }
+
+    // Ép re-auth bằng payments scope trước khi createPayment
+    piAuth = null;
+    const auth = await loginPi();
+    if (!auth) return;
+
+    if (window.__PI_PENDING_PAYMENT_BLOCKED__) {
+      alert(
+        window.__PI_PENDING_PAYMENT_MSG__ ||
+        "Đang có payment Pi cũ chưa xử lý xong. Chờ dev complete xong rồi thử lại."
+      );
+      return;
+    }
+
+    const napSo = Number(amount);
+    if (!Number.isFinite(napSo) || napSo <= 0) {
+      alert("Số Pi nạp không hợp lệ.");
+      return;
+    }
+
+    window.Pi.createPayment(
+      {
+        amount: napSo,
+        memo: `Nạp ${napSo} Pi vào game`,
+        metadata: {
+          type: "deposit",
+          amount: napSo,
+          time: Date.now()
+        }
+      },
+      {
+        onReadyForServerApproval: async function (paymentId) {
+          const res = await fetch("/api/pi/approve", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ paymentId })
+          });
+
+          const data = await res.json();
+          if (!res.ok || !data.ok) {
+            throw new Error(data?.error || "Approve payment thất bại");
+          }
+        },
+
+        onReadyForServerCompletion: async function (paymentId, txid) {
+          const res = await fetch("/api/pi/complete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ paymentId, txid })
+          });
+
+          const data = await res.json();
+          if (!res.ok || !data.ok) {
+            throw new Error(data?.error || "Complete payment thất bại");
+          }
+
+          const currentBalance = getPiBalance();
+          setPiBalance(currentBalance + napSo);
+
+          alert(`Nạp thành công ${napSo} Pi test.`);
+        },
+
+        onCancel: function () {
+          alert("Người chơi đã hủy nạp Pi.");
+        },
+
+        onError: function (error) {
+          console.error("Pi payment lỗi:", error);
+          const msg = String(error?.message || error || "");
+
+          if (/payments scope/i.test(msg)) {
+            alert("Phiên Pi hiện tại chưa có quyền payments. Tao sẽ yêu cầu đăng nhập lại khi bấm nạp.");
+            return;
+          }
+
+          if (/pending payment|incomplete payment/i.test(msg)) {
+            alert("Đang có payment Pi cũ chưa xử lý xong. Không tạo payment mới nữa.");
+            return;
+          }
+
+          alert("Nạp Pi lỗi: " + (msg || "Không rõ lỗi"));
+        }
+      }
+    );
+  } catch (err) {
+    console.error(err);
+    alert(err.message || "Không nạp Pi được.");
+  }
+}
+document.addEventListener("click", function(e) {
+    const menu = document.getElementById("emoji-menu");
+    const btn = document.getElementById("toggle-emoji-btn");
+
+    if (!menu || !btn) return;
+
+    if (!menu.contains(e.target) && e.target !== btn) {
+        menu.style.display = "none";
+    }
+});
+</script>
+<div id="admin-fee-wallet-modal" class="rank-modal" style="z-index:27000;">
+    <div class="rank-modal-box" style="width:min(92vw,430px); background:rgba(10,10,10,0.98); border:2px solid #f4c542;">
+        <div class="rank-modal-header" style="background:linear-gradient(180deg,#7b2ff7,#4d1d95); color:#fff8d6;">
+            <span>VÍ PHÍ HỆ THỐNG</span>
+            <span class="rank-close" onclick="closeAdminFeeTreasuryModal()">✕</span>
+        </div>
+
+        <div style="padding:14px;">
+            <div class="exchange-preview" id="admin-fee-wallet-balance-box">
+                PMC phí hiện có: 0 PMC<br>
+                Pi tài khoản admin hiện có: 0 Pi
+            </div>
+
+            <div class="pmc-note">
+                PMC bị trừ từ ví phí hệ thống, Pi sẽ cộng thẳng vào tài khoản Pi admin đang đăng nhập.<br>
+                Tỷ lệ đổi: <span id="admin-fee-rate-label">500 PMC = 1 Pi</span>
+            </div>
+
+            <input
+                id="admin-fee-pmc-input"
+                class="modal-input-dark"
+                type="number"
+                min="100"
+                step="1""
+                placeholder="Nhập PMC muốn đổi từ 100 trở lên, ví dụ 100 hoặc 261"
+                oninput="previewAdminFeePmcToPi()"
+            >
+            <input
+                id="admin-fee-secret-input"
+                class="modal-input-dark"
+                type="password"
+                placeholder="Nhập mã bí mật admin"
+                autocomplete="off"
+>
+            <div class="exchange-preview" id="admin-fee-pi-preview">
+                Bạn sẽ nhận: 0 Pi
+            </div>
+
+            <div class="stake-actions">
+                <button class="stake-cancel-btn" onclick="refreshAdminFeeTreasury()">TẢI LẠI</button>
+                <button class="stake-ok-btn" onclick="confirmAdminFeePmcToPi()">ĐỔI SANG PI</button>
+            </div>
+
+            <div class="pmc-note" id="admin-fee-wallet-note">
+                Chỉ tài khoản admin mới mở và đổi được ví này.
+            </div>
+        </div>
+    </div>
+</div>
+<style id="mission-hub-style">
+#mission-hub-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.78);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 28000;
+    padding: 16px;
+    box-sizing: border-box;
+}
+#mission-hub-modal.show {
+    display: flex;
+}
+.mission-hub-box {
+    width: min(96vw, 980px);
+    max-height: 88vh;
+    overflow: hidden;
+    border-radius: 22px;
+    border: 2px solid rgba(244, 197, 66, 0.65);
+    background: radial-gradient(circle at top, rgba(123,47,247,0.18), transparent 32%), rgba(8, 8, 14, 0.97);
+    box-shadow: 0 0 28px rgba(123, 47, 247, 0.25), 0 0 24px rgba(244, 197, 66, 0.08);
+}
+.mission-hub-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 18px;
+    background: linear-gradient(90deg, rgba(80, 20, 144, 0.95), rgba(45, 10, 88, 0.98));
+    color: #fff8d6;
+}
+.mission-hub-title-wrap {
+    min-width: 0;
+}
+.mission-hub-title {
+    font-size: 23px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    color: #f4c542;
+}
+.mission-hub-sub {
+    margin-top: 3px;
+    font-size: 12px;
+    color: #e7d9ff;
+}
+.mission-hub-close {
+    cursor: pointer;
+    font-size: 24px;
+    font-weight: 900;
+    line-height: 1;
+}
+.mission-hub-body {
+    padding: 16px;
+    overflow-y: auto;
+    max-height: calc(88vh - 74px);
+}
+.mission-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 14px;
+}
+.mission-summary-card {
+    border-radius: 16px;
+    padding: 14px;
+    border: 1px solid rgba(85, 239, 196, 0.18);
+    background: rgba(14, 14, 24, 0.9);
+    box-shadow: inset 0 0 16px rgba(255,255,255,0.03);
+}
+.mission-summary-card strong {
+    display: block;
+    font-size: 12px;
+    color: #d8c7ff;
+    margin-bottom: 8px;
+}
+.mission-summary-value {
+    font-size: 24px;
+    font-weight: 900;
+    color: #7dffb3;
+    line-height: 1.1;
+}
+.mission-summary-note {
+    margin-top: 6px;
+    font-size: 11px;
+    color: #b2bec3;
+    line-height: 1.45;
+}
+/* Dòng 15450 */
+.mission-top-tabs {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+    
+    /* BÙA CỐ ĐỊNH TẠI CHỖ (STICKY) */
+    position: -webkit-sticky;
+    position: sticky;
+    top: -16px; /* Hút chặt lên mép trên cùng của khung cuộn */
+    z-index: 50; /* Đảm bảo nó luôn nổi đè lên trên mấy cái Rương */
+    padding: 10px 0; /* Tạo không gian cho đẹp */
+    background: #0d0a14; /* Nền tối để che mấy cái Rương khi vuốt lên */
+    box-shadow: 0 10px 10px -10px rgba(0,0,0,0.8); /* Đổ bóng nhẹ xuống dưới cho có chiều sâu */
+}
+.mission-top-tab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border-radius: 14px;
+    border: 1px solid rgba(244, 197, 66, 0.28);
+    background: linear-gradient(180deg, rgba(58, 24, 102, 0.96), rgba(32, 12, 56, 0.96));
+    color: #f7e7b1;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 900;
+    cursor: pointer;
+}
+.mission-top-tab.active {
+    background: linear-gradient(180deg, #7b2ff7, #4d1d95);
+    color: #fff8d6;
+    border-color: #f4c542;
+    box-shadow: 0 0 14px rgba(123, 47, 247, 0.38), 0 0 20px rgba(244, 197, 66, 0.15);
+}
+.mission-pane {
+    display: none;
+}
+.mission-pane.show {
+    display: block;
+}
+.mission-pane-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+.mission-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(14, 20, 20, 0.98), rgba(8, 12, 12, 0.98));
+    border: 1px solid rgba(85, 239, 196, 0.22);
+    box-shadow: 0 0 14px rgba(85,239,196,0.07);
+    padding: 14px;
+}
+.mission-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at top right, rgba(85,239,196,0.08), transparent 40%);
+}
+.mission-card-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: flex-start;
+}
+.mission-card-title {
+    font-size: 16px;
+    font-weight: 900;
+    color: #fff8d6;
+}
+.mission-card-desc {
+    margin-top: 5px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: #c8d6d8;
+}
+.mission-card-badge {
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 900;
+    white-space: nowrap;
+}
+.mission-card-badge.ready {
+    background: rgba(125,255,179,0.16);
+    color: #7dffb3;
+    border: 1px solid rgba(125,255,179,0.35);
+}
+.mission-card-badge.claimed {
+    background: rgba(244, 197, 66, 0.16);
+    color: #f4c542;
+    border: 1px solid rgba(244, 197, 66, 0.35);
+}
+.mission-card-badge.locked {
+    background: rgba(223,230,233,0.1);
+    color: #dfe6e9;
+    border: 1px solid rgba(223,230,233,0.18);
+}
+.mission-card-progress-line {
+    margin-top: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+    color: #dfe6e9;
+}
+.mission-card-progress-bar {
+    margin-top: 8px;
+    width: 100%;
+    height: 9px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    overflow: hidden;
+}
+.mission-card-progress-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #7b2ff7, #55efc4, #f4c542);
+}
+.mission-card-footer {
+    margin-top: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+}
+.mission-reward-box strong {
+    display: block;
+    font-size: 11px;
+    color: #d8c7ff;
+    margin-bottom: 3px;
+}
+.mission-reward-value {
+    font-size: 18px;
+    font-weight: 900;
+    color: #7dffb3;
+}
+.mission-reward-note {
+    margin-top: 4px;
+    font-size: 10px;
+    line-height: 1.35;
+    color: #b2bec3;
+}
+.mission-claim-btn {
+    min-width: 126px;
+    border-radius: 12px;
+    padding: 10px 12px !important;
+    font-size: 12px !important;
+    font-weight: 900 !important;
+    letter-spacing: 0.3px;
+    background: linear-gradient(180deg, #00c38a, #008f67) !important;
+    color: #fff !important;
+    border: 1px solid rgba(125,255,179,0.65) !important;
+}
+.mission-claim-btn[disabled] {
+    opacity: 0.6;
+    cursor: not-allowed;
+    filter: grayscale(0.1);
+}
+.mission-empty {
+    border-radius: 18px;
+    border: 1px dashed rgba(85,239,196,0.28);
+    padding: 18px;
+    text-align: center;
+    color: #dfe6e9;
+    background: rgba(8, 12, 12, 0.92);
+}
+.mission-marketing-note {
+    margin-top: 14px;
+    border-radius: 16px;
+    padding: 12px 14px;
+    background: rgba(85,239,196,0.08);
+    border: 1px solid rgba(85,239,196,0.16);
+    color: #dfe6e9;
+    font-size: 12px;
+    line-height: 1.5;
+}
+#mission-hub-toast {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #f7e7b1;
+}
+@media (max-width: 768px) {
+    /* Đã rút thằng .mission-top-tabs ra khỏi cái 1fr này */
+    .mission-summary-grid,
+    .mission-pane-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    /* Ép 5 cái nút dàn thành 2 hàng (3 trên, 2 dưới) cho gọn gàng */
+    .mission-top-tabs {
+        grid-template-columns: repeat(3, 1fr); 
+    }
+    .mission-card-footer {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .mission-claim-btn {
+        width: 100%;
+    }
+}
+</style>
+
+<script id="mission-hub-script">
+(function () {
+  const MISSION_UI_STATE = {
+    board: null,
+    activeTab: 'day',
+    loading: false,
+    claiming: false
+  };
+
+  function formatPmc(value) {
+    return Math.max(0, Math.floor(Number(value) || 0)).toLocaleString('vi-VN') + ' PMC';
+  }
+
+  function missionWalletKey() {
+    try {
+      return String(
+        (typeof getCurrentWalletKeyForPi === 'function' && getCurrentWalletKeyForPi()) ||
+        localStorage.getItem('walletKey') ||
+        (typeof makeWalletDbKey === 'function' && makeWalletDbKey()) ||
+        ''
+      ).trim();
+    } catch (_) {
+      return '';
+    }
+  }
+
+ function ensureMissionHubMounted() {
+  const oldMenuItem = document.getElementById('menu-mission-hub');
+  if (oldMenuItem) oldMenuItem.remove();
+
+  if (!document.getElementById('arena-mission-btn')) {
+    const btn = document.createElement('div');
+    btn.id = 'arena-mission-btn';
+    btn.setAttribute('onclick', 'openMissionHub()');
+    btn.innerHTML = `
+      <span>🎯</span>
+      <span id="arena-mission-badge" class="mission-badge-dot">0</span>
+    `;
+    document.body.appendChild(btn);
+  }
+
+  if (document.getElementById('mission-hub-modal')) return;
+
+  const modal = document.createElement('div');
+  modal.id = 'mission-hub-modal';
+  modal.innerHTML = `
+    <div class="mission-hub-box">
+      <div class="mission-hub-header">
+        <div class="mission-hub-title-wrap">
+          <div class="mission-hub-title">QUỸ THƯỞNG CAO THỦ</div>
+          <div class="mission-hub-sub">Chơi hay • mời mạnh • bấm nhận là phí nội bộ chảy ngay về ví</div>
+        </div>
+        <div class="mission-hub-close" onclick="closeMissionHub()">✕</div>
+      </div>
+      <div class="mission-hub-body">
+        <div class="mission-summary-grid">
+          <div class="mission-summary-card">
+  <strong>Quỹ nhiệm vụ hiện tại</strong>
+  <div class="mission-summary-value" id="mission-pool-value">0 PMC</div>
+  <div class="mission-summary-note">Hoàn thành nhiệm vụ để mở khóa thưởng ngay.</div>
+</div>
+          <div class="mission-summary-card">
+            <strong>Có thể nhận ngay</strong>
+            <div class="mission-summary-value" id="mission-claimable-value">0 PMC</div>
+            <div class="mission-summary-note" id="mission-claimable-note">Cày thêm chút nữa là nút nhận sáng lên.</div>
+          </div>
+          <div class="mission-summary-card">
+            <strong>Mốc mời hiện tại</strong>
+            <div class="mission-summary-value" id="mission-ref-summary">0 bạn</div>
+            <div class="mission-summary-note" id="mission-stats-note">Càng đông bạn hữu, quỹ cộng đồng càng đã.</div>
+          </div>
+        </div>
+<!-- Dòng 15715: Thay thế cụm mission-top-tabs bằng đoạn này -->
+<div class="mission-top-tabs" id="mission-top-tabs">
+    <button class="mission-top-tab active" data-tab="day" onclick="switchMissionTab('day')">Ngày</button>
+    <button class="mission-top-tab" data-tab="week" onclick="switchMissionTab('week')">Tuần</button>
+    <button class="mission-top-tab" data-tab="month" onclick="switchMissionTab('month')">Tháng</button>
+    <button class="mission-top-tab" data-tab="referral" onclick="switchMissionTab('referral')">Mời bạn</button>
+    <!-- MỚI THÊM: Tab Cấp độ -->
+    <button class="mission-top-tab" data-tab="level" onclick="switchMissionTab('level'); renderLevelRewards();">Cấp độ</button>
+</div>
+
+<!-- Dòng 15722: Thêm cái pane cấp độ vào dưới các pane khác -->
+<div id="mission-pane-day" class="mission-pane show"><div class="mission-pane-grid"></div></div>
+<div id="mission-pane-week" class="mission-pane"><div class="mission-pane-grid"></div></div>
+<div id="mission-pane-month" class="mission-pane"><div class="mission-pane-grid"></div></div>
+<div id="mission-pane-referral" class="mission-pane"><div class="mission-pane-grid"></div></div>
+<!-- MỚI THÊM: Khu vực hiển thị Rương -->
+<div id="mission-pane-level" class="mission-pane"><div class="mission-pane-grid" id="level-reward-list"></div></div>
+
+        <div class="mission-marketing-note" id="mission-marketing-note">
+          Quỹ càng dày thì thưởng càng đậm. Đạt điều kiện là nhận thẳng vào ví PMC nội bộ, không chờ admin.
+        </div>
+        <div id="mission-hub-toast"></div>
+      </div>
+    </div>`;
+  modal.addEventListener('click', function (e) {
+    if (e.target === modal) closeMissionHub();
+  });
+  document.body.appendChild(modal);
+}
+
+  async function fetchMissionBoard(force) {
+    if (MISSION_UI_STATE.loading && !force) return;
+    MISSION_UI_STATE.loading = true;
+    missionToast('Đang tải bảng nhiệm vụ...');
+
+    try {
+      const walletKey = missionWalletKey();
+      if (!walletKey) throw new Error('Chưa xác định được ví người chơi.');
+
+      const res = await fetch('/api/missions-v1?v=' + Date.now(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-wallet-key': walletKey
+        },
+        body: JSON.stringify({ action: 'board', walletKey })
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || 'Không tải được bảng nhiệm vụ.');
+      }
+
+      MISSION_UI_STATE.board = data;
+      renderMissionBoard();
+      missionToast('');
+    } catch (err) {
+      console.error('MISSION_BOARD_FAIL', err);
+      missionToast('Lỗi tải nhiệm vụ: ' + (err.message || 'Không rõ lỗi'));
+    } finally {
+      MISSION_UI_STATE.loading = false;
+    }
+  }
+
+  function missionStatusClass(mission) {
+    if (mission.claimed) return 'claimed';
+    if (mission.ready) return 'ready';
+    return 'locked';
+  }
+
+  function missionStatusText(mission) {
+    if (mission.claimed) return 'ĐÃ NHẬN';
+    if (mission.ready) return 'NHẬN NGAY';
+    return 'ĐANG CÀY';
+  }
+
+  function escapeMissionText(text) {
+    return String(text || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function renderMissionCards(tab, missions) {
+    const pane = document.querySelector('#mission-pane-' + tab + ' .mission-pane-grid');
+    if (!pane) return;
+
+    if (!Array.isArray(missions) || !missions.length) {
+      pane.innerHTML = '<div class="mission-empty">Chưa có nhiệm vụ ở mục này.</div>';
+      return;
+    }
+
+    pane.innerHTML = missions.map(function (mission) {
+      const progressPct = Math.max(0, Math.min(100, Number(mission.progressPercent || 0)));
+      const btnText = mission.claimed ? 'Đã nhận' : (mission.ready ? 'Nhận thưởng' : 'Chưa đạt');
+      const disabled = (!mission.ready || mission.claimed || MISSION_UI_STATE.claiming) ? 'disabled' : '';
+      return `
+        <div class="mission-card">
+          <div class="mission-card-head">
+            <div>
+              <div class="mission-card-title">${escapeMissionText(mission.title)}</div>
+              <div class="mission-card-desc">${escapeMissionText(mission.desc)}</div>
+            </div>
+            <div class="mission-card-badge ${missionStatusClass(mission)}">${missionStatusText(mission)}</div>
+          </div>
+
+          <div class="mission-card-progress-line">
+            <span>Tiến độ: ${escapeMissionText(mission.progressText)}</span>
+            <span>${progressPct}%</span>
+          </div>
+          <div class="mission-card-progress-bar">
+            <div class="mission-card-progress-fill" style="width:${progressPct}%"></div>
+          </div>
+
+          <div class="mission-card-footer">
+            <div class="mission-reward-box">
+              <strong>Thưởng dự kiến</strong>
+              <div class="mission-reward-value">${escapeMissionText(mission.rewardText)}</div>
+              <div class="mission-reward-note">${escapeMissionText(mission.note || '')}</div>
+            </div>
+            <button class="mission-claim-btn" ${disabled} onclick="claimMissionReward('${mission.id}')">${btnText}</button>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function renderMissionBoard() {
+    const board = MISSION_UI_STATE.board || {};
+    const tabs = board.tabs || {};
+
+    const poolEl = document.getElementById('mission-pool-value');
+    const claimableEl = document.getElementById('mission-claimable-value');
+    const claimableNoteEl = document.getElementById('mission-claimable-note');
+    const refEl = document.getElementById('mission-ref-summary');
+    const statsEl = document.getElementById('mission-stats-note');
+    const marketingEl = document.getElementById('mission-marketing-note');
+
+    if (poolEl) poolEl.innerText = formatPmc(board.treasury?.missionPoolPmc || 0);
+    if (claimableEl) claimableEl.innerText = formatPmc(board.claimableTotalPmc || 0);
+    if (claimableNoteEl) {
+      claimableNoteEl.innerText = (board.claimableCount || 0) > 0
+        ? `Đang có ${board.claimableCount} nhiệm vụ sáng nút nhận.`
+        : 'Còn thiếu vài bước nữa để mở khóa thưởng.';
+    }
+    if (refEl) refEl.innerText = `${Number(board.metrics?.friendCount || 0).toLocaleString('vi-VN')} bạn`;
+    if (statsEl) {
+      const metrics = board.metrics || {};
+      statsEl.innerText = `Hôm nay ${metrics.dayMatches || 0} ván • tuần này ${metrics.weekMatches || 0} ván • tháng này ${metrics.monthWins || 0} trận thắng.`;
+    }
+    if (marketingEl) {
+  marketingEl.innerHTML = `
+    Hoàn thành nhiệm vụ là nhận thưởng ngay, tiền thưởng chảy thẳng vào ví PMC nội bộ của người chơi.`;
+}
+
+    renderMissionCards('day', tabs.day || []);
+renderMissionCards('week', tabs.week || []);
+renderMissionCards('month', tabs.month || []);
+renderMissionCards('referral', tabs.referral || []);
+updateMissionLobbyBadge(board);
+switchMissionTab(MISSION_UI_STATE.activeTab || 'day');
+  }
+
+  function missionToast(text) {
+    const el = document.getElementById('mission-hub-toast');
+    if (el) el.innerText = text || '';
+  }
+
+  window.openMissionHub = function () {
+    ensureMissionHubMounted();
+    const modal = document.getElementById('mission-hub-modal');
+    if (modal) modal.classList.add('show');
+    fetchMissionBoard(true);
+  };
+
+  window.closeMissionHub = function () {
+    const modal = document.getElementById('mission-hub-modal');
+    if (modal) modal.classList.remove('show');
+  };
+
+  window.switchMissionTab = function (tab) {
+    MISSION_UI_STATE.activeTab = tab;
+    document.querySelectorAll('.mission-top-tab').forEach(function (btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-tab') === tab);
+    });
+    document.querySelectorAll('.mission-pane').forEach(function (pane) {
+      pane.classList.toggle('show', pane.id === 'mission-pane-' + tab);
+    });
+  };
+
+  window.claimMissionReward = async function (missionId) {
+    if (MISSION_UI_STATE.claiming) return;
+    MISSION_UI_STATE.claiming = true;
+    missionToast('Đang nhận thưởng...');
+
+    try {
+      const walletKey = missionWalletKey();
+      if (!walletKey) throw new Error('Thiếu walletKey.');
+
+      const res = await fetch('/api/missions-v1?v=' + Date.now(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-wallet-key': walletKey
+        },
+        body: JSON.stringify({ action: 'claim', missionId, walletKey })
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || 'Không nhận được thưởng.');
+      }
+
+      if (typeof data.newPmcBalance === 'number' && typeof setPmcBalance === 'function') {
+        setPmcBalance(data.newPmcBalance);
+      } else if (typeof loadWalletBalance === 'function') {
+        await loadWalletBalance().catch(() => {});
+      }
+
+      alert(
+        'NHẬN THƯỞNG THÀNH CÔNG!\n' +
+        `Nhiệm vụ: ${data.missionTitle || missionId}\n` +
+        `Thưởng: ${formatPmc(data.amountPmc || 0)}\n` +
+        `Ví PMC mới: ${formatPmc(data.newPmcBalance || 0)}`
+      );
+
+      await fetchMissionBoard(true);
+      missionToast('Đã cộng thưởng vào ví nội bộ.');
+    } catch (err) {
+      console.error('MISSION_CLAIM_FAIL', err);
+      missionToast('Lỗi nhận thưởng: ' + (err.message || 'Không rõ lỗi'));
+      alert('Nhận thưởng lỗi: ' + (err.message || 'Không rõ lỗi'));
+    } finally {
+      MISSION_UI_STATE.claiming = false;
+    }
+  };
+
+  document.addEventListener('DOMContentLoaded', function () {
+  ensureMissionHubMounted();
+  refreshMissionLobbyBadgeSilently();
+
+  setInterval(function () {
+    const homeMenu = document.getElementById('home-menu');
+    if (homeMenu && homeMenu.style.display !== 'none') {
+      refreshMissionLobbyBadgeSilently();
+    }
+  }, 15000);
+});
+})();
+function updateMissionLobbyBadge(board) {
+  const badge = document.getElementById('arena-mission-badge');
+  const btn = document.getElementById('arena-mission-btn');
+  if (!badge || !btn) return;
+
+  const count = Math.max(0, Number(board?.claimableCount || 0));
+
+  if (count > 0) {
+    badge.textContent = count > 99 ? '99+' : String(count);
+    badge.classList.add('show');
+    btn.classList.add('has-ready-mission');
+  } else {
+    badge.textContent = '0';
+    badge.classList.remove('show');
+    btn.classList.remove('has-ready-mission');
+  }
+}
+
+async function refreshMissionLobbyBadgeSilently() {
+  try {
+    const walletKey = missionWalletKey();
+    if (!walletKey) {
+      updateMissionLobbyBadge({ claimableCount: 0 });
+      return;
+    }
+
+    const res = await fetch('/api/missions-v1?v=' + Date.now(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-wallet-key': walletKey
+      },
+      body: JSON.stringify({ action: 'board', walletKey })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) return;
+
+    MISSION_UI_STATE.board = data;
+    updateMissionLobbyBadge(data);
+  } catch (_) {}
+}
+function ensureArenaSkinButton() {
+    let btn = document.getElementById("arena-skin-btn");
+
+    if (!btn) {
+        btn = document.createElement("div");
+        btn.id = "arena-skin-btn";
+        btn.innerHTML = "🛒"; // <--- ĐỔI MẶT NẠ THÀNH CÁI XE ĐẨY Ở ĐÂY
+        btn.onclick = openAvatarSkinShop;
+    }
+
+    // Đẩy ra thẳng body để khỏi bị div cha ẩn mất
+    if (btn.parentElement !== document.body) {
+        document.body.appendChild(btn);
+    }
+
+    btn.style.display = document.body.classList.contains("in-match") ? "none" : "flex";
+}
+
+document.addEventListener("DOMContentLoaded", ensureArenaSkinButton);
+setTimeout(ensureArenaSkinButton, 500);
+setTimeout(ensureArenaSkinButton, 1500);
+
+function ensureArenaTopButton() {
+    let btn = document.getElementById("arena-top-btn");
+
+    if (!btn) {
+        btn = document.createElement("div");
+        btn.id = "arena-top-btn";
+        btn.innerHTML = "🏆";
+        btn.onclick = openArenaTopModal;
+    }
+
+    if (btn.parentElement !== document.body) {
+        document.body.appendChild(btn);
+    }
+
+    const loginScreen = document.getElementById("login-screen");
+    const homeMenu = document.getElementById("home-menu");
+    const isLoginOpen = !!loginScreen && loginScreen.style.display !== "none";
+    const isHomeOpen = !!homeMenu && homeMenu.style.display !== "none";
+    btn.style.display = (!document.body.classList.contains("in-match") && isHomeOpen && !isLoginOpen) ? "flex" : "none";
+}
+
+document.addEventListener("DOMContentLoaded", ensureArenaTopButton);
+setTimeout(ensureArenaTopButton, 500);
+setTimeout(ensureArenaTopButton, 1500);
+// HỆ THỐNG TIM MẠCH (CHỐNG BỆNH TÀNG HÌNH DO NGỦ GẬT)
+setInterval(() => {
+    // 1. Nếu đang ở sảnh chờ mà là chủ phòng (Phe Đỏ), thì 10 giây phải đập tim 1 lần
+    if (currentRoomId && mySide === "do" && currentRoomStatus === "waiting") {
+        touchCurrentLobbyHeartbeat().catch(() => {});
+    }
+    
+    // 2. Chạy cái dọn rác của mầy (đã bịt mỏ không cho dọn phòng đang sống)
+    if (typeof cleanupGhostLobbyRoomsOnce === "function") {
+        cleanupGhostLobbyRoomsOnce();
+    }
+}, 10000); 
+// Đổi mẹ thành 10 giây đi, 12 giây dọn rác nó nhạy quá nó hốt nhầm!
+// --- LOGIC LUYỆN CẤP LŨY TIẾN MC ---
+let pendingSessionEXP = 0; 
+
+function getTotalExpForLevel(level) {
+    return (level * (level - 1) / 2) * 100; 
+}
+
+function getLevelFromExp(totalExp) {
+    let level = Math.floor((1 + Math.sqrt(1 + 8 * totalExp / 100)) / 2);
+    return Math.min(180, level);
+}
+
+function getExpByResult(result) {
+    if (result === 'win') {
+        const dailyCount = Number(localStorage.getItem('daily_matches_mc') || 0);
+        let gain = Math.max(2, 30 - (dailyCount * 2.5));
+        localStorage.setItem('daily_matches_mc', dailyCount + 1);
+        return Math.floor(gain);
+    }
+    return -5; // Thua trừ 5
+}
+
+async function applyPendingExpToDatabase() {
+    if (pendingSessionEXP === 0) return;
+    const walletKey = makeWalletDbKey();
+    const userRef = db.ref("wallets/" + walletKey);
+    
+    await userRef.transaction((current) => {
+        if (!current) return current;
+        let oldExp = Number(current.exp || 0);
+        let newExp = Math.max(0, oldExp + pendingSessionEXP);
+        current.exp = newExp;
+        current.level = getLevelFromExp(newExp);
+        return current;
+    });
+
+    spawnExpEffect(pendingSessionEXP > 0);
+    pendingSessionEXP = 0;
+    // Tải lại ví và cập nhật thanh EXP ngay lập tức
+    loadWalletBalance().then(data => {
+        if(data && data.exp !== undefined) updateExpBarUI(data.exp);
+    });
+}
+
+function spawnExpEffect(isWin) {
+    const particle = document.createElement("div");
+    particle.className = "exp-particle";
+    particle.style.left = "50%";
+    particle.style.top = "50%";
+    if(!isWin) particle.style.background = "linear-gradient(#ff4757, #ff6b81)"; 
+    document.body.appendChild(particle);
+
+    particle.animate([
+        { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 },
+        { transform: `translate(${(Math.random()-0.5)*300}px, 600px) scale(0.5)`, opacity: 0 }
+    ], { duration: 1500, easing: 'ease-in-out' }).onfinish = () => particle.remove();
+}
+
+function updateExpBarUI(totalExp) {
+    const exp = Number(totalExp || 0);
+    let currentLevel = getLevelFromExp(exp);
+    let expStartOfLevel = getTotalExpForLevel(currentLevel);
+    let expForNextLevel = currentLevel * 100; 
+    let currentLevelProgress = exp - expStartOfLevel;
+    let pct = Math.min(100, Math.max(0, (currentLevelProgress / expForNextLevel) * 100));
+    
+    const fill = document.getElementById("exp-bar-fill");
+    const text = document.getElementById("exp-text-float");
+    if(fill) fill.style.width = pct + "%";
+    if(text) text.innerText = `CẤP ${currentLevel} • ${Math.floor(currentLevelProgress)} / ${expForNextLevel} EXP`;
+}
+// CẬP NHẬT: Thứ bậc rương chuẩn - Tím là VIP nhất
+const LEVEL_MILESTONES = [
+    { level: 10, name: 'Rương Đồng', desc: 'Ngẫu nhiên PMC & Tặng 2 Lượt Miễn Phí', tickets: 2, icon: 'images/ruong_dong.png', chestStyle: 'linear-gradient(135deg, #cd7f32, #8e4a23)', shadow: '#cd7f32' },
+    { level: 20, name: 'Rương Bạc', desc: 'Ngẫu nhiên PMC & Tặng 2 Lượt Miễn Phí', tickets: 2, icon: 'images/ruong_bac.png', chestStyle: 'linear-gradient(135deg, #bdc3c7, #7f8c8d)', shadow: '#bdc3c7' },
+    { level: 30, name: 'Rương Vàng + Skin', desc: 'Mở khóa Skin Đồng & 2 Lượt Miễn Phí', tickets: 2, skinId: 'bronze', icon: 'images/avatar_frames/bronze-crown.png', chestStyle: 'linear-gradient(135deg, #f1c40f, #e67e22)', shadow: '#f1c40f' },
+    { level: 60, name: 'Rương Bạch Kim + Skin', desc: 'Mở khóa Skin Ngọc & 2 Lượt Miễn Phí', tickets: 2, skinId: 'jade', icon: 'images/avatar_frames/jade-flower.png', chestStyle: 'linear-gradient(135deg, #00b894, #0984e3)', shadow: '#00b894' },
+    { level: 90, name: 'Rương Kim Cương', desc: 'Thưởng PMC KHỦNG & 2 Lượt Miễn Phí', tickets: 2, icon: 'images/ruong_kim_cuong.png', chestStyle: 'linear-gradient(135deg, #74b9ff, #0984e3)', shadow: '#74b9ff' },
+    { level: 120, name: 'Rương Đỏ + Skin', desc: 'Mở khóa Skin Long Vương & 2 Lượt Miễn Phí', tickets: 2, skinId: 'dragon', icon: 'images/avatar_frames/dragon-frame.png', chestStyle: 'linear-gradient(135deg, #ff4757, #c0392b)', shadow: '#ff4757' },
+    { level: 180, name: 'Rương Tím VIP + Skin', desc: 'Phượng Hoàng & 10 Lượt Miễn Phí VIP', tickets: 10, skinId: 'phoenix', icon: 'images/avatar_frames/phoenix-frame.png', chestStyle: 'linear-gradient(135deg, #a55eea, #6c5ce7)', shadow: '#a55eea' }
+];
+
+async function renderLevelRewards() {
+    const listEl = document.getElementById("level-reward-list");
+    if (!listEl) return;
+
+    listEl.innerHTML = '<div style="color:#55efc4; text-align:center; grid-column: 1/-1;">Đang tải rương...</div>';
+
+    const walletKey = makeWalletDbKey();
+    const snap = await db.ref("wallets/" + walletKey).once("value");
+    const userData = snap.val() || {};
+    const currentLevel = userData.level || 1;
+    const claimedLevels = userData.claimedLevels || {}; 
+
+    listEl.innerHTML = LEVEL_MILESTONES.map(m => {
+        const isClaimed = !!claimedLevels[m.level];
+        const isReady = currentLevel >= m.level && !isClaimed;
+        const isLocked = currentLevel < m.level;
+
+        let btnClass = "mission-claim-btn";
+        let btnText = "CHƯA ĐẠT";
+        let badgeClass = "locked";
+        let badgeText = "Cần Cấp " + m.level;
+        let onclick = "";
+
+        if (isClaimed) {
+            btnText = "ĐÃ MỞ";
+            btnClass += " claimed";
+            badgeClass = "claimed";
+            badgeText = "Đã nhận";
+        } else if (isReady) {
+            btnText = "MỞ RƯƠNG";
+            btnClass += " ready";
+            badgeClass = "ready";
+            badgeText = "Sẵn sàng";
+            onclick = `onclick="claimLevelChest(${m.level}, this)"`;
+        }
+
+        let progressPct = Math.min(100, (currentLevel / m.level) * 100).toFixed(0);
+        if (isClaimed) progressPct = 100;
+
+        // VẼ RƯƠNG BẰNG CSS TẠM THỜI
+        let tempChestHtml = `
+            <div style="width: 46px; height: 46px; border-radius: 10px; background: ${m.chestStyle}; box-shadow: 0 0 12px ${m.shadow}; display: flex; align-items: center; justify-content: center; position: relative; border: 2px solid rgba(255,255,255,0.4);">
+                <div style="width: 16px; height: 10px; background: #fff; border-radius: 3px; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.3);"></div>
+            </div>
+        `;
+
+        return `
+        <div class="mission-card">
+            <div class="mission-card-head" style="display: flex; align-items: center; gap: 12px;">
+                <!-- Icon Avatar/Skin trên góc -->
+                <div style="width: 45px; height: 45px; flex-shrink: 0; background: rgba(0,0,0,0.5); border-radius: 12px; border: 1px solid #55efc4; display: flex; align-items: center; justify-content: center; overflow: hidden; box-shadow: 0 0 10px rgba(85, 239, 196, 0.2);">
+                    <img src="${m.icon}" alt="reward" style="width: 100%; height: 100%; object-fit: contain; transform: scale(1.1);" onerror="this.src='images/do_tuong.png'">
+                </div>
+
+                <div style="flex: 1;">
+                    <div class="mission-card-title" style="color:${isReady ? '#f4c542' : '#fff8d6'}">${m.name}</div>
+                    <div class="mission-card-desc">${m.desc}</div>
+                </div>
+                
+                <div class="mission-card-badge ${badgeClass}" style="flex-shrink: 0;">${badgeText}</div>
+            </div>
+
+            <div class="mission-card-progress-line">
+                <span>Tiến độ: Cấp ${currentLevel}/${m.level}</span>
+                <span>${progressPct}%</span>
+            </div>
+            <div class="mission-card-progress-bar">
+                <div class="mission-card-progress-fill" style="width:${progressPct}%; background:${isReady ? 'linear-gradient(90deg, #f1c40f, #e67e22)' : ''}"></div>
+            </div>
+            
+            <!-- ÉP HIỂN THỊ NẰM NGANG VÀ ĐƯA NÚT LÊN TRƯỚC, RƯƠNG RA SAU -->
+            <div style="display: flex; flex-direction: row; gap: 12px; align-items: stretch; margin-top: 14px;">
+                
+                <!-- Ô BÊN TRÁI BÂY GIỜ LÀ NÚT NHẬN -->
+                <button class="${btnClass}" ${onclick} ${isLocked || isClaimed ? "disabled" : ""} style="flex: 1; margin: 0; min-height: 48px; border-radius: 12px;">${btnText}</button>
+
+                <!-- Ô BÊN PHẢI BÂY GIỜ LÀ RƯƠNG -->
+                <div style="flex-shrink: 0; width: 64px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); border-radius: 12px; border: 1px dashed rgba(85, 239, 196, 0.3);">
+                    ${tempChestHtml} 
+                    <!-- SAU NÀY CÓ ẢNH THẬT THÌ THAY \${tempChestHtml} BẰNG THẺ <img> CỦA MẦY -->
+                </div>
+                
+            </div>
+
+        </div>`;
+    }).join("");
+}
+async function claimLevelChest(targetLevel, btnElement) {
+    if (btnElement) {
+        btnElement.disabled = true;
+        btnElement.innerText = "ĐANG MỞ...";
+    }
+
+    const milestone = LEVEL_MILESTONES.find(m => m.level === targetLevel);
+    if (!milestone) return;
+
+    // Logic tính thưởng ngẫu nhiên (Tỉ lệ 80% ra số nhỏ, 20% ra số lớn)
+    let min = 0, max = 0;
+    if (targetLevel === 10) { min = 2; max = 20; }
+    else if (targetLevel === 20) { min = 4; max = 40; }
+    else { min = targetLevel; max = targetLevel * 3; } // Công thức chung cho cấp cao
+
+    let isLucky = Math.random() < 0.2; // 20% xui rủi
+    let rewardPMC = 0;
+    
+    if (isLucky) {
+        rewardPMC = Math.floor(Math.random() * (max - (max/2) + 1)) + Math.floor(max/2); // Nửa trên
+    } else {
+        rewardPMC = Math.floor(Math.random() * ((max/2) - min + 1)) + min; // Nửa dưới
+    }
+
+    const walletKey = makeWalletDbKey();
+    const userRef = db.ref("wallets/" + walletKey);
+
+    await userRef.transaction((current) => {
+        if (!current) return current;
+        current.claimedLevels = current.claimedLevels || {};
+        
+        // Block mầy bấm 2 lần
+        if (current.claimedLevels[targetLevel]) return; 
+
+        // Ghi nhận đã mở rương này
+        current.claimedLevels[targetLevel] = true;
+        
+        // Cộng PMC
+        current.pmcBalance = (current.pmcBalance || 0) + rewardPMC;
+        // Cộng Vé miễn phí từ rương mốc
+        if (milestone.tickets) {
+            current.freeTickets = (Number(current.freeTickets) || 0) + milestone.tickets;
+        }
+
+        // Nếu mốc đó có tặng kèm skin thì bỏ vô túi skin luôn
+        if (milestone.skinId) {
+            current.ownedAvatarSkins = current.ownedAvatarSkins || { none: true };
+            current.ownedAvatarSkins[milestone.skinId] = true;
+        }
+        return current;
+    });
+
+    // Mở rương thành công thì báo chớp nháy
+    alert(`🎉 MỞ RƯƠNG THÀNH CÔNG!\n\nBạn nhận được: ${rewardPMC} PMC\n🎫 Được tặng thêm: ${milestone.tickets} Lượt Đánh Miễn Phí${milestone.skinId ? `\n🎁 Kèm theo Skin: ${milestone.name} (Đã thêm vào mục Hồ Sơ)` : ''}`);
+    // Cập nhật lại ví ở màn hình chính và tải lại bảng rương
+    loadWalletBalance();
+    renderLevelRewards();
+}
+// --- BỘ NÃO LOGIC LUYỆN CẤP LŨY TIẾN V3 (CÓ BÁO CÁO) ---
+window.pendingSessionEXP = 0; 
+window.sessionWins = 0;
+window.sessionLosses = 0;
+
+window.getTotalExpForLevel = function(level) {
+    return (level * (level - 1) / 2) * 100; 
+};
+
+window.getLevelFromExp = function(totalExp) {
+    let level = Math.floor((1 + Math.sqrt(1 + 8 * totalExp / 100)) / 2);
+    return Math.min(180, level);
+};
+
+window.getExpByResult = function(result) {
+    if (result === 'win') {
+        window.sessionWins++; // Lưu ngầm số ván thắng
+        const dailyCount = Number(localStorage.getItem('daily_matches_mc') || 0);
+        let gain = Math.max(2, 30 - (dailyCount * 2.5));
+        localStorage.setItem('daily_matches_mc', dailyCount + 1);
+        return Math.floor(gain);
+    }
+    window.sessionLosses++; // Lưu ngầm số ván thua
+    return -5; 
+};
+
+window.applyPendingExpToDatabase = async function() {
+    // Không có EXP thì đéo làm gì cả
+    if (!window.pendingSessionEXP || window.pendingSessionEXP === 0) {
+        window.sessionWins = 0;
+        window.sessionLosses = 0;
+        return; 
+    }
+
+    const walletKey = makeWalletDbKey();
+    const userRef = db.ref("wallets/" + walletKey);
+    
+    try {
+        // 1. GỬI LỆNH CỘNG/TRỪ LÊN FIREBASE (Firebase luôn tính chuẩn 100%)
+        if (window.pendingSessionEXP > 0) {
+            // Dùng increment: Server tự cộng dồn, qua mặt mọi loại cache sai lệch, ĐÉO bao giờ ghi đè!
+            await userRef.update({
+                exp: firebase.database.ServerValue.increment(window.pendingSessionEXP),
+                updatedAt: firebase.database.ServerValue.TIMESTAMP
+            });
+        } else {
+            // Trừ điểm thì đọc cache nội bộ cho an toàn tránh bị null
+            let realExp = Number(localStorage.getItem('exp_cache') || 0);
+            await userRef.update({
+                exp: Math.max(0, realExp + window.pendingSessionEXP),
+                updatedAt: firebase.database.ServerValue.TIMESTAMP
+            });
+        }
+
+        // 2. ÉP THẰNG GAME PHẢI CHỜ FIREBASE TÍNH XONG RỒI KÉO SỐ VỀ
+        // (Chống lại cái vụ transaction Lịch Sử ván đấu chạy ngầm làm ẩn cache)
+        let finalExp = 0;
+        let finalLevel = 1;
+        let isServerSynced = false;
+
+        // BẪY CÀY CHAY: Lấy cấp độ cũ trước khi kéo số mới về
+        let oldExp = Number(localStorage.getItem('exp_cache') || 0);
+        let oldLevel = window.getLevelFromExp(oldExp);
+
+        // Ping liên tục tối đa 5 giây để đợi Firebase nhả con số thật ra
+        for (let i = 0; i < 20; i++) {
+            const snap = await userRef.child('exp').once('value');
+            // snap.exists() là tấm khiên chống lại "khoảng mù" (chống null/undefined)
+            if (snap.exists() && snap.val() !== null) {
+                finalExp = Number(snap.val());
+                isServerSynced = true;
+                break; // Có số thật rồi thì thoát vòng lặp
+            }
+            await new Promise(r => setTimeout(r, 250)); // Đợi 0.25s rồi rình tiếp
+        }
+
+        // Nếu rớt mạng quá 5 giây thì đành lấy số ảo cộng lên cho Game khỏi hiện 0
+        if (!isServerSynced) {
+            let fallbackExp = oldExp + window.pendingSessionEXP;
+            finalExp = Math.max(0, fallbackExp);
+        }
+
+        finalLevel = window.getLevelFromExp(finalExp);
+
+        // CHUẨN BỊ GÓI DATA ĐỂ LƯU CẤP ĐỘ (VÀ VÉ MIỄN PHÍ NẾU CÓ)
+        const finalUpdates = { level: finalLevel };
+
+        // Nếu cấp mới lớn hơn cấp cũ -> Tặng vé tương ứng số cấp vừa vượt qua
+        if (finalLevel > oldLevel && window.pendingSessionEXP > 0) {
+            let ticketsGained = finalLevel - oldLevel;
+            
+            // Dùng increment để cộng dồn vé cực kỳ an toàn
+            finalUpdates.freeTickets = firebase.database.ServerValue.increment(ticketsGained);
+            
+            setTimeout(() => alert(`🎉 LÊN CẤP ${finalLevel}!\nĐược hệ thống thưởng ${ticketsGained} Lượt Đánh Miễn Phí!`), 800);
+        }
+
+        await userRef.update(finalUpdates); // Đồng bộ nốt level (và vé) lên fire
+
+        // 3. GHI NHẬN SỐ THẬT TỪ FIREBASE ĐỂ VẼ LÊN GAME
+        localStorage.setItem('exp_cache', finalExp);
+        window.finalNewExpToAnimate = finalExp;
+        window.showExpSummary(finalLevel);
+    } catch (err) {
+        console.error("Lỗi đồng bộ EXP từ Fire:", err);
+        let fallbackExp = Number(localStorage.getItem('exp_cache') || 0) + window.pendingSessionEXP;
+        window.finalNewExpToAnimate = Math.max(0, fallbackExp);
+        window.showExpSummary(window.getLevelFromExp(window.finalNewExpToAnimate));
+    }
+};
+window.expSummaryTimerInt = null;
+
+window.showExpSummary = function(currentLevel) {
+    const modal = document.getElementById('exp-summary-modal');
+    if(!modal) return;
+
+    const totalMatches = window.sessionWins + window.sessionLosses;
+    const expSymbol = window.pendingSessionEXP > 0 ? '+' : '';
+
+    document.getElementById('summary-total-match').innerText = totalMatches;
+    document.getElementById('summary-win').innerText = window.sessionWins;
+    document.getElementById('summary-loss').innerText = window.sessionLosses;
+    
+    const expEl = document.getElementById('summary-exp');
+    expEl.innerText = expSymbol + window.pendingSessionEXP;
+    
+    const btnBuyBack = document.getElementById('btn-buy-back-exp');
+    const countdownText = document.getElementById('exp-countdown-text');
+    
+    clearInterval(window.expSummaryTimerInt);
+    
+    // NẾU THẮNG
+    if(window.pendingSessionEXP > 0) {
+        expEl.className = "val-win";
+        if(btnBuyBack) btnBuyBack.style.display = 'none';
+        if(countdownText) countdownText.innerText = "";
+    } 
+    // NẾU THUA (Có điểm âm)
+    else if (window.pendingSessionEXP < 0) {
+        expEl.className = "val-loss";
+        const costPMC = Math.abs(window.pendingSessionEXP);
+        
+        if(btnBuyBack) {
+            btnBuyBack.style.display = 'block';
+            btnBuyBack.innerText = `GIỮ LẠI BẰNG ${costPMC} PMC`;
+            btnBuyBack.disabled = false;
+        }
+
+        // Đếm ngược 10 giây
+        let timeLeft = 10;
+        if(countdownText) countdownText.innerText = `(${timeLeft}s)`;
+        
+        window.expSummaryTimerInt = setInterval(() => {
+            timeLeft--;
+            if(countdownText) countdownText.innerText = `(${timeLeft}s)`;
+            
+            if(timeLeft <= 0) {
+                clearInterval(window.expSummaryTimerInt);
+                window.closeExpSummary(); // Hết 10s tự động chốt đơn (trừ EXP)
+            }
+        }, 1000);
+    } 
+    // NẾU HÒA HOẶC KHÔNG CÓ EXP
+    else {
+        expEl.className = "val-loss";
+        if(btnBuyBack) btnBuyBack.style.display = 'none';
+        if(countdownText) countdownText.innerText = "";
+    }
+
+    document.getElementById('summary-level').innerText = `Cấp hiện tại: ${currentLevel}`;
+    modal.classList.add('show');
+};
+
+window.buyBackExp = async function() {
+    clearInterval(window.expSummaryTimerInt); // Dừng đếm ngược ngay
+    const costPMC = Math.abs(window.pendingSessionEXP);
+    
+    if (costPMC <= 0) return;
+
+    const currentPmc = getPmcBalance();
+    if (currentPmc < costPMC) {
+        alert("Mầy không đủ PMC để mua lại EXP!");
+        window.closeExpSummary(); // Nghèo thì chịu khó bị trừ EXP
+        return;
+    }
+
+    const btn = document.getElementById('btn-buy-back-exp');
+    if(btn) {
+        btn.innerText = "ĐANG XỬ LÝ...";
+        btn.disabled = true;
+    }
+
+    try {
+        const walletKey = makeWalletDbKey();
+        const adminWallet = "pi_admin_master"; // Ví hệ thống
+
+        // Trừ tiền thằng chơi
+        const paid = await adjustPmcWalletByKey(walletKey, -costPMC);
+        if (paid == null) throw new Error("Trừ PMC lỗi");
+
+        // Chuyển cho Admin (Lỗi cũng kệ, tiền ra khỏi túi người chơi là đc)
+        try {
+            await adjustPmcWalletByKey(adminWallet, costPMC);
+            await db.ref("walletTransactions").push({
+                type: "buy_back_exp_after_loss", 
+                walletKey: walletKey, 
+                adminWalletKey: adminWallet,
+                feePMC: costPMC, 
+                createdAt: Date.now(), 
+                status: "done"
+            });
+        } catch(e) {}
+
+        // 👇👇 ĐÂY LÀ KHÚC CHỮA BỆNH TỤT EXP 👇👇
+        // Trả lại EXP vào Database vì lúc nãy nó lỡ trừ mất trên máy chủ rồi
+        const userRef = db.ref("wallets/" + walletKey);
+        await userRef.update({
+            exp: firebase.database.ServerValue.increment(costPMC),
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+
+        // Cộng trả lại biến hiển thị UI ở Local để thanh EXP đứng im đéo nhúc nhích
+        if (window.finalNewExpToAnimate !== undefined) {
+            window.finalNewExpToAnimate += costPMC;
+            localStorage.setItem('exp_cache', window.finalNewExpToAnimate);
+        }
+        // 👆👆 KẾT THÚC CHỮA BỆNH 👆👆
+
+        alert(`Mua lại thành công! Đã trừ ${costPMC} PMC. EXP của mày được bảo toàn nguyên vẹn.`);
+        
+        // Gán EXP chờ về 0 để hàm closeExpSummary ĐÉO làm trò ruồi nữa
+        window.pendingSessionEXP = 0; 
+        
+        window.closeExpSummary();
+
+    } catch (err) {
+        console.error("Lỗi mua lại EXP:", err);
+        alert("Lỗi khi mua lại EXP. Mạng yếu.");
+        window.closeExpSummary(); // Lỗi thì đành trừ EXP
+    }
+};
+
+window.closeExpSummary = function() {
+    clearInterval(window.expSummaryTimerInt); // Dọn dẹp timer
+    const modal = document.getElementById('exp-summary-modal');
+    if(modal) modal.classList.remove('show');
+
+    // NỔ HIỆU ỨNG VÀ CHẠY THANH EXP
+    if (window.finalNewExpToAnimate !== undefined) {
+        window.spawnExpEffect(window.pendingSessionEXP > 0);
+        window.updateExpBarUI(window.finalNewExpToAnimate); 
+        
+        // Chạy xong hết rồi mới reset mẻ cày
+        window.pendingSessionEXP = 0; 
+        window.sessionWins = 0;
+        window.sessionLosses = 0;
+        window.finalNewExpToAnimate = undefined;
+    }
+
+    // CHỐT CHẶN TẢI LẠI VÍ
+    loadWalletBalance().catch(()=>{});
+};
+
+window.spawnExpEffect = function(isWin) {
+    const particle = document.createElement("div");
+    particle.className = "exp-particle";
+    particle.style.left = "50%";
+    particle.style.top = "50%";
+    if(!isWin) particle.style.background = "linear-gradient(#ff4757, #ff6b81)"; 
+    document.body.appendChild(particle);
+
+    particle.animate([
+        { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 },
+        { transform: `translate(${(Math.random()-0.5)*300}px, 600px) scale(0.5)`, opacity: 0 }
+    ], { duration: 1500, easing: 'ease-in-out' }).onfinish = () => particle.remove();
+};
+
+window.updateExpBarUI = function(totalExp) {
+    const exp = Number(totalExp || 0);
+    
+    // LƯU LUÔN CACHE ĐỂ LỠ RỚT MẠNG CÒN CÓ CÁI MÀ FALLBACK (Trị cái bệnh 0 + 2 = 2)
+    localStorage.setItem('exp_cache', exp);
+    
+    let currentLevel = window.getLevelFromExp(exp);
+    let expStartOfLevel = window.getTotalExpForLevel(currentLevel);
+    let expForNextLevel = currentLevel * 100; 
+    let currentLevelProgress = exp - expStartOfLevel;
+    let pct = Math.min(100, Math.max(0, (currentLevelProgress / expForNextLevel) * 100));
+    
+    const fill = document.getElementById("exp-bar-fill");
+    const text = document.getElementById("exp-text-float");
+    if(fill) fill.style.width = pct + "%";
+    if(text) text.innerText = `CẤP ${currentLevel} • ${Math.floor(currentLevelProgress)} / ${expForNextLevel} EXP`;
+};
+// --- LOGIC CHO BANNER QUẢNG CÁO TỰ TRƯỢT ---
+let currentAdIndex = 0;
+const totalAds = 6;
+let adIntervalTimer = null;
+
+function goToAdSlide(index) {
+    currentAdIndex = index;
+    const track = document.getElementById("ad-slider-track");
+    if (track) {
+        // Đẩy track qua trái: Mỗi slide chiếm 16.666% tổng width của track
+        track.style.transform = `translateX(-${currentAdIndex * (100 / totalAds)}%)`;
+    }
+    
+    // Cập nhật dấu chấm
+    const dots = document.querySelectorAll(".ad-dot");
+    dots.forEach((dot, i) => {
+        dot.classList.toggle("active", i === currentAdIndex);
+    });
+
+    // Reset lại timer để nó không bị trượt kép nếu người dùng vừa bấm tay
+    resetAdTimer();
+}
+
+function nextAdSlide() {
+    currentAdIndex = (currentAdIndex + 1) % totalAds;
+    goToAdSlide(currentAdIndex);
+}
+
+function resetAdTimer() {
+    if (adIntervalTimer) clearInterval(adIntervalTimer);
+    adIntervalTimer = setInterval(nextAdSlide, 4000); // Tự động trượt mỗi 4 giây
+}
+
+// Bắt đầu chạy khi load xong
+document.addEventListener("DOMContentLoaded", () => {
+    resetAdTimer();
+});
+
+// XỬ LÝ KHI CLICK VÀO QUẢNG CÁO
+window.handleAdClick = function(slideNumber) {
+    switch(slideNumber) {
+        case 1:
+            // Khuyến mãi Nạp Pi
+            if (typeof openWallet === 'function') openWallet('nap');
+            break;
+        case 2:
+            // Mở Shop Skin
+            if (typeof openAvatarSkinShop === 'function') openAvatarSkinShop();
+            break;
+        case 3:
+            // Mở bảng Nhiệm vụ (Hub)
+            if (typeof openMissionHub === 'function') openMissionHub();
+            break;
+        case 4:
+            // Đua Top Cao Thủ
+            if (typeof openArenaTopModal === 'function') openArenaTopModal();
+            break;
+        case 5:
+            // Kết bạn (Nếu là điện thoại thì xổ menu bạn bè)
+            if (window.innerWidth <= 600) {
+                const friendBox = document.getElementById("mobile-friend-box");
+                if (friendBox) friendBox.classList.add("show");
+            } else {
+                // Nếu PC mầy có hàm mở bạn bè riêng thì nhét vô đây
+                alert("Mở tab Bạn Bè phía dưới để mời nhé!");
+            }
+            break;
+        case 6:
+            // Mở Rương Cấp độ trong Mission Hub
+            if (typeof openMissionHub === 'function') {
+                openMissionHub();
+                // Ép nó nhảy qua tab Cấp Độ
+                setTimeout(() => {
+                    if(typeof switchMissionTab === 'function') {
+                        switchMissionTab('level');
+                        if(typeof renderLevelRewards === 'function') renderLevelRewards();
+                    }
+                }, 300);
+            }
+            break;
+    }
+};
+</script>
+<!-- BẢNG ĐẾM NGƯỢC CHỜ 5 GIÂY (CHỐNG LAG FIREBASE) -->
+<div id="exit-countdown-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:99999; align-items:center; justify-content:center; backdrop-filter:blur(5px);">
+    <div style="background: linear-gradient(180deg, #1f1f1f, #0a0a0a); border: 2px solid #55efc4; border-radius: 20px; padding: 25px; width: min(80vw, 320px); text-align: center; box-shadow: 0 0 30px rgba(85, 239, 196, 0.4);">
+        <h3 style="color:#ffd166; margin-top:0; letter-spacing:1px;" id="exit-countdown-title">ĐANG LƯU KẾT QUẢ...</h3>
+        <p style="color:#b2bec3; font-size:13px; line-height:1.5;">Hệ thống đang đồng bộ dữ liệu với máy chủ để tránh lỗi mất điểm và tài sản.</p>
+        <div id="exit-countdown-number" style="font-size: 60px; font-weight: 900; color: #ff7675; margin: 15px 0; text-shadow: 0 0 15px rgba(255, 118, 117, 0.6);">5</div>
+        <button id="exit-countdown-btn" disabled style="width:100%; background: #636e72; color: #dfe6e9; padding: 12px; border-radius: 12px; font-size: 16px; font-weight: 900; cursor: not-allowed; border:none; transition: 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">ĐANG ĐỒNG BỘ...</button>
+    </div>
+</div>
+</body>
+
+</html>
