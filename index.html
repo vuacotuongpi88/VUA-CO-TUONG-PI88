@@ -16574,20 +16574,17 @@ async function renderLevelRewards() {
                 <div class="mission-card-progress-fill" style="width:${progressPct}%; background:${isReady ? 'linear-gradient(90deg, #f1c40f, #e67e22)' : ''}"></div>
             </div>
             
-            <!-- ĐÃ SỬA CHỖ NÀY: CHIA LÀM 2 Ô -->
-            <div class="mission-card-footer" style="display: flex; gap: 12px; align-items: stretch; margin-top: 14px;">
+            <!-- ÉP HIỂN THỊ NẰM NGANG (ROW) KHÔNG BỊ XẾP CHỒNG LÊN NHAU -->
+            <div style="display: flex; flex-direction: row; gap: 12px; align-items: stretch; margin-top: 14px;">
                 
-                <!-- Ô BÊN TRÁI: RƯƠNG -->
-                <div style="flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); border-radius: 12px; padding: 0 10px; border: 1px dashed rgba(85, 239, 196, 0.3);">
-                    
+                <!-- Ô BÊN TRÁI: RƯƠNG (Cố định chiều rộng vuông vức) -->
+                <div style="flex-shrink: 0; width: 64px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); border-radius: 12px; border: 1px dashed rgba(85, 239, 196, 0.3);">
                     ${tempChestHtml} 
-                    <!-- SAU NÀY CÓ ẢNH THẬT THÌ MẦY XÓA BIẾN \${tempChestHtml} Ở TRÊN ĐI, RỒI NHÉT THẺ NÀY VÀO: -->
-                    <!-- <img src="images/ruong_cap_${m.level}.png" style="width: 46px; height: 46px; object-fit: contain;"> -->
-                
+                    <!-- SAU NÀY CÓ ẢNH THẬT THÌ THAY \${tempChestHtml} BẰNG THẺ <img> CỦA MẦY -->
                 </div>
 
-                <!-- Ô BÊN PHẢI: NÚT NHẬN -->
-                <button class="${btnClass}" ${onclick} ${isLocked || isClaimed ? "disabled" : ""} style="flex: 1; margin: 0; min-height: 48px;">${btnText}</button>
+                <!-- Ô BÊN PHẢI: NÚT NHẬN (Dùng flex: 1 để giãn dài ra chiếm hết chỗ trống) -->
+                <button class="${btnClass}" ${onclick} ${isLocked || isClaimed ? "disabled" : ""} style="flex: 1; margin: 0; min-height: 48px; border-radius: 12px;">${btnText}</button>
             </div>
 
         </div>`;
