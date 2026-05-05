@@ -7067,12 +7067,69 @@ function hideVictoryPopup() {
     wrap.style.transform = "translate(-50%, -50%) scale(0)";
     wrap.style.pointerEvents = "none";
 }
-// --- BỘ ĐẾM NGƯỢC 5 GIÂY CHỐNG LAG ---
+// --- BỘ ĐẾM NGƯỢC 5 GIÂY THÔNG MINH (XỬ LÝ NGẦM CHỐNG LAG LÊN ĐẾN TẬN CÙNG) ---
 let exitCountdownTimer = null;
 let pendingExitAction = null; 
 
+// HÀM 1: Chạy ngầm tống hết dữ liệu lên Server TRONG LÚC đang đếm ngược
+async function preloadNextMatchData() {
+    const roomId = currentRoomId;
+    if (!roomId) return;
+    
+    try {
+        // 1. Dành ra tối đa 3 giây để ép hệ thống chờ Firebase trả thưởng PMC xong xuôi
+        for (let i = 0; i < 15; i++) {
+            const snap = await db.ref("matches/" + roomId).once("value");
+            const room = snap.val() || {};
+            
+            const stake = Math.max(0, Math.floor(Number(room.stakePMC || 0)));
+            if (!room.winner || room.winner === "hoa" || stake === 0) break;
+            if (room.settlement && room.settlement.paid === true) break;
+            
+            await new Promise(r => setTimeout(r, 200)); // Nhấp nháy check liên tục
+        }
+
+        // 2. Tiền đã vào túi -> Đẩy lệnh dọn sạch bàn trên Firebase (không để UI phải đợi)
+        const snap2 = await db.ref("matches/" + roomId).once("value");
+        const room2 = snap2.val() || {};
+
+        if (room2.winner || room2.status === "finished") {
+            await db.ref("matches/" + roomId).update({
+                status: "waiting",
+                turn: "do",
+                board: null,
+                winner: null,
+                winReason: null,
+                drawRequest: null,
+                settlement: null,
+                refunds: null,
+                readyDeadlineAt: null,
+                lastMoveFrom: null,
+                lastMoveTo: null,
+                "ready/do": false,
+                "ready/den": false,
+                "stakeLocked/do": false,
+                "stakeLocked/den": false,
+                updatedAt: firebase.database.ServerValue.TIMESTAMP
+            });
+        }
+
+        // 3. Tải lại ví ngầm để chuẩn bị cho trận sau
+        await loadWalletBalance().catch(()=>{});
+    } catch (err) {
+        console.error("Lỗi đồng bộ ngầm Firebase:", err);
+    }
+}
+
+// HÀM 2: Dọn dẹp ngầm nếu bấm Thoát Trận
+async function preloadExitData() {
+    if (isSpectatorMode) return;
+    await leaveRealtimeMatch().catch(()=>{});
+    await setPlayerPresence("home").catch(()=>{});
+}
+
+// HÀM HIỂN THỊ: Giao diện đếm 5s
 function showExitCountdown(action) {
-    // Ẩn mấy cái popup đi cho gọn
     hideVictoryPopup();
     const overlay = document.getElementById("ready-overlay");
     if (overlay) overlay.style.display = "none";
@@ -7085,10 +7142,13 @@ function showExitCountdown(action) {
     
     if(!modal) return;
     
+    // 🔥 GỌI XỬ LÝ NGẦM LẬP TỨC (UI đếm cứ đếm, Server xử lý cứ xử lý)
     if (action === 'tieptuc') {
         titleEl.innerText = "ĐANG DỌN BÀN...";
+        preloadNextMatchData(); // <--- Lệnh chạy ngầm thần thánh
     } else {
         titleEl.innerText = "ĐANG LƯU KẾT QUẢ...";
+        preloadExitData();      // <--- Lệnh chạy ngầm thần thánh
     }
 
     modal.style.display = 'flex';
@@ -7098,7 +7158,7 @@ function showExitCountdown(action) {
     btnEl.style.cursor = 'not-allowed';
     btnEl.innerText = "ĐANG ĐỒNG BỘ...";
     
-    let timeLeft = 5; // Cài 5 giây theo ý mầy!
+    let timeLeft = 5; 
     numEl.innerText = timeLeft;
     numEl.style.color = "#ff7675";
     
@@ -7136,13 +7196,13 @@ function showExitCountdown(action) {
 }
 
 // ----------------------------------------------------
-// HÀM 1: BẤM NÚT TIẾP TỤC SAU KHI XONG VÁN
+// NÚT BẤM TIẾP TỤC SAU KHI XONG VÁN
 function playNextMatch() {
-    showExitCountdown('tieptuc'); // Bật đếm ngược 5 giây
+    showExitCountdown('tieptuc'); 
 }
 
-// Ruột xử lý thực sự của nút Tiếp Tục (chạy sau khi đếm xong)
-async function executePlayNextMatch() {
+// Xử lý Giao diện tức thì (chạy sau khi đếm xong, lúc này Firebase đã sạch bách)
+function executePlayNextMatch() {
     clearInterval(interval);
     clearInterval(readyInterval);
     readyOverlayWaitingShown = false;
@@ -7154,40 +7214,7 @@ async function executePlayNextMatch() {
     if (sounds.bgm) sounds.bgm.pause();
     if (sounds.heartbeat) sounds.heartbeat.pause();
 
-    if (!currentRoomId) {
-        resetToStartup();
-        return;
-    }
-
-    const roomId = currentRoomId;
-    clearRealtimeBoardVisualOnly();
-
-    const snap = await db.ref("matches/" + roomId).once("value");
-    const room = snap.val() || {};
-
-    if (room.winner || room.status === "finished") {
-        // Đã có 5 giây bảo kê ở ngoài nên chỗ này dọn Firebase thả ga đéo sợ lag!
-        await db.ref("matches/" + roomId).update({
-            status: "waiting",
-            turn: "do",
-            board: null,
-            winner: null,
-            winReason: null,
-            drawRequest: null,
-            settlement: null,
-            refunds: null,
-            readyDeadlineAt: null,
-            lastMoveFrom: null,
-            lastMoveTo: null,
-            "ready/do": false,
-            "ready/den": false,
-            "stakeLocked/do": false,
-            "stakeLocked/den": false,
-            updatedAt: firebase.database.ServerValue.TIMESTAMP
-        });
-    }
-
-    await loadWalletBalance().catch(()=>{});
+    clearRealtimeBoardVisualOnly(); // Xóa rác bàn cờ UI
 
     readyDo = false;
     readyDen = false;
@@ -7197,32 +7224,29 @@ async function executePlayNextMatch() {
     showReadyOverlay(currentRoomMode || "co-tuong", true);
 }
 
-
 // ----------------------------------------------------
-// HÀM 2: BẤM NÚT THOÁT TRẬN 
-async function backToMenu() {
-    // Khán giả đéo có dữ liệu gì để lưu, cho thoát ngay lập tức khỏi chờ
+// NÚT BẤM THOÁT TRẬN 
+function backToMenu() {
     if (isSpectatorMode) {
         executeBackToMenu();
         return;
     }
 
-    // Nếu trận đang đánh dở (chưa chiếu bí) thì hỏi xác nhận. Nhấn OK mới cho vô đếm 5 giây
     if (!isGameOver && currentRoomStatus === 'playing') {
         if (!confirm("Thoát ván đấu này? Mày sẽ bị xử thua đó!")) return;
     }
 
-    showExitCountdown('thoat'); // Bật đếm ngược 5 giây
+    showExitCountdown('thoat'); 
 }
 
-// Ruột xử lý thực sự của nút Thoát Trận (chạy sau khi đếm xong)
-async function executeBackToMenu() {
+// Xử lý Giao diện tức thì khi ra sảnh
+function executeBackToMenu() {
     document.getElementById("game-arena").style.display = "none";
     showHomeUI();
     closeArenaFriendBox();
     renderRoomInviteOverlay();
 
-    // CHỖ NÀY CỰC QUAN TRỌNG: Hiện bảng EXP và thanh ánh sáng (nếu có EXP)
+    // Hiện bảng báo cáo EXP
     if (window.pendingSessionEXP && window.pendingSessionEXP !== 0) {
         if (typeof window.applyPendingExpToDatabase === 'function') {
             window.applyPendingExpToDatabase();
@@ -7243,9 +7267,14 @@ async function executeBackToMenu() {
         document.body.classList.remove("spectator-mode");
         isSpectatorMode = false;
     } else {
-        leaveRealtimeMatch().then(() => {
-            setPlayerPresence("home").catch(() => {});
-        });
+        // Dữ liệu đã dọn ngầm trong 5s rồi, giờ chỉ cần clear local thôi
+        cleanupRoomListeners();
+        clearActiveMatchSnapshot();
+        currentRoomId = null;
+        mySide = null;
+        currentRoomMode = null;
+        currentRoomStakePMC = 0;
+        currentRoomBucket = null;
     }
 
     clearInterval(interval);
