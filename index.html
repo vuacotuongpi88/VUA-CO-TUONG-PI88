@@ -16655,35 +16655,30 @@ window.applyPendingExpToDatabase = async function() {
     const userRef = db.ref("wallets/" + walletKey);
     
     try {
-        let finalNewExp = 0;
-        let finalNewLevel = 1;
-
-        await userRef.transaction((current) => {
-            // 🔥 FIX TỘI ĐỒ FIREBASE: Nếu data chưa tải kịp (null) thì return để nó load lại data thật, cấm gán current = {}
-            if (current === null) return undefined; 
-            
-            let oldExp = Number(current.exp || 0);
-            let newExp = Math.max(0, oldExp + window.pendingSessionEXP);
-            
-            current.exp = newExp;
-            current.level = window.getLevelFromExp(newExp);
-            current.updatedAt = Date.now(); 
-            
-            // Lấy số liệu chuẩn để đá ra ngoài cho UI chạy hiệu ứng
-            finalNewExp = newExp;
-            finalNewLevel = current.level;
-            
-            return current;
+        // 1. Kéo thẳng data mới nhất từ Server về (Cách này chống 100% vụ null ảo của transaction)
+        const snap = await userRef.once("value");
+        let current = snap.val() || {};
+        
+        let oldExp = Number(current.exp || 0);
+        let newExp = Math.max(0, oldExp + window.pendingSessionEXP);
+        let newLevel = window.getLevelFromExp(newExp);
+        
+        // 2. Chỉ ghi đè EXP và Level, đéo đụng tới tiền bạc hay dữ liệu khác
+        await userRef.update({
+            exp: newExp,
+            level: newLevel,
+            updatedAt: Date.now()
         });
 
-        // LƯU TẠM SỐ EXP MỚI CHUẨN XÁC, CHUẨN BỊ CHO THANH EXP CHẠY
-        window.finalNewExpToAnimate = finalNewExp; 
-        window.showExpSummary(finalNewLevel);
+        // 3. Đá số ra ngoài cho UI chạy hiệu ứng
+        window.finalNewExpToAnimate = newExp;
+        window.showExpSummary(newLevel);
 
     } catch (err) {
         console.error("Lỗi lưu EXP:", err);
-        // 🔥 FIX DOMINO LỖI: Lỗi mạng hay Firebase chặn thì vẫn phải gán tạm biến này để nút Xác Nhận còn chịu chạy
-        window.finalNewExpToAnimate = Math.max(0, Number(localStorage.getItem('exp') || 0) + window.pendingSessionEXP);
+        // Fallback: Lỡ đứt cáp thì lấy cache ở LocalStorage ra cộng tạm cho UI nó chạy
+        let fallbackExp = Number(localStorage.getItem('exp_cache') || 0) + window.pendingSessionEXP;
+        window.finalNewExpToAnimate = Math.max(0, fallbackExp);
         window.showExpSummary(window.getLevelFromExp(window.finalNewExpToAnimate));
     }
 };
@@ -16729,7 +16724,7 @@ window.closeExpSummary = function() {
         window.finalNewExpToAnimate = undefined;
     }
 
-    // 🔥 CHỐT CHẶN CUỐI CÙNG: Móc lệnh load ví ra ngoài if. Dù mạng lỗi hay thành công thì hễ tắt bảng là TẢI LẠI VÍ NGAY. Khắc phục triệt để lỗi "Không đủ PMC"
+    // CHỐT CHẶN TẢI LẠI VÍ
     loadWalletBalance().catch(()=>{});
 };
 
@@ -16749,6 +16744,10 @@ window.spawnExpEffect = function(isWin) {
 
 window.updateExpBarUI = function(totalExp) {
     const exp = Number(totalExp || 0);
+    
+    // LƯU LUÔN CACHE ĐỂ LỠ RỚT MẠNG CÒN CÓ CÁI MÀ FALLBACK (Trị cái bệnh 0 + 2 = 2)
+    localStorage.setItem('exp_cache', exp);
+    
     let currentLevel = window.getLevelFromExp(exp);
     let expStartOfLevel = window.getTotalExpForLevel(currentLevel);
     let expForNextLevel = currentLevel * 100; 
