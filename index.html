@@ -17331,24 +17331,24 @@ window.handleAdClick = function(slideNumber) {
             break;
     }
 };
-// 🔥 BÙA GẮN TIẾNG CLICK TỐC ĐỘ CAO CHO MỌI THAO TÁC NGOÀI SẢNH
+// 🔥 BÙA GẮN TIẾNG TAP TỐC ĐỘ CAO CHO MỌI THAO TÁC NGOÀI SẢNH
 document.addEventListener("click", function(e) {
-    // 1. Bỏ qua khu vực bàn cờ (vì nhấc quân cờ nó có lệnh kêu riêng rồi)
+    // 1. Bỏ qua khu vực bàn cờ (để quân cờ vẫn kêu cộc cạch riêng)
     if (e.target.closest('.piece') || e.target.closest('#board')) {
         return;
     }
 
-    // 2. Gom CỔ TẤT CẢ các Nút: Nút Cược (stake-chip), Nút Game (game-card), Button...
-    const isClickable = e.target.closest("button, .stake-chip, .desktop-game-card, .mobile-game-card, [id*='btn'], [class*='btn'], .mission-top-tab, .avatar-shop-tab, .menu-item, .close, .top-close, .rank-close, .social-icon, .ad-dot");
+    // 2. Gom CỔ TẤT CẢ các Nút: Nút Cược, Nút Game, Nút Tắt, Menu...
+    const isClickable = e.target.closest("button, .stake-chip, .desktop-game-card, .mobile-game-card, [id*='btn'], [class*='btn'], .mission-top-tab, .avatar-shop-tab, .menu-item, .close, .top-close, .rank-close, .mission-hub-close, .social-icon, .ad-dot");
 
-    // 3. NẾU BẤM TRÚNG -> ĐẺ RA 1 CÁI LOA ẢO ĐỂ PHÁT TIẾNG NGAY LẬP TỨC
+    // 3. NẾU BẤM TRÚNG -> ĐẺ RA 1 CÁI LOA ẢO ĐỂ PHÁT TIẾNG "TAP"
     if (isClickable) {
         if (window.isSfxMuted) return; // Đang tắt âm thanh thì nín
         
-        if (sounds && sounds.click) {
-            // cloneNode() giúp mày bấm 10 phát 1 giây nó vẫn kêu đủ 10 tiếng chồng lên nhau, đéo bị đứt!
-            let amThanhAo = sounds.click.cloneNode(); 
-            amThanhAo.volume = 0.5; // Cho nhỏ lại 50% để nghe cạch cạch vừa tai, ko bị chát
+        if (sounds && sounds.tap) {
+            // Nhân bản âm thanh để bấm đúp 10 cái thì kêu đủ 10 tiếng không bị đứt
+            let amThanhAo = sounds.tap.cloneNode(); 
+            amThanhAo.volume = 1.0; // Tiếng tap UI thường nhỏ nên để max volume 1.0
             amThanhAo.play().catch(() => {});
         }
     }
