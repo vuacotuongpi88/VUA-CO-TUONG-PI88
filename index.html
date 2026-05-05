@@ -10613,15 +10613,7 @@ function safeWalletKeyForPath(walletKey) {
 }
 
 function getSkinBuyerWalletKey() {
-    const currentUser = firebase.auth().currentUser;
-
-    return (
-        currentUser?.uid ||
-        localStorage.getItem("uid") ||
-        localStorage.getItem("walletKey") ||
-        localStorage.getItem("currentUserUid") ||
-        makeWalletDbKey()
-    );
+    return makeWalletDbKey();
 }
 let isBuyingAvatarSkin = false;
 
@@ -12497,13 +12489,7 @@ async function confirmPmcToPiExchange() {
         return;
     }
 
-    const currentUser = firebase.auth().currentUser;
-    const walletKey =
-        currentUser?.uid ||
-        localStorage.getItem("uid") ||
-        localStorage.getItem("walletKey") ||
-        localStorage.getItem("currentUserUid") ||
-        (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "");
+   const walletKey = makeWalletDbKey();
 
     if (!walletKey) {
         alert("Không lấy được mã ví để đổi PMC sang Pi.");
@@ -12891,14 +12877,7 @@ async function confirmStakeSelection() {
     let livePmc = 0;
 
     try {
-        const currentUser = firebase.auth().currentUser;
-        const walletKey =
-            currentUser?.uid ||
-            localStorage.getItem("uid") ||
-            localStorage.getItem("walletKey") ||
-            localStorage.getItem("currentUserUid") ||
-            (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "");
-
+        const walletKey = makeWalletDbKey();
         if (!walletKey) {
             isJoiningStakeRoom = false;
             alert("Không lấy được mã ví người chơi.");
