@@ -16655,7 +16655,7 @@ window.applyPendingExpToDatabase = async function() {
     const userRef = db.ref("wallets/" + walletKey);
     
     try {
-        // 1. Phân loại cộng/trừ để đẩy lệnh an toàn nhất lên Server
+        // 1. GỬI LỆNH CỘNG/TRỪ LÊN FIREBASE (Firebase luôn tính chuẩn 100%)
         if (window.pendingSessionEXP > 0) {
             // Dùng increment: Server tự cộng dồn, qua mặt mọi loại cache sai lệch, ĐÉO bao giờ ghi đè!
             await userRef.update({
@@ -16663,31 +16663,48 @@ window.applyPendingExpToDatabase = async function() {
                 updatedAt: firebase.database.ServerValue.TIMESTAMP
             });
         } else {
-            // Trừ điểm thì đọc số thật trước để ép về 0 nếu bị âm (chống bug EXP âm)
-            const expSnap = await userRef.child('exp').once('value');
-            let realExp = Number(expSnap.val() || 0);
+            // Trừ điểm thì đọc cache nội bộ cho an toàn tránh bị null
+            let realExp = Number(localStorage.getItem('exp_cache') || 0);
             await userRef.update({
                 exp: Math.max(0, realExp + window.pendingSessionEXP),
                 updatedAt: firebase.database.ServerValue.TIMESTAMP
             });
         }
 
-        // 2. CHỜ SERVER LÀM XONG -> KÉO CON SỐ CHUẨN ĐÉT VỀ CHO UI
-        const finalSnap = await userRef.child('exp').once('value');
-        let finalExp = Number(finalSnap.val() || 0);
-        let finalLevel = window.getLevelFromExp(finalExp);
+        // 2. ÉP THẰNG GAME PHẢI CHỜ FIREBASE TÍNH XONG RỒI KÉO SỐ VỀ
+        // (Chống lại cái vụ transaction Lịch Sử ván đấu chạy ngầm làm ẩn cache)
+        let finalExp = 0;
+        let finalLevel = 1;
+        let isServerSynced = false;
 
-        // Cập nhật luôn level mới lên server cho đồng bộ
-        await userRef.update({ level: finalLevel });
+        // Ping liên tục tối đa 5 giây để đợi Firebase nhả con số thật ra
+        for (let i = 0; i < 20; i++) {
+            const snap = await userRef.child('exp').once('value');
+            // snap.exists() là tấm khiên chống lại "khoảng mù" (chống null/undefined)
+            if (snap.exists() && snap.val() !== null) {
+                finalExp = Number(snap.val());
+                isServerSynced = true;
+                break; // Có số thật rồi thì thoát vòng lặp
+            }
+            await new Promise(r => setTimeout(r, 250)); // Đợi 0.25s rồi rình tiếp
+        }
 
-        // 3. Render UI bằng con số thật 100% từ Server
+        // Nếu rớt mạng quá 5 giây thì đành lấy số ảo cộng lên cho Game khỏi hiện 0
+        if (!isServerSynced) {
+            let fallbackExp = Number(localStorage.getItem('exp_cache') || 0) + window.pendingSessionEXP;
+            finalExp = Math.max(0, fallbackExp);
+        }
+
+        finalLevel = window.getLevelFromExp(finalExp);
+        await userRef.update({ level: finalLevel }); // Đồng bộ nốt level lên fire
+
+        // 3. GHI NHẬN SỐ THẬT TỪ FIREBASE ĐỂ VẼ LÊN GAME
         localStorage.setItem('exp_cache', finalExp);
         window.finalNewExpToAnimate = finalExp;
         window.showExpSummary(finalLevel);
 
     } catch (err) {
-        console.error("Lỗi lưu EXP:", err);
-        // Lỡ đứt cáp rớt mạng thì mới xài số ảo chạy tạm cho mượt UI
+        console.error("Lỗi đồng bộ EXP từ Fire:", err);
         let fallbackExp = Number(localStorage.getItem('exp_cache') || 0) + window.pendingSessionEXP;
         window.finalNewExpToAnimate = Math.max(0, fallbackExp);
         window.showExpSummary(window.getLevelFromExp(window.finalNewExpToAnimate));
