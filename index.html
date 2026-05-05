@@ -12053,32 +12053,48 @@ reader.readAsDataURL(event.target.files[0]);
 
 // Dòng 738: Lưu thông tin
 function saveProfile() {
-const newName = document.getElementById("new-username").value;
-const newPhoto = document.getElementById("edit-user-photo").src;
+    const newName = document.getElementById("new-username").value.trim();
+    const newPhoto = document.getElementById("edit-user-photo").src;
 
-document.getElementById("user-name-display").innerText = newName;
-document.getElementById("user-name").innerText = newName;
-document.getElementById("user-photo").src = newPhoto;
-refreshOwnAvatarSkinUI();
+    if (!newName) {
+        alert("Tên không được để trống!");
+        return;
+    }
 
-const oldName = localStorage.getItem("currentUsername") || "ĐẦU TIÊN TV";
-if (newName !== oldName) {
-localStorage.setItem("lastRenameDate", new Date().toISOString());
-localStorage.setItem("currentUsername", newName);
-}
+    // 1. Đổi giao diện
+    document.getElementById("user-name-display").innerText = newName;
+    document.getElementById("user-name").innerText = newName;
+    document.getElementById("user-photo").src = newPhoto;
+    refreshOwnAvatarSkinUI();
 
-ensureFriendProfileSynced().catch(err => console.error("Lỗi sync profile bạn bè:", err));
-bindFriendSystem();
-localStorage.setItem("user-name-display", newName);
-localStorage.setItem("user-photo", newPhoto);
-localStorage.setItem("currentUsername", newName);
+    // 2. Chặn đổi tên liên tục 30 ngày
+    const oldName = localStorage.getItem("currentUsername") || "ĐẦU TIÊN TV";
+    if (newName !== oldName) {
+        localStorage.setItem("lastRenameDate", new Date().toISOString());
+        localStorage.setItem("currentUsername", newName);
+    }
 
-ensureFriendProfileSynced()
-    .then(() => bindFriendSystem())
-    .catch(err => console.error("Lỗi sync profile bạn bè:", err));
-    
-alert("Cập nhật hồ sơ thành công!");
-closeEditProfile();
+    // 3. Cập nhật Local Storage
+    localStorage.setItem("user-name-display", newName);
+    localStorage.setItem("user-photo", newPhoto);
+
+    // 4. 🔥 ÉP GHI THẲNG TÊN MỚI LÊN FIREBASE TẠI ĐÂY (Chống F5 mất tên)
+    const walletKey = makeWalletDbKey();
+    db.ref("wallets/" + walletKey).update({
+        name: newName,
+        photo: newPhoto,
+        username: newName,
+        usernameNorm: normalizeFriendName(newName),
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+    });
+
+    // 5. Cập nhật hệ thống bạn bè
+    ensureFriendProfileSynced()
+        .then(() => bindFriendSystem())
+        .catch(err => console.error("Lỗi sync profile bạn bè:", err));
+        
+    alert("Cập nhật hồ sơ thành công!");
+    closeEditProfile();
 }
 function openChat() {
     document.querySelectorAll(".profile-menu").forEach(m => {
@@ -14499,8 +14515,8 @@ async function ensureFriendProfileSynced() {
     const me = getCurrentFriendProfile();
 
     await walletRef().update({
-        name: me.displayName,
-        photo: me.photo,
+        // XÓA DÒNG name: me.displayName
+        // XÓA DÒNG photo: me.photo
         username: me.username,
         usernameNorm: me.usernameNorm,
         walletKey: me.walletKey,
