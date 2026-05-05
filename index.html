@@ -8828,62 +8828,43 @@ async function hasStatsV2History(walletKey, roundId) {
     }
 }
 
-// ===== FIREBASE TRANSACTION CHUẨN V4 =====
-// Đã fix lỗi reset về 1 khi reload app (KHÔNG HỦY TRANSACTION KHI NULL)
-async function applyStatsV2WalletOnce(walletKey, result, role) {
+window.applyStatsV2WalletOnce = async function(walletKey, result, role) {
     walletKey = String(walletKey || "").trim();
     if (!walletKey || !result?.roundId) return false;
 
     const walletRef = db.ref("wallets/" + walletKey);
-    const now = Date.now();
     const monthKey = new Date().toISOString().slice(0, 7); // YYYY-MM
     const isWin = (role === "winner");
     const reason = result.reason || "";
     const roomId = result.roomId || "";
 
-    let applied = false;
-
-    await walletRef.transaction((wallet) => {
-        // 🔥 FIX TRÍ MẠNG Ở ĐÂY: Không return nếu null, phải khởi tạo object để Firebase chịu lưu lên server
-        wallet = wallet || {};
-
-        // 1. INIT CẤU TRÚC
-        wallet.statsV2 = wallet.statsV2 || {};
-        wallet.statsByMonth = wallet.statsByMonth || {};
-        wallet.matchHistoryV2 = wallet.matchHistoryV2 || {};
-
-        // 2. CHỐNG CỘNG TRÙNG VÁN (Firebase nháy lệnh 2 lần cũng không bị +2 ảo)
-        if (wallet.matchHistoryV2[result.roundId]) {
-            return; // Ván này đã ghi rồi, thoát an toàn
+    try {
+        // 1. CHỐNG CỘNG TRÙNG VÁN: Kiểm tra xem ván này đã lưu chưa
+        const historySnap = await walletRef.child(`matchHistoryV2/${result.roundId}`).once("value");
+        if (historySnap.exists()) {
+            return true; // Đã lưu rồi thì cút, an toàn 100%
         }
 
-        // Đồng bộ cả 2 trường wins và totalWins để UI cũ/mới đều đọc đúng
-        const currentWins = Math.max(wallet.statsV2.wins || 0, wallet.statsV2.totalWins || 0);
-        const currentLosses = Math.max(wallet.statsV2.losses || 0, wallet.statsV2.totalLosses || 0);
-        const currentMatches = Math.max(wallet.statsV2.matches || 0, wallet.statsV2.totalMatches || 0, currentWins + currentLosses);
+        const updates = {};
 
-        if (!wallet.statsByMonth[monthKey]) {
-            wallet.statsByMonth[monthKey] = { wins: 0, losses: 0, matches: 0, updatedAt: now };
-        }
-        const month = wallet.statsByMonth[monthKey];
-
-        // 3. CỘNG DỒN (+1) CHUẨN XÁC
-        wallet.statsV2.matches = currentMatches + 1;
-        wallet.statsV2.totalMatches = currentMatches + 1;
-        month.matches += 1;
+        // 2. CỘNG DỒN (+1) CHUẨN XÁC BẰNG LỆNH MÁY CHỦ
+        // (Cách này bảo toàn 100% PMC và EXP, đéo bao giờ bị ghi đè hay tạo khoảng mù)
+        updates[`statsV2/matches`] = firebase.database.ServerValue.increment(1);
+        updates[`statsV2/totalMatches`] = firebase.database.ServerValue.increment(1);
+        updates[`statsByMonth/${monthKey}/matches`] = firebase.database.ServerValue.increment(1);
 
         if (isWin) {
-            wallet.statsV2.wins = currentWins + 1;
-            wallet.statsV2.totalWins = currentWins + 1;
-            month.wins += 1;
+            updates[`statsV2/wins`] = firebase.database.ServerValue.increment(1);
+            updates[`statsV2/totalWins`] = firebase.database.ServerValue.increment(1);
+            updates[`statsByMonth/${monthKey}/wins`] = firebase.database.ServerValue.increment(1);
         } else {
-            wallet.statsV2.losses = currentLosses + 1;
-            wallet.statsV2.totalLosses = currentLosses + 1;
-            month.losses += 1;
+            updates[`statsV2/losses`] = firebase.database.ServerValue.increment(1);
+            updates[`statsV2/totalLosses`] = firebase.database.ServerValue.increment(1);
+            updates[`statsByMonth/${monthKey}/losses`] = firebase.database.ServerValue.increment(1);
         }
 
-        // 4. LƯU LỊCH SỬ VÁN ĐỂ THEO DÕI
-        wallet.matchHistoryV2[result.roundId] = {
+        // 3. LƯU LỊCH SỬ VÁN ĐỂ THEO DÕI
+        updates[`matchHistoryV2/${result.roundId}`] = {
             roomId: roomId,
             result: isWin ? "win" : "loss",
             role: role,
@@ -8891,28 +8872,29 @@ async function applyStatsV2WalletOnce(walletKey, result, role) {
             opponentWalletKey: isWin ? result.loserWalletKey : result.winnerWalletKey,
             mode: result.mode || "co-tuong",
             stakePMC: result.stakePMC || 0,
-            at: now
+            at: firebase.database.ServerValue.TIMESTAMP
         };
 
-        // 5. CẬP NHẬT TRẠNG THÁI CUỐI
-        wallet.statsV2.updatedAt = now;
-        month.updatedAt = now;
-        wallet.statsV2.monthKey = monthKey;
+        // 4. CẬP NHẬT TRẠNG THÁI CUỐI
+        updates[`statsV2/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+        updates[`statsByMonth/${monthKey}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+        updates[`statsV2/monthKey`] = monthKey;
 
-        wallet.statsV2.lastResult = isWin ? "win" : "loss";
-        wallet.statsV2.lastReason = reason;
-        wallet.statsV2.lastRoomId = roomId;
-        wallet.statsV2.lastRoundId = result.roundId;
-        wallet.statsV2.source = "transaction_fixed_v4";
+        updates[`statsV2/lastResult`] = isWin ? "win" : "loss";
+        updates[`statsV2/lastReason`] = reason;
+        updates[`statsV2/lastRoomId`] = roomId;
+        updates[`statsV2/lastRoundId`] = result.roundId;
+        updates[`statsV2/source`] = "update_fixed_v5_no_blind_spot";
 
-        applied = true;
-        
-        // Trả về dữ liệu để Firebase lock và đẩy lên database
-        return wallet; 
-    });
+        // VẢ LỆNH LÊN FIREBASE (Chỉ cập nhật đúng nhánh stats, đéo đụng chạm tới PMC)
+        await walletRef.update(updates);
+        return true;
 
-    return applied;
-}
+    } catch (err) {
+        console.error("Lỗi cập nhật statsV2:", err);
+        return false;
+    }
+};
 
 async function commitStatsV2FromRoundRoomOnce(room, roomId = currentRoomId) {
     try {
