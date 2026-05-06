@@ -5522,6 +5522,13 @@ margin-bottom: 14px;
     box-shadow: 0 0 6px #55efc4;
     width: 16px;
 }
+/* --- HIỆU ỨNG VÒNG LỬA BAO QUANH TƯỚNG --- */
+.dragon-attack {
+    position: absolute; /* ĐỔI THÀNH ABSOLUTE ĐỂ BÁM VÀO BÀN CỜ */
+    z-index: 99999;
+    pointer-events: none;
+    mix-blend-mode: screen; 
+}
 /* --- HIỆU ỨNG NỔ BÙM KHI RỒNG CHẠM TƯỚNG --- */
 .dragon-explosion {
     position: fixed;
@@ -7858,8 +7865,7 @@ for (let i = 1; i <= SO_LUONG_ANH; i++) {
     img.src = `images/ezgif-frame-${padNumber(i)}-removebg-preview.png`; 
     danhSachAnhRong.push(img);
 }
-
-// HÀM TRIỆU HỒI VÒNG LỬA (ĐÃ FIX LỖI LỆCH TÂM)
+// HÀM TRIỆU HỒI VÒNG LỬA (BẢN CHỐNG LỆCH TỌA ĐỘ TRÊN MOBILE)
 function spawnDragonAttack(kingElement) {
     const dragon = document.createElement('img');
     let currentFrame = 0;
@@ -7867,50 +7873,48 @@ function spawnDragonAttack(kingElement) {
     dragon.src = danhSachAnhRong[currentFrame].src; 
     dragon.className = 'dragon-attack';
 
-    // Động cơ lật ảnh (35ms/frame cho mượt)
+    // Động cơ lật ảnh 
     const lapAnh = setInterval(() => {
         currentFrame++;
         if (currentFrame >= SO_LUONG_ANH) currentFrame = 0; 
         dragon.src = danhSachAnhRong[currentFrame].src; 
     }, 35); 
 
-    // TỌA ĐỘ TÂM CỦA CON TƯỚNG BỊ CHIẾU
-    const rect = kingElement.getBoundingClientRect();
-    const targetX = rect.left + rect.width / 2;
-    const targetY = rect.top + rect.height / 2;
+    // 🔥 CHÔM TRỰC TIẾP TỌA ĐỘ % CỦA CON TƯỚNG (Không xài getBoundingClientRect nữa)
+    const toaDoX = kingElement.style.left;
+    const toaDoY = kingElement.style.top;
 
-    // KÍCH THƯỚC VÒNG LỬA: Chỉnh 140px để ôm vừa vặn con cờ
     dragon.style.width = '140px'; 
     
-    // GẮN THẲNG VÀO GIỮA TÂM
-    dragon.style.left = targetX + 'px';
-    dragon.style.top = targetY + 'px';
+    // Gắn cứng vào đúng vị trí % đó
+    dragon.style.left = toaDoX;
+    dragon.style.top = toaDoY;
     
-    // 🔥 LỖI Ở ĐÂY NÈ: Hồi nãy mầy làm rớt cái translate(-50%, -50%) của tao!
-    // Phải có nó thì tâm vòng tròn lửa mới trùng với tâm của con tướng được.
+    // Đã có translate(-50%, -50%) để tâm vòng lửa trùng tâm con tướng
     dragon.style.transform = `translate(-50%, -50%) scale(0.1)`;
-    dragon.style.transition = 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'; // Hiệu ứng bung nở
+    dragon.style.transition = 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'; 
     
-    document.body.appendChild(dragon);
+    // ÉP VÒNG LỬA CHUI VÀO TRONG BÀN CỜ 
+    const boardNode = document.getElementById('board');
+    boardNode.appendChild(dragon);
 
-    // Bung to ra kích thước thật (VẪN PHẢI GIỮ TRANSLATE)
     setTimeout(() => {
         dragon.style.transform = `translate(-50%, -50%) scale(1)`;
     }, 50);
 
     // KẾT THÚC VÀ NỔ BÙM
     setTimeout(() => {
-        clearInterval(lapAnh); // Tắt vỗ cánh
-        dragon.remove();       // Xóa vòng lửa
+        clearInterval(lapAnh); 
+        dragon.remove();       
         
-        // Nổ bùm
+        // Căn vụ nổ theo đúng % của bàn cờ
         const explosion = document.createElement('div');
         explosion.className = 'dragon-explosion';
-        explosion.style.left = targetX + 'px';
-        explosion.style.top = targetY + 'px';
-        document.body.appendChild(explosion);
+        explosion.style.position = 'absolute'; // Ép thành absolute
+        explosion.style.left = toaDoX;
+        explosion.style.top = toaDoY;
+        boardNode.appendChild(explosion);
 
-        // Rung màn hình
         document.body.style.animation = "shakeScreen 0.4s ease-in-out";
         
         setTimeout(() => {
@@ -7918,7 +7922,7 @@ function spawnDragonAttack(kingElement) {
             explosion.remove();
         }, 400);
 
-    }, 2800); // Tồn tại 2.8 giây rồi nổ
+    }, 2800); 
 }
 function laBiChieu(side, mt) {
 let tPos = null;
