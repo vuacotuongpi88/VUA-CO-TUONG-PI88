@@ -17673,6 +17673,19 @@ chargeStakeForReady = async function(roomId, side) {
 // ===============================================
 // HÀM ĐỘNG CƠ CHIẾU PHIM TỰ ĐỘNG ĐỌC MÃ RƯƠNG VÀ SỐ FRAME
 // ===============================================
+
+// BÙA TẢI TRƯỚC 193 ẢNH VÀO RAM ĐỂ LẬT NHƯ LẬT SÁCH (CHỐNG GIẬT LAG)
+const cacheAnhRuong = {};
+LEVEL_MILESTONES.forEach(m => {
+    cacheAnhRuong[m.chestPrefix] = [];
+    for (let i = 1; i <= m.frameCount; i++) {
+        let img = new Image();
+        // Tự động pad thêm số 0 cho mượt (01, 02... 30)
+        img.src = `images/ruong_${m.chestPrefix}_${i.toString().padStart(2, '0')}.png`;
+        cacheAnhRuong[m.chestPrefix].push(img);
+    }
+});
+
 function playChestOpeningAnimation(chestPrefix, frameCount, onCompleteCallback) {
      let overlay = document.getElementById("chest-anim-overlay");
      if (!overlay) {
@@ -17681,19 +17694,20 @@ function playChestOpeningAnimation(chestPrefix, frameCount, onCompleteCallback) 
          document.body.appendChild(overlay);
      }
      
-     const pad = (num) => num.toString().padStart(2, '0');
+     // Lấy nguyên cục ảnh đã tải sẵn trong RAM của rương này ra
+     const mangAnh = cacheAnhRuong[chestPrefix];
      
-     // Nạp tấm số 01 của đúng loại rương đó vào
-     overlay.innerHTML = `<img id="chest-anim-img" class="chest-anim-sprite" src="images/ruong_${chestPrefix}_01.png">`;
+     // Nạp tấm số 01
+     overlay.innerHTML = `<img id="chest-anim-img" class="chest-anim-sprite" src="${mangAnh[0].src}">`;
      overlay.style.display = "flex";
 
-     // Phát tiếng cót két (Nhớ tải file chest_open.mp3 quăng vào folder sounds nha mậy)
+     // Phát tiếng cót két
      if (typeof playSnd === 'function') playSnd('chest_open');
 
      let currentFrame = 1;
      const imgEl = document.getElementById("chest-anim-img");
 
-     // Tốc độ lật ảnh 40ms/khung hình (cực mượt)
+     // Tốc độ lật ảnh 40ms/khung hình (cực mượt vì ảnh đã ở sẵn trong RAM)
      const timer = setInterval(() => {
          currentFrame++;
          
@@ -17712,7 +17726,8 @@ function playChestOpeningAnimation(chestPrefix, frameCount, onCompleteCallback) 
              if(typeof onCompleteCallback === 'function') onCompleteCallback();
              
          } else {
-             imgEl.src = `images/ruong_${chestPrefix}_${pad(currentFrame)}.png`;
+             // Móc ảnh từ mảng RAM ra gắn vào (trừ 1 vì mảng bắt đầu từ 0)
+             imgEl.src = mangAnh[currentFrame - 1].src;
          }
      }, 40); 
 }
