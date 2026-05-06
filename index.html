@@ -4419,6 +4419,12 @@ margin-bottom: 14px;
         font-size: 9px !important;
     }
 }
+.player-balance-ticket {
+    color: #ff9f43 !important;
+    border: 1px solid rgba(255, 159, 67, 0.85) !important;
+    background: linear-gradient(180deg, rgba(64, 40, 10, 0.95), rgba(30, 20, 5, 0.95)) !important;
+    box-shadow: 0 0 10px rgba(255, 159, 67, 0.14) !important;
+}
 /* KHÓA UI AVATAR + ĐỒNG HỒ THEO 2 GÓC BÀN CỜ */
 .board-side {
     width: min(92vw, 460px) !important;
@@ -6132,6 +6138,8 @@ margin-bottom: 14px;
             <div class="player-balance-row">
                 <div id="player-den-pi-balance" class="player-balance-box player-balance-pi">0.00 π</div>
                 <div id="player-den-pmc-balance" class="player-balance-box player-balance-pmc">0 PMC</div>
+                <!-- THÊM Ô VÉ BÊN ĐEN -->
+                <div id="player-den-ticket-balance" class="player-balance-box player-balance-ticket">0 🎫</div>
             </div>
 
             <div id="player-den-invite" class="player-invite-code"></div>
@@ -6179,6 +6187,8 @@ margin-bottom: 14px;
             <div class="player-balance-row">
                 <div id="player-do-pi-balance" class="player-balance-box player-balance-pi">0.00 π</div>
                 <div id="player-do-pmc-balance" class="player-balance-box player-balance-pmc">0 PMC</div>
+                <!-- THÊM Ô VÉ BÊN ĐỎ -->
+                <div id="player-do-ticket-balance" class="player-balance-box player-balance-ticket">0 🎫</div>
             </div>
 
             <div id="player-do-invite" class="player-invite-code"></div>
@@ -6359,6 +6369,10 @@ margin-bottom: 14px;
 
         <div style="font-size:13px; color:#dfe6e9;">
             Số dư PMC hiện có: <b id="stake-pmc-now" style="color:#7dffb3;">0 PMC</b>
+        </div>
+        <!-- THÊM DÒNG NÀY ĐỂ HIỆN SỐ VÉ -->
+        <div style="font-size:13px; color:#dfe6e9; margin-top:4px;">
+            Lượt đánh miễn phí: <b id="stake-ticket-now" style="color:#ff9f43;">0 🎫</b>
         </div>
 
         <div class="stake-grid">
@@ -17475,6 +17489,82 @@ document.addEventListener("click", function(e) {
         }
     }
 });
+// ==========================================
+// HỆ THỐNG ĐỒNG BỘ VÉ MIỄN PHÍ LÊN GIAO DIỆN
+// ==========================================
+window.currentFreeTickets = 0;
+
+function updateTicketUI(amount) {
+    const safeAmount = Math.max(0, Math.floor(Number(amount) || 0));
+    window.currentFreeTickets = safeAmount;
+    
+    // Cập nhật bảng Cược
+    const stakeTicketEl = document.getElementById("stake-ticket-now");
+    if (stakeTicketEl) stakeTicketEl.innerText = safeAmount + " 🎫";
+    
+    // Cập nhật trong phòng (phe của mình)
+    const myTicketBox = document.getElementById(`player-${mySide}-ticket-balance`);
+    if (myTicketBox) myTicketBox.innerText = safeAmount + " 🎫";
+}
+
+// Gắn ké vào hàm tải ví để load luôn vé
+const oldLoadWalletBalance = loadWalletBalance;
+loadWalletBalance = async function() {
+    const res = await oldLoadWalletBalance();
+    try {
+        const snap = await db.ref("wallets/" + makeWalletDbKey()).once("value");
+        const data = snap.val() || {};
+        updateTicketUI(data.freeTickets || 0);
+    } catch(e){}
+    return res;
+};
+
+// Gắn ké vào hàm mở bảng cược để cập nhật mới nhất
+const oldOpenStakeRoomModal = openStakeRoomModal;
+openStakeRoomModal = function(mode) {
+    oldOpenStakeRoomModal(mode);
+    const stakeTicketEl = document.getElementById("stake-ticket-now");
+    if (stakeTicketEl) stakeTicketEl.innerText = window.currentFreeTickets + " 🎫";
+};
+
+// Ép hàm xuất Profile đưa luôn số vé vào phòng
+const oldGetCurrentPlayerProfile = getCurrentPlayerProfile;
+getCurrentPlayerProfile = function() {
+    let p = oldGetCurrentPlayerProfile();
+    p.freeTickets = window.currentFreeTickets;
+    return p;
+};
+
+// Hiển thị vé của đối thủ trong phòng cờ
+const oldRenderPlayersFromRoom = renderPlayersFromRoom;
+renderPlayersFromRoom = function(room) {
+    oldRenderPlayersFromRoom(room);
+    
+    const safeMySide = getMySideFromRoomSafe(room) || mySide || "do";
+    const oppSide = safeMySide === "den" ? "do" : "den";
+    const oppPlayer = room?.players?.[oppSide] || {};
+    
+    const oppTicketBox = document.getElementById(`player-${oppSide}-ticket-balance`);
+    if (oppTicketBox) {
+        oppTicketBox.innerText = Math.max(0, Math.floor(Number(oppPlayer.freeTickets) || 0)) + " 🎫";
+    }
+    
+    const myTicketBox = document.getElementById(`player-${safeMySide}-ticket-balance`);
+    if (myTicketBox) {
+        myTicketBox.innerText = window.currentFreeTickets + " 🎫";
+    }
+};
+
+// Ép tải lại ví (để tải lại số vé) khi bị trừ tiền / dùng vé trong hàm chargeStakeForReady
+const oldChargeStakeForReady = chargeStakeForReady;
+chargeStakeForReady = async function(roomId, side) {
+    const res = await oldChargeStakeForReady(roomId, side);
+    // Nếu dùng thẻ / PMC thành công -> Load lại ví để cập nhật UI ngay lập tức
+    if (res.ok) {
+        await loadWalletBalance();
+    }
+    return res;
+};
 </script>
 <!-- BẢNG ĐẾM NGƯỢC CHỜ 5 GIÂY (CHỐNG LAG FIREBASE) -->
 <div id="exit-countdown-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:99999; align-items:center; justify-content:center; backdrop-filter:blur(5px);">
