@@ -7886,7 +7886,7 @@ for (let i = 1; i <= SO_LUONG_ANH; i++) {
     danhSachAnhRong.push(img);
 }
 
-// HÀM TRIỆU HỒI RỒNG BAY UỐN LƯỢN ĐỈNH CAO (FIX CHUẨN TỌA ĐỘ MOBILE)
+// HÀM TRIỆU HỒI RỒNG BAY UỐN LƯỢN ĐỈNH CAO (BẢN UPDATE V3: ÁP SÁT MẶT TƯỚNG)
 function spawnDragonAttack(kingElement) {
     const dragon = document.createElement('img');
     let currentFrame = 0;
@@ -7894,7 +7894,7 @@ function spawnDragonAttack(kingElement) {
     dragon.src = danhSachAnhRong[currentFrame].src; 
     dragon.className = 'dragon-attack';
 
-    // Động cơ vỗ cánh (Lật ảnh mỗi 40 mili-giây)
+    // Động cơ vỗ cánh (Lật ảnh mỗi 40 mili-giây -> Đập cánh nhịp nhàng)
     const lapAnh = setInterval(() => {
         currentFrame++;
         if (currentFrame >= SO_LUONG_ANH) currentFrame = 0; 
@@ -7906,41 +7906,42 @@ function spawnDragonAttack(kingElement) {
     const targetX = rect.left + rect.width / 2;
     const targetY = rect.top + rect.height / 2;
 
-    // 🔥 VỊ TRÍ LƠ LỬNG: Căn chính giữa, xích lên trên đầu ĐÚNG 50px để không văng khỏi bàn cờ
+    // 🔥 VỊ TRÍ LƠ LỬNG: Đã xích xuống sát rạt, chỉ cách mục tiêu 20px 
     const hoverX = targetX;
-    const hoverY = targetY - 50;
+    const hoverY = targetY - 20;
 
     // --- GIAI ĐOẠN 1: LAO TỪ CHÍN TẦNG MÂY XUỐNG ---
-    dragon.style.width = '160px'; // Thu nhỏ rồng lại cho vừa vặn màn hình điện thoại
+    dragon.style.width = '200px'; 
     dragon.style.left = hoverX + 'px';
     dragon.style.top = (hoverY - 400) + 'px'; 
     
+    // Ép nó xoay 180 độ cắm đầu xuống đất
     dragon.style.transform = `translate(-50%, -50%) scale(0.1) rotate(180deg)`;
     
     document.body.appendChild(dragon);
 
     setTimeout(() => {
         // Rồng bay phanh gấp lại ngay trên đỉnh đầu con Tướng
-        dragon.style.transition = 'all 0.7s cubic-bezier(0.25, 1, 0.5, 1)'; 
+        dragon.style.transition = 'all 0.8s cubic-bezier(0.25, 1, 0.5, 1)'; 
         dragon.style.top = hoverY + 'px';
-        dragon.style.transform = `translate(-50%, -50%) scale(1) rotate(180deg)`; // Để scale(1) vừa vặn
+        dragon.style.transform = `translate(-50%, -50%) scale(1.3) rotate(180deg)`;
     }, 50);
 
-    // --- GIAI ĐOẠN 2: LƯỢN LỜ HÙ DỌA DẬP DỀNH ---
+    // --- GIAI ĐOẠN 2: LƯỢN LỜ HÙ DỌA (Áp sát mặt) ---
     setTimeout(() => {
         // Lên xuống nhẹ nhàng trên đầu con tướng
         dragon.style.transition = 'all 1.6s ease-in-out';
-        dragon.style.top = (hoverY - 20) + 'px';
-    }, 750);
+        dragon.style.top = (hoverY - 15) + 'px';
+    }, 850);
 
     // --- GIAI ĐOẠN 3: CẮM ĐẦU PHẬP XUỐNG TƯỚNG ---
     setTimeout(() => {
-        dragon.style.transition = 'all 0.2s ease-in'; // Cắm phập cực lẹ dứt khoát
+        dragon.style.transition = 'all 0.25s ease-in'; 
         
         dragon.style.left = targetX + 'px';
         dragon.style.top = targetY + 'px';
-        dragon.style.transform = `translate(-50%, -50%) scale(0.6) rotate(180deg)`;
-    }, 2600); // Giữ lơ lửng khè lửa đủ lâu rồi mới cắm
+        dragon.style.transform = `translate(-50%, -50%) scale(0.7) rotate(180deg)`;
+    }, 2800); 
 
     // --- GIAI ĐOẠN 4: CHẠM ĐÍCH VÀ NỔ BÙM ---
     setTimeout(() => {
@@ -7962,7 +7963,7 @@ function spawnDragonAttack(kingElement) {
             explosion.remove();
         }, 400);
 
-    }, 2800); 
+    }, 3050); // Khớp chính xác giờ nổ
 }
 function laBiChieu(side, mt) {
 let tPos = null;
