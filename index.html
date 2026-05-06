@@ -5566,6 +5566,35 @@ margin-bottom: 14px;
     80% { transform: translate(2px, 1px) rotate(1deg); }
     100% { transform: translate(0px, 0px) rotate(0deg); }
 }
+/* --- HIỆU ỨNG POPUP MỞ RƯƠNG VIP --- */
+#chest-reward-overlay {
+    position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85);
+    z-index: 99999; display: none; align-items: center; justify-content: center;
+    backdrop-filter: blur(8px);
+}
+.chest-reward-box {
+    background: linear-gradient(180deg, #1f1f1f, #0a0a0a);
+    border: 2px solid #f4c542; border-radius: 20px;
+    padding: 20px 25px 25px; width: min(88vw, 340px); text-align: center;
+    box-shadow: 0 0 40px rgba(244, 197, 66, 0.3);
+    animation: chestPopIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+.chest-reward-title {
+    color: #f4c542; font-size: 24px; font-weight: 900; margin-bottom: 15px;
+    text-shadow: 0 0 15px rgba(244, 197, 66, 0.8); letter-spacing: 1px;
+}
+.chest-item-row {
+    display: flex; align-items: center; justify-content: flex-start; gap: 12px;
+    background: rgba(255, 255, 255, 0.05); padding: 10px 12px; border-radius: 12px;
+    margin-bottom: 10px; border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.chest-item-val {
+    color: #7dffb3; font-size: 18px; font-weight: bold; text-align: left; line-height: 1.2;
+}
+@keyframes chestPopIn {
+    0% { transform: scale(0.5); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -17088,9 +17117,74 @@ async function claimLevelChest(targetLevel, btnElement) {
         return current;
     });
 
-    // Mở rương thành công thì báo chớp nháy
-    alert(`🎉 MỞ RƯƠNG THÀNH CÔNG!\n\nBạn nhận được: ${rewardPMC} PMC\n🎫 Được tặng thêm: ${milestone.tickets} Lượt Đánh Miễn Phí${milestone.skinId ? `\n🎁 Kèm theo Skin: ${milestone.name} (Đã thêm vào mục Hồ Sơ)` : ''}`);
-    // Cập nhật lại ví ở màn hình chính và tải lại bảng rương
+    // (Bên trong hàm claimLevelChest, đoạn cuối cùng)
+    
+    // --- XÓA CÁI ALERT CŨ ĐI, DÁN ĐOẠN NÀY VÀO ---
+    
+    // Bật tiếng Win cho sướng tai
+    if (typeof playSnd === 'function') playSnd('win');
+    
+    // Tạo bảng thông báo VIP nếu chưa có
+    let overlay = document.getElementById("chest-reward-overlay");
+    if (!overlay) {
+        overlay = document.createElement("div");
+        overlay.id = "chest-reward-overlay";
+        document.body.appendChild(overlay);
+    }
+
+    // Đổ Skin vào nếu có
+    let skinHtml = "";
+    if (milestone.skinId) {
+        skinHtml = `
+            <div class="chest-item-row" style="border-color: #ff3bd4; box-shadow: inset 0 0 10px rgba(255, 59, 212, 0.2);">
+                <div style="font-size: 28px;">🎁</div>
+                <div class="chest-item-val" style="color: #ffb7f0;">
+                    <span style="font-size: 11px; color: #dfe6e9;">Đã mở khóa Skin:</span><br>
+                    ${milestone.name}
+                </div>
+            </div>
+        `;
+    }
+
+    // Đổ HTML hiển thị ra
+    overlay.innerHTML = `
+        <div class="chest-reward-box">
+            <img src="${milestone.chestImage}" style="width: 120px; height: 120px; object-fit: contain; filter: drop-shadow(0 0 25px ${milestone.shadow || '#f4c542'}); margin-bottom: -15px; animation: chestReadyPulse 1s infinite alternate;">
+            
+            <div class="chest-reward-title">MỞ RƯƠNG THÀNH CÔNG!</div>
+            
+            <div class="chest-item-row" style="border-color: #55efc4;">
+                <div style="font-size: 28px;">💎</div>
+                <div class="chest-item-val">
+                    <span style="font-size: 11px; color: #dfe6e9;">Nhận được:</span><br>
+                    +${rewardPMC.toLocaleString('vi-VN')} PMC
+                </div>
+            </div>
+
+            ${milestone.tickets ? `
+            <div class="chest-item-row" style="border-color: #ff9f43;">
+                <div style="font-size: 28px;">🎫</div>
+                <div class="chest-item-val" style="color: #ff9f43;">
+                    <span style="font-size: 11px; color: #dfe6e9;">Tặng kèm:</span><br>
+                    +${milestone.tickets} Lượt Miễn Phí
+                </div>
+            </div>
+            ` : ''}
+
+            ${skinHtml}
+
+            <button onclick="document.getElementById('chest-reward-overlay').style.display='none'" style="margin-top: 15px; width: 100%; padding: 12px; border-radius: 12px; background: linear-gradient(180deg, #f1c40f, #e67e22); color: #000; font-size: 16px; font-weight: 900; border: none; cursor: pointer; box-shadow: 0 4px 15px rgba(241, 196, 15, 0.4);">TUYỆT VỜI</button>
+        </div>
+    `;
+    
+    // Rung màn hình 1 phát cho bạo lực
+    document.body.style.animation = "shakeScreen 0.4s ease-in-out";
+    setTimeout(() => document.body.style.animation = "", 400);
+
+    // Bật bảng lên
+    overlay.style.display = "flex";
+
+    // Cập nhật lại ví ở màn hình chính và tải lại bảng rương (Đoạn cũ giữ nguyên)
     loadWalletBalance();
     renderLevelRewards();
 }
