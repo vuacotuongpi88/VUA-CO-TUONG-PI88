@@ -5522,13 +5522,31 @@ margin-bottom: 14px;
     box-shadow: 0 0 6px #55efc4;
     width: 16px;
 }
-/* --- HIỆU ỨNG RỒNG LAO XUỐNG --- */
+/* --- HIỆU ỨNG RỒNG CÓ HÀO QUANG LỬA BAO QUANH --- */
 .dragon-attack {
     position: fixed;
     z-index: 99999;
     pointer-events: none;
-    /* ĐÃ XÓA TRANSITION Ở ĐÂY ĐỂ JS ĐIỀU KHIỂN BAY LƯỢN CHUẨN HƠN */
-    filter: drop-shadow(0 0 20px #ff3bd4) drop-shadow(0 0 30px #d63031);
+    mix-blend-mode: screen; /* Giữ bùa tàng hình nền đen */
+    
+    /* Gắn động cơ chớp tắt lửa: 0.15 giây chớp 1 lần tạo cảm giác rực cháy */
+    animation: rongKhacLua 0.15s infinite alternate;
+}
+
+/* --- BÙA TẠO ÁNH SÁNG ĐỎ - CAM - VÀNG PHẬP PHỒNG --- */
+@keyframes rongKhacLua {
+    0% {
+        /* Lửa đỏ rực, độ sáng bình thường */
+        filter: drop-shadow(0 0 15px #e17055) drop-shadow(0 0 30px #d63031) brightness(1);
+    }
+    50% {
+        /* Lửa bùng lên cam vàng chói lóa, rồng sáng rực lên (brightness 1.4) */
+        filter: drop-shadow(0 0 30px #fdcb6e) drop-shadow(0 0 60px #e17055) brightness(1.4);
+    }
+    100% {
+        /* Lửa dịu lại một chút */
+        filter: drop-shadow(0 0 20px #ff7675) drop-shadow(0 0 45px #d63031) brightness(1.2);
+    }
 }
 /* --- HIỆU ỨNG NỔ BÙM KHI RỒNG CHẠM TƯỚNG --- */
 .dragon-explosion {
