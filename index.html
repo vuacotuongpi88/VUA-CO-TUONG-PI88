@@ -7859,7 +7859,7 @@ for (let i = 1; i <= SO_LUONG_ANH; i++) {
     danhSachAnhRong.push(img);
 }
 
-// HÀM TRIỆU HỒI VÒNG LỬA (CĂN CHÍNH GIỮA TÂM 100%)
+// HÀM TRIỆU HỒI VÒNG LỬA (ĐÃ FIX LỖI LỆCH TÂM)
 function spawnDragonAttack(kingElement) {
     const dragon = document.createElement('img');
     let currentFrame = 0;
@@ -7882,17 +7882,18 @@ function spawnDragonAttack(kingElement) {
     // KÍCH THƯỚC VÒNG LỬA: Chỉnh 140px để ôm vừa vặn con cờ
     dragon.style.width = '140px'; 
     
-    // GẮN THẲNG VÀO GIỮA TÂM (Không trừ hao Y nữa, không lộn ngược rotate 180 nữa)
+    // GẮN THẲNG VÀO GIỮA TÂM
     dragon.style.left = targetX + 'px';
     dragon.style.top = targetY + 'px';
     
-    // Hiệu ứng xuất hiện: Từ nhỏ xíu bung to ra
+    // 🔥 LỖI Ở ĐÂY NÈ: Hồi nãy mầy làm rớt cái translate(-50%, -50%) của tao!
+    // Phải có nó thì tâm vòng tròn lửa mới trùng với tâm của con tướng được.
     dragon.style.transform = `translate(-50%, -50%) scale(0.1)`;
-    dragon.style.transition = 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'; // Hiệu ứng bung nở nảy nảy
+    dragon.style.transition = 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'; // Hiệu ứng bung nở
     
     document.body.appendChild(dragon);
 
-    // Bung to ra kích thước thật
+    // Bung to ra kích thước thật (VẪN PHẢI GIỮ TRANSLATE)
     setTimeout(() => {
         dragon.style.transform = `translate(-50%, -50%) scale(1)`;
     }, 50);
