@@ -16920,13 +16920,12 @@ function updateExpBarUI(totalExp) {
 const LEVEL_MILESTONES = [
     { level: 10, name: 'Rương Đồng', desc: 'Ngẫu nhiên PMC & Tặng 2 Lượt Miễn Phí', tickets: 2, icon: 'images/ruong_dong.png', chestStyle: 'linear-gradient(135deg, #cd7f32, #8e4a23)', shadow: '#cd7f32' },
     { level: 20, name: 'Rương Bạc', desc: 'Ngẫu nhiên PMC & Tặng 2 Lượt Miễn Phí', tickets: 2, icon: 'images/ruong_bac.png', chestStyle: 'linear-gradient(135deg, #bdc3c7, #7f8c8d)', shadow: '#bdc3c7' },
-    { level: 30, name: 'Rương Vàng + Skin', desc: 'Mở khóa Skin Đồng & 2 Lượt Miễn Phí', tickets: 2, skinId: 'bronze', icon: 'images/avatar_frames/bronze-crown.png', chestStyle: 'linear-gradient(135deg, #f1c40f, #e67e22)', shadow: '#f1c40f' },
-    { level: 60, name: 'Rương Bạch Kim + Skin', desc: 'Mở khóa Skin Ngọc & 2 Lượt Miễn Phí', tickets: 2, skinId: 'jade', icon: 'images/avatar_frames/jade-flower.png', chestStyle: 'linear-gradient(135deg, #00b894, #0984e3)', shadow: '#00b894' },
+    { level: 30, name: 'Rương Vàng + Skin', desc: 'Mở khóa Skin Đồng & 2 Lượt Miễn Phí', tickets: 2, skinId: 'bronze', icon: 'images/ruong_vang.png', chestStyle: 'linear-gradient(135deg, #f1c40f, #e67e22)', shadow: '#f1c40f' },
+    { level: 60, name: 'Rương Bạch Kim + Skin', desc: 'Mở khóa Skin Ngọc & 2 Lượt Miễn Phí', tickets: 2, skinId: 'jade', icon: 'images/ruong_bach_kim.png', chestStyle: 'linear-gradient(135deg, #00b894, #0984e3)', shadow: '#00b894' },
     { level: 90, name: 'Rương Kim Cương', desc: 'Thưởng PMC KHỦNG & 2 Lượt Miễn Phí', tickets: 2, icon: 'images/ruong_kim_cuong.png', chestStyle: 'linear-gradient(135deg, #74b9ff, #0984e3)', shadow: '#74b9ff' },
-    { level: 120, name: 'Rương Đỏ + Skin', desc: 'Mở khóa Skin Long Vương & 2 Lượt Miễn Phí', tickets: 2, skinId: 'dragon', icon: 'images/avatar_frames/dragon-frame.png', chestStyle: 'linear-gradient(135deg, #ff4757, #c0392b)', shadow: '#ff4757' },
-    { level: 180, name: 'Rương Tím VIP + Skin', desc: 'Phượng Hoàng & 10 Lượt Miễn Phí VIP', tickets: 10, skinId: 'phoenix', icon: 'images/avatar_frames/phoenix-frame.png', chestStyle: 'linear-gradient(135deg, #a55eea, #6c5ce7)', shadow: '#a55eea' }
+    { level: 120, name: 'Rương Đỏ + Skin', desc: 'Mở khóa Skin Long Vương & 2 Lượt Miễn Phí', tickets: 2, skinId: 'dragon', icon: 'images/ruong_do.png', chestStyle: 'linear-gradient(135deg, #ff4757, #c0392b)', shadow: '#ff4757' },
+    { level: 180, name: 'Rương Tím VIP + Skin', desc: 'Phượng Hoàng & 10 Lượt Miễn Phí VIP', tickets: 10, skinId: 'phoenix', icon: 'images/ruong_tim.png', chestStyle: 'linear-gradient(135deg, #a55eea, #6c5ce7)', shadow: '#a55eea' }
 ];
-
 async function renderLevelRewards() {
     const listEl = document.getElementById("level-reward-list");
     if (!listEl) return;
@@ -16965,14 +16964,6 @@ async function renderLevelRewards() {
 
         let progressPct = Math.min(100, (currentLevel / m.level) * 100).toFixed(0);
         if (isClaimed) progressPct = 100;
-
-        // VẼ RƯƠNG BẰNG CSS TẠM THỜI
-        let tempChestHtml = `
-            <div style="width: 46px; height: 46px; border-radius: 10px; background: ${m.chestStyle}; box-shadow: 0 0 12px ${m.shadow}; display: flex; align-items: center; justify-content: center; position: relative; border: 2px solid rgba(255,255,255,0.4);">
-                <div style="width: 16px; height: 10px; background: #fff; border-radius: 3px; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.3);"></div>
-            </div>
-        `;
-
         return `
         <div class="mission-card">
             <div class="mission-card-head" style="display: flex; align-items: center; gap: 12px;">
@@ -17005,8 +16996,8 @@ async function renderLevelRewards() {
 
                 <!-- Ô BÊN PHẢI BÂY GIỜ LÀ RƯƠNG -->
                 <div style="flex-shrink: 0; width: 64px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); border-radius: 12px; border: 1px dashed rgba(85, 239, 196, 0.3);">
-                    ${tempChestHtml} 
-                    <!-- SAU NÀY CÓ ẢNH THẬT THÌ THAY \${tempChestHtml} BẰNG THẺ <img> CỦA MẦY -->
+                    <!-- Hiển thị thẳng hình Rương mầy đã up -->
+                    <img src="${m.icon}" style="width: 50px; height: 50px; object-fit: contain; filter: drop-shadow(0 0 8px ${m.shadow});" onerror="this.src='images/do_tuong.png'">
                 </div>
                 
             </div>
