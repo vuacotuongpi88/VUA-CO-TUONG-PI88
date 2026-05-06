@@ -7868,7 +7868,7 @@ for (let i = 1; i <= SO_LUONG_ANH; i++) {
     danhSachAnhRong.push(img);
 }
 
-// HÀM TRIỆU HỒI RỒNG BAY UỐN LƯỢN ĐỈNH CAO
+// HÀM TRIỆU HỒI RỒNG BAY UỐN LƯỢN ĐỈNH CAO (BẢN UPDATE: ĐÈ ĐẦU CƯỠI CỔ TƯỚNG)
 function spawnDragonAttack(kingElement) {
     const dragon = document.createElement('img');
     let currentFrame = 0;
@@ -7883,55 +7883,47 @@ function spawnDragonAttack(kingElement) {
         dragon.src = danhSachAnhRong[currentFrame].src; 
     }, 40); 
 
-    // Tọa độ mục tiêu (Con tướng)
+    // Tọa độ mục tiêu (Con tướng bị chiếu)
     const rect = kingElement.getBoundingClientRect();
     const targetX = rect.left + rect.width / 2;
     const targetY = rect.top + rect.height / 2;
 
-    // Vị trí xuất phát (Ngoài lề trên)
-    const startX = window.innerWidth / 2;
-    const startY = -200; 
+    // VỊ TRÍ LƠ LỬNG: Căn chính giữa con tướng, xích lên trên đầu 120px
+    const hoverX = targetX;
+    const hoverY = targetY - 120;
 
-    // VỊ TRÍ LƯỢN LỜ BÊN KIA SÔNG: 
-    const hoverY = (targetY > window.innerHeight / 2) ? (targetY - 300) : (targetY + 300);
-    const hoverX = window.innerWidth / 2;
-
-    // --- GIAI ĐOẠN 1: LAO TỪ TRÊN TRỜI RA GIỮA SÔNG KHÈ 1 CÁI ---
-    dragon.style.width = '250px'; 
-    dragon.style.left = startX + 'px';
-    dragon.style.top = startY + 'px';
-    dragon.style.transform = `translate(-50%, -50%) scale(0.1)`;
+    // --- GIAI ĐOẠN 1: LAO TỪ CHÍN TẦNG MÂY XUỐNG ---
+    dragon.style.width = '200px'; 
+    dragon.style.left = hoverX + 'px';
+    dragon.style.top = (hoverY - 400) + 'px'; // Bắt đầu tít trên cao che khuất
+    
+    // 🔥 ẢNH RỒNG CỦA MẦY CÁI ĐẦU CHỈA LÊN TRỜI, TAO ÉP NÓ XOAY 180 ĐỘ CẮM ĐẦU XUỐNG ĐẤT
+    dragon.style.transform = `translate(-50%, -50%) scale(0.1) rotate(180deg)`;
     
     document.body.appendChild(dragon);
 
     setTimeout(() => {
-        // Rồng bay tới bên kia sông, uốn éo qua trái 1 xíu
+        // Rồng bay phanh gấp lại ngay trên đỉnh đầu con Tướng
         dragon.style.transition = 'all 0.8s cubic-bezier(0.25, 1, 0.5, 1)'; 
-        dragon.style.left = (hoverX - 80) + 'px';
         dragon.style.top = hoverY + 'px';
-        dragon.style.transform = `translate(-50%, -50%) scale(1.3) rotate(20deg)`;
+        dragon.style.transform = `translate(-50%, -50%) scale(1.3) rotate(180deg)`;
     }, 50);
 
-    // --- GIAI ĐOẠN 2: LƯỢN VÒNG SANG PHẢI (TẠO CẢM GIÁC BƠI TRONG KHÔNG KHÍ) ---
+    // --- GIAI ĐOẠN 2: LƯỢN LỜ HÙ DỌA (HIỆN LÂU HƠN NHƯ MẦY MUỐN) ---
     setTimeout(() => {
-        dragon.style.transition = 'all 1s ease-in-out';
-        dragon.style.left = (hoverX + 80) + 'px';
-        dragon.style.transform = `translate(-50%, -50%) scale(1.3) rotate(-20deg)`;
+        // Cho nó dập dềnh bay lên bay xuống nhẹ nhàng trên đầu con tướng
+        dragon.style.transition = 'all 1.6s ease-in-out';
+        dragon.style.top = (hoverY - 30) + 'px';
     }, 850);
 
-    // --- GIAI ĐOẠN 3: LẤY GÓC VÀ CẮM ĐẦU LAO XUỐNG TƯỚNG ---
+    // --- GIAI ĐOẠN 3: CẮM ĐẦU PHẬP XUỐNG TƯỚNG ---
     setTimeout(() => {
-        // Tính góc cắm đầu từ vị trí hiện tại đâm tới mục tiêu
-        let angle = Math.atan2(targetY - hoverY, targetX - (hoverX + 80)) * (180 / Math.PI);
-        // Trừ hao 90 độ vì ảnh con rồng của mầy chỉa lên trời
-        angle = angle - 90; 
-
-        dragon.style.transition = 'all 0.4s ease-in'; // Cắm đầu cực gắt
+        dragon.style.transition = 'all 0.25s ease-in'; // Cắm phập cực lẹ không kịp chớp mắt
         
         dragon.style.left = targetX + 'px';
         dragon.style.top = targetY + 'px';
-        dragon.style.transform = `translate(-50%, -50%) rotate(${angle}deg) scale(0.6)`;
-    }, 1850); 
+        dragon.style.transform = `translate(-50%, -50%) scale(0.7) rotate(180deg)`;
+    }, 2800); // 🕒 Chờ tận 2.8 giây hù dọa rồi mới cắm (hồi nãy chưa tới 2 giây)
 
     // --- GIAI ĐOẠN 4: CHẠM ĐÍCH VÀ NỔ BÙM ---
     setTimeout(() => {
@@ -7953,7 +7945,7 @@ function spawnDragonAttack(kingElement) {
             explosion.remove();
         }, 400);
 
-    }, 2250); 
+    }, 3050); // Khớp chính xác giờ nổ
 }
 function laBiChieu(side, mt) {
 let tPos = null;
