@@ -17707,7 +17707,7 @@ function playChestOpeningAnimation(chestPrefix, frameCount, onCompleteCallback) 
      let currentFrame = 1;
      const imgEl = document.getElementById("chest-anim-img");
 
-     // Tốc độ lật ảnh 40ms/khung hình (cực mượt vì ảnh đã ở sẵn trong RAM)
+     // 🔥 SỬA SỐ 40 THÀNH 150 (Kéo dài thành 4.5 giây) 🔥
      const timer = setInterval(() => {
          currentFrame++;
          
@@ -17729,7 +17729,7 @@ function playChestOpeningAnimation(chestPrefix, frameCount, onCompleteCallback) 
              // Móc ảnh từ mảng RAM ra gắn vào (trừ 1 vì mảng bắt đầu từ 0)
              imgEl.src = mangAnh[currentFrame - 1].src;
          }
-     }, 40); 
+     }, 150); // <---- CHÍNH LÀ CHỖ NÀY! SỬA 40 THÀNH 150!
 }
 </script>
 <!-- BẢNG ĐẾM NGƯỢC CHỜ 5 GIÂY (CHỐNG LAG FIREBASE) -->
