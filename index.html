@@ -5527,11 +5527,9 @@ margin-bottom: 14px;
     position: fixed;
     z-index: 99999;
     pointer-events: none;
-    /* Bùa này làm rồng bay lượn vòng cung chứ không chọi thẳng nữa */
-    transition: left 0.8s ease-out, top 0.8s ease-in, transform 0.8s linear;
+    /* ĐÃ XÓA TRANSITION Ở ĐÂY ĐỂ JS ĐIỀU KHIỂN BAY LƯỢN CHUẨN HƠN */
     filter: drop-shadow(0 0 20px #ff3bd4) drop-shadow(0 0 30px #d63031);
 }
-
 /* --- HIỆU ỨNG NỔ BÙM KHI RỒNG CHẠM TƯỚNG --- */
 .dragon-explosion {
     position: fixed;
@@ -7857,11 +7855,11 @@ return false;
 const danhSachAnhRong = [];
 for (let i = 1; i <= 5; i++) {
     let img = new Image();
-    img.src = `images/rong_${i}.png`; // Gọi đúng 5 cái tên mầy đã up
+    img.src = `images/rong_${i}.png`; 
     danhSachAnhRong.push(img);
 }
 
-// HÀM TRIỆU HỒI RỒNG VÀ TÍNH TỌA ĐỘ VẬT LÝ
+// HÀM TRIỆU HỒI RỒNG VÀ TÍNH TỌA ĐỘ VẬT LÝ (BẢN BAY LƯỢN VIP)
 function spawnDragonAttack(kingElement) {
     const dragon = document.createElement('img');
     let currentFrame = 0;
@@ -7870,43 +7868,64 @@ function spawnDragonAttack(kingElement) {
     dragon.src = danhSachAnhRong[currentFrame].src; 
     dragon.className = 'dragon-attack';
 
-    // 🔥 ĐỘNG CƠ LẬT ẢNH VỖ CÁNH (80ms đổi ảnh 1 lần = đập cánh cực lẹ)
+    // Động cơ vỗ cánh (Đổi ảnh mỗi 80ms)
     const lapAnh = setInterval(() => {
         currentFrame++;
-        if (currentFrame > 4) currentFrame = 0; // Hết 5 hình thì quay lại hình đầu
+        if (currentFrame > 4) currentFrame = 0; 
         dragon.src = danhSachAnhRong[currentFrame].src; 
     }, 80); 
 
-    // 2. Lấy vị trí đích (Con tướng)
+    // Tọa độ mục tiêu (Con tướng)
     const rect = kingElement.getBoundingClientRect();
     const targetX = rect.left + rect.width / 2;
     const targetY = rect.top + rect.height / 2;
 
-    // 3. Đặt rồng tít trên đỉnh trời VÀ LỆCH SANG GÓC PHẢI (Để nó lượn chéo xuống)
-    const startX = window.innerWidth + 200; 
-    const startY = -300; 
+    // Vị trí xuất phát (Ngoài lề trên)
+    const startX = window.innerWidth / 2;
+    const startY = -200; 
 
-    // 4. Tính toán góc cắm đầu
-    let angle = Math.atan2(targetY - startY, targetX - startX) * (180 / Math.PI);
-    
-    // 🔥 CHỮA BỆNH CON RỒNG CẮM ĐẦU TRONG ẢNH MẦY GỬI: TRỪ ĐI 90 ĐỘ
-    angle = angle - 90; 
+    // Vị trí dừng lại lượn lờ (Giữa màn hình, lùi lên trên 1 tí)
+    const hoverX = window.innerWidth / 2;
+    const hoverY = window.innerHeight * 0.35; 
 
-    dragon.style.width = '200px'; 
+    // --- GIAI ĐOẠN 1: XUẤT HIỆN TỪ TỪ ---
+    dragon.style.width = '250px'; // Bự chà bá
     dragon.style.left = startX + 'px';
     dragon.style.top = startY + 'px';
-    dragon.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
+    dragon.style.transform = `translate(-50%, -50%) scale(0.1)`;
+    // Mất 1.2 giây để bay từ ngoài vào giữa màn hình
+    dragon.style.transition = 'all 1.2s cubic-bezier(0.25, 1, 0.5, 1)'; 
 
     document.body.appendChild(dragon);
 
-    // 5. Cho rồng lao xuống theo quỹ đạo vòng cung
     setTimeout(() => {
+        // Rồng bay tới giữa màn hình và lượn nghiêng người
+        dragon.style.left = hoverX + 'px';
+        dragon.style.top = hoverY + 'px';
+        dragon.style.transform = `translate(-50%, -50%) scale(1.2) rotate(15deg)`;
+        
+        // Lắc lư qua lại cho ra vẻ đang bay lượn
+        setTimeout(() => {
+            dragon.style.transform = `translate(-50%, -50%) scale(1.2) rotate(-10deg)`;
+        }, 600);
+        
+    }, 50);
+
+    // --- GIAI ĐOẠN 2: LẤY GÓC VÀ CẮM ĐẦU LAO XUỐNG ---
+    setTimeout(() => {
+        // Tính góc cắm đầu vào tướng
+        let angle = Math.atan2(targetY - hoverY, targetX - hoverX) * (180 / Math.PI);
+        angle = angle - 90; // Trừ hao 90 độ vì ảnh rồng chỉa lên trời
+
+        // Tăng tốc độ lao xuống (Chỉ mất 0.4s cắm thẳng)
+        dragon.style.transition = 'all 0.4s ease-in';
+        
         dragon.style.left = targetX + 'px';
         dragon.style.top = targetY + 'px';
         dragon.style.transform = `translate(-50%, -50%) rotate(${angle}deg) scale(0.5)`;
-    }, 50);
+    }, 1400); // Đợi lượn lờ 1.4s xong mới lao
 
-    // 6. Rồng chạm mục tiêu -> NỔ BÙM & RUNG MÀN HÌNH
+    // --- GIAI ĐOẠN 3: CHẠM ĐÍCH VÀ NỔ BÙM ---
     setTimeout(() => {
         clearInterval(lapAnh); // Tắt vỗ cánh
         dragon.remove();       // Xóa rồng
@@ -7921,13 +7940,12 @@ function spawnDragonAttack(kingElement) {
         // Rung màn hình
         document.body.style.animation = "shakeScreen 0.4s ease-in-out";
         
-        // Dọn dẹp chiến trường
         setTimeout(() => {
             document.body.style.animation = "";
             explosion.remove();
         }, 400);
 
-    }, 800); // 0.8 giây là chạm đích
+    }, 1800); // 1.4s lượn + 0.4s lao = 1.8s
 }
 function laBiChieu(side, mt) {
 let tPos = null;
