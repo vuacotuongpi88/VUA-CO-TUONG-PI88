@@ -5522,29 +5522,6 @@ margin-bottom: 14px;
     box-shadow: 0 0 6px #55efc4;
     width: 16px;
 }
-/* --- HIỆU ỨNG VÒNG LỬA BAO QUANH TƯỚNG --- */
-.dragon-attack {
-    position: fixed;
-    z-index: 99999;
-    pointer-events: none;
-    mix-blend-mode: screen; /* Bùa tàng hình nền đen */
-    /* Đã gỡ bỏ toàn bộ hiệu ứng ánh sáng lóa mắt */
-}
-/* --- BÙA TẠO ÁNH SÁNG ĐỎ - CAM - VÀNG PHẬP PHỒNG --- */
-@keyframes rongKhacLua {
-    0% {
-        /* Lửa đỏ rực, độ sáng bình thường */
-        filter: drop-shadow(0 0 15px #e17055) drop-shadow(0 0 30px #d63031) brightness(1);
-    }
-    50% {
-        /* Lửa bùng lên cam vàng chói lóa, rồng sáng rực lên (brightness 1.4) */
-        filter: drop-shadow(0 0 30px #fdcb6e) drop-shadow(0 0 60px #e17055) brightness(1.4);
-    }
-    100% {
-        /* Lửa dịu lại một chút */
-        filter: drop-shadow(0 0 20px #ff7675) drop-shadow(0 0 45px #d63031) brightness(1.2);
-    }
-}
 /* --- HIỆU ỨNG NỔ BÙM KHI RỒNG CHẠM TƯỚNG --- */
 .dragon-explosion {
     position: fixed;
