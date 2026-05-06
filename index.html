@@ -5522,17 +5522,14 @@ margin-bottom: 14px;
     box-shadow: 0 0 6px #55efc4;
     width: 16px;
 }
-/* --- HIỆU ỨNG RỒNG CÓ HÀO QUANG LỬA BAO QUANH --- */
+/* --- HIỆU ỨNG VÒNG LỬA BAO QUANH TƯỚNG --- */
 .dragon-attack {
     position: fixed;
     z-index: 99999;
     pointer-events: none;
-    mix-blend-mode: screen; /* Giữ bùa tàng hình nền đen */
-    
-    /* Gắn động cơ chớp tắt lửa: 0.15 giây chớp 1 lần tạo cảm giác rực cháy */
-    animation: rongKhacLua 0.15s infinite alternate;
+    mix-blend-mode: screen; /* Bùa tàng hình nền đen */
+    /* Đã gỡ bỏ toàn bộ hiệu ứng ánh sáng lóa mắt */
 }
-
 /* --- BÙA TẠO ÁNH SÁNG ĐỎ - CAM - VÀNG PHẬP PHỒNG --- */
 @keyframes rongKhacLua {
     0% {
@@ -7885,7 +7882,7 @@ for (let i = 1; i <= SO_LUONG_ANH; i++) {
     danhSachAnhRong.push(img);
 }
 
-// HÀM TRIỆU HỒI RỒNG BAY (BẢN UPDATE CHO RỒNG MỚI 45 FRAME)
+// HÀM TRIỆU HỒI VÒNG LỬA (CĂN CHÍNH GIỮA TÂM 100%)
 function spawnDragonAttack(kingElement) {
     const dragon = document.createElement('img');
     let currentFrame = 0;
@@ -7893,57 +7890,40 @@ function spawnDragonAttack(kingElement) {
     dragon.src = danhSachAnhRong[currentFrame].src; 
     dragon.className = 'dragon-attack';
 
-    // Động cơ vỗ cánh (Tao ép xuống 35 mili-giây để 45 frame chạy siêu mượt không bị rề rà)
+    // Động cơ lật ảnh (35ms/frame cho mượt)
     const lapAnh = setInterval(() => {
         currentFrame++;
         if (currentFrame >= SO_LUONG_ANH) currentFrame = 0; 
         dragon.src = danhSachAnhRong[currentFrame].src; 
     }, 35); 
 
-    // Tọa độ mục tiêu (Con tướng bị chiếu)
+    // TỌA ĐỘ TÂM CỦA CON TƯỚNG BỊ CHIẾU
     const rect = kingElement.getBoundingClientRect();
     const targetX = rect.left + rect.width / 2;
     const targetY = rect.top + rect.height / 2;
 
-    // 🔥 VỊ TRÍ LƠ LỬNG: Căn chính giữa, xích lên trên đầu ĐÚNG 50px
-    const hoverX = targetX;
-    const hoverY = targetY - 50;
-
-    // --- GIAI ĐOẠN 1: LAO TỪ CHÍN TẦNG MÂY XUỐNG ---
-    dragon.style.width = '200px'; 
-    dragon.style.left = hoverX + 'px';
-    dragon.style.top = (hoverY - 400) + 'px'; 
+    // KÍCH THƯỚC VÒNG LỬA: Chỉnh 140px để ôm vừa vặn con cờ
+    dragon.style.width = '140px'; 
     
-    // Đang giữ xoay 180 độ. (Ghi chú: Tí ra game nếu thấy con rồng bị ngược đít thì mầy sửa số 180deg thành 0deg nha)
-    dragon.style.transform = `translate(-50%, -50%) scale(0.1) rotate(180deg)`;
+    // GẮN THẲNG VÀO GIỮA TÂM (Không trừ hao Y nữa, không lộn ngược rotate 180 nữa)
+    dragon.style.left = targetX + 'px';
+    dragon.style.top = targetY + 'px';
+    
+    // Hiệu ứng xuất hiện: Từ nhỏ xíu bung to ra
+    dragon.style.transform = `translate(-50%, -50%) scale(0.1)`;
+    dragon.style.transition = 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'; // Hiệu ứng bung nở nảy nảy
     
     document.body.appendChild(dragon);
 
+    // Bung to ra kích thước thật
     setTimeout(() => {
-        dragon.style.transition = 'all 0.7s cubic-bezier(0.25, 1, 0.5, 1)'; 
-        dragon.style.top = hoverY + 'px';
-        dragon.style.transform = `translate(-50%, -50%) scale(1) rotate(180deg)`;
+        dragon.style.transform = `translate(-50%, -50%) scale(1)`;
     }, 50);
 
-    // --- GIAI ĐOẠN 2: LƯỢN LỜ HÙ DỌA DẬP DỀNH ---
+    // KẾT THÚC VÀ NỔ BÙM
     setTimeout(() => {
-        dragon.style.transition = 'all 1.6s ease-in-out';
-        dragon.style.top = (hoverY - 20) + 'px';
-    }, 750);
-
-    // --- GIAI ĐOẠN 3: CẮM ĐẦU PHẬP XUỐNG TƯỚNG ---
-    setTimeout(() => {
-        dragon.style.transition = 'all 0.2s ease-in'; 
-        
-        dragon.style.left = targetX + 'px';
-        dragon.style.top = targetY + 'px';
-        dragon.style.transform = `translate(-50%, -50%) scale(0.6) rotate(180deg)`;
-    }, 2600); 
-
-    // --- GIAI ĐOẠN 4: CHẠM ĐÍCH VÀ NỔ BÙM ---
-    setTimeout(() => {
-        clearInterval(lapAnh); // Tắt animation
-        dragon.remove();       // Xóa xác rồng
+        clearInterval(lapAnh); // Tắt vỗ cánh
+        dragon.remove();       // Xóa vòng lửa
         
         // Nổ bùm
         const explosion = document.createElement('div');
@@ -7960,7 +7940,7 @@ function spawnDragonAttack(kingElement) {
             explosion.remove();
         }, 400);
 
-    }, 2800); 
+    }, 2800); // Tồn tại 2.8 giây rồi nổ
 }
 function laBiChieu(side, mt) {
 let tPos = null;
