@@ -8130,25 +8130,11 @@ refreshTimerRings();
     clearMoveHints();
     drawLastMoveMarks();
 
+    // (Bên trong board.onclick) ...
+    // Xóa sạch cái setTimeout cũ đi và dán đoạn này vào:
     setTimeout(() => {
-        document.querySelectorAll('.piece').forEach(p => p.classList.remove('is-chieu', 'lightning-chieu'));
-
-       if (laBiChieu(luotDi, taoMaTran())) {
-            playSnd('check');
-            playSnd('heartbeat');
-
-            const pieces = document.querySelectorAll('.piece');
-            pieces.forEach(p => {
-                const type = p.dataset.type;
-                if ((type === '帥' || type === '將') && p.dataset.side === luotDi) {
-                    p.classList.add('is-chieu', 'lightning-chieu');
-                    
-                    // 👇 MỚI THÊM: GỌI RỒNG THẬT LAO XUỐNG CẮM ĐẦU VÀO TƯỚNG 👇
-                    spawnDragonAttack(p);
-                }
-            });
-            // ...
-
+        // Kiểm tra Chiếu Bí (Checkmate)
+        if (laBiChieu(luotDi, taoMaTran())) {
             if (checkMate(luotDi)) {
                 const winnerSide = (luotDi === 'do') ? 'den' : 'do';
                 const resultSub = `BÊN ${winnerSide === 'do' ? 'ĐỎ' : 'ĐEN'} THẮNG`;
@@ -8156,23 +8142,21 @@ refreshTimerRings();
                 if (currentRoomId) {
                     db.ref("matches/" + currentRoomId).update({
                         winner: winnerSide,
-winReason: "checkmate",
-finishedAt: firebase.database.ServerValue.TIMESTAMP,
-updatedAt: firebase.database.ServerValue.TIMESTAMP
+                        winReason: "checkmate",
+                        finishedAt: firebase.database.ServerValue.TIMESTAMP,
+                        updatedAt: firebase.database.ServerValue.TIMESTAMP
                     });
                 } else {
                     endGame("CHIẾU BÍ", resultSub);
                 }
             }
-        } else {
-            if (sounds.heartbeat) sounds.heartbeat.pause();
         }
     }, 200);
 
     if (currentRoomId) {
         syncRoomFromBoard();
     }
-};
+}; // Kết thúc board.onclick
 
 function resetToStartup() {
 clearInterval(interval);
@@ -8439,23 +8423,45 @@ saveActiveMatchSnapshot({
 
     setTimeout(() => tryReset(0), 500);
 }
+// BẢN FIX VIP: TẬP TRUNG XỬ LÝ HIỆU ỨNG CHIẾU TƯỚNG CHO CẢ 2 BÊN CÙNG LÚC
 function updateCheckEffectFromBoard() {
     document.querySelectorAll('.piece').forEach(p => {
         p.classList.remove('is-chieu', 'lightning-chieu');
     });
 
     const mt = taoMaTran();
+    let aiBiChieu = null;
 
     ['do', 'den'].forEach(side => {
-        if (!laBiChieu(side, mt)) return;
+        if (laBiChieu(side, mt)) {
+            aiBiChieu = side;
+        }
+    });
 
+    if (aiBiChieu) {
         document.querySelectorAll('.piece').forEach(p => {
             const type = p.dataset.type;
-            if (p.dataset.side === side && (type === '帥' || type === '將')) {
+            if (p.dataset.side === aiBiChieu && (type === '帥' || type === '將')) {
+                // Áp hiệu ứng điện xẹt đỏ
                 p.classList.add('is-chieu', 'lightning-chieu');
+                
+                // KIỂM TRA: Nếu trước đó chưa bị chiếu, bây giờ mới bị -> Lôi rồng ra khè!
+                if (window.dangBiChieu !== aiBiChieu) {
+                    playSnd('check');
+                    playSnd('heartbeat');
+                    
+                    // Triệu hồi rồng thẳng trên đỉnh đầu con Tướng này
+                    spawnDragonAttack(p); 
+                }
             }
         });
-    });
+    } else {
+        // Hết bị chiếu rồi thì tắt tiếng tim đập bùm bụp đi
+        if (sounds.heartbeat) sounds.heartbeat.pause();
+    }
+
+    // Lưu lại trạng thái để ván sau biết
+    window.dangBiChieu = aiBiChieu;
 }
 function getLocalUidSafe() {
     return String(
