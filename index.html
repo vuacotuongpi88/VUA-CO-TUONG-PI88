@@ -7873,12 +7873,12 @@ function spawnDragonAttack(kingElement) {
     dragon.src = danhSachAnhRong[currentFrame].src; 
     dragon.className = 'dragon-attack';
 
-    // Động cơ lật ảnh 
+    // Động cơ lật ảnh (Tăng từ 35 lên 70 để rồng cuộn chậm rãi, uy lực hơn)
     const lapAnh = setInterval(() => {
         currentFrame++;
         if (currentFrame >= SO_LUONG_ANH) currentFrame = 0; 
         dragon.src = danhSachAnhRong[currentFrame].src; 
-    }, 35); 
+    }, 60); // 🔥 SỬA SỐ 35 THÀNH 70 (Hoặc 80 nếu muốn chậm nữa)
 
     // 🔥 CHÔM TRỰC TIẾP TỌA ĐỘ % CỦA CON TƯỚNG (Không xài getBoundingClientRect nữa)
     const toaDoX = kingElement.style.left;
