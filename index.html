@@ -10963,8 +10963,10 @@ window.buyExpDirectly = async function(expAmount, pmcCost, bonusTickets) {
             });
         } catch(e) {} 
 
-        const userRef = db.ref("wallets/" + walletKey);
-        await userRef.transaction((current) => {
+       const userRef = db.ref("wallets/" + walletKey);
+        
+        // Gắn biến txResult để lấy kết quả trả về từ Firebase sau khi cộng xong
+        const txResult = await userRef.transaction((current) => {
             if (!current) current = {}; 
             current.exp = (Number(current.exp) || 0) + expAmount;
             current.level = window.getLevelFromExp(current.exp); 
@@ -10974,6 +10976,18 @@ window.buyExpDirectly = async function(expAmount, pmcCost, bonusTickets) {
             }
             return current;
         });
+
+        await loadWalletBalance();
+
+        // 🔥 CHỮA BỆNH ĐÂY: Ép gọi hàm cập nhật thanh EXP ngay lập tức lấy số mới từ Firebase
+        if (txResult.committed && txResult.snapshot.val()) {
+            const newTotalExp = txResult.snapshot.val().exp;
+            // Lưu đè lại cache để lỡ tắt bảng nó đéo tụt
+            localStorage.setItem('exp_cache', newTotalExp); 
+            if (typeof window.updateExpBarUI === 'function') {
+                window.updateExpBarUI(newTotalExp);
+            }
+        }
 
         await loadWalletBalance();
         if (typeof window.spawnExpEffect === 'function') {
