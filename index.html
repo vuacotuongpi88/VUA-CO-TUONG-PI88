@@ -5526,11 +5526,9 @@ margin-bottom: 14px;
 .dragon-attack {
     position: fixed;
     z-index: 99999;
-    pointer-events: none; /* Không che các nút bấm */
-    /* Bay mượt theo gia tốc: lúc đầu bay từ từ, sau lao cực nhanh */
-    transition: top 0.7s cubic-bezier(0.55, 0.085, 0.68, 0.53), 
-                left 0.7s cubic-bezier(0.55, 0.085, 0.68, 0.53),
-                transform 0.7s ease-in;
+    pointer-events: none;
+    /* Bùa này làm rồng bay lượn vòng cung chứ không chọi thẳng nữa */
+    transition: left 0.8s ease-out, top 0.8s ease-in, transform 0.8s linear;
     filter: drop-shadow(0 0 20px #ff3bd4) drop-shadow(0 0 30px #d63031);
 }
 
@@ -7855,54 +7853,63 @@ case '兵': case '卒': {
 
 return false;
 }
-// HÀM TRIỆU HỒI RỒNG VÀ TÍNH TỌA ĐỘ VẬT LÝ (PHIÊN BẢN LẬT 5 ẢNH TĨNH)
+// 🔥 BÙA TẢI TRƯỚC 5 ẢNH RỒNG (CHỐNG GIẬT LAG)
+const danhSachAnhRong = [];
+for (let i = 1; i <= 5; i++) {
+    let img = new Image();
+    img.src = `images/rong_${i}.png`; // Gọi đúng 5 cái tên mầy đã up
+    danhSachAnhRong.push(img);
+}
+
+// HÀM TRIỆU HỒI RỒNG VÀ TÍNH TỌA ĐỘ VẬT LÝ
 function spawnDragonAttack(kingElement) {
-    // 1. Tạo hình con rồng
     const dragon = document.createElement('img');
-    let currentFrame = 1;
-    dragon.src = `images/rong_${currentFrame}.png`; // Gọi tấm số 1 ra trước
+    let currentFrame = 0;
+    
+    // Gọi tấm đầu tiên ra
+    dragon.src = danhSachAnhRong[currentFrame].src; 
     dragon.className = 'dragon-attack';
 
-    // 🔥 ĐỘNG CƠ LẬT ẢNH VỖ CÁNH (10 hình/giây)
+    // 🔥 ĐỘNG CƠ LẬT ẢNH VỖ CÁNH (80ms đổi ảnh 1 lần = đập cánh cực lẹ)
     const lapAnh = setInterval(() => {
         currentFrame++;
-        if (currentFrame > 5) currentFrame = 1; // Hết 5 thì quay lại 1
-        dragon.src = `images/rong_${currentFrame}.png`;
-    }, 100);
+        if (currentFrame > 4) currentFrame = 0; // Hết 5 hình thì quay lại hình đầu
+        dragon.src = danhSachAnhRong[currentFrame].src; 
+    }, 80); 
 
-    // 2. Lấy vị trí vật lý của con Tướng
+    // 2. Lấy vị trí đích (Con tướng)
     const rect = kingElement.getBoundingClientRect();
     const targetX = rect.left + rect.width / 2;
     const targetY = rect.top + rect.height / 2;
 
-    // 3. Đặt rồng tít trên đỉnh trời
-    const startX = window.innerWidth / 2;
+    // 3. Đặt rồng tít trên đỉnh trời VÀ LỆCH SANG GÓC PHẢI (Để nó lượn chéo xuống)
+    const startX = window.innerWidth + 200; 
     const startY = -300; 
 
-    // 4. Tính toán góc để rồng "cắm đầu" xuống đúng ngay con Tướng
+    // 4. Tính toán góc cắm đầu
     let angle = Math.atan2(targetY - startY, targetX - startX) * (180 / Math.PI);
     
-    // ⚠️ NẾU ẢNH CON RỒNG MẦY CHỈA ĐẦU LÊN TRÊN THÌ BỎ DẤU // Ở DÒNG DƯỚI ĐI:
-    // angle = angle + 90;
+    // 🔥 CHỮA BỆNH CON RỒNG CẮM ĐẦU TRONG ẢNH MẦY GỬI: TRỪ ĐI 90 ĐỘ
+    angle = angle - 90; 
 
-    dragon.style.width = '180px'; 
+    dragon.style.width = '200px'; 
     dragon.style.left = startX + 'px';
     dragon.style.top = startY + 'px';
     dragon.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
 
     document.body.appendChild(dragon);
 
-    // 5. Cho rồng lao xuống 
+    // 5. Cho rồng lao xuống theo quỹ đạo vòng cung
     setTimeout(() => {
         dragon.style.left = targetX + 'px';
         dragon.style.top = targetY + 'px';
-        dragon.style.transform = `translate(-50%, -50%) rotate(${angle}deg) scale(0.6)`;
+        dragon.style.transform = `translate(-50%, -50%) rotate(${angle}deg) scale(0.5)`;
     }, 50);
 
     // 6. Rồng chạm mục tiêu -> NỔ BÙM & RUNG MÀN HÌNH
     setTimeout(() => {
-        clearInterval(lapAnh); // Tắt động cơ vỗ cánh
-        dragon.remove();       // Xóa xác rồng
+        clearInterval(lapAnh); // Tắt vỗ cánh
+        dragon.remove();       // Xóa rồng
         
         // Tạo quả nổ
         const explosion = document.createElement('div');
@@ -7920,7 +7927,7 @@ function spawnDragonAttack(kingElement) {
             explosion.remove();
         }, 400);
 
-    }, 750); // Mất 0.75 giây để rồng bay tới đích
+    }, 800); // 0.8 giây là chạm đích
 }
 function laBiChieu(side, mt) {
 let tPos = null;
