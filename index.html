@@ -5595,6 +5595,21 @@ margin-bottom: 14px;
     0% { transform: scale(0.5); opacity: 0; }
     100% { transform: scale(1); opacity: 1; }
 }
+/* --- HIỆU ỨNG NỀN VÀ LÓE SÁNG KHI MỞ RƯƠNG --- */
+#chest-anim-overlay {
+    position: fixed; inset: 0; background: rgba(0, 0, 0, 0.9);
+    z-index: 999999; display: none; align-items: center; justify-content: center;
+}
+.chest-anim-sprite {
+    width: 250px; height: 250px; object-fit: contain;
+    filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.5));
+}
+.white-flash {
+    position: fixed; inset: 0; background: white;
+    z-index: 9999999; opacity: 0; pointer-events: none;
+    animation: flashBang 0.8s ease-out forwards;
+}
+@keyframes flashBang { 0% { opacity: 1; } 100% { opacity: 0; } }
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -16977,15 +16992,15 @@ function updateExpBarUI(totalExp) {
     if(fill) fill.style.width = pct + "%";
     if(text) text.innerText = `CẤP ${currentLevel} • ${Math.floor(currentLevelProgress)} / ${expForNextLevel} EXP`;
 }
-// CẬP NHẬT: Tách riêng icon góc trái và hình rương góc phải
+// CẬP NHẬT: Thêm số lượng ảnh (frameCount) chuẩn cho từng loại rương
 const LEVEL_MILESTONES = [
-    { level: 10, name: 'Rương Đồng', desc: 'Ngẫu nhiên PMC & Tặng 2 Lượt Miễn Phí', tickets: 2, icon: 'images/do_tuong.png', chestImage: 'images/ruong_dong.png', shadow: '#cd7f32' },
-    { level: 20, name: 'Rương Bạc', desc: 'Ngẫu nhiên PMC & Tặng 2 Lượt Miễn Phí', tickets: 2, icon: 'images/do_tuong.png', chestImage: 'images/ruong_bac.png', shadow: '#bdc3c7' },
-    { level: 30, name: 'Rương Vàng + Skin', desc: 'Mở khóa Skin Đồng & 2 Lượt Miễn Phí', tickets: 2, skinId: 'bronze', icon: 'images/avatar_frames/bronze-crown.png', chestImage: 'images/ruong_vang.png', shadow: '#f1c40f' },
-    { level: 60, name: 'Rương Bạch Kim + Skin', desc: 'Mở khóa Skin Ngọc & 2 Lượt Miễn Phí', tickets: 2, skinId: 'jade', icon: 'images/avatar_frames/jade-flower.png', chestImage: 'images/ruong_bach_kim.png', shadow: '#00b894' },
-    { level: 90, name: 'Rương Kim Cương', desc: 'Thưởng PMC KHỦNG & 2 Lượt Miễn Phí', tickets: 2, icon: 'images/do_tuong.png', chestImage: 'images/ruong_kim_cuong.png', shadow: '#74b9ff' },
-    { level: 120, name: 'Rương Đỏ + Skin', desc: 'Mở khóa Skin Long Vương & 2 Lượt Miễn Phí', tickets: 2, skinId: 'dragon', icon: 'images/avatar_frames/dragon-frame.png', chestImage: 'images/ruong_do.png', shadow: '#ff4757' },
-    { level: 180, name: 'Rương Tím VIP + Skin', desc: 'Phượng Hoàng & 10 Lượt Miễn Phí VIP', tickets: 10, skinId: 'phoenix', icon: 'images/avatar_frames/phoenix-frame.png', chestImage: 'images/ruong_tim.png', shadow: '#a55eea' }
+    { level: 10, name: 'Rương Đồng', desc: 'Ngẫu nhiên PMC & Tặng 2 Lượt Miễn Phí', tickets: 2, icon: 'images/do_tuong.png', chestImage: 'images/ruong_dong_01.png', chestPrefix: 'dong', frameCount: 30, shadow: '#cd7f32' },
+    { level: 20, name: 'Rương Bạc', desc: 'Ngẫu nhiên PMC & Tặng 2 Lượt Miễn Phí', tickets: 2, icon: 'images/do_tuong.png', chestImage: 'images/ruong_bac_01.png', chestPrefix: 'bac', frameCount: 26, shadow: '#bdc3c7' },
+    { level: 30, name: 'Rương Vàng + Skin', desc: 'Mở khóa Skin Đồng & 2 Lượt Miễn Phí', tickets: 2, skinId: 'bronze', icon: 'images/avatar_frames/bronze-crown.png', chestImage: 'images/ruong_vang_01.png', chestPrefix: 'vang', frameCount: 27, shadow: '#f1c40f' },
+    { level: 60, name: 'Rương Bạch Kim + Skin', desc: 'Mở khóa Skin Ngọc & 2 Lượt Miễn Phí', tickets: 2, skinId: 'jade', icon: 'images/avatar_frames/jade-flower.png', chestImage: 'images/ruong_bach_kim_01.png', chestPrefix: 'bach_kim', frameCount: 27, shadow: '#00b894' },
+    { level: 90, name: 'Rương Kim Cương', desc: 'Thưởng PMC KHỦNG & 2 Lượt Miễn Phí', tickets: 2, icon: 'images/do_tuong.png', chestImage: 'images/ruong_kim_cuong_01.png', chestPrefix: 'kim_cuong', frameCount: 29, shadow: '#74b9ff' },
+    { level: 120, name: 'Rương Đỏ + Skin', desc: 'Mở khóa Skin Long Vương & 2 Lượt Miễn Phí', tickets: 2, skinId: 'dragon', icon: 'images/avatar_frames/dragon-frame.png', chestImage: 'images/ruong_do_01.png', chestPrefix: 'do', frameCount: 24, shadow: '#ff4757' },
+    { level: 180, name: 'Rương Tím VIP + Skin', desc: 'Phượng Hoàng & 10 Lượt Miễn Phí VIP', tickets: 10, skinId: 'phoenix', icon: 'images/avatar_frames/phoenix-frame.png', chestImage: 'images/ruong_tim_01.png', chestPrefix: 'tim', frameCount: 30, shadow: '#a55eea' }
 ];
 async function renderLevelRewards() {
     const listEl = document.getElementById("level-reward-list");
@@ -17117,82 +17132,69 @@ async function claimLevelChest(targetLevel, btnElement) {
         return current;
     });
 
-    // (Bên trong hàm claimLevelChest, đoạn cuối cùng)
-    
-    // --- XÓA CÁI ALERT CŨ ĐI, DÁN ĐOẠN NÀY VÀO ---
-    
-    // Bật tiếng Win cho sướng tai
-    if (typeof playSnd === 'function') playSnd('win');
-    
-    // Tạo bảng thông báo VIP nếu chưa có
-    let overlay = document.getElementById("chest-reward-overlay");
-    if (!overlay) {
-        overlay = document.createElement("div");
-        overlay.id = "chest-reward-overlay";
-        document.body.appendChild(overlay);
-    }
+    // 🔥 CHIẾU PHIM MỞ RƯƠNG DỰA VÀO PREFIX VÀ SỐ LƯỢNG ẢNH 🔥
+     playChestOpeningAnimation(milestone.chestPrefix, milestone.frameCount, () => {
+         
+         // 1. Phim chiếu xong, rương mở toang -> Nổ tiếng Win
+         if (typeof playSnd === 'function') playSnd('win');
+         
+         // 2. Tạo bảng Popup VIP văng quà ra
+         let overlay = document.getElementById("chest-reward-overlay");
+         if (!overlay) {
+             overlay = document.createElement("div");
+             overlay.id = "chest-reward-overlay";
+             document.body.appendChild(overlay);
+         }
 
-    // Đổ Skin vào nếu có
-    let skinHtml = "";
-    if (milestone.skinId) {
-        skinHtml = `
-            <div class="chest-item-row" style="border-color: #ff3bd4; box-shadow: inset 0 0 10px rgba(255, 59, 212, 0.2);">
-                
-                <!-- Thay hộp quà bằng hình viền Skin ốp lên con Tướng Đỏ -->
-                <div style="width: 42px; height: 42px; position: relative; flex-shrink: 0; display: flex; align-items: center; justify-content: center; margin-right: 4px;">
-                    <img src="images/do_tuong.png" style="width: 26px; height: 26px; border-radius: 50%; object-fit: cover; border: 1px solid #ffb7f0;">
-                    <img src="${milestone.icon}" style="position: absolute; width: 145%; height: 145%; top: 50%; left: 50%; transform: translate(-50%, -50%); object-fit: contain; filter: drop-shadow(0 0 5px rgba(255, 183, 240, 0.8));">
-                </div>
+         let skinHtml = "";
+         if (milestone.skinId) {
+             skinHtml = `
+                 <div class="chest-item-row" style="border-color: #ff3bd4; box-shadow: inset 0 0 10px rgba(255, 59, 212, 0.2);">
+                     <div style="width: 42px; height: 42px; position: relative; flex-shrink: 0; display: flex; align-items: center; justify-content: center; margin-right: 4px;">
+                         <img src="images/do_tuong.png" style="width: 26px; height: 26px; border-radius: 50%; object-fit: cover; border: 1px solid #ffb7f0;">
+                         <img src="${milestone.icon}" style="position: absolute; width: 145%; height: 145%; top: 50%; left: 50%; transform: translate(-50%, -50%); object-fit: contain; filter: drop-shadow(0 0 5px rgba(255, 183, 240, 0.8));">
+                     </div>
+                     <div class="chest-item-val" style="color: #ffb7f0;">
+                         <span style="font-size: 11px; color: #dfe6e9;">Đã mở khóa Skin:</span><br>
+                         ${milestone.name.replace(' + Skin', '')} 
+                     </div>
+                 </div>
+             `;
+         }
 
-                <div class="chest-item-val" style="color: #ffb7f0;">
-                    <span style="font-size: 11px; color: #dfe6e9;">Đã mở khóa Skin:</span><br>
-                    ${milestone.name.replace(' + Skin', '')} 
-                </div>
-            </div>
-        `;
-    }
+         overlay.innerHTML = `
+             <div class="chest-reward-box">
+                 <img src="${milestone.chestImage}" style="width: 120px; height: 120px; object-fit: contain; filter: drop-shadow(0 0 25px ${milestone.shadow || '#f4c542'}); margin-bottom: -15px; animation: chestReadyPulse 1s infinite alternate;">
+                 <div class="chest-reward-title">MỞ RƯƠNG THÀNH CÔNG!</div>
+                 <div class="chest-item-row" style="border-color: #55efc4;">
+                     <div style="font-size: 28px;">💎</div>
+                     <div class="chest-item-val">
+                         <span style="font-size: 11px; color: #dfe6e9;">Nhận được:</span><br>
+                         +${rewardPMC.toLocaleString('vi-VN')} PMC
+                     </div>
+                 </div>
+                 ${milestone.tickets ? `
+                 <div class="chest-item-row" style="border-color: #ff9f43;">
+                     <div style="font-size: 28px;">🎫</div>
+                     <div class="chest-item-val" style="color: #ff9f43;">
+                         <span style="font-size: 11px; color: #dfe6e9;">Tặng kèm:</span><br>
+                         +${milestone.tickets} Lượt Miễn Phí
+                     </div>
+                 </div>
+                 ` : ''}
+                 ${skinHtml}
+                 <button onclick="document.getElementById('chest-reward-overlay').style.display='none'" style="margin-top: 15px; width: 100%; padding: 12px; border-radius: 12px; background: linear-gradient(180deg, #f1c40f, #e67e22); color: #000; font-size: 16px; font-weight: 900; border: none; cursor: pointer; box-shadow: 0 4px 15px rgba(241, 196, 15, 0.4);">TUYỆT VỜI</button>
+             </div>
+         `;
+         
+         // Rung màn hình
+         document.body.style.animation = "shakeScreen 0.4s ease-in-out";
+         setTimeout(() => document.body.style.animation = "", 400);
 
-    // Đổ HTML hiển thị ra
-    overlay.innerHTML = `
-        <div class="chest-reward-box">
-            <img src="${milestone.chestImage}" style="width: 120px; height: 120px; object-fit: contain; filter: drop-shadow(0 0 25px ${milestone.shadow || '#f4c542'}); margin-bottom: -15px; animation: chestReadyPulse 1s infinite alternate;">
-            
-            <div class="chest-reward-title">MỞ RƯƠNG THÀNH CÔNG!</div>
-            
-            <div class="chest-item-row" style="border-color: #55efc4;">
-                <div style="font-size: 28px;">💎</div>
-                <div class="chest-item-val">
-                    <span style="font-size: 11px; color: #dfe6e9;">Nhận được:</span><br>
-                    +${rewardPMC.toLocaleString('vi-VN')} PMC
-                </div>
-            </div>
-
-            ${milestone.tickets ? `
-            <div class="chest-item-row" style="border-color: #ff9f43;">
-                <div style="font-size: 28px;">🎫</div>
-                <div class="chest-item-val" style="color: #ff9f43;">
-                    <span style="font-size: 11px; color: #dfe6e9;">Tặng kèm:</span><br>
-                    +${milestone.tickets} Lượt Miễn Phí
-                </div>
-            </div>
-            ` : ''}
-
-            ${skinHtml}
-
-            <button onclick="document.getElementById('chest-reward-overlay').style.display='none'" style="margin-top: 15px; width: 100%; padding: 12px; border-radius: 12px; background: linear-gradient(180deg, #f1c40f, #e67e22); color: #000; font-size: 16px; font-weight: 900; border: none; cursor: pointer; box-shadow: 0 4px 15px rgba(241, 196, 15, 0.4);">TUYỆT VỜI</button>
-        </div>
-    `;
-    
-    // Rung màn hình 1 phát cho bạo lực
-    document.body.style.animation = "shakeScreen 0.4s ease-in-out";
-    setTimeout(() => document.body.style.animation = "", 400);
-
-    // Bật bảng lên
-    overlay.style.display = "flex";
-
-    // Cập nhật lại ví ở màn hình chính và tải lại bảng rương (Đoạn cũ giữ nguyên)
-    loadWalletBalance();
-    renderLevelRewards();
+         overlay.style.display = "flex";
+         loadWalletBalance();
+         renderLevelRewards();
+     });
 }
 // --- BỘ NÃO LOGIC LUYỆN CẤP LŨY TIẾN V3 (CÓ BÁO CÁO) ---
 window.pendingSessionEXP = 0; 
@@ -17668,6 +17670,52 @@ chargeStakeForReady = async function(roomId, side) {
     }
     return res;
 };
+// ===============================================
+// HÀM ĐỘNG CƠ CHIẾU PHIM TỰ ĐỘNG ĐỌC MÃ RƯƠNG VÀ SỐ FRAME
+// ===============================================
+function playChestOpeningAnimation(chestPrefix, frameCount, onCompleteCallback) {
+     let overlay = document.getElementById("chest-anim-overlay");
+     if (!overlay) {
+         overlay = document.createElement("div");
+         overlay.id = "chest-anim-overlay";
+         document.body.appendChild(overlay);
+     }
+     
+     const pad = (num) => num.toString().padStart(2, '0');
+     
+     // Nạp tấm số 01 của đúng loại rương đó vào
+     overlay.innerHTML = `<img id="chest-anim-img" class="chest-anim-sprite" src="images/ruong_${chestPrefix}_01.png">`;
+     overlay.style.display = "flex";
+
+     // Phát tiếng cót két (Nhớ tải file chest_open.mp3 quăng vào folder sounds nha mậy)
+     if (typeof playSnd === 'function') playSnd('chest_open');
+
+     let currentFrame = 1;
+     const imgEl = document.getElementById("chest-anim-img");
+
+     // Tốc độ lật ảnh 40ms/khung hình (cực mượt)
+     const timer = setInterval(() => {
+         currentFrame++;
+         
+         // Đếm đúng bằng frameCount của rương thì dừng
+         if (currentFrame > frameCount) {
+             clearInterval(timer);
+             overlay.style.display = "none";
+             
+             // Xóa phông chiếu phim, chớp trắng màn hình
+             const flash = document.createElement("div");
+             flash.className = "white-flash";
+             document.body.appendChild(flash);
+             setTimeout(() => flash.remove(), 800);
+
+             // Bật bảng quà lên
+             if(typeof onCompleteCallback === 'function') onCompleteCallback();
+             
+         } else {
+             imgEl.src = `images/ruong_${chestPrefix}_${pad(currentFrame)}.png`;
+         }
+     }, 40); 
+}
 </script>
 <!-- BẢNG ĐẾM NGƯỢC CHỜ 5 GIÂY (CHỐNG LAG FIREBASE) -->
 <div id="exit-countdown-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:99999; align-items:center; justify-content:center; backdrop-filter:blur(5px);">
