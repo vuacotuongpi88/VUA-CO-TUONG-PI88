@@ -17137,10 +17137,16 @@ async function claimLevelChest(targetLevel, btnElement) {
     if (milestone.skinId) {
         skinHtml = `
             <div class="chest-item-row" style="border-color: #ff3bd4; box-shadow: inset 0 0 10px rgba(255, 59, 212, 0.2);">
-                <div style="font-size: 28px;">🎁</div>
+                
+                <!-- Thay hộp quà bằng hình viền Skin ốp lên con Tướng Đỏ -->
+                <div style="width: 42px; height: 42px; position: relative; flex-shrink: 0; display: flex; align-items: center; justify-content: center; margin-right: 4px;">
+                    <img src="images/do_tuong.png" style="width: 26px; height: 26px; border-radius: 50%; object-fit: cover; border: 1px solid #ffb7f0;">
+                    <img src="${milestone.icon}" style="position: absolute; width: 145%; height: 145%; top: 50%; left: 50%; transform: translate(-50%, -50%); object-fit: contain; filter: drop-shadow(0 0 5px rgba(255, 183, 240, 0.8));">
+                </div>
+
                 <div class="chest-item-val" style="color: #ffb7f0;">
                     <span style="font-size: 11px; color: #dfe6e9;">Đã mở khóa Skin:</span><br>
-                    ${milestone.name}
+                    ${milestone.name.replace(' + Skin', '')} 
                 </div>
             </div>
         `;
