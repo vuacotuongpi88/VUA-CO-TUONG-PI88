@@ -2229,7 +2229,11 @@ color: transparent;
     cursor: pointer;
     font-size: 18px;
 }
-
+/* --- HIỆU ỨNG RƯƠNG PHÁT SÁNG KHI ĐẠT CẤP --- */
+@keyframes chestReadyPulse {
+    0% { transform: scale(1); box-shadow: 0 0 10px #f1c40f, inset 0 0 10px rgba(241, 196, 15, 0.2); border-color: #f1c40f; }
+    100% { transform: scale(1.08); box-shadow: 0 0 25px #f1c40f, inset 0 0 20px rgba(241, 196, 15, 0.5); border-color: #ffeaa7; }
+}
 #ranking-list {
     max-height: 65vh;
     overflow-y: auto;
@@ -17023,9 +17027,8 @@ async function renderLevelRewards() {
                 <button class="${btnClass}" ${onclick} ${isLocked || isClaimed ? "disabled" : ""} style="flex: 1; margin: 0; min-height: 48px; border-radius: 12px;">${btnText}</button>
 
                 <!-- Ô BÊN PHẢI BÂY GIỜ LÀ RƯƠNG -->
-                <div style="flex-shrink: 0; width: 64px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); border-radius: 12px; border: 1px dashed rgba(85, 239, 196, 0.3);">
-                    <!-- Chỗ này đổi từ m.icon thành m.chestImage nè -->
-                    <img src="${m.chestImage}" style="width: 50px; height: 50px; object-fit: contain; filter: drop-shadow(0 0 8px ${m.shadow});" onerror="this.src='images/do_tuong.png'">
+                <div style="flex-shrink: 0; width: 64px; display: flex; align-items: center; justify-content: center; border-radius: 12px; ${isReady ? 'background: rgba(241, 196, 15, 0.15); border: 2px solid #f1c40f; animation: chestReadyPulse 0.8s infinite alternate;' : 'background: rgba(0,0,0,0.3); border: 1px dashed rgba(85, 239, 196, 0.3); opacity: ' + (isClaimed ? '0.4' : '1')};">
+                    <img src="${m.chestImage}" style="width: 50px; height: 50px; object-fit: contain; filter: drop-shadow(0 0 ${isReady ? '15px' : '8px'} ${m.shadow}) ${isReady ? 'brightness(1.2)' : ''};" onerror="this.src='images/do_tuong.png'">
                 </div>
                 
             </div>
