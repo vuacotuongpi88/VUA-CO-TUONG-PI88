@@ -12373,12 +12373,12 @@ function saveProfile() {
     alert("Cập nhật hồ sơ thành công!");
     closeEditProfile();
 }
-// ==================== KHỐI CHAT CSKH FIX TRIỆT ĐỂ ĐỒNG BỘ ====================
+// ==================== KHỐI CHAT CSKH FIX CỨNG ĐỒNG BỘ 100% ====================
 let adminChatSelectedUser = null; 
 
 function isMeAdmin() {
     const key = makeWalletDbKey();
-    // Danh sách ví Admin của mầy
+    // Admin 406 của mầy nằm ở đây
     return ["pi_0962903406", "google_116744888151240212035", "pi_8962903406"].includes(key); 
 }
 
@@ -12392,7 +12392,7 @@ window.openChat = function() {
     }
 };
 
-// 1. Admin: Xem danh sách khách (Quét cả tin cũ ở root và tin mới ở messages)
+// 1. Admin: Load danh sách khách (Gom tất cả để tính tin nhắn cuối)
 function loadAdminUserList() {
     document.querySelector("#chat-box div span").innerText = "🎧 QUẢN LÝ CSKH";
     const content = document.getElementById("chat-content");
@@ -12402,29 +12402,36 @@ function loadAdminUserList() {
         
         snap.forEach(child => {
             const userKey = child.key;
-            const rawData = child.val();
-            // Gom tất cả tin nhắn từ cả root và messages để tìm tin cuối cùng
-            const msgs = rawData.messages ? Object.assign({}, rawData, rawData.messages) : rawData;
+            const data = child.val();
+            // Gom tin nhắn từ root và messages folder
+            const allMsgs = data.messages ? Object.assign({}, data, data.messages) : data;
             
             let hasUnread = false;
-            let lastMsg = "...";
-            
-            for (let id in msgs) {
-                if (id === "messages" || typeof msgs[id] !== 'object') continue;
-                if (msgs[id].text) lastMsg = msgs[id].text;
-                if (msgs[id].sender === 'user' && msgs[id].readByAdmin === false) hasUnread = true;
+            let lastText = "...";
+            let lastAt = 0;
+
+            for (let id in allMsgs) {
+                if (id === "messages" || typeof allMsgs[id] !== 'object') continue;
+                if (allMsgs[id].at > lastAt) {
+                    lastAt = allMsgs[id].at;
+                    lastText = allMsgs[id].text || "...";
+                }
+                if (allMsgs[id].sender === 'user' && allMsgs[id].readByAdmin === false) hasUnread = true;
             }
-            
+
             const div = document.createElement("div");
             div.style = `padding:10px; background:${hasUnread ? '#d63031' : '#333'}; border-radius:8px; cursor:pointer; margin-bottom:8px; border: 1px solid #444;`;
-            div.innerHTML = `<b>${userKey.substring(0,15)}... ${hasUnread ? '🔴' : ''}</b><br><span style="font-size:11px; opacity:0.8;">${lastMsg.substring(0,30)}</span>`;
-            div.onclick = () => { adminChatSelectedUser = userKey; loadSingleChatRoom(userKey, true); };
+            div.innerHTML = `<b>${userKey.substring(0,15)}... ${hasUnread ? '🔴' : ''}</b><br><span style="font-size:11px; opacity:0.8;">${lastText.substring(0,30)}</span>`;
+            div.onclick = () => { 
+                adminChatSelectedUser = userKey; 
+                loadSingleChatRoom(userKey, true); 
+            };
             content.appendChild(div);
         });
     });
 }
 
-// 2. Load nội dung chat (Hợp nhất dữ liệu cũ và mới)
+// 2. Load nội dung chat (Hợp nhất dữ liệu để hiện đúng)
 window.loadSingleChatRoom = function(walletKey, isAdmin) {
     const chatContent = document.getElementById("chat-content");
     if (isAdmin) {
@@ -12436,59 +12443,69 @@ window.loadSingleChatRoom = function(walletKey, isAdmin) {
         chatContent.innerHTML = "";
         const data = snap.val() || {};
         
-        // HỢP NHẤT: Lấy tin ở root và tin ở folder messages
-        const msgs = data.messages ? Object.assign({}, data, data.messages) : data;
-        if (msgs.messages) delete msgs.messages;
+        // Hợp nhất tin ở ngoài và tin ở trong messages
+        let rawMsgs = data.messages ? Object.assign({}, data, data.messages) : data;
+        
+        const cleanMsgs = [];
+        for (let key in rawMsgs) {
+            if (key !== "messages" && typeof rawMsgs[key] === 'object' && rawMsgs[key].text) {
+                cleanMsgs.push({ id: key, ...rawMsgs[key] });
+            }
+        }
 
-        // Sắp xếp theo thời gian
-        const sorted = Object.values(msgs)
-            .filter(m => typeof m === 'object' && m.text)
-            .sort((a, b) => (a.at || 0) - (b.at || 0));
+        // Sắp xếp theo thời gian 'at'
+        cleanMsgs.sort((a, b) => (a.at || 0) - (b.at || 0));
 
-        sorted.forEach(m => {
+        cleanMsgs.forEach(m => {
             const isMe = (isAdmin && m.sender === 'admin') || (!isAdmin && m.sender === 'user');
             const div = document.createElement("div");
-            div.style = `padding:8px 12px; border-radius:10px; margin-bottom:8px; max-width:85%; font-size:12px; ${isMe ? 'align-self:flex-end; background:#333; color:white;' : 'align-self:flex-start; background:#005f4b; color:white; border:1px solid #55efc4;'}`;
+            div.style = `padding:8px 12px; border-radius:10px; margin-bottom:8px; max-width:85%; font-size:12px; word-break:break-word; ${isMe ? 'align-self:flex-end; background:#333; color:white;' : 'align-self:flex-start; background:#005f4b; color:white; border:1px solid #55efc4;'}`;
             div.innerHTML = `<b style="font-size:10px; color:${isMe ? '#55efc4' : '#ffd166'}">${m.name}</b><br>${m.text}`;
             chatContent.appendChild(div);
         });
         
         chatContent.scrollTop = chatContent.scrollHeight;
 
-        // Admin đọc thì tự động đánh dấu "Đã đọc" cho cả 2 chỗ
+        // Đánh dấu đã đọc
         if (isAdmin) {
-            snap.ref.once('value').then(s => {
-                const d = s.val();
-                let updates = {};
-                // Check tin ở root
-                for(let k in d) { if(d[k].sender==='user' && !d[k].readByAdmin) updates[`${k}/readByAdmin`] = true; }
-                // Check tin ở messages
-                if(d.messages) { for(let k in d.messages) { if(d.messages[k].sender==='user' && !d.messages[k].readByAdmin) updates[`messages/${k}/readByAdmin`] = true; } }
-                if(Object.keys(updates).length > 0) snap.ref.update(updates);
-            });
+            let updates = {};
+            if (data.sender === 'user' && !data.readByAdmin) updates['readByAdmin'] = true; // Tin ở root
+            if (data.messages) {
+                for (let k in data.messages) {
+                    if (data.messages[k].sender === 'user' && !data.messages[k].readByAdmin) updates[`messages/${k}/readByAdmin`] = true;
+                }
+            }
+            if (Object.keys(updates).length > 0) snap.ref.update(updates);
         }
     });
 };
 
-// 3. Gửi tin (Thống nhất gửi vào folder messages)
+// 3. Gửi tin (Chốt gửi vào messages folder cho đúng chuẩn)
 window.sendMsg = async function() {
     const msgInput = document.getElementById("user-msg");
     const text = msgInput.value.trim();
     if (!text) return;
+    
     const isAdmin = isMeAdmin();
     let walletKey = isAdmin ? adminChatSelectedUser : makeWalletDbKey();
     if (isAdmin && !walletKey) return alert("Chọn khách đã mầy!");
 
-    await db.ref("support_chats/" + walletKey + "/messages").push({
+    const msgData = {
         sender: isAdmin ? "admin" : "user",
         name: localStorage.getItem("user-name-display") || "Người chơi",
         text: text,
         at: firebase.database.ServerValue.TIMESTAMP,
         readByAdmin: isAdmin ? true : false
-    });
-    msgInput.value = "";
+    };
+
+    try {
+        await db.ref("support_chats/" + walletKey + "/messages").push(msgData);
+        msgInput.value = "";
+    } catch (err) {
+        console.error("Lỗi gửi tin:", err);
+    }
 };
-// ==================== HẾT KHỐI FIX ====================
+// ==================== HẾT KHỐI FIX CỨNG ====================
 
 window.closeChat = function() {
     const chatBox = document.getElementById("chat-box");
