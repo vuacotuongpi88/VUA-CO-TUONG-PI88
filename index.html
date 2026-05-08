@@ -12453,41 +12453,29 @@ function closeChat() {
     document.getElementById("chat-box").style.display = "none";
 }
 async function sendMsg() {
-    // 1. Kiểm tra xem nút có ăn không
-    alert("BẮT ĐẦU GỬI TIN..."); 
-
     const msgInput = document.getElementById("user-msg");
-    const message = msgInput ? msgInput.value.trim() : "";
-    
-    if (!message) {
-        alert("LỖI: Nội dung trống!");
-        return;
-    }
+    const message = msgInput.value.trim();
+    if (!message) return;
 
     try {
-        // FIX CÚ PHÁP DÒNG 12465 (XÓA CHỮ ANY)
-        const myWalletKey = (typeof makeWalletDbKey === 'function') ? makeWalletDbKey() : "guest";
-        alert("VÍ CỦA MẦY LÀ: " + myWalletKey);
+        // Lấy đúng ID người dùng hoặc ví
+        const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "guest";
+        // Đẩy thẳng vào support_chats/walletKey
+        const chatRef = db.ref("support_chats").child(walletKey); 
 
-        const chatRef = db.ref("support_chats").child(myWalletKey);
-        const meName = localStorage.getItem("user-name-display") || "Người chơi";
-
-        // Gửi tin nhắn
         await chatRef.push({
             sender: 'user',
-            name: meName,
+            name: localStorage.getItem("user-name-display") || "Người chơi",
             text: message,
             at: firebase.database.ServerValue.TIMESTAMP,
             readByAdmin: false 
         });
 
-        alert("GỬI THÀNH CÔNG LÊN FIREBASE!");
         msgInput.value = "";
+        console.log("Đã gửi tin nhắn vào nhánh: " + walletKey);
 
     } catch (err) {
-        // BÁO LỖI FIREBASE NẾU CÓ
-        alert("LỖI FIREBASE RỒI: " + err.message);
-        console.error(err);
+        alert("Lỗi: " + err.message);
     }
 }
 // Hàm đóng mở chat trên Mobile
