@@ -12453,10 +12453,12 @@ function closeChat() {
     document.getElementById("chat-box").style.display = "none";
 }
 
+// TÁCH HẲN RA NHƯ VẦY NÈ ĐẠI GIA
 window.sendMsg = async function() {
     const msgInput = document.getElementById("user-msg");
     const message = msgInput.value.trim();
     if (!message) return;
+    // ... (phần code bên dưới giữ nguyên)
 
     const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "guest";
     const chatRef = db.ref("support_chats/" + walletKey);
