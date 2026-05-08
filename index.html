@@ -12377,13 +12377,22 @@ function saveProfile() {
 let adminChatSelectedUser = null; 
 
 function isMeAdmin() {
-    const key = makeWalletDbKey();
-    // Tao đã thêm các biến thể có và không có số 0 để chắc ăn
+    const key = String(makeWalletDbKey() || "").trim();
+
     const adminKeys = [
-        "pi_0962903406", "pi_962903406", 
-        "google_116744888151240212035", 
-        "pi_8962903406", "google_111054363403565012589"
+        "pi_0962903406",
+        "pi_962903406",
+        "pi_8962903406",
+
+        "guest_ngoc_linh",
+        "guest_0962903406",
+
+        "google_116744888151240212035",
+        "google_111054363403565012589"
     ];
+
+    console.log("ADMIN CHECK KEY =", key);
+
     return adminKeys.includes(key);
 }
 
