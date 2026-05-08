@@ -8622,8 +8622,7 @@ function setMatchStatsV2Line(el, stats, prefixText = "") {
     const prefix = prefixText ? `<div>${escapeMatchStatsV2Html(prefixText)}</div>` : "";
     const wins = Math.max(0, Math.floor(Number(stats?.wins || 0) || 0));
     const losses = Math.max(0, Math.floor(Number(stats?.losses || 0) || 0));
-    const matches = Math.max(0, Math.floor(Number(stats?.matches || (wins + losses)) || 0));
-    el.innerHTML = `${prefix}<div class="player-v2-record-line">V2: <span class="v2-win">T ${wins}</span> / <span class="v2-loss">B ${losses}</span> • ${matches} ván</div>`;
+    el.innerHTML = `${prefix}<div class="player-v2-record-line"><span class="v2-win">T ${wins}</span> / <span class="v2-loss">B ${losses}</span></div>`;
 }
 
 async function readWalletStatsV2ForAvatar(walletKey) {
@@ -13779,7 +13778,7 @@ listEl.innerHTML = list.map((p, i) => {
         } else if (arenaTopActiveTab === "record") {
             let winHtml = p.wins >= 1 ? `<span style="color: #55efc4;">Thắng ${p.wins}</span>` : `Thắng ${p.wins}`;
             let lossHtml = p.losses >= 1 ? `<span style="color: #ff7675;">Thua ${p.losses}</span>` : `Thua ${p.losses}`;
-            value = `V2 ${winHtml} / ${lossHtml}`;
+            value = `${winHtml} / ${lossHtml}`;
         } else if (arenaTopActiveTab === "pi") {
             value = `${p.pi.toLocaleString("vi-VN", { maximumFractionDigits: 4 })} π`;
         } else if (arenaTopActiveTab === "pmc") {
@@ -17742,14 +17741,16 @@ renderPlayersFromRoom = function(room) {
     const oppSide = safeMySide === "den" ? "do" : "den";
     const oppPlayer = room?.players?.[oppSide] || {};
     
-    const oppTicketBox = document.getElementById(`player-${oppSide}-ticket-balance`);
-    if (oppTicketBox) {
-        oppTicketBox.innerText = Math.max(0, Math.floor(Number(oppPlayer.freeTickets) || 0)) + " 🎫";
+    // UI Game chốt cứng: Ô TRÊN ("den") luôn là Đối Thủ, Ô DƯỚI ("do") luôn là Mình
+    const topTicketBox = document.getElementById("player-den-ticket-balance");
+    const bottomTicketBox = document.getElementById("player-do-ticket-balance");
+    
+    if (topTicketBox) {
+        topTicketBox.innerText = Math.max(0, Math.floor(Number(oppPlayer.freeTickets) || 0)) + " 🎫";
     }
     
-    const myTicketBox = document.getElementById(`player-${safeMySide}-ticket-balance`);
-    if (myTicketBox) {
-        myTicketBox.innerText = window.currentFreeTickets + " 🎫";
+    if (bottomTicketBox) {
+        bottomTicketBox.innerText = window.currentFreeTickets + " 🎫";
     }
 };
 
