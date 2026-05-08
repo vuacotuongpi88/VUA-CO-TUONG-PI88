@@ -5616,6 +5616,50 @@ margin-bottom: 14px;
     70% { transform: scale(1.1); opacity: 1; }
     100% { transform: scale(1); opacity: 1; }
 }
+/* =========================================
+   THANH CẢNH BÁO PI TEST CHẠY NGANG TỐI CAO
+   ========================================= */
+#testnet-warning-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    background: linear-gradient(90deg, #d63031, #b33939); /* Nền đỏ đậm báo động */
+    color: #fff;
+    font-size: 14px;
+    font-weight: 900;
+    padding: 8px 0;
+    z-index: 999999; /* Đè lên vạn vật trên đời */
+    overflow: hidden;
+    border-bottom: 2px solid #ffeaa7; /* Viền vàng chanh */
+    box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+    display: flex;
+    align-items: center;
+}
+
+.warning-text-scroll {
+    white-space: nowrap;
+    /* Tốc độ chạy: 25s. Mầy thấy chậm thì giảm xuống 20s, nhanh thì tăng lên 30s */
+    animation: scrollText 25s linear infinite; 
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    letter-spacing: 0.5px;
+    color: #fff8d6;
+}
+
+@keyframes scrollText {
+    /* Trượt từ mép bên phải màn hình sang tuốt bên trái */
+    0% { transform: translateX(100vw); }
+    100% { transform: translateX(-100%); }
+}
+
+/* Đẩy các nút UI ở góc trên xuống 35px để nhường chỗ cho thanh cảnh báo, chống đè nút */
+.hamburger-menu-container, 
+#arena-mission-btn, 
+#arena-skin-btn, 
+#arena-top-btn, 
+#mobile-friend-wrap {
+    margin-top: 35px !important;
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -5623,6 +5667,11 @@ margin-bottom: 14px;
 </script>
 </head>
 <body>
+    <div id="testnet-warning-banner">
+        <div class="warning-text-scroll">
+            ⚠️ LƯU Ý QUAN TRỌNG: Game hiện đang chạy trên mạng thử nghiệm (Pi Testnet). Toàn bộ số Pi và PMC trong game là TIỀN ẢO DÙNG ĐỂ CHƠI THỬ, hoàn toàn KHÔNG CÓ GIÁ TRỊ THỰC TẾ! Tuyệt đối không mua bán hay giao dịch bằng tiền thật dưới mọi hình thức! Chúc anh em giải trí vui vẻ! ⚠️
+        </div>
+    </div>
     <div id="exp-bar-container"><div id="exp-bar-fill"></div></div>
 <div id="exp-text-float">CẤP 1: 0/100 EXP</div>
 <div id="edit-profile-modal" class="modal" style="display:none;">
