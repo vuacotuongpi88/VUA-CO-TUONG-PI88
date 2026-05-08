@@ -12461,9 +12461,9 @@ async function sendMsg() {
     if (!message) return;
 
     try {
-        // Giữ nguyên logic lấy key của mầy để không lệch database
-        const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "guest";
-        const chatRef = db.ref("support_chats/" + walletKey);
+        // Sửa đoạn dòng 12465 trong file của mầy
+const myWalletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "guest";
+const chatRef = db.ref("support_chats").child(myWalletKey);
         const meName = localStorage.getItem("user-name-display") || "Người chơi";
 
         await chatRef.push({
