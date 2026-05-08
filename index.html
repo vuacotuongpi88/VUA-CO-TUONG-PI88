@@ -6500,18 +6500,19 @@ style="background: #55efc4; border: none; padding: 5px 12px; border-radius: 5px;
 <script>
 // --- FIREBASE (GIỮ NGUYÊN) ---
 const firebaseConfig = {
-apiKey: "AIzaSyA2P3yh0o-Jr2zCDkFxBg4YTrFSTpeS8P0",
-authDomain: "bonsaipi224.firebaseapp.com",
-databaseURL: "https://bonsaipi224-default-rtdb.firebaseio.com",
-projectId: "bonsaipi224",
-storageBucket: "bonsaipi224.firebasestorage.app",
-messagingSenderId: "818801429743",
-appId: "1:818801429743:web:27ed0c854b8be5c8a95f1a"
+  apiKey: "AIzaSyBueYOZ7kpz9gRN1MoDia_vrb-Qu7uzjV8",
+  authDomain: "co-tuong-bd072.firebaseapp.com",
+  databaseURL: "https://co-tuong-bd072-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "co-tuong-bd072",
+  storageBucket: "co-tuong-bd072.firebasestorage.app",
+  messagingSenderId: "451564287193",
+  appId: "1:451564287193:web:22d8c8bda2f83cc0fa7ac8"
 };
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.database();
 const provider = new firebase.auth.GoogleAuthProvider();
+
 let readyServerOffsetMs = 0;
 
 db.ref(".info/serverTimeOffset").on("value", snap => {
