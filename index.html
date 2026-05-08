@@ -17219,13 +17219,28 @@ window.getLevelFromExp = function(totalExp) {
 window.getExpByResult = function(result) {
     if (result === 'win') {
         window.sessionWins++; // Lưu ngầm số ván thắng
-        const dailyCount = Number(localStorage.getItem('daily_matches_mc') || 0);
+        
+        // --- BẮT ĐẦU FIX: BỘ ĐẾM NGÀY ĐỂ RESET EXP VỀ LẠI 30 ---
+        const homNay = new Date().toLocaleDateString(); // Lấy ngày tháng năm hiện tại
+        const ngayCu = localStorage.getItem('daily_matches_mc_date'); // Lấy ngày tháng năm của ván cuối cùng
+        
+        let dailyCount = Number(localStorage.getItem('daily_matches_mc') || 0);
+        
+        // KỊCH BẢN: Nếu qua ngày mới (ngày cũ đéo giống hôm nay) -> Reset sạch sẽ về 0
+        if (ngayCu !== homNay) {
+            dailyCount = 0;
+            localStorage.setItem('daily_matches_mc_date', homNay); // Cập nhật lại ngày mới
+        }
+        // --------------------------------------------------------
+
         let gain = Math.max(2, 30 - (dailyCount * 2.5));
+        
+        // Đánh xong 1 ván thì tăng biến đếm lên để ván sau giảm dần
         localStorage.setItem('daily_matches_mc', dailyCount + 1);
         return Math.floor(gain);
     }
     window.sessionLosses++; // Lưu ngầm số ván thua
-    return -5; 
+    return -5; // Thua trừ 5
 };
 
 window.applyPendingExpToDatabase = async function() {
