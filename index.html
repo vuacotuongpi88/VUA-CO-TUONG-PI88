@@ -5600,16 +5600,22 @@ margin-bottom: 14px;
     position: fixed; inset: 0; background: rgba(0, 0, 0, 0.9);
     z-index: 999999; display: none; align-items: center; justify-content: center;
 }
+/* --- HÌNH ẢNH RƯƠNG TRONG LÚC CHIẾU PHIM --- */
 .chest-anim-sprite {
-    width: 250px; height: 250px; object-fit: contain;
-    filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.5));
+    width: 400px;     /* ÉP TO LÊN 400px */
+    height: 400px;    /* ÉP TO LÊN 400px */
+    max-width: 95vw;  /* Chống lố màn hình điện thoại */
+    object-fit: contain;
+    filter: drop-shadow(0 0 35px rgba(255, 215, 0, 0.6)); /* Hào quang chói lóa hơn */
+    animation: chestZoomIn 0.4s ease-out forwards; /* Hiệu ứng rương bay đập thẳng vào mặt */
 }
-.white-flash {
-    position: fixed; inset: 0; background: white;
-    z-index: 9999999; opacity: 0; pointer-events: none;
-    animation: flashBang 0.8s ease-out forwards;
+
+/* Hiệu ứng rương bay thẳng ra màn hình */
+@keyframes chestZoomIn {
+    0% { transform: scale(0.5); opacity: 0; }
+    70% { transform: scale(1.1); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
 }
-@keyframes flashBang { 0% { opacity: 1; } 100% { opacity: 0; } }
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
