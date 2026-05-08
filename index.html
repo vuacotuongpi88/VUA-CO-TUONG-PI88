@@ -5859,10 +5859,11 @@ margin-bottom: 14px;
 </div>
 
 <div id="user-display" class="hamburger-menu-container" style="display: none;">
-<div class="hamburger-icon" onclick="toggleProfileMenu(event)">
+<div class="hamburger-icon" onclick="toggleProfileMenu(event)" style="position: relative;">
 <span></span>
 <span></span>
 <span></span>
+<div id="admin-msg-badge" style="display:none; position:absolute; top:-5px; right:-8px; background:red; color:white; font-size:10px; padding:2px 6px; border-radius:50%; border:1px solid white; z-index:100; font-family:Arial; font-weight:bold;">!</div>
 </div>
 
 <div class="user-meta" onclick="toggleProfileMenu(event)">
@@ -6767,6 +6768,7 @@ showHomeUI();
 setPlayerPresence("home");
 startPresenceHeartbeat();
 renderRoomInviteOverlay();
+if (typeof bindAdminNotification === 'function') bindAdminNotification(); // Bật radar
 }
 
 function showLoginChoices() {
@@ -12362,48 +12364,126 @@ function saveProfile() {
     alert("Cập nhật hồ sơ thành công!");
     closeEditProfile();
 }
-function openChat() {
+window.openChat = function() {
     document.querySelectorAll(".profile-menu").forEach(m => {
         m.classList.remove("show");
     });
 
     const chatBox = document.getElementById("chat-box");
-    if (!chatBox) {
-        alert("Không thấy khung chat admin.");
-        return;
-    }
-
+    if (!chatBox) return;
     chatBox.style.display = "block";
+
+    const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "guest";
+    const chatContent = document.getElementById("chat-content");
+
+    // Quét lịch sử chat trên Firebase
+    db.ref("support_chats/" + walletKey).on("value", (snap) => {
+        chatContent.innerHTML = "";
+        snap.forEach(child => {
+            const m = child.val();
+            const msgDiv = document.createElement("div");
+            msgDiv.style.padding = "5px 8px";
+            msgDiv.style.borderRadius = "8px";
+            msgDiv.style.marginBottom = "8px";
+            msgDiv.style.maxWidth = "85%";
+            msgDiv.style.fontSize = "12px";
+            
+            if (m.sender === 'user') {
+                msgDiv.style.background = "#333";
+                msgDiv.style.alignSelf = "flex-end";
+                msgDiv.style.color = "white";
+                msgDiv.innerHTML = `<b style="color:#55efc4">Bạn:</b> ${m.text}`;
+            } else {
+                msgDiv.style.background = "#005f4b";
+                msgDiv.style.alignSelf = "flex-start";
+                msgDiv.style.color = "white";
+                msgDiv.innerHTML = `<b style="color:#ffd166">${m.name}:</b> ${m.text}`;
+            }
+            chatContent.appendChild(msgDiv);
+        });
+        chatContent.scrollTop = chatContent.scrollHeight;
+
+        // Tự tắt chấm đỏ nếu Admin đang mở xem
+        if (typeof isCurrentPiAdminKey === 'function' && isCurrentPiAdminKey()) {
+            snap.forEach(child => {
+                if (child.val().sender === 'user' && !child.val().readByAdmin) {
+                    child.ref.update({ readByAdmin: true });
+                }
+            });
+        }
+    });
+};
+
+// HÀM LẮNG NGHE TIN NHẮN DÀNH CHO ADMIN (Nổ chấm đỏ)
+function bindAdminNotification() {
+    // Chỉ kích hoạt radar nếu nick đang login là Admin (đuôi 406)
+    if (typeof isCurrentPiAdminKey !== 'function' || !isCurrentPiAdminKey()) return;
+
+    const badge = document.getElementById("admin-msg-badge");
+    if(!badge) return;
+    
+    db.ref("support_chats").on("value", (snap) => {
+        let hasNewMsg = false;
+        const allChats = snap.val() || {};
+        
+        for (let userKey in allChats) {
+            const msgs = allChats[userKey];
+            for (let msgId in msgs) {
+                if (msgs[msgId].sender === 'user' && msgs[msgId].readByAdmin === false) {
+                    hasNewMsg = true;
+                    break;
+                }
+            }
+            if (hasNewMsg) break;
+        }
+
+        // Có người kiện thì bật chấm đỏ lên
+        if (hasNewMsg) {
+            badge.style.display = "block";
+            badge.innerText = "!";
+        } else {
+            badge.style.display = "none";
+        }
+    });
 }
 // Hàm đóng khung chat
 function closeChat() {
 document.getElementById("chat-box").style.display = "none";
-} function sendMsg() {
-const msgInput = document.getElementById("user-msg");
-const chatContent = document.getElementById("chat-content");
-const message = msgInput.value.trim();
+} 
+window.sendMsg = async function() {
+    const msgInput = document.getElementById("user-msg");
+    const message = msgInput.value.trim();
+    if (!message) return;
 
-if (message !== "") {
-// Tạo phần tử hiển thị tin nhắn mới
-const msgDiv = document.createElement("div");
-msgDiv.style.color = "white";
-msgDiv.style.marginBottom = "10px";
-msgDiv.style.padding = "5px";
-msgDiv.style.background = "#444";
-msgDiv.style.borderRadius = "5px";
-msgDiv.style.alignSelf = "flex-end"; // Đẩy tin nhắn người dùng sang phải
-msgDiv.innerText = "Bạn: " + message;
+    const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "guest";
+    const chatRef = db.ref("support_chats/" + walletKey);
+    const meName = localStorage.getItem("user-name-display") || "Người chơi";
 
-// Thêm vào khung nội dung chat
-chatContent.appendChild(msgDiv);
+    // 1. Đẩy tin nhắn lên Firebase
+    await chatRef.push({
+        sender: 'user',
+        name: meName,
+        text: message,
+        at: firebase.database.ServerValue.TIMESTAMP,
+        readByAdmin: false // Đánh dấu chưa đọc để nổ chấm đỏ cho Admin
+    });
 
-// Xóa nội dung trong ô nhập sau khi gửi
-msgInput.value = "";
+    msgInput.value = "";
 
-// Tự động cuộn xuống cuối khung chat
-chatContent.scrollTop = chatContent.scrollHeight;
-}
-}// Hàm đóng mở chat trên Mobile
+    // 2. Tự động trả lời sau 2 giây nếu là tin đầu tiên
+    setTimeout(async () => {
+        const snap = await chatRef.limitToLast(2).once("value");
+        if (snap.numChildren() <= 1) {
+            chatRef.push({
+                sender: 'admin',
+                name: 'Hệ thống (Auto)',
+                text: "Chào mầy! Hiện tại Admin đang bận hoặc đi ngủ. Mầy cứ để lại lỗi ở đây, Admin sẽ giải quyết và trả lời mầy trong vòng 24h nhé!",
+                at: firebase.database.ServerValue.TIMESTAMP
+            });
+        }
+    }, 2000);
+};
+// Hàm đóng mở chat trên Mobile
 function toggleMobileChat() {
 const chatBox = document.getElementById("game-chat-box");
 if (chatBox.style.display === "none" || chatBox.style.display === "") {
