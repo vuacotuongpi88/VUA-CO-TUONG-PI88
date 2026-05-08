@@ -12373,13 +12373,17 @@ function saveProfile() {
     alert("Cập nhật hồ sơ thành công!");
     closeEditProfile();
 }
-// ==================== KHỐI CHAT CSKH FIX TRIỆT ĐỂ V5 ====================
+// ==================== KHỐI CHAT CSKH FIX TRIỆT ĐỂ V6 ====================
 let adminChatSelectedUser = null; 
 
 function isMeAdmin() {
     const key = makeWalletDbKey();
-    // Danh sách ID Admin chuẩn của mầy
-    const adminKeys = ["pi_0962903406", "google_116744888151240212035", "pi_8962903406"];
+    // Tao đã thêm các biến thể có và không có số 0 để chắc ăn
+    const adminKeys = [
+        "pi_0962903406", "pi_962903406", 
+        "google_116744888151240212035", 
+        "pi_8962903406", "google_111054363403565012589"
+    ];
     return adminKeys.includes(key);
 }
 
@@ -12388,53 +12392,56 @@ window.openChat = function() {
     document.querySelectorAll(".profile-menu").forEach(m => m.classList.remove("show"));
     document.getElementById("chat-box").style.display = "block";
     
-    // BƯỚC 1: HIỆN THÔNG BÁO ĐỂ MẦY TỰ KIỂM TRA ID
-    console.log("ID HIỆN TẠI CỦA MẦY:", myKey);
+    // 🔥 BƯỚC THẦN THÁNH: HIỆN ID ĐỂ KIỂM TRA
+    console.log("ID CỦA MẦY LÀ:", myKey);
+    // Nếu mầy mở trên điện thoại, hãy tạm thời bỏ comment dòng alert dưới đây để xem ID:
+    // alert("ID của mầy: " + myKey);
 
     if (isMeAdmin()) {
-        adminChatSelectedUser = null; // Reset để hiện danh sách
+        adminChatSelectedUser = null; 
         loadAdminUserList();
     } else {
         loadSingleChatRoom(myKey, false);
     }
 };
 
-// 1. Admin: Load danh sách khách (Lấy danh sách ID từ support_chats)
+// 1. Admin: Load danh sách khách
 function loadAdminUserList() {
     const content = document.getElementById("chat-content");
-    document.querySelector("#chat-box div span").innerText = "🎧 QUẢN LÝ CSKH";
+    const headerTitle = document.querySelector("#chat-box div span");
+    headerTitle.innerText = "🎧 QUẢN LÝ CSKH";
     
+    // Admin thì lắng nghe toàn bộ support_chats để hiện danh sách người nhắn
     db.ref("support_chats").on("value", (snap) => {
-        if (adminChatSelectedUser) return; // Nếu đang trong phòng thì không vẽ lại danh sách
+        if (adminChatSelectedUser) return; 
+        content.innerHTML = "";
         
         if (!snap.exists()) {
-            content.innerHTML = "<div style='color:orange; text-align:center;'>Chưa có khách nhắn tin.</div>";
+            content.innerHTML = "<div style='color:orange; text-align:center; font-size:11px;'>Chưa có khách nhắn tin.</div>";
             return;
         }
 
-        content.innerHTML = "<div style='color:#55efc4; font-size:11px; font-weight:bold; margin-bottom:10px;'>DANH SÁCH KHÁCH:</div>";
-        
         snap.forEach(child => {
             const userKey = child.key;
             const data = child.val();
+            // Lấy folder messages
             const msgs = data.messages || {};
             
-            // Lấy tin cuối cùng để hiện preview
-            const msgIds = Object.keys(msgs);
-            const lastMsg = msgIds.length > 0 ? msgs[msgIds[msgIds.length - 1]] : { text: "..." };
+            // Tìm tin nhắn cuối cùng để hiện preview
+            const ids = Object.keys(msgs);
+            const lastMsg = ids.length > 0 ? msgs[ids[ids.length - 1]] : { text: "...", name: "Khách" };
             
             let hasUnread = false;
             for (let id in msgs) {
                 if (msgs[id].sender === 'user' && msgs[id].readByAdmin === false) {
-                    hasUnread = true;
-                    break;
+                    hasUnread = true; break;
                 }
             }
 
             const div = document.createElement("div");
             div.style = `padding:10px; background:${hasUnread ? '#d63031' : '#333'}; border-radius:8px; cursor:pointer; margin-bottom:8px; border: 1px solid #444;`;
             div.innerHTML = `
-                <div style="font-size:12px; font-weight:bold; color:white;">👤 ${userKey.substring(0,12)}... ${hasUnread ? '🔴' : ''}</div>
+                <div style="font-size:12px; font-weight:bold; color:#55efc4;">👤 ${lastMsg.name || userKey.substring(0,10)} ${hasUnread ? '🔴' : ''}</div>
                 <div style="font-size:10px; color:#aaa; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${lastMsg.text}</div>
             `;
             div.onclick = () => { 
@@ -12446,7 +12453,7 @@ function loadAdminUserList() {
     });
 }
 
-// 2. Load nội dung chat (Đồng bộ 100% Khách và Admin vào folder /messages)
+// 2. Load nội dung chat (Ép Admin và Khách nhìn vào cùng folder /messages)
 window.loadSingleChatRoom = function(walletKey, isAdmin) {
     const chatContent = document.getElementById("chat-content");
     const headerTitle = document.querySelector("#chat-box div span");
@@ -12457,13 +12464,13 @@ window.loadSingleChatRoom = function(walletKey, isAdmin) {
         headerTitle.innerText = "🎧 HỖ TRỢ CSKH";
     }
     
-    // Lắng nghe trực tiếp folder messages của khách
+    // Lắng nghe đúng đường dẫn messages của khách
     db.ref("support_chats/" + walletKey + "/messages").on("value", (snap) => {
         if (isAdmin && adminChatSelectedUser !== walletKey) return;
         chatContent.innerHTML = "";
         
         if (!snap.exists()) {
-            chatContent.innerHTML = "<div style='text-align:center; opacity:0.5; font-size:11px; margin-top:20px;'>Gửi tin nhắn để bắt đầu hỗ trợ.</div>";
+            chatContent.innerHTML = "<div style='text-align:center; opacity:0.5; font-size:11px; margin-top:20px;'>Gửi tin để bắt đầu.</div>";
             return;
         }
 
@@ -12478,7 +12485,7 @@ window.loadSingleChatRoom = function(walletKey, isAdmin) {
             div.innerHTML = `<b style="font-size:10px; color:${isMe ? '#55efc4' : '#ffd166'}">${m.name}</b><br>${m.text}`;
             chatContent.appendChild(div);
             
-            // Đánh dấu đã đọc nếu là Admin đang xem tin của khách
+            // Đánh dấu đã đọc khi Admin vào xem
             if (isAdmin && m.sender === 'user' && m.readByAdmin === false) {
                 snap.ref.child(m.id).update({ readByAdmin: true });
             }
@@ -12497,8 +12504,7 @@ window.sendMsg = async function() {
     const walletKey = isAdmin ? adminChatSelectedUser : makeWalletDbKey();
     
     if (isAdmin && !walletKey) {
-        alert("Mầy chưa chọn khách nào để nhắn!");
-        return;
+        alert("Mầy chưa chọn khách!"); return;
     }
 
     const msgData = {
@@ -12513,10 +12519,10 @@ window.sendMsg = async function() {
         await db.ref("support_chats/" + walletKey + "/messages").push(msgData);
         msgInput.value = "";
     } catch (err) {
-        alert("Lỗi kết nối: " + err.message);
+        console.error(err);
     }
 };
-// ==================== HẾT KHỐI FIX V5 ====================
+// ==================== HẾT KHỐI FIX V6 ====================
 
 window.closeChat = function() {
     const chatBox = document.getElementById("chat-box");
