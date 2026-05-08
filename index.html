@@ -12455,17 +12455,16 @@ function closeChat() {
 
 async function sendMsg() {
     const msgInput = document.getElementById("user-msg");
-    if (!msgInput) return;
-    
     const message = msgInput.value.trim();
     if (!message) return;
 
     try {
-        // Sửa đoạn dòng 12465 trong file của mầy
-const myWalletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "guest";
-const chatRef = db.ref("support_chats").child(myWalletKey);
+        // SỬA LẠI DÒNG NÀY CHO CHUẨN:
+        const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "guest";
+        const chatRef = db.ref("support_chats").child(walletKey); 
         const meName = localStorage.getItem("user-name-display") || "Người chơi";
 
+        // 1. Đẩy tin nhắn lên Firebase
         await chatRef.push({
             sender: 'user',
             name: meName,
@@ -12474,12 +12473,23 @@ const chatRef = db.ref("support_chats").child(myWalletKey);
             readByAdmin: false 
         });
 
-        // Xóa nội dung ô nhập sau khi gửi thành công
         msgInput.value = "";
-        console.log("Tin nhắn đã gửi!");
+
+        // 2. Tự động trả lời sau 2 giây (Chỉ gửi 1 lần đầu)
+        setTimeout(async () => {
+            const snap = await chatRef.limitToLast(2).once("value");
+            if (snap.numChildren() <= 1) {
+                await chatRef.push({
+                    sender: 'admin',
+                    name: 'Hệ thống (Auto)',
+                    text: "Chào bạn! Hiện tại Admin đang bận. Bạn cứ để lại lời nhắn, Admin sẽ trả lời sớm nhất nhé!",
+                    at: firebase.database.ServerValue.TIMESTAMP
+                });
+            }
+        }, 2000);
 
     } catch (err) {
-        console.error("Lỗi gửi tin nhắn:", err);
+        console.error("Lỗi chat:", err);
     }
 }
 // Hàm đóng mở chat trên Mobile
