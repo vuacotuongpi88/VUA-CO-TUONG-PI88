@@ -8621,12 +8621,13 @@ function escapeMatchStatsV2Html(text = "") {
 
 function setMatchStatsV2Line(el, stats, prefixText = "") {
     if (!el) return;
-    const prefix = prefixText ? `<div>${escapeMatchStatsV2Html(prefixText)}</div>` : "";
-    const wins = Math.max(0, Math.floor(Number(stats?.wins || 0) || 0));
-    const losses = Math.max(0, Math.floor(Number(stats?.losses || 0) || 0));
-    el.innerHTML = `${prefix}<div class="player-v2-record-line"><span class="v2-win">T ${wins}</span> / <span class="v2-loss">B ${losses}</span></div>`;
+    // Chỉ giữ lại Mã Mời (nếu có), dọn sạch sành sanh dòng hiển thị Thắng/Thua (T/B)
+    if (prefixText) {
+        el.innerHTML = `<div>${escapeMatchStatsV2Html(prefixText)}</div>`;
+    } else {
+        el.innerHTML = "";
+    }
 }
-
 async function readWalletStatsV2ForAvatar(walletKey) {
     walletKey = String(walletKey || "").trim();
     if (!walletKey) return { wins: 0, losses: 0, matches: 0 };
