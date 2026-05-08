@@ -285,8 +285,9 @@ async function buildMetrics(db, walletKey, now = Date.now()) {
   const weekStart = weekStartMs(now);
   const monthStart = monthStartMs(now);
 
-  const [matchesSnap, friendsSnap] = await Promise.all([
-    db.ref('matches').once('value'),
+  // ĐÃ SỬA: Đọc lịch sử ván đấu (matchHistoryV2) của riêng người dùng này thay vì đọc toàn bộ nhánh matches rác!
+  const [historySnap, friendsSnap] = await Promise.all([
+    db.ref(`wallets/${walletKey}/matchHistoryV2`).once('value'),
     db.ref(`social/friends/${walletKey}`).once('value')
   ]);
 
@@ -306,38 +307,33 @@ async function buildMetrics(db, walletKey, now = Date.now()) {
   const weekDays = new Set();
   const monthDays = new Set();
 
-  matchesSnap.forEach(child => {
-    const room = child.val() || {};
-    const players = room.players || {};
-    const doKey = String(players?.do?.walletKey || '').trim();
-    const denKey = String(players?.den?.walletKey || '').trim();
+  historySnap.forEach(child => {
+    const record = child.val() || {};
+    
+    // Bỏ qua các ván đang đánh hoặc lỗi
+    if (!record.done) return;
 
-    let side = '';
-    if (doKey === walletKey) side = 'do';
-    if (denKey === walletKey) side = 'den';
-    if (!side) return;
-
-    const winner = String(room.winner || '').trim();
-    if (!winner) return;
-
-    const eventTs = Number(room.updatedAt || room.createdAt || 0);
+    // Lấy thời gian ván đấu kết thúc
+    const eventTs = Number(record.at || 0);
     if (!Number.isFinite(eventTs) || eventTs <= 0) return;
+
+    const isWin = record.result === 'win';
 
     if (eventTs >= dayStart) {
       metrics.dayMatches += 1;
-      if (winner === side) metrics.dayWins += 1;
+      if (isWin) metrics.dayWins += 1;
     }
 
     if (eventTs >= weekStart) {
       metrics.weekMatches += 1;
       weekDays.add(localDayKey(eventTs));
-      if (winner === side) metrics.weekWins += 1;
+      if (isWin) metrics.weekWins += 1;
     }
 
     if (eventTs >= monthStart) {
       metrics.monthMatches += 1;
       monthDays.add(localDayKey(eventTs));
-      if (winner === side) metrics.monthWins += 1;
+      if (isWin) metrics.monthWins += 1;
     }
   });
 
