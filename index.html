@@ -12382,18 +12382,25 @@ window.openChat = function() {
     if (!chatBox) return;
     chatBox.style.display = "block";
 
-  let walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "guest";
+// Nếu tao là Admin, tao sẽ lấy số ví khách hàng từ 1 cái ô nhập liệu. 
+// Nếu không có ô nhập liệu, tao tạm ép cứng vào ví Châu để test.
+let walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "guest";
 
-// NẾU LÀ ADMIN THÌ ÉP ĐỌC TIN NHẮN CỦA VÍ 657 ĐỂ TEST
 if (typeof isCurrentPiAdminKey === 'function' && isCurrentPiAdminKey()) {
+    // Admin đang đăng nhập. TẠM THỜI MÌNH ÉP CỨNG ĐỂ TEST VÍ 657
     walletKey = "pi_0865417657"; 
+    
+    // NẾU SAU NÀY MẦY MUỐN XỊN: Tạo 1 cái prompt cho Admin nhập số ví cần hỗ trợ:
+    // const inputWallet = prompt("Nhập ID ví khách hàng cần hỗ trợ (VD: pi_0865417657):");
+    // if (inputWallet) walletKey = inputWallet.trim();
 }
 
 const chatContent = document.getElementById("chat-content");
 
-// Quét lịch sử chat trên Firebase
+// Admin (hoặc khách) sẽ chui vào ĐÚNG CÁI PHÒNG walletKey này để soi tin nhắn
 db.ref("support_chats/" + walletKey).on("value", (snap) => {
-        chatContent.innerHTML = "";
+    chatContent.innerHTML = "";
+// ... giữ nguyên phần dưới ...
         snap.forEach(child => {
             const m = child.val();
             const msgDiv = document.createElement("div");
