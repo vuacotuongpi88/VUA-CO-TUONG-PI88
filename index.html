@@ -14102,19 +14102,17 @@ async function openArenaTopModal(e) {
     const now = Date.now();
     const listEl = document.getElementById("arena-top-list");
 
-    // 🔥 LỚP BẢO VỆ CACHE: Nếu vừa tải xong chưa quá 30s (30000ms), lôi đồ cũ ra xài luôn, ĐÉO tải lại!
-    if (now - lastTopFetchTime < 30000 && arenaTopCache.length > 0) {
+    // SỬA DÒNG NÀY: 30000 -> 300000
+    if (now - lastTopFetchTime < 300000 && arenaTopCache.length > 0) {
         renderArenaTopList();
     } else {
-        // Còn nếu quá 30s hoặc mới vô game chưa có data, thì báo "Đang tải" và gọi Firebase
         if (listEl && arenaTopCache.length === 0) listEl.innerHTML = '<div class="top-empty">Đang tải bảng Top...</div>';
         await safeFetchAndRenderTop();
     }
 
-    // Dọn Timer cũ trước khi cài Timer mới
     if (arenaTopUpdateTimer) clearInterval(arenaTopUpdateTimer);
 
-    // 🔥 TIMER TỰ ĐỘNG CẬP NHẬT: Quét mỗi 30 giây (30000ms)
+    // SỬA DÒNG NÀY: 30000 -> 300000
     arenaTopUpdateTimer = setInterval(() => {
         if (modal && modal.classList.contains("show")) {
             safeFetchAndRenderTop();
@@ -14122,7 +14120,7 @@ async function openArenaTopModal(e) {
             clearInterval(arenaTopUpdateTimer);
             arenaTopUpdateTimer = null;
         }
-    }, 30000); 
+    }, 300000);
 }
 
 function closeArenaTopModal() {
@@ -14646,37 +14644,41 @@ async function cleanupGhostLobbyRoomsOnce() {
     }
 }
 
+let lobbyPollTimer = null;
 function bindLobbyRoomList() {
-    // tránh bind nhiều lần
     if (typeof window.lobbyBound !== "undefined" && window.lobbyBound) return;
     window.lobbyBound = true;
 
-    // clear listener cũ
+    // Rút sạch cái ống hút trực tiếp cũ ra
     if (lobbyRoomListRef) {
         lobbyRoomListRef.off();
     }
 
-    lobbyRoomListRef = db.ref("matches")
-        .orderByChild("createdAt")
-        .limitToLast(50);
+    const fetchLobby = async () => {
+        try {
+            // Chỉ kéo 1 lần (once), không cắm cọc (on) nữa. Giảm xuống 20 phòng mới nhất.
+            const snap = await db.ref("matches").orderByChild("createdAt").limitToLast(20).once("value");
+            const roomList = [];
 
-    lobbyRoomListRef.on("value", snap => {
-        const roomList = [];
+            snap.forEach(child => {
+                const room = child.val();
+                if (!room) return;
+                room.id = child.key;
+                if (shouldShowLobbyRoom(room)) {
+                    roomList.push(room);
+                }
+            });
 
-        snap.forEach(child => {
-            const room = child.val();
-            if (!room) return;
+            renderLobbyRoomList(roomList);
+        } catch (err) {
+            console.error("Lỗi kéo sảnh:", err);
+        }
+    };
 
-            room.id = child.key;
+    fetchLobby(); // Kéo ngay lúc mới vào sảnh
 
-            // 🔥 FIX: Dùng đúng hàm lọc mày đã viết để chặn rác/ẩn phòng của chính mình
-            if (shouldShowLobbyRoom(room)) {
-                roomList.push(room);
-            }
-        });
-
-        renderLobbyRoomList(roomList);
-    });
+    // Cứ 15 giây mới kéo danh sách 1 lần thay vì tải cả đống mỗi giây
+    lobbyPollTimer = setInterval(fetchLobby, 15000); 
 }
 let friendListRef = null;
 let friendRequestRef = null;
@@ -16933,7 +16935,7 @@ setTimeout(ensureArenaTopButton, 500);
 setTimeout(ensureArenaTopButton, 1500);
 // HỆ THỐNG TIM MẠCH (CHỐNG BỆNH TÀNG HÌNH DO NGỦ GẬT)
 setInterval(() => {
-    // 1. Nếu đang ở sảnh chờ mà là chủ phòng (Phe Đỏ), thì 10 giây phải đập tim 1 lần
+    // 1. Nếu đang ở sảnh chờ mà là chủ phòng (Phe Đỏ), thì 30 giây phải đập tim 1 lần
     if (currentRoomId && mySide === "do" && currentRoomStatus === "waiting") {
         touchCurrentLobbyHeartbeat().catch(() => {});
     }
@@ -16942,7 +16944,7 @@ setInterval(() => {
     if (typeof cleanupGhostLobbyRoomsOnce === "function") {
         cleanupGhostLobbyRoomsOnce();
     }
-}, 10000); 
+}, 30000); // <--- SỬA 10000 THÀNH 30000
 // Đổi mẹ thành 10 giây đi, 12 giây dọn rác nó nhạy quá nó hốt nhầm!
 // --- LOGIC LUYỆN CẤP LŨY TIẾN MC ---
 let pendingSessionEXP = 0; 
