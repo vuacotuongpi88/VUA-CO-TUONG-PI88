@@ -12454,23 +12454,18 @@ function closeChat() {
 }
 
 async function sendMsg() {
-    // LỆNH KIỂM TRA ĐÂY:
-    alert("ĐÃ NHẬN LỆNH BẤM NÚT GỬI!"); 
-
     const msgInput = document.getElementById("user-msg");
+    if (!msgInput) return;
+    
     const message = msgInput.value.trim();
-
-    if (!message) {
-        alert("LỖI: Mầy chưa nhập chữ nào vào ô chat!");
-        return;
-    }
+    if (!message) return;
 
     try {
+        // Giữ nguyên logic lấy key của mầy để không lệch database
         const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "guest";
         const chatRef = db.ref("support_chats/" + walletKey);
         const meName = localStorage.getItem("user-name-display") || "Người chơi";
 
-        // Gửi lên Firebase
         await chatRef.push({
             sender: 'user',
             name: meName,
@@ -12479,12 +12474,12 @@ async function sendMsg() {
             readByAdmin: false 
         });
 
-        alert("THÀNH CÔNG: Tin nhắn đã bay lên Firebase!");
+        // Xóa nội dung ô nhập sau khi gửi thành công
         msgInput.value = "";
+        console.log("Tin nhắn đã gửi!");
 
     } catch (err) {
-        // LỆNH BÁO LỖI CHI TIẾT ĐÂY:
-        alert("LỖI FIREBASE: " + err.message);
+        console.error("Lỗi gửi tin nhắn:", err);
     }
 }
 // Hàm đóng mở chat trên Mobile
