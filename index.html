@@ -6529,14 +6529,14 @@ margin-bottom: 14px;
 style="display: none; position: fixed; bottom: 80px; right: 20px; width: 260px; background: #1a1a1a; border: 2px solid #55efc4; border-radius: 12px; z-index: 30000; box-shadow: 0 0 15px rgba(0,0,0,0.8); font-family: Arial, sans-serif;">
 <div
 style="background: #55efc4; color: #000; padding: 10px; display: flex; justify-content: space-between; border-radius: 10px 10px 0 0; font-weight: bold; font-size: 0.8rem;">
-<span>🎧 HỖ TRỢ BONSAI PI</span>
+<span>🎧 ADM coreteam</span>
 <span onclick="closeChat()" style="cursor: pointer; font-size: 20px;">&times;</span>
 </div>
 <div id="chat-content"
 style="height: 180px; padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; color: white; font-size: 0.75rem;">
 <div
 style="background: #333; padding: 8px; border-radius: 8px; align-self: flex-start; border: 1px solid #444;">
-Chào mậy! Tao là Admin đây. Cần hỗ trợ gì cứ nhắn nhé!
+Chào bạn! tui là Admin đây. Cần hỗ trợ gì cứ nhắn nhé!
 </div>
 </div>
 <div style="display: flex; padding: 8px; border-top: 1px solid #333; gap: 5px;">
@@ -12453,27 +12453,26 @@ function closeChat() {
     document.getElementById("chat-box").style.display = "none";
 }
 
-// TÁCH HẲN RA NHƯ VẦY NÈ ĐẠI GIA
+// TÁCH RỜI CỤM NÀY RA, KHÔNG ĐỂ DÍNH VÀO DẤU } Ở TRÊN
 window.sendMsg = async function() {
     const msgInput = document.getElementById("user-msg");
     const message = msgInput.value.trim();
     if (!message) return;
-    // ... (phần code bên dưới giữ nguyên)
-
+    
     const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "guest";
     const chatRef = db.ref("support_chats/" + walletKey);
     const meName = localStorage.getItem("user-name-display") || "Người chơi";
 
-    // 1. Đẩy tin nhắn lên Firebase
     await chatRef.push({
         sender: 'user',
         name: meName,
         text: message,
         at: firebase.database.ServerValue.TIMESTAMP,
-        readByAdmin: false // Đánh dấu chưa đọc để nổ chấm đỏ cho Admin
+        readByAdmin: false 
     });
 
     msgInput.value = "";
+
 
     // 2. Tự động trả lời sau 2 giây nếu là tin đầu tiên
     setTimeout(async () => {
