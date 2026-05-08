@@ -6541,7 +6541,8 @@ Chào mậy! Tao là Admin đây. Cần hỗ trợ gì cứ nhắn nhé!
 </div>
 <div style="display: flex; padding: 8px; border-top: 1px solid #333; gap: 5px;">
 <input type="text" id="user-msg" placeholder="Nhập tin nhắn..."
-style="flex: 1; background: #000; color: #fff; border: 1px solid #444; padding: 6px; border-radius: 5px; outline: none; font-size: 0.75rem;">
+style="flex: 1; background: #000; color: #fff; border: 1px solid #444; padding: 6px; border-radius: 5px; outline: none; font-size: 0.75rem;"
+onkeydown="if(event.key==='Enter'){ sendMsg(); }">
 <button onclick="sendMsg()"
 style="background: #55efc4; border: none; padding: 5px 12px; border-radius: 5px; font-weight: bold; cursor: pointer;">Gửi</button>
 </div>
@@ -12449,8 +12450,8 @@ function bindAdminNotification() {
 }
 // Hàm đóng khung chat
 function closeChat() {
-document.getElementById("chat-box").style.display = "none";
-} 
+    document.getElementById("chat-box").style.display = "none";
+}
 window.sendMsg = async function() {
     const msgInput = document.getElementById("user-msg");
     const message = msgInput.value.trim();
