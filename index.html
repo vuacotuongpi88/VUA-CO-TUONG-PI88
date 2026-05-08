@@ -12452,19 +12452,27 @@ function bindAdminNotification() {
 function closeChat() {
     document.getElementById("chat-box").style.display = "none";
 }
-
 async function sendMsg() {
+    // 1. Kiểm tra xem nút có ăn không
+    alert("BẮT ĐẦU GỬI TIN..."); 
+
     const msgInput = document.getElementById("user-msg");
-    const message = msgInput.value.trim();
-    if (!message) return;
+    const message = msgInput ? msgInput.value.trim() : "";
+    
+    if (!message) {
+        alert("LỖI: Nội dung trống!");
+        return;
+    }
 
     try {
-        // SỬA LẠI DÒNG NÀY CHO CHUẨN:
-        const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "guest";
-        const chatRef = db.ref("support_chats").child(walletKey); 
+        // FIX CÚ PHÁP DÒNG 12465 (XÓA CHỮ ANY)
+        const myWalletKey = (typeof makeWalletDbKey === 'function') ? makeWalletDbKey() : "guest";
+        alert("VÍ CỦA MẦY LÀ: " + myWalletKey);
+
+        const chatRef = db.ref("support_chats").child(myWalletKey);
         const meName = localStorage.getItem("user-name-display") || "Người chơi";
 
-        // 1. Đẩy tin nhắn lên Firebase
+        // Gửi tin nhắn
         await chatRef.push({
             sender: 'user',
             name: meName,
@@ -12473,23 +12481,13 @@ async function sendMsg() {
             readByAdmin: false 
         });
 
+        alert("GỬI THÀNH CÔNG LÊN FIREBASE!");
         msgInput.value = "";
 
-        // 2. Tự động trả lời sau 2 giây (Chỉ gửi 1 lần đầu)
-        setTimeout(async () => {
-            const snap = await chatRef.limitToLast(2).once("value");
-            if (snap.numChildren() <= 1) {
-                await chatRef.push({
-                    sender: 'admin',
-                    name: 'Hệ thống (Auto)',
-                    text: "Chào bạn! Hiện tại Admin đang bận. Bạn cứ để lại lời nhắn, Admin sẽ trả lời sớm nhất nhé!",
-                    at: firebase.database.ServerValue.TIMESTAMP
-                });
-            }
-        }, 2000);
-
     } catch (err) {
-        console.error("Lỗi chat:", err);
+        // BÁO LỖI FIREBASE NẾU CÓ
+        alert("LỖI FIREBASE RỒI: " + err.message);
+        console.error(err);
     }
 }
 // Hàm đóng mở chat trên Mobile
