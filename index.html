@@ -12382,7 +12382,34 @@ window.openChat = function() {
     if (!chatBox) return;
     chatBox.style.display = "block";
 
-    const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "guest";
+    let walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "guest";
+    const isAdmin = typeof isCurrentPiAdminKey === 'function' && isCurrentPiAdminKey();
+
+    // 1. NẾU LÀ ADMIN -> BẬT BẢNG HỎI MUỐN CHAT VỚI VÍ NÀO
+    if (isAdmin) {
+        const inputKey = prompt("Nhập SĐT ví khách hàng (VD: 0865417657 hoặc guest):", "0865417657");
+        if (inputKey === null) {
+            closeChat(); // Bấm hủy thì đóng khung chat
+            return; 
+        }
+        
+        let cleanKey = inputKey.trim();
+        // Tự động thêm chữ pi_ nếu Admin chỉ nhập mỗi số điện thoại cho lẹ
+        if (cleanKey !== "guest" && !cleanKey.startsWith("pi_")) {
+            cleanKey = "pi_" + cleanKey;
+        }
+        walletKey = cleanKey;
+        
+        // Lưu lại ID khách để lát Admin gửi tin thì chui đúng vào phòng này
+        window.currentAdminChatWallet = walletKey; 
+        
+        // Đổi tên tiêu đề cho Admin biết đang chat với ai
+        document.querySelector("#chat-box div span").innerText = "Hỗ trợ: " + cleanKey;
+    } else {
+        window.currentAdminChatWallet = null;
+        document.querySelector("#chat-box div span").innerText = "🎧 CSKH Trúc Lâm";
+    }
+
     const chatContent = document.getElementById("chat-content");
 
     // Quét lịch sử chat trên Firebase
@@ -12397,7 +12424,10 @@ window.openChat = function() {
             msgDiv.style.maxWidth = "85%";
             msgDiv.style.fontSize = "12px";
             
-            if (m.sender === 'user') {
+            // 2. TÁCH BỌT TIN NHẮN (Ai là người gửi?)
+            const isMyMsg = (isAdmin && m.sender === 'admin') || (!isAdmin && m.sender === 'user');
+
+            if (isMyMsg) {
                 msgDiv.style.background = "#333";
                 msgDiv.style.alignSelf = "flex-end";
                 msgDiv.style.color = "white";
@@ -12406,14 +12436,15 @@ window.openChat = function() {
                 msgDiv.style.background = "#005f4b";
                 msgDiv.style.alignSelf = "flex-start";
                 msgDiv.style.color = "white";
-                msgDiv.innerHTML = `<b style="color:#ffd166">${m.name}:</b> ${m.text}`;
+                const senderName = m.sender === 'admin' ? 'Admin' : 'Khách';
+                msgDiv.innerHTML = `<b style="color:#ffd166">${senderName}:</b> ${m.text}`;
             }
             chatContent.appendChild(msgDiv);
         });
         chatContent.scrollTop = chatContent.scrollHeight;
 
         // Tự tắt chấm đỏ nếu Admin đang mở xem
-        if (typeof isCurrentPiAdminKey === 'function' && isCurrentPiAdminKey()) {
+        if (isAdmin) {
             snap.forEach(child => {
                 if (child.val().sender === 'user' && !child.val().readByAdmin) {
                     child.ref.update({ readByAdmin: true });
@@ -12422,7 +12453,6 @@ window.openChat = function() {
         }
     });
 };
-
 // HÀM LẮNG NGHE TIN NHẮN DÀNH CHO ADMIN (Nổ chấm đỏ)
 function bindAdminNotification() {
     // Chỉ kích hoạt radar nếu nick đang login là Admin (đuôi 406)
@@ -12465,17 +12495,22 @@ async function sendMsg() {
     if (!message) return;
 
     try {
-        // Lấy đúng ID người dùng hoặc ví
-        const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "guest";
-        // Đẩy thẳng vào support_chats/walletKey
+        let walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "guest";
+        const isAdmin = typeof isCurrentPiAdminKey === 'function' && isCurrentPiAdminKey();
+
+        // 3. NẾU ADMIN GỬI TIN -> PHẢI ĐẨY NGƯỢC VÀO VÍ KHÁCH
+        if (isAdmin && window.currentAdminChatWallet) {
+            walletKey = window.currentAdminChatWallet;
+        }
+
         const chatRef = db.ref("support_chats").child(walletKey); 
 
         await chatRef.push({
-            sender: 'user',
+            sender: isAdmin ? 'admin' : 'user',
             name: localStorage.getItem("user-name-display") || "Người chơi",
             text: message,
             at: firebase.database.ServerValue.TIMESTAMP,
-            readByAdmin: false 
+            readByAdmin: isAdmin ? true : false 
         });
 
         msgInput.value = "";
