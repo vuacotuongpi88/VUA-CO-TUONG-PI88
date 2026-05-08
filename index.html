@@ -6541,10 +6541,10 @@ Chào bạn! tui là Admin đây. Cần hỗ trợ gì cứ nhắn nhé!
 </div>
 <div style="display: flex; padding: 8px; border-top: 1px solid #333; gap: 5px;">
 <input type="text" id="user-msg" placeholder="Nhập tin nhắn..."
-style="flex: 1; background: #000; color: #fff; border: 1px solid #444; padding: 6px; border-radius: 5px; outline: none; font-size: 0.75rem;"
-onkeydown="if(event.key==='Enter'){ sendMsg(); }">
+       style="flex: 1; background: #000; color: #fff; border: 1px solid #444; padding: 6px; border-radius: 5px; outline: none; font-size: 0.75rem;"
+       onkeydown="if(event.key==='Enter'){ sendMsg(); }">
 <button onclick="sendMsg()"
-style="background: #55efc4; border: none; padding: 5px 12px; border-radius: 5px; font-weight: bold; cursor: pointer;">Gửi</button>
+        style="background: #55efc4; border: none; padding: 5px 12px; border-radius: 5px; font-weight: bold; cursor: pointer;">Gửi</button>
 </div>
 </div>
 
@@ -12454,10 +12454,12 @@ function closeChat() {
 }
 
 // TÁCH RỜI CỤM NÀY RA, KHÔNG ĐỂ DÍNH VÀO DẤU } Ở TRÊN
-window.sendMsg = async function() {
+async function sendMsg() {
     const msgInput = document.getElementById("user-msg");
     const message = msgInput.value.trim();
     if (!message) return;
+    
+    // ... (toàn bộ code bên trong giữ nguyên y hệt)
     
     const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "guest";
     const chatRef = db.ref("support_chats/" + walletKey);
