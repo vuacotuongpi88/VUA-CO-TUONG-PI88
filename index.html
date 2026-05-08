@@ -6563,7 +6563,14 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.database();
 const provider = new firebase.auth.GoogleAuthProvider();
-
+// Tự động kích hoạt ID ẩn danh cho người chơi
+firebase.auth().signInAnonymously()
+  .then(() => {
+    console.log("Đã cấp ID ẩn danh thành công!");
+  })
+  .catch((error) => {
+    console.error("Lỗi cấp ID:", error.message);
+  });
 let readyServerOffsetMs = 0;
 
 db.ref(".info/serverTimeOffset").on("value", snap => {
@@ -12375,11 +12382,17 @@ window.openChat = function() {
     if (!chatBox) return;
     chatBox.style.display = "block";
 
-    const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "guest";
-    const chatContent = document.getElementById("chat-content");
+  let walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "guest";
 
-    // Quét lịch sử chat trên Firebase
-    db.ref("support_chats/" + walletKey).on("value", (snap) => {
+// NẾU LÀ ADMIN THÌ ÉP ĐỌC TIN NHẮN CỦA VÍ 657 ĐỂ TEST
+if (typeof isCurrentPiAdminKey === 'function' && isCurrentPiAdminKey()) {
+    walletKey = "pi_0865417657"; 
+}
+
+const chatContent = document.getElementById("chat-content");
+
+// Quét lịch sử chat trên Firebase
+db.ref("support_chats/" + walletKey).on("value", (snap) => {
         chatContent.innerHTML = "";
         snap.forEach(child => {
             const m = child.val();
