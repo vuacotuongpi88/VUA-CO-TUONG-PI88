@@ -10472,8 +10472,7 @@ async function loadWalletBalance() {
 
         // 2. Chốt lại: Cập nhật Firebase bằng tên gốc của Database, không cho ghi đè bậy bạ nữa!
         await walletRef().update({
-            balance: currentWalletBalance,
-            pmcBalance: currentPmcBalance,
+            // Xóa mẹ 2 dòng balance và pmcBalance ở đây đi, cấm tuyệt đối hàm Load được phép ghi đè tiền!
             updatedAt: firebase.database.ServerValue.TIMESTAMP,
             name: nameToSave,
             photo: photoToSave
