@@ -12410,48 +12410,54 @@ window.openChat = function() {
         document.querySelector("#chat-box div span").innerText = "🎧 CSKH Trúc Lâm";
     }
 
-    const chatContent = document.getElementById("chat-content");
+   const roomRef = db.ref("support_chats/" + walletKey);
 
-    // Quét lịch sử chat trên Firebase
-    db.ref("support_chats/" + walletKey).on("value", (snap) => {
-        chatContent.innerHTML = "";
-        snap.forEach(child => {
-            const m = child.val();
-            const msgDiv = document.createElement("div");
-            msgDiv.style.padding = "5px 8px";
-            msgDiv.style.borderRadius = "8px";
-            msgDiv.style.marginBottom = "8px";
-            msgDiv.style.maxWidth = "85%";
-            msgDiv.style.fontSize = "12px";
-            
-            // 2. TÁCH BỌT TIN NHẮN (Ai là người gửi?)
-            const isMyMsg = (isAdmin && m.sender === 'admin') || (!isAdmin && m.sender === 'user');
+roomRef.off();
 
-            if (isMyMsg) {
-                msgDiv.style.background = "#333";
-                msgDiv.style.alignSelf = "flex-end";
-                msgDiv.style.color = "white";
-                msgDiv.innerHTML = `<b style="color:#55efc4">Bạn:</b> ${m.text}`;
-            } else {
-                msgDiv.style.background = "#005f4b";
-                msgDiv.style.alignSelf = "flex-start";
-                msgDiv.style.color = "white";
-                const senderName = m.sender === 'admin' ? 'Admin' : 'Khách';
-                msgDiv.innerHTML = `<b style="color:#ffd166">${senderName}:</b> ${m.text}`;
-            }
-            chatContent.appendChild(msgDiv);
-        });
-        chatContent.scrollTop = chatContent.scrollHeight;
+roomRef.on("value", (snap) => {
+    chatContent.innerHTML = "";
 
-        // Tự tắt chấm đỏ nếu Admin đang mở xem
-        if (isAdmin) {
-            snap.forEach(child => {
-                if (child.val().sender === 'user' && !child.val().readByAdmin) {
-                    child.ref.update({ readByAdmin: true });
-                }
+    snap.forEach(child => {
+        const m = child.val() || {};
+
+        const msgDiv = document.createElement("div");
+
+        msgDiv.style.padding = "5px 8px";
+        msgDiv.style.borderRadius = "8px";
+        msgDiv.style.marginBottom = "8px";
+        msgDiv.style.maxWidth = "85%";
+        msgDiv.style.fontSize = "12px";
+
+        const isMyMsg =
+            (isAdmin && m.sender === "admin") ||
+            (!isAdmin && m.sender === "user");
+
+        msgDiv.style.alignSelf =
+            isMyMsg ? "flex-end" : "flex-start";
+
+        msgDiv.style.background =
+            isMyMsg ? "#55efc4" : "#333";
+
+        msgDiv.style.color =
+            isMyMsg ? "#000" : "#fff";
+
+        msgDiv.innerHTML = `
+            <b>${m.name || "Ẩn danh"}:</b><br>
+            ${m.text || ""}
+        `;
+
+        chatContent.appendChild(msgDiv);
+
+        // ADMIN ĐỌC => ĐÁNH DẤU ĐÃ XEM
+        if (isAdmin && !m.readByAdmin) {
+            child.ref.update({
+                readByAdmin: true
             });
         }
     });
+
+    chatContent.scrollTop = chatContent.scrollHeight;
+});
 };
 // HÀM LẮNG NGHE TIN NHẮN DÀNH CHO ADMIN (Nổ chấm đỏ)
 function bindAdminNotification() {
@@ -12503,7 +12509,12 @@ async function sendMsg() {
             walletKey = window.currentAdminChatWallet;
         }
 
-        const chatRef = db.ref("support_chats").child(walletKey); 
+        const roomId = walletKey;
+
+const chatRef = db
+  .ref("support_chats")
+  .child(roomId)
+  .child("messages");
 
         await chatRef.push({
             sender: isAdmin ? 'admin' : 'user',
