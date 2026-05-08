@@ -12453,39 +12453,39 @@ function closeChat() {
     document.getElementById("chat-box").style.display = "none";
 }
 
-// --- ĐOẠN CODE CHUẨN DÒNG 12457 ---
 async function sendMsg() {
+    // LỆNH KIỂM TRA ĐÂY:
+    alert("ĐÃ NHẬN LỆNH BẤM NÚT GỬI!"); 
+
     const msgInput = document.getElementById("user-msg");
     const message = msgInput.value.trim();
-    if (!message) return;
 
-    const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "guest";
-    const chatRef = db.ref("support_chats/" + walletKey);
-    const meName = localStorage.getItem("user-name-display") || "Người chơi";
+    if (!message) {
+        alert("LỖI: Mầy chưa nhập chữ nào vào ô chat!");
+        return;
+    }
 
-    // 1. Đẩy tin nhắn lên Firebase
-    await chatRef.push({
-        sender: 'user',
-        name: meName,
-        text: message,
-        at: firebase.database.ServerValue.TIMESTAMP,
-        readByAdmin: false 
-    });
+    try {
+        const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "guest";
+        const chatRef = db.ref("support_chats/" + walletKey);
+        const meName = localStorage.getItem("user-name-display") || "Người chơi";
 
-    msgInput.value = "";
+        // Gửi lên Firebase
+        await chatRef.push({
+            sender: 'user',
+            name: meName,
+            text: message,
+            at: firebase.database.ServerValue.TIMESTAMP,
+            readByAdmin: false 
+        });
 
-    // 2. Tự động trả lời
-    setTimeout(async () => {
-        const snap = await chatRef.limitToLast(2).once("value");
-        if (snap.numChildren() <= 1) {
-            chatRef.push({
-                sender: 'admin',
-                name: 'Hệ thống (Auto)',
-                text: "Chào bạn! Hiện tại Admin đang bận. Bạn cứ để lại lời nhắn, Admin sẽ trả lời sau nhé!",
-                at: firebase.database.ServerValue.TIMESTAMP
-            });
-        }
-    }, 2000);
+        alert("THÀNH CÔNG: Tin nhắn đã bay lên Firebase!");
+        msgInput.value = "";
+
+    } catch (err) {
+        // LỆNH BÁO LỖI CHI TIẾT ĐÂY:
+        alert("LỖI FIREBASE: " + err.message);
+    }
 }
 // Hàm đóng mở chat trên Mobile
 function toggleMobileChat() {
