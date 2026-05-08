@@ -10923,6 +10923,9 @@ window.renderAvatarSkinShop = function() {
     if (balance) balance.innerText = "Số dư: " + formatPMC(currentPmc) + " PMC";
 
     if (window.avatarSkinShopTab === "exp") {
+        // Lấy lịch sử mua từ máy ra check
+        const boughtPkgs = JSON.parse(localStorage.getItem('bought_exp_pkgs') || '{}');
+
         // 6 GÓI EXP ĐỂ CÀY LÊN MAX CẤP 180 - TỔNG ĐÚNG 60 VÉ
         const expPackages = [
             { id: "exp1", name: "Gói Tân Binh", exp: 1000, price: 1000, desc: "+1.000 EXP <br><b style='color:#00c38a'>+2 Lượt Miễn Phí</b>", tickets: 2, icon: "🌱" },
@@ -10934,10 +10937,23 @@ window.renderAvatarSkinShop = function() {
         ];
 
         list.innerHTML = expPackages.map(pkg => {
-            const canBuy = currentPmc >= pkg.price;
-            const btnClass = canBuy ? "avatar-shop-btn" : "avatar-shop-btn locked";
-            const btnAttr = canBuy ? `onclick="window.buyExpDirectly(${pkg.exp}, ${pkg.price}, ${pkg.tickets})"` : "disabled";
-            const btnText = canBuy ? "MUA" : "THIẾU PMC";
+            const isBought = !!boughtPkgs[pkg.id];
+            const canBuy = currentPmc >= pkg.price && !isBought;
+            
+            let btnClass = "avatar-shop-btn";
+            let btnText = "MUA";
+            let btnAttr = `onclick="window.buyExpDirectly('${pkg.id}', ${pkg.exp}, ${pkg.price}, ${pkg.tickets})"`;
+            
+            // XỬ LÝ KHÓA NÚT NẾU ĐÃ MUA RỒI
+            if (isBought) {
+                btnClass = "avatar-shop-btn equipped"; // Đổi màu xanh lá
+                btnText = "ĐÃ MUA";
+                btnAttr = "disabled style='opacity: 0.6; cursor: not-allowed;'";
+            } else if (!canBuy) {
+                btnClass = "avatar-shop-btn locked";
+                btnText = "THIẾU PMC";
+                btnAttr = "disabled";
+            }
             
             return `
                 <div class="avatar-shop-card">
@@ -11007,7 +11023,7 @@ window.renderAvatarSkinShop = function() {
     }).join("");
 };
 
-window.buyExpDirectly = async function(expAmount, pmcCost, bonusTickets) {
+window.buyExpDirectly = async function(pkgId, expAmount, pmcCost, bonusTickets) {
     if (window.isBuyingExp) return;
     const currentPmc = getPmcBalance();
     if (currentPmc < pmcCost) { alert("Mầy không đủ PMC!"); return; }
@@ -11025,34 +11041,36 @@ window.buyExpDirectly = async function(expAmount, pmcCost, bonusTickets) {
         try {
             await adjustPmcWalletByKey(adminWallet, pmcCost);
             await db.ref("walletTransactions").push({
-                type: "buy_exp_package", walletKey: walletKey, adminWalletKey: adminWallet,
+                type: "buy_exp_package", walletKey: walletKey, adminWalletKey: adminWallet, pkgId: pkgId,
                 feePMC: pmcCost, expGained: expAmount, createdAt: Date.now(), status: "done"
             });
         } catch(e) {} 
 
-       const userRef = db.ref("wallets/" + walletKey);
+        const userRef = db.ref("wallets/" + walletKey);
         
-        // Gắn biến txResult để lấy kết quả trả về từ Firebase sau khi cộng xong
+        // Ghi lên Firebase và ghim chết cái gói này
         const txResult = await userRef.transaction((current) => {
             if (!current) current = {}; 
             current.exp = (Number(current.exp) || 0) + expAmount;
             current.level = window.getLevelFromExp(current.exp); 
-            // CỘNG VÉ MIỄN PHÍ VÀO VÍ
             if (bonusTickets > 0) {
                 current.freeTickets = (Number(current.freeTickets) || 0) + bonusTickets;
             }
+            
+            // 🔥 ĐÁNH DẤU ĐÃ MUA GÓI NÀY
+            current.boughtExpPackages = current.boughtExpPackages || {};
+            current.boughtExpPackages[pkgId] = true;
+            
             return current;
         });
 
-        await loadWalletBalance();
-
-        // 🔥 CHỮA BỆNH ĐÂY: Ép gọi hàm cập nhật thanh EXP ngay lập tức lấy số mới từ Firebase
+        // 🔥 CHỮA BỆNH ĐÂY: Ép gọi hàm cập nhật thanh EXP và Lịch sử mua ngay lập tức
         if (txResult.committed && txResult.snapshot.val()) {
-            const newTotalExp = txResult.snapshot.val().exp;
-            // Lưu đè lại cache để lỡ tắt bảng nó đéo tụt
-            localStorage.setItem('exp_cache', newTotalExp); 
+            const snapVal = txResult.snapshot.val();
+            localStorage.setItem('exp_cache', snapVal.exp); 
+            localStorage.setItem('bought_exp_pkgs', JSON.stringify(snapVal.boughtExpPackages || {})); // Update cache shop
             if (typeof window.updateExpBarUI === 'function') {
-                window.updateExpBarUI(newTotalExp);
+                window.updateExpBarUI(snapVal.exp);
             }
         }
 
@@ -11062,7 +11080,7 @@ window.buyExpDirectly = async function(expAmount, pmcCost, bonusTickets) {
         }
 
         alert(`Chúc mừng! Đã bơm thành công ${expAmount.toLocaleString('vi-VN')} EXP vào người!`);
-        window.renderAvatarSkinShop(); 
+        window.renderAvatarSkinShop(); // Bắt Shop vẽ lại để khóa cái nút mầy vừa bấm!
     } catch(err) {
         console.error("Lỗi mua EXP:", err);
         alert("Có lỗi xảy ra khi giao dịch.");
@@ -17632,7 +17650,7 @@ function updateTicketUI(amount) {
     if (myTicketBox) myTicketBox.innerText = safeAmount + " 🎫";
 }
 
-// Gắn ké vào hàm tải ví để load luôn vé
+// Gắn ké vào hàm tải ví để load luôn vé và lịch sử mua Gói EXP
 const oldLoadWalletBalance = loadWalletBalance;
 loadWalletBalance = async function() {
     const res = await oldLoadWalletBalance();
@@ -17640,6 +17658,9 @@ loadWalletBalance = async function() {
         const snap = await db.ref("wallets/" + makeWalletDbKey()).once("value");
         const data = snap.val() || {};
         updateTicketUI(data.freeTickets || 0);
+        
+        // 🔥 LƯU LỊCH SỬ MUA GÓI EXP VÀO MÁY ĐỂ SHOP BIẾT ĐƯỜNG KHÓA NÚT
+        localStorage.setItem('bought_exp_pkgs', JSON.stringify(data.boughtExpPackages || {}));
     } catch(e){}
     return res;
 };
