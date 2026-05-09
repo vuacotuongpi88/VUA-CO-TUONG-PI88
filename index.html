@@ -11445,7 +11445,8 @@ async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
     const currentPmc = Math.floor(Number(safeCurrent.pmcBalance ?? 0) || 0);
     const nextPmc = currentPmc + Math.floor(Number(delta || 0));
 
-    if (nextPmc < 0) return null;
+    // Cho phép riêng ví hệ thống được mượn nợ, các ví khác vẫn cấm âm
+    if (nextPmc < 0 && walletKey !== "pi_admin_master") return null;
 
     // 🔥 ĐÃ XÓA DÒNG TỘI ĐỒ ...safeCurrent
     // Giờ nó chỉ update đúng PMC, KHÔNG BAO GIỜ chạm vào hay ghi đè StatsV2 nữa
@@ -18409,12 +18410,6 @@ async function submitReferralCode() {
         const adminData = adminSnap.val() || {};
         const adminPmc = Math.floor(Number(adminData.pmcBalance || 0));
 
-        if (adminPmc < totalCost) {
-            alert("⚠️ Quỹ thưởng hệ thống hiện tại đã cạn. Hãy quay lại sau hoặc báo Admin nạp thêm nhé!");
-            if (btn) { btn.disabled = false; btn.innerText = "NHẬN 5 PMC NGAY"; }
-            return;
-        }
-
         // --- BƯỚC 3: KIỂM TRA XEM ĐÃ NHẬN THƯỞNG CHƯA ---
         const mySnap = await db.ref("wallets/" + myWalletKey).once("value");
         if (mySnap.val() && mySnap.val().referredBy) {
@@ -19041,7 +19036,6 @@ async function submitReferralCode() {
     // Sau đó, cứ 15 phút (900.000 mili-giây) lại réo lên 1 lần
     setInterval(triggerTestnetWarning, 15 * 60 * 1000);
 })();
-<!-- ====================================================================== -->
 </script>
 </body>
 </html>
