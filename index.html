@@ -11019,18 +11019,14 @@ window.renderAvatarSkinShop = function() {
     const balance = document.getElementById("avatar-skin-shop-balance");
     if (!list) return;
 
-    // --- ĐOẠN CHÈN MỚI TẠI ĐÂY ---
-    // Tạo mã kiểm tra dựa trên: Danh sách skin sở hữu + Tab đang mở + Số dư PMC
-    const currentDataHash = JSON.stringify(getOwnedAvatarSkins()) + window.avatarSkinShopTab + getPmcBalance();
+    // --- CẬP NHẬT DÒNG NÀY (Thêm getEquippedAvatarSkin() để nó nhận biết khi mầy đổi skin) ---
+    const currentDataHash = JSON.stringify(getOwnedAvatarSkins()) + window.avatarSkinShopTab + getPmcBalance() + getEquippedAvatarSkin();
     
-    // Nếu mọi thứ vẫn y như cũ, thoát hàm luôn, không vẽ lại giao diện (đỡ lag máy)
     if (currentDataHash === lastSkinShopDataHash) return; 
     lastSkinShopDataHash = currentDataHash;
-    // --- KẾT THÚC ĐOẠN CHÈN ---
 
     window.refreshAvatarSkinShopTabs();
     const currentPmc = getPmcBalance();
-    // ... các đoạn code render phía dưới giữ nguyên
     if (balance) balance.innerText = "Số dư: " + formatPMC(currentPmc) + " PMC";
 
     if (window.avatarSkinShopTab === "exp") {
@@ -11236,7 +11232,12 @@ async function syncEquippedAvatarSkinToRoom(skinId) {
 
 // THAY THẾ HÀM GẮN SKIN CŨ BẰNG HÀM NÀY ĐỂ BẢO ĐẢM LƯU LÊN FIREBASE
 async function equipAvatarSkin(skinId) {
+    // --- CHÈN DÒNG NÀY VÀO ĐẦU HÀM ĐỂ ÉP SHOP PHẢI VẼ LẠI ---
+    lastSkinShopDataHash = ""; 
+    // --------------------------------------------------------
+
     const skin = getAvatarSkinById(skinId);
+    // ... các đoạn code bên dưới của mầy giữ nguyên
     const owned = getOwnedAvatarSkins();
 
     if (!owned[skin.id]) {
