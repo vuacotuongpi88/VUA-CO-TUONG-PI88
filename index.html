@@ -18613,7 +18613,7 @@ async function submitReferralCode() {
 #arena-referral-btn {
     position: fixed;
     top: 16px;
-    right: 250px; /* Đặt cạnh nút Bảng Top */
+    right: 256px; /* Trên PC thì nằm bên trái nút Bảng Top */
     width: 52px;
     height: 52px;
     border-radius: 50%;
@@ -18624,7 +18624,7 @@ async function submitReferralCode() {
     color: #fff;
     font-size: 24px;
     cursor: pointer;
-    z-index: 13050;
+    z-index: 10000; /* Hạ z-index để bảng bạn bè có thể đè lên */
     box-shadow: 0 0 15px rgba(255, 159, 67, 0.6);
     border: 2px solid #ffeaa7;
     animation: pulseGift 1.5s infinite;
@@ -18638,8 +18638,9 @@ async function submitReferralCode() {
 
 @media (max-width: 600px) {
     #arena-referral-btn {
-        right: 140px; /* Căn lại trên điện thoại cho khỏi đè nút khác */
-        margin-top: 45px !important;
+        /* Điện thoại chật quá, đẩy nó xuống NẰM DƯỚI nút Kết Bạn tạo thành 1 cột dọc */
+        top: 76px !important; 
+        right: 12px !important; 
     }
 }
 
