@@ -5617,41 +5617,60 @@ margin-bottom: 14px;
     100% { transform: scale(1); opacity: 1; }
 }
 /* =========================================
-   THANH CẢNH BÁO PI TEST CHẠY NGANG TỐI CAO
+   THANH CẢNH BÁO PI TEST (TỐI ƯU CHỐNG TRÀN RAM)
    ========================================= */
 #testnet-warning-banner {
     position: fixed;
     top: 0;
     left: 0;
     width: 100vw;
-    background: linear-gradient(90deg, #d63031, #b33939); /* Nền đỏ đậm báo động */
+    background: linear-gradient(90deg, #d63031, #b33939);
     color: #fff;
     font-size: 14px;
     font-weight: 900;
     padding: 8px 0;
-    z-index: 999999; /* Đè lên vạn vật trên đời */
+    z-index: 999999;
     overflow: hidden;
-    border-bottom: 2px solid #ffeaa7; /* Viền vàng chanh */
+    border-bottom: 2px solid #ffeaa7;
     box-shadow: 0 4px 15px rgba(0,0,0,0.6);
-    display: flex;
+    display: none; /* Mặc định ẨN để đỡ tốn RAM và rộng màn hình */
     align-items: center;
 }
 
 .warning-text-scroll {
     white-space: nowrap;
-    /* Tốc độ chạy: 25s. Mầy thấy chậm thì giảm xuống 20s, nhanh thì tăng lên 30s */
-    animation: scrollText 25s linear infinite; 
     text-shadow: 0 1px 3px rgba(0,0,0,0.8);
     letter-spacing: 0.5px;
     color: #fff8d6;
+    /* Đã xóa infinite, tao dùng JS để kích hoạt 1 lần rồi thôi */
 }
 
 @keyframes scrollText {
-    /* Trượt từ mép bên phải màn hình sang tuốt bên trái */
     0% { transform: translateX(100vw); }
     100% { transform: translateX(-100%); }
 }
 
+/* CHỈ đẩy UI xuống KHI banner xuất hiện (dựa vào class has-warning) */
+body.has-warning .hamburger-menu-container, 
+body.has-warning #arena-mission-btn, 
+body.has-warning #arena-skin-btn, 
+body.has-warning #arena-top-btn, 
+body.has-warning #arena-referral-btn, 
+body.has-warning #mobile-friend-wrap,
+body.has-warning #game-arena {
+    margin-top: 50px !important;
+}
+
+/* Thêm hiệu ứng trượt mượt mà lên xuống cho các nút */
+.hamburger-menu-container, 
+#arena-mission-btn, 
+#arena-skin-btn, 
+#arena-top-btn, 
+#arena-referral-btn, 
+#mobile-friend-wrap,
+#game-arena {
+    transition: margin-top 0.4s ease;
+}
 /* Đẩy các nút UI ở góc trên và CẢ BÀN CỜ xuống 45px để nhường chỗ cho thanh cảnh báo, chống đè nút */
 .hamburger-menu-container, 
 #arena-mission-btn, 
@@ -18857,5 +18876,38 @@ async function submitReferralCode() {
     </div>
 </div>
 <!-- ====================================================================== -->
+ <!-- ====================================================================== -->
+<!-- BỘ HẸN GIỜ HIỂN THỊ THANH CẢNH BÁO (15 PHÚT 1 LẦN) -->
+<script>
+(function() {
+    function triggerTestnetWarning() {
+        const banner = document.getElementById("testnet-warning-banner");
+        const text = banner ? banner.querySelector(".warning-text-scroll") : null;
+        if (!banner || !text) return;
+
+        // 1. Hiện thanh đỏ và ép giao diện lùi xuống 50px
+        banner.style.display = "flex";
+        document.body.classList.add("has-warning");
+
+        // 2. Kích hoạt cuộn chữ (Mất 25 giây để chạy hết màn hình)
+        text.style.animation = "none";
+        void text.offsetWidth; // Bùa Reset animation
+        text.style.animation = "scrollText 25s linear forwards";
+
+        // 3. Tự động đóng sau khi chữ chạy xong (Chờ 26 giây cho chắc ăn)
+        setTimeout(() => {
+            banner.style.display = "none";
+            document.body.classList.remove("has-warning");
+            text.style.animation = "none"; // Xả rác GPU
+        }, 26000);
+    }
+
+    // Chạy lần đầu tiên sau khi người chơi vào game được 3 giây
+    setTimeout(triggerTestnetWarning, 3000);
+    
+    // Sau đó, cứ 15 phút (900.000 mili-giây) lại réo lên 1 lần
+    setInterval(triggerTestnetWarning, 15 * 60 * 1000);
+})();
+</script>
 </body>
 </html>
