@@ -18247,14 +18247,66 @@ function closeReferralModal() {
     document.getElementById("referral-modal").style.display = "none";
 }
 
-// 2. Chức năng Copy Mã
+// 2. Chức năng Copy Mã (Bao xài mọi trình duyệt + Hiệu ứng 5 giây)
 function copyMyRefCode() {
-    const code = document.getElementById("my-ref-code").innerText;
-    if (code === "ĐANG TẠO..." || code === "LỖI MẠNG") return;
+    const codeEl = document.getElementById("my-ref-code");
+    if (!codeEl) return;
     
-    navigator.clipboard.writeText(code).then(() => {
-        alert("Đã chép mã: " + code + "\nMang đi spam khắp thế giới đi bạn êi!");
-    });
+    const code = codeEl.innerText;
+    if (code === "ĐANG TẠO..." || code === "LỖI MẠNG") return;
+
+    const btn = document.querySelector(".btn-copy");
+    
+    // Hàm xử lý đổi hiệu ứng nút khi copy thành công
+    const showSuccess = () => {
+        if (btn) {
+            btn.innerHTML = "✅ ĐÃ COPY";
+            btn.style.background = "linear-gradient(180deg, #00b894, #008f67)"; // Đổi sang màu xanh lá báo thành công
+            
+            // Canh đúng 5 giây (5000ms) trả về như cũ
+            setTimeout(() => {
+                btn.innerHTML = "📋 COPY MÃ";
+                btn.style.background = "linear-gradient(180deg, #0984e3, #0652dd)"; // Trả về màu xanh dương cũ
+            }, 5000);
+        }
+    };
+
+    // Bùa Copy Cổ Đại: Chống lũng đoạn trên Pi Browser / Giả Lập
+    function fallbackCopyTextToClipboard(text) {
+        var textArea = document.createElement("textarea");
+        textArea.value = text;
+        
+        // Giấu cái ô nhập chữ đi để màn hình không bị giật
+        textArea.style.top = "0";
+        textArea.style.left = "0";
+        textArea.style.position = "fixed";
+        textArea.style.opacity = "0";
+
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+
+        try {
+            var successful = document.execCommand('copy');
+            if(successful) {
+                showSuccess();
+            } else {
+                alert("Lỗi: Máy mày cấm copy, tự bôi đen copy tay nha!");
+            }
+        } catch (err) {
+            alert("Lỗi: Trình duyệt không hỗ trợ copy!");
+        }
+        document.body.removeChild(textArea);
+    }
+
+    // Ưu tiên xài lệnh xịn, nếu máy cùi báo lỗi thì lôi bùa cổ đại ra xài
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code)
+            .then(showSuccess)
+            .catch(err => fallbackCopyTextToClipboard(code));
+    } else {
+        fallbackCopyTextToClipboard(code);
+    }
 }
 
 // 3. Chức năng Share lên Facebook
