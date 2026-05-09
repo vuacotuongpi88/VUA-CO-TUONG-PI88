@@ -12366,10 +12366,26 @@ function saveProfile() {
     alert("Cập nhật hồ sơ thành công!");
     closeEditProfile();
 }
-// ==================== KHỐI CHAT CSKH V9 (FIX TẬN GỐC - BẢO MẬT & CHỐNG KẸT) ====================
+// ==================== KHỐI CHAT CSKH V10 (CHỐT HẠ) ====================
 window.currentAdminChatWallet = null;
 
-// 1. Tạo nút Hòm thư SPM cho Admin
+// 1. Nhận diện Admin (Bắt cứng ngắc tên và ví)
+window.isCurrentPiAdminKey = function() {
+    const currentKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "";
+    const currentName = localStorage.getItem("user-name-display") || localStorage.getItem("currentUsername") || "";
+    
+    // Tao liệt kê sẵn mọi biến thể tên/ví của mầy vào đây, trật đi đâu được nữa!
+    const isMe = 
+        currentKey === "pi_0962903406" || 
+        currentKey === "pi_962903406" || 
+        currentName === "0962903406" || 
+        currentName === "962903406" ||
+        currentKey.includes("google_116744888151240212035");
+        
+    return isMe;
+};
+
+// 2. Nút Hòm thư SPM cho Admin
 function initAdminInboxButton() {
     if (!window.isCurrentPiAdminKey()) return;
     const menu = document.getElementById("profile-dropdown");
@@ -12382,6 +12398,7 @@ function initAdminInboxButton() {
             <span style="color:#ff7675; font-weight:bold;">HÒM THƯ SPM</span>
             <div id="admin-inbox-badge" style="display:none; background:red; color:white; border-radius:50%; padding:2px 6px; font-size:10px; margin-left:auto;">0</div>
         `;
+        // Admin bấm nút này sẽ mở Quản Lý Chat
         adminBtn.onclick = function() { window.openChat(); };
         
         const targetNode = document.querySelector(".menu-item-danger"); 
@@ -12391,7 +12408,7 @@ function initAdminInboxButton() {
 }
 setInterval(initAdminInboxButton, 2000); 
 
-// 2. Mở cửa sổ Chat
+// 3. Mở cửa sổ Chat
 window.openChat = function() {
     document.querySelectorAll(".profile-menu").forEach(m => m.classList.remove("show"));
     const chatBox = document.getElementById("chat-box");
@@ -12400,22 +12417,24 @@ window.openChat = function() {
     
     const myKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "guest";
 
+    // Phân luồng: Nếu là Admin thì mở Danh Sách Khách. Nếu là Khách thì mở Phòng 1-1
     if (window.isCurrentPiAdminKey()) {
         window.currentAdminChatWallet = null; 
         document.querySelector("#chat-box div span").innerHTML = "📬 QUẢN LÝ CSKH";
         window.loadAdminUserList();
     } else {
-        document.querySelector("#chat-box div span").innerHTML = "🎧 HỖ TRỢ CSKH";
+        document.querySelector("#chat-box div span").innerHTML = "🎧 HỖ TRỢ CSKH (TRÚC LÂM)";
         window.loadSingleChatRoom(myKey, false);
     }
 };
 window.openAdminInbox = window.openChat;
 
-// 3. Admin load danh sách khách hàng
+// 4. Admin load danh sách khách hàng
 window.loadAdminUserList = function() {
     const chatContent = document.getElementById("chat-content");
 
     db.ref("support_chats").on("value", (snap) => {
+        // Đang chát dở với 1 thằng thì đéo cập nhật list
         if (window.currentAdminChatWallet) return;
         
         chatContent.innerHTML = "<div style='color:#55efc4; margin-bottom:10px; font-size: 13px; font-weight: bold;'>TIN NHẮN CHỜ XỬ LÝ:</div>";
@@ -12425,17 +12444,21 @@ window.loadAdminUserList = function() {
         }
 
         const allChats = snap.val();
-        for (let userKey in allChats) {
-            // Gom dữ liệu chuẩn xác, loại bỏ rác
-            let msgs = allChats[userKey].messages ? allChats[userKey].messages : allChats[userKey];
-            const msgKeys = Object.keys(msgs).filter(k => msgs[k] && msgs[k].sender);
-            if (msgKeys.length === 0) continue;
+        let hasAnyChat = false;
 
-            msgKeys.sort((a, b) => (msgs[a].at || 0) - (msgs[b].at || 0));
-            const lastMsg = msgs[msgKeys[msgKeys.length - 1]];
+        for (let userKey in allChats) {
+            const msgs = allChats[userKey].messages; 
+            if (!msgs) continue; // Bỏ qua mấy thằng rác đéo có thư mục messages
+
+            const ids = Object.keys(msgs);
+            if (ids.length === 0) continue;
+            
+            hasAnyChat = true;
+
+            const lastMsg = msgs[ids[ids.length - 1]];
             let hasUnread = false;
 
-            for (let id of msgKeys) {
+            for (let id in msgs) {
                 if (msgs[id].sender === 'user' && msgs[id].readByAdmin === false) {
                     hasUnread = true; 
                     break;
@@ -12448,16 +12471,21 @@ window.loadAdminUserList = function() {
                 <div style="font-size:12px; font-weight:bold; color:#55efc4;">👤 ${lastMsg.name || userKey.substring(0,8)} ${hasUnread ? '🔴' : ''}</div>
                 <div style="font-size:10px; color:#ccc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${lastMsg.text}</div>
             `;
+            // Chọt vô 1 thằng thì mở chat 1-1 với nó
             div.onclick = () => { 
                 window.currentAdminChatWallet = userKey;
                 window.loadSingleChatRoom(userKey, true); 
             };
             chatContent.appendChild(div);
         }
+        
+        if(!hasAnyChat) {
+             chatContent.innerHTML += "<div style='color:#ccc; font-size:11px; text-align:center;'>Không có tin nhắn hợp lệ.</div>";
+        }
     });
 };
 
-// 4. Load tin nhắn riêng tư 1-1
+// 5. Load tin nhắn riêng tư 1-1
 window.loadSingleChatRoom = function(walletKey, isAdmin) {
     const chatContent = document.getElementById("chat-content");
     const headerTitle = document.querySelector("#chat-box div span");
@@ -12503,7 +12531,7 @@ window.loadSingleChatRoom = function(walletKey, isAdmin) {
     });
 };
 
-// 5. Gửi tin nhắn (CHỐNG KẸT NÚT)
+// 6. Gửi tin nhắn
 window.sendMsg = async function() {
     const msgInput = document.getElementById("user-msg");
     const text = msgInput.value.trim();
@@ -12545,14 +12573,14 @@ window.sendMsg = async function() {
     }
 };
 
-// 6. Đóng Chat
+// 7. Đóng Chat
 window.closeChat = function() {
     const chatBox = document.getElementById("chat-box");
     if (chatBox) chatBox.style.display = "none";
     window.currentAdminChatWallet = null;
 };
 
-// 7. Radar Quét Chấm Đỏ
+// 8. Radar Quét Chấm Đỏ
 window.bindAdminNotification = function() {
     if (!window.isCurrentPiAdminKey()) return;
     
@@ -12561,7 +12589,9 @@ window.bindAdminNotification = function() {
         const allChats = snap.val() || {};
         
         for (let userKey in allChats) {
-            const msgs = allChats[userKey].messages ? allChats[userKey].messages : allChats[userKey];
+            const msgs = allChats[userKey].messages;
+            if(!msgs) continue;
+
             const msgKeys = Object.keys(msgs).filter(k => msgs[k] && msgs[k].sender);
             
             for (let msgId of msgKeys) {
@@ -12586,7 +12616,7 @@ window.bindAdminNotification = function() {
     });
 };
 setTimeout(() => { if (typeof window.bindAdminNotification === 'function') window.bindAdminNotification(); }, 3000);
-// ==================== KẾT THÚC HỆ THỐNG CHAT CSKH V9 ====================
+// ==================== KẾT THÚC HỆ THỐNG CHAT CSKH V10 ====================
 // Hàm đóng mở chat trên Mobile
 function toggleMobileChat() {
 const chatBox = document.getElementById("game-chat-box");
