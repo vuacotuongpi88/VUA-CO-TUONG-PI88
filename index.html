@@ -11088,6 +11088,8 @@ window.buyExpDirectly = async function(pkgId, expAmount, pmcCost, bonusTickets) 
     try {
         const walletKey = makeWalletDbKey();
         const adminWallet = "pi_admin_master"; 
+        
+        // 1. Trừ tiền
         const paid = await adjustPmcWalletByKey(walletKey, -pmcCost);
         if (paid == null) throw new Error("Thanh toán lỗi");
 
@@ -11099,32 +11101,30 @@ window.buyExpDirectly = async function(pkgId, expAmount, pmcCost, bonusTickets) 
             });
         } catch(e) {} 
 
+        // 2. Ép cộng EXP siêu tốc, đéo dùng transaction nữa để chống văng game
         const userRef = db.ref("wallets/" + walletKey);
+        const snap = await userRef.once("value");
+        let currentData = snap.val() || {};
         
-        // Ghi lên Firebase và ghim chết cái gói này
-        const txResult = await userRef.transaction((current) => {
-            if (!current) current = {}; 
-            current.exp = (Number(current.exp) || 0) + expAmount;
-            current.level = window.getLevelFromExp(current.exp); 
-            if (bonusTickets > 0) {
-                current.freeTickets = (Number(current.freeTickets) || 0) + bonusTickets;
-            }
-            
-            // 🔥 ĐÁNH DẤU ĐÃ MUA GÓI NÀY
-            current.boughtExpPackages = current.boughtExpPackages || {};
-            current.boughtExpPackages[pkgId] = true;
-            
-            return current;
+        let newExp = (Number(currentData.exp) || 0) + expAmount;
+        let newLevel = window.getLevelFromExp(newExp);
+        let newTickets = (Number(currentData.freeTickets) || 0) + (bonusTickets || 0);
+        
+        let pkgs = currentData.boughtExpPackages || {};
+        pkgs[pkgId] = true;
+
+        await userRef.update({
+            exp: newExp,
+            level: newLevel,
+            freeTickets: newTickets,
+            boughtExpPackages: pkgs
         });
 
-        // 🔥 CHỮA BỆNH ĐÂY: Ép gọi hàm cập nhật thanh EXP và Lịch sử mua ngay lập tức
-        if (txResult.committed && txResult.snapshot.val()) {
-            const snapVal = txResult.snapshot.val();
-            localStorage.setItem('exp_cache', snapVal.exp); 
-            localStorage.setItem('bought_exp_pkgs', JSON.stringify(snapVal.boughtExpPackages || {})); // Update cache shop
-            if (typeof window.updateExpBarUI === 'function') {
-                window.updateExpBarUI(snapVal.exp);
-            }
+        // 3. Cập nhật giao diện mượt mà
+        localStorage.setItem('exp_cache', newExp); 
+        localStorage.setItem('bought_exp_pkgs', JSON.stringify(pkgs)); 
+        if (typeof window.updateExpBarUI === 'function') {
+            window.updateExpBarUI(newExp);
         }
 
         await loadWalletBalance();
@@ -11133,7 +11133,7 @@ window.buyExpDirectly = async function(pkgId, expAmount, pmcCost, bonusTickets) 
         }
 
         alert(`Chúc mừng! Đã bơm thành công ${expAmount.toLocaleString('vi-VN')} EXP vào người!`);
-        window.renderAvatarSkinShop(); // Bắt Shop vẽ lại để khóa cái nút mầy vừa bấm!
+        window.renderAvatarSkinShop(); 
     } catch(err) {
         console.error("Lỗi mua EXP:", err);
         alert("Có lỗi xảy ra khi giao dịch.");
@@ -12553,7 +12553,10 @@ window.loadSingleChatRoom = function(walletKey, isAdmin) {
         headerTitle.innerHTML = `<span onclick="window.openAdminInbox();" style="cursor:pointer; color:yellow;">⬅️ DANH SÁCH</span> | KHÁCH`;
     }
 
-    db.ref("support_chats/" + walletKey + "/messages").on("value", (snap) => {
+    const chatRef = db.ref("support_chats/" + walletKey + "/messages"); // <--- ĐẶT BIẾN
+    chatRef.off("value"); // <--- DÁN THÊM DÒNG NÀY VÀO ĐÂY ĐỂ XÓA RÁC CŨ
+    chatRef.on("value", (snap) => {
+        // ... code đang có (đổi db.ref...on thành chatRef.on)
         if (isAdmin && window.currentAdminChatWallet !== walletKey) return;
         
         chatContent.innerHTML = "";
@@ -15742,6 +15745,8 @@ function isHomeVisible() {
     return !!home && getComputedStyle(home).display !== "none";
 }
 
+let isDisconnectHooked = false; // Bùa chống spam ngầm
+
 async function setPlayerPresence(state = "home") {
     try {
         const me = getCurrentFriendProfile();
@@ -15756,10 +15761,14 @@ async function setPlayerPresence(state = "home") {
             updatedAt: Date.now()
         });
 
-        stateRef.onDisconnect().update({
-            online: false,
-            updatedAt: firebase.database.ServerValue.TIMESTAMP
-        });
+        // CHỈ GẮN ONDISCONNECT ĐÚNG 1 LẦN DUY NHẤT LÚC MỚI VÀO GAME
+        if (!isDisconnectHooked) {
+            stateRef.onDisconnect().update({
+                online: false,
+                updatedAt: firebase.database.ServerValue.TIMESTAMP
+            });
+            isDisconnectHooked = true; 
+        }
     } catch (err) {
         console.error("Lỗi setPlayerPresence:", err);
     }
@@ -18207,7 +18216,9 @@ function playChestOpeningAnimation(chestPrefix, frameCount, onCompleteCallback) 
             </div>
         `;
 
-        db.ref("support_chats").on("value", (snap) => {
+        db.ref("support_chats").off("value"); // <--- DÁN THÊM DÒNG NÀY VÀO ĐÂY
+    db.ref("support_chats").on("value", (snap) => {
+        // ... code đang có
             if (window.currentAdminChatWallet) return;
             
             const listContainer = document.getElementById("admin-chat-list-container");
