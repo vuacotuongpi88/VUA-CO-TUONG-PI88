@@ -7051,20 +7051,32 @@ auth.getRedirectResult()
         console.error("Lỗi redirect:", err);
         alert("Đăng nhập Google bị lỗi: " + (err.message || err.code || err));
     });
-// TÌM ĐOẠN NÀY VÀ THAY THẾ
 auth.onAuthStateChanged(async user => {
+    const piName = localStorage.getItem("pi-user-name");
+    const piPhoto = localStorage.getItem("pi-user-photo");
+
+    // Ưu tiên dùng lại tài khoản Pi nếu có trong máy
+    if (piName) {
+        applyLoggedInUI(piName, piPhoto || "images/do_tuong.png");
+        await ensureFriendProfileSynced().catch(() => {});
+        await bindFriendSystem().catch(() => {});
+        await tryResumeRealtimeMatch();
+        return;
+    }
+
     if (user) {
-        // Nếu đã có user (kể cả ẩn danh), dùng luôn UID này
-        const displayName = user.displayName || "Khách_" + user.uid.slice(0, 4);
-        applyLoggedInUI(displayName, user.photoURL || "images/do_tuong.png");
-        
-        await ensureFriendProfileSynced();
-        await bindFriendSystem();
+        // Đã có user (ẩn danh hoặc Google), dùng luôn
+        const displayName = user.displayName || localStorage.getItem("user-name-display") || "Người chơi";
+        const photoURL = user.photoURL || localStorage.getItem("user-photo") || "images/do_tuong.png";
+        applyLoggedInUI(displayName, photoURL);
+
+        await ensureFriendProfileSynced().catch(() => {});
+        await bindFriendSystem().catch(() => {});
         await tryResumeRealtimeMatch();
     } else {
-        // CHỈ tạo ẩn danh khi thực sự không có ai đăng nhập
-        // Đừng để nó tự động nhảy vào màn hình Login liên tục
-        console.log("Chưa có user, chờ người chơi bấm nút đăng nhập...");
+        // KHÔNG PHẢI CHẶN, mà là tự tạo Login nếu chưa có gì
+        // Nếu mầy muốn người chơi vào thẳng game ẩn danh thì để dòng dưới:
+        auth.signInAnonymously().catch(err => console.error("Lỗi login:", err));
     }
 });
 function hideHomeUI() {
@@ -8837,23 +8849,33 @@ if (bottomPmcBox) bottomPmcBox.innerText = formatPMC(myPmc) + " PMC";
 }
 
 function cleanupRoomListeners() {
-    // TẮT SẠCH MỌI KÊNH LẮNG NGHE
+    // Tắt sạch các kênh đang lắng nghe trên Firebase
     if (roomValueRef) roomValueRef.off();
     if (roomChatRef) roomChatRef.off();
     if (currentViewerCountRef) currentViewerCountRef.off();
-    
-    // Tìm thêm các biến Listener khác nếu mầy có khai báo thêm
-    db.ref("social/friends/" + makeWalletDbKey()).off();
-    db.ref("social/friendRequests/" + makeWalletDbKey()).off();
-
     if (currentViewerRef) currentViewerRef.remove().catch(() => {});
     
-    // Reset các biến trạng thái
+    // Dọn thêm các kênh thông báo xã hội để máy nhẹ hoàn toàn
+    const myKey = makeWalletDbKey();
+    if (myKey) {
+        db.ref("social/friends/" + myKey).off();
+        db.ref("social/friendRequests/" + myKey).off();
+        db.ref("social/roomInvitesInbox/" + myKey).off();
+    }
+
+    // Reset các biến về trạng thái trống
     roomValueRef = null;
     roomChatRef = null;
-    lastRoomBoardHash = ""; 
-    isSpectatorMode = false;
-    document.body.classList.remove("spectator-mode");
+    currentViewerRef = null;
+    currentViewerCountRef = null;
+    currentViewerWalletKey = "";
+    lastRoomBoardHash = "";
+    updateViewerCountBadge(0);
+    
+    if (isSpectatorMode) {
+        document.body.classList.remove("spectator-mode");
+        isSpectatorMode = false;
+    }
 }
 // HÀM RÚT LUI VÀ BÀN GIAO PHÒNG (FIX LỖI MẤT PMC KHI ĐẦU HÀNG RỒI THOÁT NHANH)
 async function leaveRealtimeMatch() {
@@ -10991,7 +11013,7 @@ window.refreshAvatarSkinShopTabs = function() {
     if (bagTab) bagTab.classList.toggle("active", window.avatarSkinShopTab === "bag");
     if (expTab) expTab.classList.toggle("active", window.avatarSkinShopTab === "exp");
 }
-
+let lastSkinShopDataHash = "";
 window.renderAvatarSkinShop = function() {
     const list = document.getElementById("avatar-skin-shop-list");
     const balance = document.getElementById("avatar-skin-shop-balance");
@@ -11008,6 +11030,7 @@ window.renderAvatarSkinShop = function() {
 
     window.refreshAvatarSkinShopTabs();
     const currentPmc = getPmcBalance();
+    // ... các đoạn code render phía dưới giữ nguyên
     if (balance) balance.innerText = "Số dư: " + formatPMC(currentPmc) + " PMC";
 
     if (window.avatarSkinShopTab === "exp") {
@@ -17329,17 +17352,17 @@ setTimeout(ensureArenaTopButton, 500);
 setTimeout(ensureArenaTopButton, 1500);
 // HỆ THỐNG TIM MẠCH (CHỐNG BỆNH TÀNG HÌNH DO NGỦ GẬT)
 setInterval(() => {
-    // Chỉ làm việc khi người dùng đang thực sự xem trang web
-    if (document.hidden) return; 
-
+    // 1. Nếu đang ở sảnh chờ mà là chủ phòng (Phe Đỏ), thì 30 giây phải đập tim 1 lần
     if (currentRoomId && mySide === "do" && currentRoomStatus === "waiting") {
         touchCurrentLobbyHeartbeat().catch(() => {});
     }
     
+    // 2. Chạy cái dọn rác của mầy (đã bịt mỏ không cho dọn phòng đang sống)
     if (typeof cleanupGhostLobbyRoomsOnce === "function") {
         cleanupGhostLobbyRoomsOnce();
     }
-}, 60000); // Tăng lên 1 phút cho nhẹ máy
+}, 30000); // <--- SỬA 10000 THÀNH 30000
+// Đổi mẹ thành 10 giây đi, 12 giây dọn rác nó nhạy quá nó hốt nhầm!
 // --- LOGIC LUYỆN CẤP LŨY TIẾN MC ---
 let pendingSessionEXP = 0; 
 
