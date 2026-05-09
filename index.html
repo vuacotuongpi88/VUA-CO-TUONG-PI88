@@ -18876,7 +18876,6 @@ async function submitReferralCode() {
     </div>
 </div>
 <!-- ====================================================================== -->
- <!-- ====================================================================== -->
 <!-- BỘ HẸN GIỜ HIỂN THỊ THANH CẢNH BÁO (15 PHÚT 1 LẦN) -->
 <script>
 (function() {
@@ -18902,12 +18901,14 @@ async function submitReferralCode() {
         }, 26000);
     }
 
-    // Chạy lần đầu tiên sau khi người chơi vào game được 3 giây
-    setTimeout(triggerTestnetWarning, 3000);
+    // ĐÃ SỬA THÀNH 15 GIÂY: Chờ game load xong xuôi, êm ái mượt mà rồi mới chạy cảnh báo
+    setTimeout(triggerTestnetWarning, 15000);
     
     // Sau đó, cứ 15 phút (900.000 mili-giây) lại réo lên 1 lần
     setInterval(triggerTestnetWarning, 15 * 60 * 1000);
 })();
+</script>
+<!-- ====================================================================== -->
 </script>
 </body>
 </html>
