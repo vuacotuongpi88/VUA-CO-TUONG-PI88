@@ -5659,7 +5659,7 @@ margin-bottom: 14px;
 #arena-top-btn, 
 #mobile-friend-wrap,
 #game-arena {
-    margin-top: 45px !important;
+    margin-top: 50px !important;
 }
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
@@ -11167,6 +11167,17 @@ function refreshRoomAvatarSkinUI() {
     });
 }
 
+// BỔ SUNG HÀM BỊ THIẾU: Cập nhật skin cho đối thủ thấy ngay lập tức nếu đang ngồi trong bàn
+async function syncEquippedAvatarSkinToRoom(skinId) {
+    if (!currentRoomId || !mySide) return;
+    try {
+        await db.ref(`matches/${currentRoomId}/players/${mySide}/avatarSkin`).set(skinId);
+    } catch (err) {
+        console.error("Lỗi đồng bộ skin vào phòng:", err);
+    }
+}
+
+// THAY THẾ HÀM GẮN SKIN CŨ BẰNG HÀM NÀY ĐỂ BẢO ĐẢM LƯU LÊN FIREBASE
 async function equipAvatarSkin(skinId) {
     const skin = getAvatarSkinById(skinId);
     const owned = getOwnedAvatarSkins();
@@ -11176,24 +11187,26 @@ async function equipAvatarSkin(skinId) {
         return;
     }
 
-saveAvatarSkinLocal(skin.id, owned);
+    // 1. Lưu dưới máy mày để giao diện đổi ngay lập tức
+    saveAvatarSkinLocal(skin.id, owned);
+    refreshOwnAvatarSkinUI();
+    refreshRoomAvatarSkinUI();
 
-refreshOwnAvatarSkinUI();
-refreshRoomAvatarSkinUI();
+    try {
+        // 2. Chạy hàm (vừa được bổ sung) để đổi skin trên bàn cờ
+        await syncEquippedAvatarSkinToRoom(skin.id);
 
-await syncEquippedAvatarSkinToRoom(skin.id);
+        // 3. QUAN TRỌNG NHẤT: Đẩy data lên Firebase. Giờ không bị crash ngầm nữa thì đoạn này mới được chạy!
+        await walletRef().update({
+            avatarSkin: skin.id,
+            ownedAvatarSkins: owned,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        });
 
-await walletRef().update({
-    avatarSkin: skin.id,
-    ownedAvatarSkins: owned,
-    updatedAt: firebase.database.ServerValue.TIMESTAMP,
-    name: localStorage.getItem("user-name-display") || "Người chơi",
-    photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-}).catch(err => console.error("Lỗi lưu skin avatar:", err));
-
-refreshOwnAvatarSkinUI();
-refreshRoomAvatarSkinUI();
-renderAvatarSkinShop();
+        renderAvatarSkinShop();
+    } catch (err) {
+        console.error("Lỗi lưu skin avatar lên Database:", err);
+    }
 }
 function safeWalletKeyForPath(walletKey) {
     return String(walletKey || makeWalletDbKey()).replace(/[.#$\[\]\/]/g, "_");
