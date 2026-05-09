@@ -18213,28 +18213,38 @@ function playChestOpeningAnimation(chestPrefix, frameCount, onCompleteCallback) 
         });
     };
 
-    // 6. Khách hàng / Admin gửi tin nhắn
+// 6. Gửi tin nhắn (CÓ Ổ KHÓA CHỐNG SPAM & CHỐNG NHÁY PHÍM ẢO)
+window.isSendingSupportMsg = false; // Biến ổ khóa
+
 window.sendMsg = async function() {
+    // 1. Đang khóa thì cút, không cho chạy tiếp
+    if (window.isSendingSupportMsg) return; 
+
     const msgInput = document.getElementById("user-msg");
-    const btn = document.querySelector("#chat-box button"); // Bắt lấy cái nút Gửi
     const text = msgInput.value.trim();
     if (!text) return;
 
-    const isAdmin = isCurrentPiAdminKey();
+    // 2. BẬT KHÓA NGAY LẬP TỨC & XÓA CHỮ LUÔN (Chống nháy phím)
+    window.isSendingSupportMsg = true;
+    msgInput.value = ""; 
+
+    const isAdmin = window.isCurrentPiAdminKey();
     const walletKey = isAdmin ? window.currentAdminChatWallet : (typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "guest");
     
     if (isAdmin && !walletKey) {
         alert("Mày phải chọn một khách hàng trong danh sách trước khi nhắn!"); 
+        window.isSendingSupportMsg = false; // Mở khóa
         return;
     }
 
-    // Tạm khóa nút Gửi để tránh khách bấm spam liên tục 
-    if(btn) {
+    const btn = document.querySelector("#chat-box button");
+    if (btn) {
         btn.disabled = true;
         btn.innerText = "...";
     }
 
     try {
+        // 3. Đẩy lên Firebase
         const chatRef = db.ref("support_chats/" + walletKey + "/messages"); 
         await chatRef.push({
             sender: isAdmin ? "admin" : "user",
@@ -18243,18 +18253,17 @@ window.sendMsg = async function() {
             at: firebase.database.ServerValue.TIMESTAMP,
             readByAdmin: isAdmin ? true : false
         });
-
-        // Gửi thành công thì xóa chữ trong ô
-        msgInput.value = "";
     } catch (err) {
         console.error("Lỗi gửi tin nhắn:", err);
-        alert("Gửi thất bại! Kiểm tra lại mạng hoặc tải lại trang.");
+        alert("Lỗi mạng hoặc Firebase. F5 tải lại trang nhé!");
+        msgInput.value = text; // Lỗi thì nhả lại chữ cũ cho khách
     } finally {
-        // Xong xuôi thì mở khóa nút Gửi lại
-        if(btn) {
+        // 4. Mở khóa khi xử lý xong xuôi
+        if (btn) {
             btn.disabled = false;
             btn.innerText = "Gửi";
         }
+        window.isSendingSupportMsg = false; // MỞ KHÓA
         msgInput.focus();
     }
 };
