@@ -13653,7 +13653,8 @@ async function openAdminFeeTreasuryModal() {
     const secretInput = document.getElementById("admin-fee-secret-input");
     const preview = document.getElementById("admin-fee-pi-preview");
 
-    if (!isCurrentPiAdminKey()) {
+    // 🔥 FIX LỖI: Thêm window. để nó xài đúng bùa check Admin xịn
+    if (!window.isCurrentPiAdminKey()) {
         alert("Tài khoản Pi này không có quyền mở ví phí hệ thống.");
         return;
     }
@@ -13669,7 +13670,6 @@ async function openAdminFeeTreasuryModal() {
         await refreshAdminFeeTreasury();
     } catch (_) {}
 }
-
 async function confirmAdminFeePmcToPi() {
     const pmcInput = document.getElementById("admin-fee-pmc-input");
     const secretInput = document.getElementById("admin-fee-secret-input");
