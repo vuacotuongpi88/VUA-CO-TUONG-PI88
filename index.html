@@ -5661,6 +5661,48 @@ margin-bottom: 14px;
 #game-arena {
     margin-top: 50px !important;
 }
+/* =======================================================
+   BÙA CHỈNH LẠI GIAO DIỆN 5 NÚT TRÊN ĐIỆN THOẠI (XẾP HÀNG NGANG)
+   ======================================================= */
+@media (max-width: 600px) {
+    /* 1. Thu nhỏ đồng loạt 5 nút xuống 40px cho gọn */
+    #mobile-friend-toggle, 
+    #arena-referral-btn, 
+    #arena-mission-btn,  
+    #arena-skin-btn,     
+    #arena-top-btn {
+        width: 40px !important;
+        height: 40px !important;
+        font-size: 18px !important; /* Thu nhỏ icon bên trong một chút */
+        top: 16px !important;       /* Đưa hết lên cùng 1 độ cao */
+    }
+
+    /* 2. Đẩy cả đám xuống 50px để né thanh cảnh báo màu đỏ */
+    #mobile-friend-wrap, 
+    #arena-referral-btn, 
+    #arena-mission-btn,  
+    #arena-skin-btn,     
+    #arena-top-btn {
+        margin-top: 50px !important;
+    }
+
+    /* 3. Canh tọa độ từ phải qua trái (mỗi nút cách nhau 8px) */
+    #mobile-friend-wrap { right: 10px !important; }
+    #arena-referral-btn { right: 58px !important; }
+    #arena-mission-btn  { right: 106px !important; }
+    #arena-skin-btn     { right: 154px !important; }
+    #arena-top-btn      { right: 202px !important; }
+    
+    /* 4. Thu nhỏ mấy cái chấm đỏ thông báo lại cho cân đối với nút 40px */
+    .friend-badge-dot, .mission-badge-dot {
+        top: -2px !important;
+        right: -2px !important;
+        min-width: 16px !important;
+        height: 16px !important;
+        font-size: 9px !important;
+        padding: 0 4px !important;
+    }
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
