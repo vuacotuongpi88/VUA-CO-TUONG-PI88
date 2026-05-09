@@ -6563,14 +6563,6 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.database();
 const provider = new firebase.auth.GoogleAuthProvider();
-// Tự động kích hoạt ID ẩn danh cho người chơi
-firebase.auth().signInAnonymously()
-  .then(() => {
-    console.log("Đã cấp ID ẩn danh thành công!");
-  })
-  .catch((error) => {
-    console.error("Lỗi cấp ID:", error.message);
-  });
 
 let readyServerOffsetMs = 0;
 
