@@ -12437,19 +12437,20 @@ window.openAdminInbox = function() {
 window.loadAdminUserList = function() {
     const chatContent = document.getElementById("chat-content");
 
-    // Đổ khung Tìm kiếm vào trước, 1 lần duy nhất
+    // Đã xóa chữ "TIN NHẮN CHỜ XỬ LÝ"
+    // Thêm bùa position: sticky để ghim chặt thanh tìm kiếm lên nóc
     chatContent.innerHTML = `
-        <div style='color:#55efc4; margin-bottom:10px; font-size: 13px; font-weight: bold;'>TIN NHẮN CHỜ XỬ LÝ:</div>
-        <input type="text" id="admin-search-chat" placeholder="🔍 Tìm tên hoặc SĐT..." 
-               style="width: 100%; box-sizing: border-box; background: #000; color: #fff; border: 1px solid #444; padding: 8px; border-radius: 5px; margin-bottom: 10px; font-size: 12px; outline: none;"
-               oninput="window.filterAdminChatList()">
+        <div style="position: sticky; top: -10px; background: #1a1a1a; padding-top: 10px; padding-bottom: 10px; margin-top: -10px; z-index: 10;">
+            <input type="text" id="admin-search-chat" placeholder="🔍 Tìm tên hoặc SĐT..." 
+                   style="width: 100%; box-sizing: border-box; background: #000; color: #fff; border: 1px solid #444; padding: 10px; border-radius: 5px; font-size: 12px; outline: none; box-shadow: 0 4px 6px rgba(0,0,0,0.5);"
+                   oninput="window.filterAdminChatList()">
+        </div>
         <div id="admin-chat-list-container" style="display:flex; flex-direction:column;">
             <div style='color:#ccc; font-size:11px; text-align:center;'>Đang tải dữ liệu...</div>
         </div>
     `;
 
     db.ref("support_chats").on("value", (snap) => {
-        // Đang chát riêng 1-1 thì không render lại list
         if (window.currentAdminChatWallet) return;
         
         const listContainer = document.getElementById("admin-chat-list-container");
@@ -12522,7 +12523,6 @@ window.loadAdminUserList = function() {
             listContainer.appendChild(div);
         });
 
-        // Áp dụng bộ lọc ngay nếu Admin đang gõ dở
         if(typeof window.filterAdminChatList === 'function') window.filterAdminChatList();
     });
 };
