@@ -352,7 +352,7 @@ font-size: 1rem;
 #login-screen {
     position: fixed;
     inset: 0;
-    z-index: 9999;
+    z-index: 99999;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
@@ -1333,7 +1333,8 @@ body.spectator-mode #ready-main-btn {
 /* Ẩn icon nhiệm vụ + shop khi đã vào phòng / vào trận */
 body.in-match #arena-mission-btn,
 body.in-match #arena-skin-btn,
-body.in-match #arena-top-btn {
+body.in-match #arena-top-btn,
+body.in-match #arena-referral-btn {
     display: none !important;
 }
 /* Container dời qua trái */
@@ -6112,8 +6113,8 @@ body.has-warning #game-arena {
     </div>
 </div>
 <div id="mobile-lobby-title" class="lobby-title-box lobby-title-mobile">
-    <div class="lobby-main-title">SẢNH CHỜ</div>
-    <div class="lobby-sub-title">TRÚC LÂM TIÊN CẢNH</div>
+    <div class="lobby-main-title"></div>
+    <div class="lobby-sub-title"></div>
 </div>
 
 <!-- NGUYÊN CỤC QUẢNG CÁO CHUẨN ĐƯỢC GÓI GỌN Ở ĐÂY -->
@@ -7078,7 +7079,6 @@ auth.onAuthStateChanged(async user => {
     const piName = localStorage.getItem("pi-user-name");
     const piPhoto = localStorage.getItem("pi-user-photo");
 
-    // Ưu tiên dùng lại tài khoản Pi nếu có trong máy
     if (piName) {
         applyLoggedInUI(piName, piPhoto || "images/do_tuong.png");
         await ensureFriendProfileSynced().catch(() => {});
@@ -7088,18 +7088,20 @@ auth.onAuthStateChanged(async user => {
     }
 
     if (user) {
-        // Đã có user (ẩn danh hoặc Google), dùng luôn
         const displayName = user.displayName || localStorage.getItem("user-name-display") || "Người chơi";
         const photoURL = user.photoURL || localStorage.getItem("user-photo") || "images/do_tuong.png";
         applyLoggedInUI(displayName, photoURL);
-
         await ensureFriendProfileSynced().catch(() => {});
         await bindFriendSystem().catch(() => {});
         await tryResumeRealtimeMatch();
     } else {
-        // KHÔNG PHẢI CHẶN, mà là tự tạo Login nếu chưa có gì
-        // Nếu mầy muốn người chơi vào thẳng game ẩn danh thì để dòng dưới:
-        auth.signInAnonymously().catch(err => console.error("Lỗi login:", err));
+        // --- CHỖ NÀY LÀ MẤU CHỐT: Xóa sạch lệnh signInAnonymously ---
+        // Để nó hiện trang Login và bắt người dùng tự chọn nút bấm
+        document.getElementById("login-screen").style.display = "flex";
+        document.getElementById("user-display").style.display = "none";
+        document.getElementById("home-menu").style.display = "none";
+        document.getElementById("game-arena").style.display = "none";
+        showLoginChoices(); 
     }
 });
 function hideHomeUI() {
