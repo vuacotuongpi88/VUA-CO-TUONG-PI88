@@ -10404,7 +10404,10 @@ function toggleProfileMenu(event) {
     if (!menu) return;
     menu.classList.toggle("show");
 }
-
+function closeProfileMenu() {
+     const menu = document.getElementById("profile-dropdown");
+     if (menu) menu.classList.remove("show");
+}
 document.addEventListener("click", function (event) {
     const menu = document.getElementById("profile-dropdown");
     const userDisplay = document.getElementById("user-display");
@@ -13915,8 +13918,6 @@ document.addEventListener("click", function (e) {
     chat.style.display = "none";
     if (menu) menu.style.display = "none";
 
-    e.preventDefault();
-    e.stopPropagation();
 }, true);
 }
 
@@ -18961,7 +18962,6 @@ async function submitReferralCode() {
     // Sau đó, cứ 15 phút (900.000 mili-giây) lại réo lên 1 lần
     setInterval(triggerTestnetWarning, 15 * 60 * 1000);
 })();
-</script>
 <!-- ====================================================================== -->
 </script>
 </body>
