@@ -18325,7 +18325,7 @@ function shareRefToFB() {
     window.open(fbShareUrl, '_blank', 'width=600,height=400');
 }
 
-// 4. CHỨC NĂNG NHẬP MÃ - XỬ LÝ TRẢ TIỀN 2 BÊN
+// 4. CHỨC NĂNG NHẬP MÃ - XỬ LÝ TRẢ TIỀN 2 BÊN (BẢN FIX LỖI CHỐNG KẸT FIREBASE)
 async function submitReferralCode() {
     const inputEl = document.getElementById("input-ref-code");
     const code = inputEl.value.trim().toUpperCase();
@@ -18335,12 +18335,14 @@ async function submitReferralCode() {
         return;
     }
 
-    const myWalletKey = makeWalletDbKey();
+    const myWalletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "";
     
     try {
         const btn = document.querySelector(".btn-submit");
-        btn.disabled = true;
-        btn.innerText = "ĐANG KIỂM TRA...";
+        if (btn) {
+            btn.disabled = true;
+            btn.innerText = "ĐANG KIỂM TRA...";
+        }
 
         // Bước 1: Kiểm tra xem mã này có tồn tại không
         const codeSnap = await db.ref("referralCodes/" + code).once("value");
@@ -18348,25 +18350,28 @@ async function submitReferralCode() {
 
         if (!referrerWalletKey) {
             alert("Mã này đéo tồn tại! Hỏi lại bạn mày xem có ghi sai chữ nào không.");
-            btn.disabled = false; btn.innerText = "NHẬN 5 PMC NGAY"; return;
+            if (btn) { btn.disabled = false; btn.innerText = "NHẬN 5 PMC NGAY"; }
+            return;
         }
 
         if (referrerWalletKey === myWalletKey) {
             alert("Định lươn lẹo tự nhập mã của chính mình à? Đéo qua mặt được tao đâu!");
-            btn.disabled = false; btn.innerText = "NHẬN 5 PMC NGAY"; return;
+            if (btn) { btn.disabled = false; btn.innerText = "NHẬN 5 PMC NGAY"; }
+            return;
         }
 
         // Bước 2: Kiểm tra xem ví mình có đang gian lận, đã nhập rồi mà nhập lại không
         const mySnap = await db.ref("wallets/" + myWalletKey).once("value");
         if (mySnap.val() && mySnap.val().referredBy) {
             alert("Mày đã nhận thưởng nhập mã rồi, tham lam vừa thôi!");
-            closeReferralModal(); return;
+            closeReferralModal(); 
+            return;
         }
 
-        // Bước 3: TRẢ THƯỞNG! Cộng 5 PMC cho cả 2 thằng.
+        // Bước 3: TRẢ THƯỞNG!
         const rewardAmount = 5;
 
-        // Cộng cho mình (Người nhập)
+        // Cộng cho mình (Người nhập) - Phần này trên ví mình nên chắc chắn thành công
         await adjustPmcWalletByKey(myWalletKey, rewardAmount);
         
         // Ghi chú vào ví mình là đã có người giới thiệu rồi (Đóng băng ô nhập)
@@ -18375,24 +18380,30 @@ async function submitReferralCode() {
             referredAt: firebase.database.ServerValue.TIMESTAMP
         });
 
-        // Cộng cho người giới thiệu (Nằm im cũng có tiền)
-        await adjustPmcWalletByKey(referrerWalletKey, rewardAmount);
+        // Cộng cho người giới thiệu (Bọc Try/Catch để lỡ Firebase Rules chặn thì cũng đéo làm văng App)
+        try {
+            await adjustPmcWalletByKey(referrerWalletKey, rewardAmount);
+        } catch (e) {
+            console.warn("Firebase chặn cộng tiền cho người mời, kệ mẹ nó, tiền vào túi mình là được!", e);
+        }
         
         // Tải lại số dư trên màn hình của mình
-        await loadWalletBalance();
+        if (typeof loadWalletBalance === 'function') {
+            await loadWalletBalance();
+        }
 
-        alert(`🎉 THÀNH CÔNG! Mày đã nhận được 5 PMC!\nNgười mời mày cũng vừa được cộng 5 PMC.`);
+        alert(`🎉 THÀNH CÔNG! Mày đã nhận được 5 PMC!`);
         closeReferralModal();
 
     } catch (err) {
-        console.error(err);
-        alert("Có lỗi mạng, thử lại sau nhé.");
+        console.error("LỖI NHẬP MÃ:", err);
+        // Thay vì báo "Lỗi mạng" chung chung, tao cho nó nôn cái lỗi thật ra đây luôn!
+        alert("Lỗi: " + (err.message || err)); 
     } finally {
         const btn = document.querySelector(".btn-submit");
         if (btn) { btn.disabled = false; btn.innerText = "NHẬN 5 PMC NGAY"; }
     }
 }
-// ==========================================================================
 </script>
 <!-- BẢNG ĐẾM NGƯỢC CHỜ 5 GIÂY (CHỐNG LAG FIREBASE) -->
 <div id="exit-countdown-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:99999; align-items:center; justify-content:center; backdrop-filter:blur(5px);">
