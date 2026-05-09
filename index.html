@@ -5707,6 +5707,29 @@ body.has-warning #game-arena {
         padding: 0 4px !important;
     }
 }
+/* Chấm đỏ thông báo chung */
+.dot-red-small {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 10px;
+    height: 10px;
+    background-color: #ff2d55;
+    border-radius: 50%;
+    border: 1.5px solid #000;
+    box-shadow: 0 0 6px #ff2d55;
+    display: none; /* Mặc định ẩn */
+    z-index: 100;
+    pointer-events: none;
+}
+.dot-red-small.show {
+    display: block !important;
+}
+
+/* Ép các nút có chấm đỏ phải có position: relative */
+.avatar-shop-tab, .mission-top-tab {
+    position: relative !important;
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -11019,13 +11042,22 @@ window.renderAvatarSkinShop = function() {
     const balance = document.getElementById("avatar-skin-shop-balance");
     if (!list) return;
 
-    // --- CẬP NHẬT DÒNG NÀY (Thêm getEquippedAvatarSkin() để nó nhận biết khi mầy đổi skin) ---
-    const currentDataHash = JSON.stringify(getOwnedAvatarSkins()) + window.avatarSkinShopTab + getPmcBalance() + getEquippedAvatarSkin();
-    
+    const currentDataHash = JSON.stringify(getOwnedAvatarSkins()) + window.avatarSkinShopTab + getPmcBalance() + getEquippedAvatarSkin() + (localStorage.getItem(scopedKey("has_new_skin")) || "");
     if (currentDataHash === lastSkinShopDataHash) return; 
     lastSkinShopDataHash = currentDataHash;
 
+    const bagTabBtn = document.getElementById("avatar-shop-tab-bag");
+    if (bagTabBtn) {
+        const oldDot = bagTabBtn.querySelector(".dot-red-small");
+        if (oldDot) oldDot.remove();
+        if (localStorage.getItem(scopedKey("has_new_skin")) === "true") {
+            const dot = document.createElement("div");
+            dot.className = "dot-red-small show";
+            bagTabBtn.appendChild(dot);
+        }
+    }
     window.refreshAvatarSkinShopTabs();
+    // ... (đoạn code render phía dưới giữ nguyên)
     const currentPmc = getPmcBalance();
     if (balance) balance.innerText = "Số dư: " + formatPMC(currentPmc) + " PMC";
 
@@ -11367,11 +11399,13 @@ async function buyAvatarSkin(skinId) {
         avatarSkinShopTab = "bag";
         renderAvatarSkinShop();
 
-        alert(
-    "Đã mua skin " + skin.name + " thành công!\n" +
-    "Đã trừ " + formatPMC(skin.price) + " PMC.\n\n" +
-    "Skin đã nằm trong TÚI. Vào TÚI bấm GẮN để thay skin."
-);
+        // ... (đoạn trên giữ nguyên đến chỗ alert)
+        alert("Đã mua skin " + skin.name + " thành công!\n" + "Skin đã nằm trong TÚI. Vào TÚI bấm GẮN để thay skin.");
+        
+        // CHÈN THÊM ĐOẠN NÀY
+        localStorage.setItem(scopedKey("has_new_skin"), "true");
+        lastSkinShopDataHash = ""; 
+        renderAvatarSkinShop();
     } catch (err) {
         console.error("Lỗi mua skin avatar:", err);
         alert("Lỗi mua skin: " + (err.message || "Không rõ lỗi"));
@@ -17141,9 +17175,24 @@ document.addEventListener("click", function(e) {
     }).join('');
   }
 
-  function renderMissionBoard() {
+function renderMissionBoard() {
     const board = MISSION_UI_STATE.board || {};
     const tabs = board.tabs || {};
+
+    // --- ĐOẠN CHÈN MỚI ĐỂ BÁO ĐỎ CÁC TAB ---
+    ['day', 'week', 'month', 'referral'].forEach(key => {
+        const btn = document.querySelector(`.mission-top-tab[data-tab="${key}"]`);
+        if (!btn) return;
+        const oldDot = btn.querySelector(".dot-red-small");
+        if (oldDot) oldDot.remove();
+        if ((tabs[key] || []).some(m => m.ready && !m.claimed)) {
+            const dot = document.createElement("div");
+            dot.className = "dot-red-small show";
+            btn.appendChild(dot);
+        }
+    });
+    checkLevelRewardNotification(); // Kiểm tra mục Cấp độ
+    // --- KẾT THÚC ĐOẠN CHÈN ---
 
     const poolEl = document.getElementById('mission-pool-value');
     const claimableEl = document.getElementById('mission-claimable-value');
