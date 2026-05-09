@@ -18161,33 +18161,51 @@ function playChestOpeningAnimation(chestPrefix, frameCount, onCompleteCallback) 
         });
     };
 
-    // 6. Gửi Tin Nhắn (Bảo mật theo Ví/ID thay vì Tên)
-    window.sendMsg = async function() {
-        const msgInput = document.getElementById("user-msg");
-        const text = msgInput.value.trim();
-        if (!text) return;
+    // 6. Khách hàng / Admin gửi tin nhắn
+window.sendMsg = async function() {
+    const msgInput = document.getElementById("user-msg");
+    const btn = document.querySelector("#chat-box button"); // Bắt lấy cái nút Gửi
+    const text = msgInput.value.trim();
+    if (!text) return;
 
-        const isAdmin = isCurrentPiAdminKey();
-        
-        let walletKey = isAdmin ? window.currentAdminChatWallet : (typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "guest");
-        
-        if (isAdmin && !walletKey) {
-            alert("Mầy phải chọn 1 tin nhắn trong Hòm Thư trước khi nhắn!");
-            return;
-        }
+    const isAdmin = isCurrentPiAdminKey();
+    const walletKey = isAdmin ? window.currentAdminChatWallet : (typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "guest");
+    
+    if (isAdmin && !walletKey) {
+        alert("Mày phải chọn một khách hàng trong danh sách trước khi nhắn!"); 
+        return;
+    }
 
-        const chatRef = db.ref("support_chats/" + walletKey); 
+    // Tạm khóa nút Gửi để tránh khách bấm spam liên tục 
+    if(btn) {
+        btn.disabled = true;
+        btn.innerText = "...";
+    }
+
+    try {
+        const chatRef = db.ref("support_chats/" + walletKey + "/messages"); 
         await chatRef.push({
             sender: isAdmin ? "admin" : "user",
-            name: isAdmin ? "Admin Support" : (localStorage.getItem("user-name-display") || "Người chơi"),
+            name: isAdmin ? "Admin CSKH" : (localStorage.getItem("user-name-display") || "Người chơi"),
             text: text,
             at: firebase.database.ServerValue.TIMESTAMP,
             readByAdmin: isAdmin ? true : false
         });
 
+        // Gửi thành công thì xóa chữ trong ô
         msgInput.value = "";
-    };
-
+    } catch (err) {
+        console.error("Lỗi gửi tin nhắn:", err);
+        alert("Gửi thất bại! Kiểm tra lại mạng hoặc tải lại trang.");
+    } finally {
+        // Xong xuôi thì mở khóa nút Gửi lại
+        if(btn) {
+            btn.disabled = false;
+            btn.innerText = "Gửi";
+        }
+        msgInput.focus();
+    }
+};
     // 7. Radar Quét Chấm Đỏ Báo Cáo Cho Admin
     window.bindAdminNotification = function() {
         if (!isCurrentPiAdminKey()) return;
