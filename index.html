@@ -18136,6 +18136,147 @@ function playChestOpeningAnimation(chestPrefix, frameCount, onCompleteCallback) 
          }
      }, 150); // <---- CHÍNH LÀ CHỖ NÀY! SỬA 40 THÀNH 150!
 }
+// ==================== BỘ NÃO XỬ LÝ MÃ MỜI (ANTI-CHEAT) ====================
+
+// 1. Mở Modal và Khởi tạo mã
+async function openReferralModal() {
+    const modal = document.getElementById("referral-modal");
+    if (!modal) return;
+    modal.style.display = "flex";
+
+    const walletKey = makeWalletDbKey();
+    const myCodeEl = document.getElementById("my-ref-code");
+    const inputSection = document.getElementById("ref-input-section");
+    const doneSection = document.getElementById("ref-done-section");
+
+    try {
+        const snap = await db.ref("wallets/" + walletKey).once("value");
+        const data = snap.val() || {};
+
+        // Nếu người này đã nhập mã người khác rồi thì giấu ô nhập đi
+        if (data.referredBy) {
+            inputSection.style.display = "none";
+            doneSection.style.display = "block";
+        } else {
+            inputSection.style.display = "block";
+            doneSection.style.display = "none";
+        }
+
+        // Kiểm tra xem nó có mã mời cá nhân chưa, chưa có thì đẻ ra 1 cái
+        if (data.myReferralCode) {
+            myCodeEl.innerText = data.myReferralCode;
+        } else {
+            // Tạo mã random 6 chữ số có chữ MC ở đầu
+            const newCode = "MC" + Math.random().toString(36).substring(2, 6).toUpperCase();
+            
+            // Lưu vào Ví của mình
+            await db.ref("wallets/" + walletKey).update({ myReferralCode: newCode });
+            
+            // Lưu vào kho Data Danh bạ Mã Mời để truy xuất cho lẹ
+            await db.ref("referralCodes/" + newCode).set(walletKey);
+            
+            myCodeEl.innerText = newCode;
+        }
+    } catch (error) {
+        myCodeEl.innerText = "LỖI MẠNG";
+    }
+}
+
+function closeReferralModal() {
+    document.getElementById("referral-modal").style.display = "none";
+}
+
+// 2. Chức năng Copy Mã
+function copyMyRefCode() {
+    const code = document.getElementById("my-ref-code").innerText;
+    if (code === "ĐANG TẠO..." || code === "LỖI MẠNG") return;
+    
+    navigator.clipboard.writeText(code).then(() => {
+        alert("Đã chép mã: " + code + "\nMang đi spam khắp thế giới đi bạn êi!");
+    });
+}
+
+// 3. Chức năng Share lên Facebook
+function shareRefToFB() {
+    const code = document.getElementById("my-ref-code").innerText;
+    if (code === "ĐANG TẠO..." || code === "LỖI MẠNG") return;
+
+    const gameUrl = window.location.href; 
+    const shareText = `Vào chơi Cờ Tướng / Cờ Úp săn Pi Network với tao không? Nhập mã mời [ ${code} ] để được nhận ngay 5 PMC làm vốn khởi nghiệp nhé! Link game: ${gameUrl}`;
+    
+    // Mở popup share FB
+    const fbShareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(gameUrl)}&quote=${encodeURIComponent(shareText)}`;
+    window.open(fbShareUrl, '_blank', 'width=600,height=400');
+}
+
+// 4. CHỨC NĂNG NHẬP MÃ - XỬ LÝ TRẢ TIỀN 2 BÊN
+async function submitReferralCode() {
+    const inputEl = document.getElementById("input-ref-code");
+    const code = inputEl.value.trim().toUpperCase();
+
+    if (!code) {
+        alert("Mày chưa nhập mã kìa!");
+        return;
+    }
+
+    const myWalletKey = makeWalletDbKey();
+    
+    try {
+        const btn = document.querySelector(".btn-submit");
+        btn.disabled = true;
+        btn.innerText = "ĐANG KIỂM TRA...";
+
+        // Bước 1: Kiểm tra xem mã này có tồn tại không
+        const codeSnap = await db.ref("referralCodes/" + code).once("value");
+        const referrerWalletKey = codeSnap.val();
+
+        if (!referrerWalletKey) {
+            alert("Mã này đéo tồn tại! Hỏi lại bạn mày xem có ghi sai chữ nào không.");
+            btn.disabled = false; btn.innerText = "NHẬN 5 PMC NGAY"; return;
+        }
+
+        if (referrerWalletKey === myWalletKey) {
+            alert("Định lươn lẹo tự nhập mã của chính mình à? Đéo qua mặt được tao đâu!");
+            btn.disabled = false; btn.innerText = "NHẬN 5 PMC NGAY"; return;
+        }
+
+        // Bước 2: Kiểm tra xem ví mình có đang gian lận, đã nhập rồi mà nhập lại không
+        const mySnap = await db.ref("wallets/" + myWalletKey).once("value");
+        if (mySnap.val() && mySnap.val().referredBy) {
+            alert("Mày đã nhận thưởng nhập mã rồi, tham lam vừa thôi!");
+            closeReferralModal(); return;
+        }
+
+        // Bước 3: TRẢ THƯỞNG! Cộng 5 PMC cho cả 2 thằng.
+        const rewardAmount = 5;
+
+        // Cộng cho mình (Người nhập)
+        await adjustPmcWalletByKey(myWalletKey, rewardAmount);
+        
+        // Ghi chú vào ví mình là đã có người giới thiệu rồi (Đóng băng ô nhập)
+        await db.ref("wallets/" + myWalletKey).update({
+            referredBy: referrerWalletKey,
+            referredAt: firebase.database.ServerValue.TIMESTAMP
+        });
+
+        // Cộng cho người giới thiệu (Nằm im cũng có tiền)
+        await adjustPmcWalletByKey(referrerWalletKey, rewardAmount);
+        
+        // Tải lại số dư trên màn hình của mình
+        await loadWalletBalance();
+
+        alert(`🎉 THÀNH CÔNG! Mày đã nhận được 5 PMC!\nNgười mời mày cũng vừa được cộng 5 PMC.`);
+        closeReferralModal();
+
+    } catch (err) {
+        console.error(err);
+        alert("Có lỗi mạng, thử lại sau nhé.");
+    } finally {
+        const btn = document.querySelector(".btn-submit");
+        if (btn) { btn.disabled = false; btn.innerText = "NHẬN 5 PMC NGAY"; }
+    }
+}
+// ==========================================================================
 </script>
 <!-- BẢNG ĐẾM NGƯỢC CHỜ 5 GIÂY (CHỐNG LAG FIREBASE) -->
 <div id="exit-countdown-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:99999; align-items:center; justify-content:center; backdrop-filter:blur(5px);">
@@ -18466,5 +18607,179 @@ function playChestOpeningAnimation(chestPrefix, frameCount, onCompleteCallback) 
     setTimeout(() => { if (typeof window.bindAdminNotification === 'function') window.bindAdminNotification(); }, 3000);
 })();
 </script>
+<!-- ==================== GIAO DIỆN QUẢNG BÁ & KIẾM PMC ==================== -->
+<style>
+/* Nút bấm nhấp nháy ngoài sảnh */
+#arena-referral-btn {
+    position: fixed;
+    top: 16px;
+    right: 250px; /* Đặt cạnh nút Bảng Top */
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, #ff9f43, #e17055);
+    color: #fff;
+    font-size: 24px;
+    cursor: pointer;
+    z-index: 13050;
+    box-shadow: 0 0 15px rgba(255, 159, 67, 0.6);
+    border: 2px solid #ffeaa7;
+    animation: pulseGift 1.5s infinite;
+}
+
+@keyframes pulseGift {
+    0% { transform: scale(1); box-shadow: 0 0 15px rgba(255, 159, 67, 0.6); }
+    50% { transform: scale(1.1); box-shadow: 0 0 25px rgba(255, 159, 67, 1); }
+    100% { transform: scale(1); box-shadow: 0 0 15px rgba(255, 159, 67, 0.6); }
+}
+
+@media (max-width: 600px) {
+    #arena-referral-btn {
+        right: 140px; /* Căn lại trên điện thoại cho khỏi đè nút khác */
+        margin-top: 45px !important;
+    }
+}
+
+/* Bảng xổ ra bự chà bá */
+#referral-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 35000;
+    backdrop-filter: blur(5px);
+}
+
+.ref-box {
+    background: linear-gradient(180deg, #2c003e, #000000);
+    border: 3px solid #f4c542;
+    border-radius: 20px;
+    width: min(92vw, 450px);
+    text-align: center;
+    box-shadow: 0 0 40px rgba(244, 197, 66, 0.4);
+    position: relative;
+    overflow: hidden;
+}
+
+.ref-header {
+    background: linear-gradient(90deg, #ff9f43, #f4c542, #ff9f43);
+    color: #000;
+    padding: 15px;
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: 1px;
+}
+
+.ref-body {
+    padding: 20px;
+}
+
+.ref-my-code-box {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px dashed #f4c542;
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.ref-code-text {
+    font-size: 32px;
+    font-weight: 900;
+    color: #7dffb3;
+    letter-spacing: 3px;
+    margin: 10px 0;
+    text-shadow: 0 0 10px rgba(125, 255, 179, 0.5);
+}
+
+.ref-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.ref-btn {
+    padding: 10px 15px;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 13px;
+    cursor: pointer;
+    border: none;
+    color: white;
+}
+
+.btn-copy { background: linear-gradient(180deg, #0984e3, #0652dd); }
+.btn-fb { background: linear-gradient(180deg, #1877f2, #1052a8); }
+.btn-submit { background: linear-gradient(180deg, #00b894, #008f67); width: 100%; margin-top: 10px; padding: 12px; font-size: 16px;}
+
+.ref-input-box {
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid #55efc4;
+    border-radius: 12px;
+    padding: 15px;
+}
+
+.ref-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #f4c542;
+    background: #111;
+    color: #fff;
+    font-size: 16px;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.ref-close {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    color: #000;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+}
+</style>
+
+<!-- Nút ngoài sảnh -->
+<div id="arena-referral-btn" onclick="openReferralModal()" title="Mời bạn kiếm tiền">🎁</div>
+
+<!-- Hộp thoại xổ ra -->
+<div id="referral-modal">
+    <div class="ref-box">
+        <span class="ref-close" onclick="closeReferralModal()">✖</span>
+        <div class="ref-header">MỜI BẠN BÈ - NHẬN QUÀ KÉP</div>
+        <div class="ref-body">
+            
+            <div class="ref-my-code-box">
+                <div style="color: #dfe6e9; font-size: 13px;">Mã mời của bạn (Cứ có người nhập là +5 PMC)</div>
+                <div id="my-ref-code" class="ref-code-text">ĐANG TẠO...</div>
+                <div class="ref-buttons">
+                    <button class="ref-btn btn-copy" onclick="copyMyRefCode()">📋 COPY MÃ</button>
+                    <button class="ref-btn btn-fb" onclick="shareRefToFB()">🌐 SHARE FACEBOOK</button>
+                </div>
+            </div>
+
+            <div id="ref-input-section" class="ref-input-box">
+                <div style="color: #f4c542; font-size: 14px; font-weight: bold; margin-bottom: 10px;">AI GIỚI THIỆU BẠN VÀO ĐÂY?</div>
+                <div style="color: #b2bec3; font-size: 11px; margin-bottom: 10px;">Nhập mã của họ để CẢ HAI cùng nhận 5 PMC! (Chỉ được nhập 1 lần)</div>
+                <input type="text" id="input-ref-code" class="ref-input" placeholder="NHẬP MÃ TẠI ĐÂY" maxlength="8">
+                <button class="ref-btn btn-submit" onclick="submitReferralCode()">NHẬN 5 PMC NGAY</button>
+            </div>
+
+            <div id="ref-done-section" style="display: none; color: #55efc4; font-weight: bold; padding: 20px; background: rgba(0,255,157,0.1); border-radius: 10px;">
+                ✅ Bạn đã nhập mã giới thiệu rồi! Hãy mang mã của bạn đi mời người khác để kiếm thêm nhé!
+            </div>
+
+        </div>
+    </div>
+</div>
+<!-- ====================================================================== -->
 </body>
 </html>
