@@ -12366,7 +12366,7 @@ function saveProfile() {
     alert("Cập nhật hồ sơ thành công!");
     closeEditProfile();
 }
-// ==================== KHỐI CHAT CSKH V12 (TÌM KIẾM & LỌC THÔNG MINH) ====================
+// ==================== KHỐI CHAT CSKH V13 (TÌM KIẾM THÔNG MINH - CHỐNG CACHE) ====================
 window.currentAdminChatWallet = null;
 
 // 1. Nhận diện Admin
@@ -12405,7 +12405,7 @@ function initAdminInboxButton() {
 }
 setInterval(initAdminInboxButton, 2000); 
 
-// 3. Mở cửa sổ Chat (Cho Khách)
+// 3. Mở cửa sổ Chat 
 window.openChat = function() {
     document.querySelectorAll(".profile-menu").forEach(m => m.classList.remove("show"));
     const chatBox = document.getElementById("chat-box");
@@ -12422,7 +12422,7 @@ window.openChat = function() {
     }
 };
 
-// 4. Admin mở Hòm Thư SPM -> Hiện danh sách inbox của khách + CÓ THANH TÌM KIẾM
+// 4. Admin mở Hòm Thư -> Hiện LIST + TÌM KIẾM
 window.openAdminInbox = function() {
     document.querySelectorAll(".profile-menu").forEach(m => m.classList.remove("show"));
     const chatBox = document.getElementById("chat-box");
@@ -12431,13 +12431,16 @@ window.openAdminInbox = function() {
 
     document.querySelector("#chat-box div span").innerHTML = "📬 QUẢN LÝ CSKH";
     window.currentAdminChatWallet = null; 
-    
+    window.loadAdminUserList();
+};
+
+window.loadAdminUserList = function() {
     const chatContent = document.getElementById("chat-content");
 
-    // Tạo Form Tìm Kiếm 1 Lần Duy Nhất
+    // Đổ khung Tìm kiếm vào trước, 1 lần duy nhất
     chatContent.innerHTML = `
         <div style='color:#55efc4; margin-bottom:10px; font-size: 13px; font-weight: bold;'>TIN NHẮN CHỜ XỬ LÝ:</div>
-        <input type="text" id="admin-search-chat" placeholder="🔍 Tìm tên hoặc 3 số cuối..." 
+        <input type="text" id="admin-search-chat" placeholder="🔍 Tìm tên hoặc SĐT..." 
                style="width: 100%; box-sizing: border-box; background: #000; color: #fff; border: 1px solid #444; padding: 8px; border-radius: 5px; margin-bottom: 10px; font-size: 12px; outline: none;"
                oninput="window.filterAdminChatList()">
         <div id="admin-chat-list-container" style="display:flex; flex-direction:column;">
@@ -12446,7 +12449,7 @@ window.openAdminInbox = function() {
     `;
 
     db.ref("support_chats").on("value", (snap) => {
-        // Đang chát riêng thì không update danh sách
+        // Đang chát riêng 1-1 thì không render lại list
         if (window.currentAdminChatWallet) return;
         
         const listContainer = document.getElementById("admin-chat-list-container");
@@ -12487,24 +12490,22 @@ window.openAdminInbox = function() {
         }
         
         if(chatArray.length === 0) {
-             listContainer.innerHTML = "<div style='color:#ccc; font-size:11px; text-align:center;'>Không có tin nhắn hợp lệ.</div>";
+             listContainer.innerHTML = "<div style='color:#ccc; font-size:11px; text-align:center;'>Không có tin nhắn.</div>";
              return;
         }
 
-        // Sắp xếp: Ưu tiên tin chưa đọc lên đầu -> Xong mới tới tin nhắn mới nhất
+        // Ưu tiên tin chưa đọc lên đầu
         chatArray.sort((a, b) => {
             if (a.hasUnread && !b.hasUnread) return -1;
             if (!a.hasUnread && b.hasUnread) return 1;
             return b.time - a.time;
         });
 
-        // Đổ dữ liệu vào list
         listContainer.innerHTML = "";
         
         chatArray.forEach(chat => {
             const div = document.createElement("div");
             div.className = "admin-chat-row";
-            // Gom tên và ID vào để tìm kiếm
             const searchData = (chat.lastMsg.name + " " + chat.userKey).toLowerCase();
             div.setAttribute("data-search", searchData);
 
@@ -12521,12 +12522,12 @@ window.openAdminInbox = function() {
             listContainer.appendChild(div);
         });
 
-        // Áp dụng lại bộ lọc (Nếu Admin đang gõ tìm kiếm mà có tin nhắn mới tới)
-        window.filterAdminChatList();
+        // Áp dụng bộ lọc ngay nếu Admin đang gõ dở
+        if(typeof window.filterAdminChatList === 'function') window.filterAdminChatList();
     });
 };
 
-// Hàm Filter (Lọc danh sách khi gõ phím)
+// Hàm Lọc Chat
 window.filterAdminChatList = function() {
     const input = document.getElementById("admin-search-chat");
     if (!input) return;
@@ -12549,7 +12550,7 @@ window.loadSingleChatRoom = function(walletKey, isAdmin) {
     const headerTitle = document.querySelector("#chat-box div span");
 
     if (isAdmin) {
-        headerTitle.innerHTML = `<span onclick="window.currentAdminChatWallet=null; window.openAdminInbox();" style="cursor:pointer; color:yellow;">⬅️ DANH SÁCH</span> | KHÁCH`;
+        headerTitle.innerHTML = `<span onclick="window.openAdminInbox();" style="cursor:pointer; color:yellow;">⬅️ DANH SÁCH</span> | KHÁCH`;
     }
 
     db.ref("support_chats/" + walletKey + "/messages").on("value", (snap) => {
@@ -12575,7 +12576,6 @@ window.loadSingleChatRoom = function(walletKey, isAdmin) {
             div.innerHTML = `<b style="font-size:10px; color:${isMe ? '#55efc4' : '#ffd166'}">${m.name}</b><br>${m.text}`;
             chatContent.appendChild(div);
             
-            // Đánh dấu đã đọc
             if (isAdmin && m.sender === 'user' && m.readByAdmin === false) {
                 updates[`${m.id}/readByAdmin`] = true;
             }
@@ -12658,7 +12658,7 @@ window.bindAdminNotification = function() {
             const msgs = allChats[userKey].messages;
             if(!msgs) continue;
 
-            const msgKeys = Object.keys(msgs);
+            const msgKeys = Object.keys(msgs).filter(k => msgs[k] && msgs[k].sender);
             
             for (let msgId of msgKeys) {
                 if (msgs[msgId] && msgs[msgId].sender === 'user' && msgs[msgId].readByAdmin === false) {
@@ -12682,7 +12682,7 @@ window.bindAdminNotification = function() {
     });
 };
 setTimeout(() => { if (typeof window.bindAdminNotification === 'function') window.bindAdminNotification(); }, 3000);
-// ==================== KẾT THÚC HỆ THỐNG CHAT CSKH V12 ====================
+// ==================== KẾT THÚC HỆ THỐNG CHAT CSKH V13 ====================
 // Hàm đóng mở chat trên Mobile
 function toggleMobileChat() {
 const chatBox = document.getElementById("game-chat-box");
