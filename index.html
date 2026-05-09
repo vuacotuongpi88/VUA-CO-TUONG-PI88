@@ -11818,7 +11818,8 @@ async function maybeSettleStakeRoom(room, roomId) {
     }
 
     const totalPot = stake * 2;
-    const feePMC = Math.max(0, Math.floor(totalPot * 0.02));
+    // SỬA 0.02 THÀNH 0.2 ĐỂ THU PHÍ 20% (Chém đẹp tụi nó!)
+    const feePMC = Math.max(0, Math.floor(totalPot * 0.2)); 
     const winnerReceivePMC = totalPot - feePMC;
     const adminWalletKey = "pi_admin_master";
 
@@ -13828,12 +13829,13 @@ async function confirmStakeSelection() {
     const customValue = Math.floor(Number(custom?.value || 0) || 0);
     const finalStake = customValue > 0 ? customValue : selectedRoomStakePMC;
 
-    if (!Number.isFinite(finalStake) || finalStake <= 0) {
+    // Đã sửa lại để ép bọn nó phải cược ít nhất 1 PMC
+    if (!Number.isFinite(finalStake) || finalStake < 1) {
         isJoiningStakeRoom = false;
-        alert("Chọn hoặc nhập mức PMC trước đã.");
+        alert("Cược bèo nhất cũng phải 1 PMC trở lên nhé thằng khứa!");
         return;
     }
-
+    
     let livePmc = 0;
 
     try {
