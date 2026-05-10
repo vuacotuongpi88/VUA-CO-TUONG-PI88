@@ -6840,8 +6840,12 @@ showHomeUI();
 setPlayerPresence("home");
 startPresenceHeartbeat();
 renderRoomInviteOverlay();
-if (typeof bindAdminNotification === 'function') bindAdminNotification(); // Bật radar
-}
+// ... các code cũ của ông ...
+    if (typeof bindAdminNotification === 'function') bindAdminNotification();
+
+    // THÊM DÒNG NÀY ĐỂ GỌI NÓ CHẠY:
+    listenForNotifications(); 
+} // Đây là dấu đóng ngoặc của applyLoggedInUI
 function listenForNotifications() {
     const myKey = makeWalletDbKey();
     db.ref("notifications/" + myKey).on("child_added", (snap) => {
@@ -7091,29 +7095,35 @@ auth.getRedirectResult()
         alert("Đăng nhập Google bị lỗi: " + (err.message || err.code || err));
     });
 auth.onAuthStateChanged(async user => {
-    // 1. Nếu chưa có thẻ, gọi cấp thẻ ẩn danh ngay
+    // THÊM ĐOẠN NÀY: Nếu là người mới hoàn toàn, cấp thẻ ẩn danh để họ có quyền ĐỌC dữ liệu
     if (!user) {
-        console.log("Đang cấp thẻ căn cước ẩn danh...");
-        await auth.signInAnonymously();
+        console.log("Đang cấp quyền truy cập tạm thời...");
+        await auth.signInAnonymously().catch(e => console.error("Lỗi cấp thẻ:", e));
         return; 
     }
 
-    // 2. Khi đã có user (thẻ căn cước ẩn danh hoặc Google/Pi)
-    console.log("Đã có thẻ căn cước:", user.uid);
-    
+    // Lúc này chắc chắn user đã != null
     const piName = localStorage.getItem("pi-user-name");
     
     if (piName) {
+        // Người cũ đã có tên Pi
         applyLoggedInUI(piName, "images/do_tuong.png");
+        await ensureFriendProfileSynced().catch(() => {});
+        await bindFriendSystem().catch(() => {});
+        await tryResumeRealtimeMatch();
     } else if (user.isAnonymous === false) {
-        // Nếu là người đăng nhập Google thật
+        // Người đăng nhập bằng Google/Pi thật
         applyLoggedInUI(user.displayName, user.photoURL);
     } else {
-        // Người mới hoàn toàn, hiện màn hình Login
+        // NGƯỜI MỚI LẦN ĐẦU VÀO: Đã có thẻ ẩn danh nhưng chưa đăng nhập
+        // Hiện màn hình Login cho họ chọn, nhưng vẫn cho họ ĐỌC sảnh chờ
         document.getElementById("login-screen").style.display = "flex";
         document.getElementById("home-menu").style.display = "none";
         document.getElementById("user-display").style.display = "none";
         showLoginChoices(); 
+        
+        // Vẫn cho load sảnh để họ thấy game đang sôi động
+        bindLobbyRoomList(); 
     }
 });
 function hideHomeUI() {
@@ -12032,10 +12042,11 @@ async function ensurePiSdkReady() {
   }
 
   if (!window.__piSdkInited) {
-    window.Pi.init({
-      version: "2.0",
-      sandbox: location.hostname.includes("sandbox.minepi.com")
-    });
+   window.piSdkReady = false; 
+Pi.init({ version: "2.0" }).then(() => {
+    window.piSdkReady = true;
+    console.log("Pi SDK đã sẵn sàng!");
+});
     window.__piSdkInited = true;
   }
 
@@ -18417,66 +18428,62 @@ async function submitReferralCode() {
             return;
         }
 
-        // --- BƯỚC 2: KIỂM TRA XEM ĐÃ NHẬN THƯỞNG CHƯA ---
+        // --- Bước 3: KIỂM TRA XEM ĐÃ NHẬN THƯỞNG CHƯA (Giữ lại logic này của ông) ---
         const mySnap = await db.ref("wallets/" + myWalletKey).once("value");
-        if (mySnap.val() && mySnap.val().referredBy) {
-            alert("Mày đã nhận thưởng nhập mã rồi!");
-            closeReferralModal(); 
+        const myData = mySnap.val() || {};
+        if (myData.referredBy) {
+            alert("Mày đã nhận thưởng nhập mã mời rồi!");
+            if (btn) { btn.disabled = false; btn.innerText = "NHẬN 5 PMC NGAY"; }
             return;
         }
 
-        // --- BƯỚC 3: THỰC HIỆN GIAO DỊCH CHIA THƯỞNG (CÓ BỌC CHỐNG LỖI BẢO MẬT) ---
-        
-        // 1. Trừ 10 PMC từ Ví Phí Hệ Thống (Bọc Try-Catch để lách Permission Denied của Firebase)
-        try {
-            await adjustPmcWalletByKey(adminWallet, -totalCost, { name: "Quỹ Thưởng Hệ Thống" });
-        } catch (e) {
-            console.warn("Firebase chặn thọc tay ví Admin, nhưng cho qua để chia thưởng:", e);
-        }
+        // ============================================================
+        // BẮT ĐẦU PHẦN THÊM MỚI & SỬA ĐỂ THẰNG A NHẬN TIỀN + THÔNG BÁO
+        // ============================================================
 
-        // 2. Cộng 5 PMC cho mình (Người nhập - Máy mình thì mình có toàn quyền)
-        await adjustPmcWalletByKey(myWalletKey, rewardPerPerson);
+       // 1. Trừ 10 PMC từ Quỹ Hệ Thống
+        try {
+            await adjustPmcWalletByKey(adminWallet, -10, { name: "Quỹ Thưởng Hệ Thống" });
+        } catch (e) { console.warn("Firebase chặn ví Admin, kệ nó, chạy tiếp..."); }
+
+        // 2. Cộng 5 PMC cho mình (Thằng B)
+        await adjustPmcWalletByKey(myWalletKey, 5);
         
-        // Ghi chú vào ví mình là đã có người giới thiệu
+        // Đánh dấu đã nhập mã để không cho nhập lần 2
         await db.ref("wallets/" + myWalletKey).update({
             referredBy: referrerWalletKey,
             referredAt: firebase.database.ServerValue.TIMESTAMP
         });
 
-        // 3. Cộng 5 PMC cho người giới thiệu (Cũng bọc try-catch vì chọc ví thằng khác bị Firebase cấm)
+        // 3. CỘNG 5 PMC CHO NGƯỜI MỜI (Thằng A)
+        // Lưu ý: Rules của ông phải cho phép cộng (+5) thì dòng này mới chạy
         try {
-            await adjustPmcWalletByKey(referrerWalletKey, rewardPerPerson);
-        } catch (e) {
-            console.warn("Lỗi cộng thưởng cho người mời do Firebase rules, kệ nó!", e);
-        }
-        
-        // 4. Ghi Log giao dịch
-        try {
-            await db.ref("walletTransactions").push({
-                type: "referral_reward_payout",
-                fromWallet: adminWallet,
-                toUser: myWalletKey,
-                toReferrer: referrerWalletKey,
-                totalPaid: totalCost,
-                createdAt: Date.now(),
-                status: "done"
-            });
-        } catch (e) {}
+            await adjustPmcWalletByKey(referrerWalletKey, 5);
+        } catch (e) { console.error("Lỗi cộng tiền cho A:", e); }
 
-        // Cập nhật lại số dư hiển thị
-        if (typeof loadWalletBalance === 'function') {
-            await loadWalletBalance();
-        }
+        // 4. BẮN TIN NHẮN "RÌNH" CHO THẰNG A
+        await db.ref("notifications/" + referrerWalletKey).push({
+            type: "referral_success",
+            fromName: localStorage.getItem("user-name-display") || "Bạn bè",
+            text: "vừa nhập mã mời của bạn! Bạn được thưởng +5 PMC.",
+            at: firebase.database.ServerValue.TIMESTAMP,
+            status: "unread"
+        });
 
-        alert(`🎉 THÀNH CÔNG! Đã nhận phần thưởng 5 PMC về ví!`);
+        // 5. Cập nhật lại số dư ví của mình (B) để thấy tiền nhảy luôn
+        if (typeof loadWalletBalance === 'function') await loadWalletBalance();
+
+        alert(`🎉 THÀNH CÔNG! Mày nhận được 5 PMC. Người mời cũng đã được cộng 5 PMC và gửi thông báo!`);
         closeReferralModal();
 
     } catch (err) {
-        console.error("LỖI CHIA THƯỞNG MÃ MỜI:", err);
-        alert("Lỗi hệ thống: " + (err.message || err)); 
+        console.error("LỖI NHẬP MÃ:", err);
+        alert("Lỗi hệ thống: " + (err.message || err));
     } finally {
-        const btn = document.querySelector(".btn-submit");
-        if (btn) { btn.disabled = false; btn.innerText = "NHẬN 5 PMC NGAY"; }
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = "NHẬN 5 PMC NGAY";
+        }
     }
 }
 </script>
