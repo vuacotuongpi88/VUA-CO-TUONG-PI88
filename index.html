@@ -6842,7 +6842,22 @@ startPresenceHeartbeat();
 renderRoomInviteOverlay();
 if (typeof bindAdminNotification === 'function') bindAdminNotification(); // Bật radar
 }
+function listenForNotifications() {
+    const myKey = makeWalletDbKey();
+    db.ref("notifications/" + myKey).on("child_added", (snap) => {
+        const notify = snap.val();
+        if (!notify || notify.status !== "unread") return;
 
+        // Hiện thông báo nhảy lên màn hình
+        alert(`🎁 CHÚC MỪNG: ${notify.fromName} ${notify.text}`);
+
+        // Sau khi báo xong thì đánh dấu là đã đọc để lần sau vào game không bị hiện lại
+        db.ref("notifications/" + myKey + "/" + snap.key).update({ status: "read" });
+        
+        // Tải lại ví để tiền nhảy số luôn cho sướng
+        loadWalletBalance();
+    });
+}
 function showLoginChoices() {
     const topBtn = document.getElementById("arena-top-btn");
     if (topBtn) topBtn.style.display = "none";
