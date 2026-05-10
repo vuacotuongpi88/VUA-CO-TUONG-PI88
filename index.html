@@ -13689,8 +13689,8 @@ async function confirmAdminFeePmcToPi() {
     const pmcAmount = Math.max(0, Math.floor(Number(pmcInput?.value || 0) || 0));
     const adminSecret = String(secretInput?.value || "").trim();
     
-    // Lấy mã ví cá nhân của ông để API biết chuyển Pi về đâu
-    const myPersonalWalletKey = makeWalletDbKey(); 
+    // ĐÂY LÀ CHÌA KHÓA: Lấy đúng mã ví cá nhân 406 của ông để Server nhận diện
+    const walletKey = makeWalletDbKey(); 
 
     if (!isCurrentPiAdminKey()) {
         alert("Tài khoản Pi này không có quyền đổi ví phí hệ thống.");
@@ -13722,14 +13722,13 @@ async function confirmAdminFeePmcToPi() {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                // 🔥 ĐIỂM CHẾT Ở ĐÂY: Phải gửi đúng mã Két Sắt lên cho Server
-                "x-wallet-key": "pi_admin_master" 
+                // 🔥 SỬA LẠI ĐÚNG NHƯ CŨ: Truyền thẻ căn cước của ông lên
+                "x-wallet-key": walletKey 
             },
             body: JSON.stringify({
                 pmcAmount,
-                adminSecret,
-                targetWalletKey: myPersonalWalletKey // Gửi kèm ví cá nhân để Server biết đường chuyển Pi
-            })
+                adminSecret
+            }) // Xóa cái targetWalletKey thừa thãi tao xúi ban nãy đi
         });
 
         const raw = await res.text();
@@ -13762,7 +13761,6 @@ async function confirmAdminFeePmcToPi() {
             throw new Error(errCode || "Rút Pi thất bại.");
         }
 
-        // Tiền về! Cập nhật số Pi mới vào ví cá nhân của ông
         if (typeof data.newPlayerPiBalance === "number") {
             setPiBalance(data.newPlayerPiBalance);
         }
@@ -13775,7 +13773,7 @@ async function confirmAdminFeePmcToPi() {
         alert(
             `Đổi phí thành công!\n` +
             `-${pmcAmount.toLocaleString("vi-VN")} PMC từ ví phí hệ thống\n` +
-            `+${(data.piAmount || 0)} Pi vào tài khoản hiện tại`
+            `+${formatPiExchangeValue(data.piAmount || 0)} Pi vào tài khoản hiện tại`
         );
     } catch (err) {
         alert("Đổi ví phí lỗi: " + (err.message || "Không rõ lỗi"));
