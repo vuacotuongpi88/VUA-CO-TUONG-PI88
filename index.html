@@ -6131,7 +6131,7 @@ body.has-warning #game-arena {
         </div>
 
         <div id="friend-list" class="friend-sections"></div>
-      </div> </div>
+      </div>
 </div>
 </div>
 <div id="mobile-lobby-title" class="lobby-title-box lobby-title-mobile">
@@ -18979,11 +18979,10 @@ async function submitReferralCode() {
     cursor: pointer;
 }
 </style>
-
 <!-- Nút ngoài sảnh -->
-<div id="referral-btn-container" style="position: fixed; top: 16px; right: 256px; z-index: 10000; display: flex; flex-direction: column; align-items: center; gap: 5px;">
-    <div id="arena-referral-btn" style="position: static;" onclick="openReferralModal()" title="Mời bạn kiếm tiền">🎁</div>
-    <div id="my-referral-count-badge" style="background: rgba(0,0,0,0.8); border: 1px solid #f4c542; color: #f4c542; font-size: 10px; padding: 2px 8px; border-radius: 12px; font-weight: 900; box-shadow: 0 0 10px rgba(244,197,66,0.3);">0/100</div>
+<div id="arena-referral-btn" onclick="openReferralModal()" title="Mời bạn kiếm tiền">
+    🎁
+    <div id="my-referral-count-badge" style="position: absolute; bottom: -14px; background: rgba(0,0,0,0.9); border: 1px solid #f4c542; color: #f4c542; font-size: 9px; padding: 2px 5px; border-radius: 12px; font-weight: 900; white-space: nowrap; line-height: 1.2; letter-spacing: 0;">0/100</div>
 </div>
 
 <!-- Hộp thoại xổ ra -->
