@@ -6808,7 +6808,7 @@ async function applyLoggedInUI(displayName, photoURL) {
     if (!user) return;
     const walletKey = makeWalletDbKey();
 
-    // GHI ĐÈ UID VÀO VÍ NGAY LẬP TỨC ĐỂ MỞ KHÓA RULES
+    // 🔥 LỆNH QUAN TRỌNG: Ghi UID vào ví để mở khóa Rules (Sửa lỗi tạo bàn)
     await db.ref("wallets/" + walletKey).update({
         uid: user.uid,
         name: displayName || "Người chơi",
@@ -6838,20 +6838,19 @@ async function applyLoggedInUI(displayName, photoURL) {
     localStorage.setItem("user-name-display", safeName);
     localStorage.setItem("user-photo", safePhoto);
 
-loadWalletBalance()
-    .then(() => loadAvatarSkinState())
-    .catch(err => console.error("Lỗi tải ví/skin:", err));
+    // Tải ví sau khi đã có UID
+    loadWalletBalance()
+        .then(() => loadAvatarSkinState())
+        .catch(err => console.error("Lỗi tải ví/skin:", err));
 
-showHomeUI();
-setPlayerPresence("home");
-startPresenceHeartbeat();
-renderRoomInviteOverlay();
-// ... các code cũ của ông ...
+    showHomeUI();
+    setPlayerPresence("home");
+    startPresenceHeartbeat();
+    renderRoomInviteOverlay();
+    
     if (typeof bindAdminNotification === 'function') bindAdminNotification();
-
-    // THÊM DÒNG NÀY ĐỂ GỌI NÓ CHẠY:
-    listenForNotifications(); 
-} // Đây là dấu đóng ngoặc của applyLoggedInUI
+    if (typeof listenForNotifications === 'function') listenForNotifications();
+}
 function listenForNotifications() {
     const myKey = makeWalletDbKey();
     db.ref("notifications/" + myKey).on("child_added", (snap) => {
@@ -7113,15 +7112,15 @@ auth.onAuthStateChanged(async user => {
         await ensureFriendProfileSynced().catch(() => {});
         await bindFriendSystem().catch(() => {});
         await tryResumeRealtimeMatch();
-        // Đợi 1 giây để ví kịp nhận UID rồi mới load nhiệm vụ
+        // Đợi 1.5 giây cho ví ổn định rồi mới load nhiệm vụ
         setTimeout(() => {
             if (typeof refreshMissionLobbyBadgeSilently === 'function') refreshMissionLobbyBadgeSilently();
-        }, 1200);
+        }, 1500);
     } else if (user.isAnonymous === false) {
         await applyLoggedInUI(user.displayName, user.photoURL);
         setTimeout(() => {
             if (typeof refreshMissionLobbyBadgeSilently === 'function') refreshMissionLobbyBadgeSilently();
-        }, 1200);
+        }, 1500);
     } else {
         document.getElementById("login-screen").style.display = "flex";
         document.getElementById("home-menu").style.display = "none";
@@ -13621,27 +13620,17 @@ async function refreshAdminFeeTreasury() {
   const noteEl = document.getElementById("admin-fee-wallet-note");
   const balanceEl = document.getElementById("admin-fee-wallet-balance-box");
   const previewEl = document.getElementById("admin-fee-pi-preview");
-  const inputEl = document.getElementById("admin-fee-pmc-input");
-  const secretEl = document.getElementById("admin-fee-secret-input");
-
+  
   function setNote(text, color) {
     if (!noteEl) return;
     noteEl.textContent = String(text || "");
     if (color) noteEl.style.color = color;
   }
 
-  function setBalance(pmcText, piText) {
-    if (!balanceEl) return;
-    balanceEl.innerHTML =
-      "PMC phí hiện có: " + pmcText + "<br>" +
-      "Pi tài khoản admin hiện có: " + piText;
-  }
-
   setNote("Đang tải ví phí hệ thống...", "#7fffd4");
-  setBalance("...", "...");
 
   try {
-    const walletKey = makeWalletDbKey(); // SỬA: Lấy key chuẩn của Admin 406
+    const walletKey = makeWalletDbKey(); // 🔥 SỬA: Lấy đúng key Admin 406
     const res = await fetch("/api/convert-fee-pmc-to-pi?v=" + Date.now(), {
       method: "GET",
       headers: { 
