@@ -18358,7 +18358,7 @@ function shareRefToFB() {
     window.open(fbShareUrl, '_blank', 'width=600,height=400');
 }
 
-// 4. CHỨC NĂNG NHẬP MÃ - RÚT 10 PMC TỪ QUỸ HỆ THỐNG ĐỂ CHIA THƯỞNG (V3 - BỌC KHIÊN)
+// 4. CHỨC NĂNG NHẬP MÃ - CHIA NHỎ LỆNH ĐỂ CHỐNG FIREBASE KẸT BĂNG ĐẠN
 async function submitReferralCode() {
     const inputEl = document.getElementById("input-ref-code");
     const code = inputEl.value.trim().toUpperCase();
@@ -18370,8 +18370,6 @@ async function submitReferralCode() {
 
     const myWalletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "";
     const adminWallet = "pi_admin_master"; // Ví Phí Hệ Thống (Nguồn chi thưởng)
-    const rewardPerPerson = 5;
-    const totalCost = 10; // Rút tổng 10 PMC từ quỹ
     
     try {
         const btn = document.querySelector(".btn-submit");
@@ -18380,29 +18378,22 @@ async function submitReferralCode() {
             btn.innerText = "ĐANG XỬ LÝ QUỸ...";
         }
 
-       // --- BƯỚC 1: KIỂM TRA MÃ VÀ QUYỀN HẠN ---
+        // --- BƯỚC 1: TÌM KẾM CHỦ MÃ ---
         let referrerWalletKey = null;
-
-        // 1. Dò trong sổ danh bạ tổng trước
         const codeSnap = await db.ref("referralCodes/" + code).once("value");
         referrerWalletKey = codeSnap.val();
 
-        // 2. NẾU ĐÉO CÓ TRONG SỔ: Tự động suy luận nó là acc Pi (Ví dụ khách gõ THIHONG123 -> Server tự mò ví pi_thihong123)
         if (!referrerWalletKey) {
             const guessKey = "pi_" + code.toLowerCase();
             const guessSnap = await db.ref("wallets/" + guessKey).once("value");
-            
             if (guessSnap.exists()) {
-                referrerWalletKey = guessKey; // Bắt được quả tang!
-                
-                // Tiện tay đăng ký sổ hộ khẩu giùm thằng kia luôn cho lần sau Firebase nó khỏi tìm cực
+                referrerWalletKey = guessKey; 
                 db.ref("referralCodes/" + code).set(guessKey).catch(()=>{});
             }
         }
 
-        // 3. NẾU MÒ TẬN NHÀ MÀ VẪN KHÔNG CÓ THÌ MỚI CHỬI!
         if (!referrerWalletKey) {
-            alert("Mã này đéo tồn tại! Kêu thằng chủ mã đăng nhập vào game một lần trước đã!");
+            alert("Mã này đéo tồn tại! Kêu chủ mã đăng nhập game 1 lần đi.");
             if (btn) { btn.disabled = false; btn.innerText = "NHẬN 5 PMC NGAY"; }
             return;
         }
@@ -18413,7 +18404,7 @@ async function submitReferralCode() {
             return;
         }
 
-        // --- Bước 3: KIỂM TRA XEM ĐÃ NHẬN THƯỞNG CHƯA (Giữ lại logic này của ông) ---
+        // --- BƯỚC 2: KIỂM TRA MÌNH NHẬN CHƯA ---
         const mySnap = await db.ref("wallets/" + myWalletKey).once("value");
         const myData = mySnap.val() || {};
         if (myData.referredBy) {
@@ -18422,82 +18413,71 @@ async function submitReferralCode() {
             return;
         }
 
-        // ============================================================
-        // BẮT ĐẦU PHẦN THÊM MỚI & SỬA ĐỂ THẰNG A NHẬN TIỀN + THÔNG BÁO
-        // ============================================================
+        const refSnap = await db.ref("wallets/" + referrerWalletKey).once("value");
+        const refData = refSnap.val() || {};
+        const meProfile = getCurrentFriendProfile();
 
-       // 1. Trừ 10 PMC từ Quỹ Hệ Thống
-        try {
-            await adjustPmcWalletByKey(adminWallet, -10, { name: "Quỹ Thưởng Hệ Thống" });
-        } catch (e) { console.warn("Firebase chặn ví Admin, kệ nó, chạy tiếp..."); }
+        // =======================================================
+        // BẮT ĐẦU THỰC THI (ĐÃ CHIA NHỎ TỪNG VIỆC CHỐNG LỖI)
+        // =======================================================
 
-        // 2. Cộng 5 PMC cho mình (Thằng B)
+        // Việc 1: Trừ 10 PMC từ Quỹ (Kệ mẹ lỗi Rules, cho qua luôn)
+        try { await adjustPmcWalletByKey(adminWallet, -10, { name: "Quỹ Thưởng Hệ Thống" }); } catch (e) {}
+
+        // Việc 2: Cộng 5 PMC cho mình (Thằng B) và khóa ô nhập mã
         await adjustPmcWalletByKey(myWalletKey, 5);
-        
-        // Đánh dấu đã nhập mã để không cho nhập lần 2
         await db.ref("wallets/" + myWalletKey).update({
             referredBy: referrerWalletKey,
             referredAt: firebase.database.ServerValue.TIMESTAMP
         });
 
-        // 3. CỘNG 5 PMC CHO NGƯỜI MỜI (Thằng A)
-        // Lưu ý: Rules của ông phải cho phép cộng (+5) thì dòng này mới chạy
-        try {
-            await adjustPmcWalletByKey(referrerWalletKey, 5);
-        } catch (e) { console.error("Lỗi cộng tiền cho A:", e); }
+        // Việc 3: Cộng 5 PMC cho thằng mời (Thằng A)
+        try { await adjustPmcWalletByKey(referrerWalletKey, 5); } catch (e) {}
 
-        // 4. BẮN TIN NHẮN "RÌNH" CHO THẰNG A
-        await db.ref("notifications/" + referrerWalletKey).push({
+        // Việc 4: Bắn Thông Báo rình cho thằng A
+        db.ref("notifications/" + referrerWalletKey).push({
             type: "referral_success",
-            fromName: localStorage.getItem("user-name-display") || "Bạn bè",
+            fromName: meProfile.displayName || "Bạn bè",
             text: "vừa nhập mã mời của bạn! Bạn được thưởng +5 PMC.",
             at: firebase.database.ServerValue.TIMESTAMP,
             status: "unread"
-        });
+        }).catch(()=>{});
 
-        // 5. Cập nhật lại số dư ví của mình (B) để thấy tiền nhảy luôn
+        // Việc 5: Ép KẾT BẠN CHÉO (Làm riêng rẽ từng thằng)
+        db.ref(`social/friends/${myWalletKey}/${referrerWalletKey}`).update({
+            walletKey: referrerWalletKey,
+            uid: refData.uid || referrerWalletKey,
+            username: refData.username || "",
+            displayName: refData.name || "Người mời",
+            photo: refData.photo || "images/do_tuong.png",
+            addedAt: firebase.database.ServerValue.TIMESTAMP
+        }).catch(()=>{});
+
+        db.ref(`social/friends/${referrerWalletKey}/${myWalletKey}`).update({
+            walletKey: myWalletKey,
+            uid: meProfile.uid,
+            username: meProfile.username,
+            displayName: meProfile.displayName,
+            photo: meProfile.photo,
+            addedAt: firebase.database.ServerValue.TIMESTAMP
+        }).catch(()=>{});
+
+        // Việc 6: Cộng số người mời (referralCount) cho A
+        db.ref(`wallets/${referrerWalletKey}/referralCount`).set(
+            firebase.database.ServerValue.increment(1)
+        ).catch(()=>{});
+
+        // Load lại ví để thấy tiền nhảy
         if (typeof loadWalletBalance === 'function') await loadWalletBalance();
-        // 👇👇 CHÈN THÊM ĐOẠN NÀY VÀO: AUTO KẾT BẠN & CỘNG SỐ LƯỢNG MỜI 👇👇
-        try {
-            const meProfile = getCurrentFriendProfile();
-            const refSnap = await db.ref("wallets/" + referrerWalletKey).once("value");
-            const refData = refSnap.val() || {};
 
-            const autoFriendUpdates = {};
-            // Thêm thằng chủ mã vào danh sách bạn của mình
-            autoFriendUpdates[`social/friends/${myWalletKey}/${referrerWalletKey}`] = {
-                walletKey: referrerWalletKey,
-                uid: refData.uid || referrerWalletKey,
-                username: refData.username || "",
-                displayName: refData.name || "Người mời",
-                photo: refData.photo || "images/do_tuong.png",
-                addedAt: firebase.database.ServerValue.TIMESTAMP
-            };
-            // Thêm mình vào danh sách bạn của thằng chủ mã
-            autoFriendUpdates[`social/friends/${referrerWalletKey}/${myWalletKey}`] = {
-                walletKey: myWalletKey,
-                uid: meProfile.uid,
-                username: meProfile.username,
-                displayName: meProfile.displayName,
-                photo: meProfile.photo,
-                addedAt: firebase.database.ServerValue.TIMESTAMP
-            };
-            // Tăng số lượng người mời thành công của thằng chủ mã lên +1
-            autoFriendUpdates[`wallets/${referrerWalletKey}/referralCount`] = firebase.database.ServerValue.increment(1);
-
-            await db.ref().update(autoFriendUpdates);
-        } catch(err) {
-            console.error("Lỗi Auto-friend:", err);
-        }
-        // 👆👆 KẾT THÚC CHÈN 👆👆
-
-        alert(`🎉 THÀNH CÔNG! Mày nhận được 5 PMC. Người mời cũng đã được cộng 5 PMC và gửi thông báo!`);
+        alert(`🎉 THÀNH CÔNG! Mày nhận được 5 PMC. Người mời cũng được cộng 5 PMC và hai đứa đã tự động kết bạn!`);
         closeReferralModal();
 
     } catch (err) {
         console.error("LỖI NHẬP MÃ:", err);
         alert("Lỗi hệ thống: " + (err.message || err));
     } finally {
+        const btn = document.querySelector(".btn-submit");
         if (btn) {
             btn.disabled = false;
             btn.innerText = "NHẬN 5 PMC NGAY";
