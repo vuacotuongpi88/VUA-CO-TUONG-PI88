@@ -18229,13 +18229,13 @@ function playChestOpeningAnimation(chestPrefix, frameCount, onCompleteCallback) 
 }
 // ==================== BỘ NÃO XỬ LÝ MÃ MỜI (ANTI-CHEAT) ====================
 
-// 1. Mở Modal và Khởi tạo mã
+// 1. Mở Modal và Khởi tạo mã bằng Tên Pi (Chuẩn đét)
 async function openReferralModal() {
     const modal = document.getElementById("referral-modal");
     if (!modal) return;
     modal.style.display = "flex";
 
-    const walletKey = makeWalletDbKey();
+    const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "";
     const myCodeEl = document.getElementById("my-ref-code");
     const inputSection = document.getElementById("ref-input-section");
     const doneSection = document.getElementById("ref-done-section");
@@ -18253,21 +18253,28 @@ async function openReferralModal() {
             doneSection.style.display = "none";
         }
 
-        // Kiểm tra xem nó có mã mời cá nhân chưa, chưa có thì đẻ ra 1 cái
-        if (data.myReferralCode) {
-            myCodeEl.innerText = data.myReferralCode;
+        // 🔥 BẮT ĐẦU FIX: LẤY PI ID LÀM MÃ CỐ ĐỊNH 🔥
+        let fixedCode = "";
+        const piName = localStorage.getItem("pi-user-name"); // Kéo chính xác ID Pi (vd: thihong123456789)
+        
+        if (piName) {
+            // Nếu là dân Pi, ép chữ in hoa cho ngầu và dễ nhập
+            fixedCode = piName.trim().toUpperCase(); 
         } else {
-            // Tạo mã random 6 chữ số có chữ MC ở đầu
-            const newCode = "MC" + Math.random().toString(36).substring(2, 6).toUpperCase();
-            
-            // Lưu vào Ví của mình
-            await db.ref("wallets/" + walletKey).update({ myReferralCode: newCode });
-            
-            // Lưu vào kho Data Danh bạ Mã Mời để truy xuất cho lẹ
-            await db.ref("referralCodes/" + newCode).set(walletKey);
-            
-            myCodeEl.innerText = newCode;
+            // Nếu không phải Pi (test trên web/Google/Guest), móc mã ví cắt gọn ra làm mã cho đỡ trùng
+            fixedCode = walletKey.replace('guest_', 'G').replace('google_', 'GG').substring(0, 15).toUpperCase();
         }
+
+        // ÉP CHẾT MÃ NÀY VÀO DATABASE (Ghi đè luôn mã MC random cũ nếu trước đó nó lỡ tạo)
+        if (data.myReferralCode !== fixedCode) {
+            await db.ref("wallets/" + walletKey).update({ myReferralCode: fixedCode });
+            // Cắm rễ vào danh bạ tổng để tìm kiếm lẹ
+            await db.ref("referralCodes/" + fixedCode).set(walletKey);
+        }
+        
+        // In ra màn hình cho khách xem
+        myCodeEl.innerText = fixedCode;
+
     } catch (error) {
         myCodeEl.innerText = "LỖI MẠNG";
     }
@@ -19010,7 +19017,7 @@ async function submitReferralCode() {
             <div id="ref-input-section" class="ref-input-box">
                 <div style="color: #f4c542; font-size: 14px; font-weight: bold; margin-bottom: 10px;">AI GIỚI THIỆU BẠN VÀO ĐÂY?</div>
                 <div style="color: #b2bec3; font-size: 11px; margin-bottom: 10px;">Nhập mã của họ để CẢ HAI cùng nhận 5 PMC! (Chỉ được nhập 1 lần)</div>
-                <input type="text" id="input-ref-code" class="ref-input" placeholder="NHẬP MÃ TẠI ĐÂY" maxlength="8">
+                <input type="text" id="input-ref-code" class="ref-input" placeholder="NHẬP MÃ TẠI ĐÂY" maxlength="30">
                 <button class="ref-btn btn-submit" onclick="submitReferralCode()">NHẬN 5 PMC NGAY</button>
             </div>
 
