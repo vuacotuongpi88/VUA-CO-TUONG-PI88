@@ -18253,9 +18253,9 @@ async function openReferralModal() {
             doneSection.style.display = "none";
         }
 
-        // 🔥 BẮT ĐẦU FIX: LẤY PI ID LÀM MÃ CỐ ĐỊNH 🔥
+        // LẤY PI ID LÀM MÃ CỐ ĐỊNH
         let fixedCode = "";
-        const piName = localStorage.getItem("pi-user-name"); // Kéo chính xác ID Pi (vd: thihong123456789)
+        const piName = localStorage.getItem("pi-user-name");
         
         if (piName) {
             // Nếu là dân Pi, ép chữ in hoa cho ngầu và dễ nhập
@@ -18265,12 +18265,11 @@ async function openReferralModal() {
             fixedCode = walletKey.replace('guest_', 'G').replace('google_', 'GG').substring(0, 15).toUpperCase();
         }
 
-        // ÉP CHẾT MÃ NÀY VÀO DATABASE (Ghi đè luôn mã MC random cũ nếu trước đó nó lỡ tạo)
-        if (data.myReferralCode !== fixedCode) {
-            await db.ref("wallets/" + walletKey).update({ myReferralCode: fixedCode });
-            // Cắm rễ vào danh bạ tổng để tìm kiếm lẹ
-            await db.ref("referralCodes/" + fixedCode).set(walletKey);
-        }
+        // 🔥 FIX CHÍ MẠNG Ở ĐÂY: Dẹp lệnh IF, ép đăng ký Hộ Khẩu lên Firebase liên tục!
+        await db.ref("wallets/" + walletKey).update({ myReferralCode: fixedCode }).catch(e=>console.log(e));
+        
+        // Cắm rễ vào danh bạ tổng. Thêm bùa catch để nếu có rồi Firebase cấm ghi đè thì game vẫn không bị sập.
+        await db.ref("referralCodes/" + fixedCode).set(walletKey).catch(e=>console.log("Mã đã có trong sổ"));
         
         // In ra màn hình cho khách xem
         myCodeEl.innerText = fixedCode;
