@@ -7076,27 +7076,28 @@ auth.getRedirectResult()
         alert("Đăng nhập Google bị lỗi: " + (err.message || err.code || err));
     });
 auth.onAuthStateChanged(async user => {
+    // 1. Nếu chưa có thẻ, gọi cấp thẻ ẩn danh ngay
+    if (!user) {
+        console.log("Đang cấp thẻ căn cước ẩn danh...");
+        await auth.signInAnonymously();
+        return; 
+    }
+
+    // 2. Khi đã có user (thẻ căn cước ẩn danh hoặc Google/Pi)
+    console.log("Đã có thẻ căn cước:", user.uid);
+    
     const piName = localStorage.getItem("pi-user-name");
     
     if (piName) {
-        // Người cũ đã nạp tên Pi
         applyLoggedInUI(piName, "images/do_tuong.png");
-        return;
-    }
-
-    if (user) {
-        // Người cũ đã đăng nhập Google
-        const displayName = user.displayName || "Kỳ thủ";
-        applyLoggedInUI(displayName, user.photoURL);
+    } else if (user.isAnonymous === false) {
+        // Nếu là người đăng nhập Google thật
+        applyLoggedInUI(user.displayName, user.photoURL);
     } else {
-        // ĐÂY LÀ NGƯỜI MỚI (Khách hoặc giả lập mới)
-        // Phải ẩn sảnh, ẩn bàn cờ, CHỈ hiện màn hình Đăng nhập
+        // Người mới hoàn toàn, hiện màn hình Login
         document.getElementById("login-screen").style.display = "flex";
         document.getElementById("home-menu").style.display = "none";
         document.getElementById("user-display").style.display = "none";
-        document.getElementById("game-arena").style.display = "none";
-        
-        // Quan trọng: Không được gọi loadWalletBalance() ở đây vì họ chưa có acc!
         showLoginChoices(); 
     }
 });
