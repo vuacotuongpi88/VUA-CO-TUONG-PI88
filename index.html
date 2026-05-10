@@ -10513,12 +10513,17 @@ let currentRoomBucket = null;
 let isJoiningStakeRoom = false;
 
 function getAccountKey() {
-    const user = auth.currentUser;
-    if (user?.uid) return `google_${user.uid}`;
-
+    // 1. ƯU TIÊN CAO NHẤT: Tài khoản Pi Browser thật
     const piName = localStorage.getItem("pi-user-name");
     if (piName) return `pi_${piName.trim().toLowerCase()}`;
 
+    // 2. ƯU TIÊN THỨ HAI: Tài khoản Google thật (Bỏ qua bọn ẩn danh)
+    const user = auth.currentUser;
+    if (user && user.isAnonymous === false) {
+        return `google_${user.uid}`;
+    }
+
+    // 3. CUỐI CÙNG: Tài khoản Khách test
     const guestName =
         localStorage.getItem("currentUsername") ||
         localStorage.getItem("user-name-display") ||
