@@ -18380,12 +18380,29 @@ async function submitReferralCode() {
             btn.innerText = "ĐANG XỬ LÝ QUỸ...";
         }
 
-        // --- BƯỚC 1: KIỂM TRA MÃ VÀ QUYỀN HẠN ---
-        const codeSnap = await db.ref("referralCodes/" + code).once("value");
-        const referrerWalletKey = codeSnap.val();
+       // --- BƯỚC 1: KIỂM TRA MÃ VÀ QUYỀN HẠN ---
+        let referrerWalletKey = null;
 
+        // 1. Dò trong sổ danh bạ tổng trước
+        const codeSnap = await db.ref("referralCodes/" + code).once("value");
+        referrerWalletKey = codeSnap.val();
+
+        // 2. NẾU ĐÉO CÓ TRONG SỔ: Tự động suy luận nó là acc Pi (Ví dụ khách gõ THIHONG123 -> Server tự mò ví pi_thihong123)
         if (!referrerWalletKey) {
-            alert("Mã này đéo tồn tại!");
+            const guessKey = "pi_" + code.toLowerCase();
+            const guessSnap = await db.ref("wallets/" + guessKey).once("value");
+            
+            if (guessSnap.exists()) {
+                referrerWalletKey = guessKey; // Bắt được quả tang!
+                
+                // Tiện tay đăng ký sổ hộ khẩu giùm thằng kia luôn cho lần sau Firebase nó khỏi tìm cực
+                db.ref("referralCodes/" + code).set(guessKey).catch(()=>{});
+            }
+        }
+
+        // 3. NẾU MÒ TẬN NHÀ MÀ VẪN KHÔNG CÓ THÌ MỚI CHỬI!
+        if (!referrerWalletKey) {
+            alert("Mã này đéo tồn tại! Kêu thằng chủ mã đăng nhập vào game một lần trước đã!");
             if (btn) { btn.disabled = false; btn.innerText = "NHẬN 5 PMC NGAY"; }
             return;
         }
