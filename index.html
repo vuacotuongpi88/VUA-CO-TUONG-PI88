@@ -2158,22 +2158,43 @@ color: transparent;
     box-shadow: 0 0 12px rgba(0, 0, 0, 0.5);
 }
 
+/* BẢNG BẠN BÈ MỚI (TO & NẰM GIỮA MÀN HÌNH) */
 #mobile-friend-box {
     display: none;
+    position: fixed;
+    inset: 0; /* Phủ kín màn hình */
+    background: rgba(0, 0, 0, 0.85); /* Nền đen mờ */
+    z-index: 40000; /* Nổi lên trên cùng */
+    align-items: center;
+    justify-content: center;
     flex-direction: column;
-    gap: 6px;
-    position: absolute;
-    top: 60px;
-    right: 0;
-    width: min(76vw, 290px);
-    max-width: 290px;
-    background: rgba(0, 0, 0, 0.88);
-    border: 2px solid #55efc4;
-    border-radius: 14px;
-    padding: 10px;
+    backdrop-filter: blur(5px);
+}
+
+#mobile-friend-box.show {
+    display: flex;
+}
+
+/* Khung chứa nội dung bên trong */
+.friend-box-inner {
+    width: min(92vw, 450px);
+    max-height: 85vh;
+    background: linear-gradient(180deg, rgba(32, 12, 56, 0.98), rgba(18, 8, 34, 0.98));
+    border: 2px solid #f4c542;
+    border-radius: 20px;
+    padding: 20px;
     box-sizing: border-box;
-    z-index: 11000;
-    box-shadow: 0 0 15px rgba(0, 0, 0, 0.45);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-shadow: 0 0 30px rgba(123, 47, 247, 0.4);
+}
+
+#friend-list {
+    max-height: 50vh; /* Kéo dài danh sách bạn bè ra */
+    overflow-y: auto;
+    font-size: 13px;
+    padding-right: 5px;
 }
 
 #mobile-friend-box.show {
@@ -6086,7 +6107,7 @@ body.has-warning #game-arena {
     </div>
 
     <div id="mobile-friend-box">
-        <div class="friend-box-header">
+      <div class="friend-box-inner"> <div class="friend-box-header">
             <span class="friend-box-title">BẠN BÈ</span>
             <span class="friend-close" onclick="closeFriendBox()">✖</span>
         </div>
@@ -6110,7 +6131,8 @@ body.has-warning #game-arena {
         </div>
 
         <div id="friend-list" class="friend-sections"></div>
-    </div>
+      </div> </div>
+</div>
 </div>
 <div id="mobile-lobby-title" class="lobby-title-box lobby-title-mobile">
     <div class="lobby-main-title"></div>
@@ -18407,6 +18429,39 @@ async function submitReferralCode() {
 
         // 5. Cập nhật lại số dư ví của mình (B) để thấy tiền nhảy luôn
         if (typeof loadWalletBalance === 'function') await loadWalletBalance();
+        // 👇👇 CHÈN THÊM ĐOẠN NÀY VÀO: AUTO KẾT BẠN & CỘNG SỐ LƯỢNG MỜI 👇👇
+        try {
+            const meProfile = getCurrentFriendProfile();
+            const refSnap = await db.ref("wallets/" + referrerWalletKey).once("value");
+            const refData = refSnap.val() || {};
+
+            const autoFriendUpdates = {};
+            // Thêm thằng chủ mã vào danh sách bạn của mình
+            autoFriendUpdates[`social/friends/${myWalletKey}/${referrerWalletKey}`] = {
+                walletKey: referrerWalletKey,
+                uid: refData.uid || referrerWalletKey,
+                username: refData.username || "",
+                displayName: refData.name || "Người mời",
+                photo: refData.photo || "images/do_tuong.png",
+                addedAt: firebase.database.ServerValue.TIMESTAMP
+            };
+            // Thêm mình vào danh sách bạn của thằng chủ mã
+            autoFriendUpdates[`social/friends/${referrerWalletKey}/${myWalletKey}`] = {
+                walletKey: myWalletKey,
+                uid: meProfile.uid,
+                username: meProfile.username,
+                displayName: meProfile.displayName,
+                photo: meProfile.photo,
+                addedAt: firebase.database.ServerValue.TIMESTAMP
+            };
+            // Tăng số lượng người mời thành công của thằng chủ mã lên +1
+            autoFriendUpdates[`wallets/${referrerWalletKey}/referralCount`] = firebase.database.ServerValue.increment(1);
+
+            await db.ref().update(autoFriendUpdates);
+        } catch(err) {
+            console.error("Lỗi Auto-friend:", err);
+        }
+        // 👆👆 KẾT THÚC CHÈN 👆👆
 
         alert(`🎉 THÀNH CÔNG! Mày nhận được 5 PMC. Người mời cũng đã được cộng 5 PMC và gửi thông báo!`);
         closeReferralModal();
@@ -18926,7 +18981,10 @@ async function submitReferralCode() {
 </style>
 
 <!-- Nút ngoài sảnh -->
-<div id="arena-referral-btn" onclick="openReferralModal()" title="Mời bạn kiếm tiền">🎁</div>
+<div id="referral-btn-container" style="position: fixed; top: 16px; right: 256px; z-index: 10000; display: flex; flex-direction: column; align-items: center; gap: 5px;">
+    <div id="arena-referral-btn" style="position: static;" onclick="openReferralModal()" title="Mời bạn kiếm tiền">🎁</div>
+    <div id="my-referral-count-badge" style="background: rgba(0,0,0,0.8); border: 1px solid #f4c542; color: #f4c542; font-size: 10px; padding: 2px 8px; border-radius: 12px; font-weight: 900; box-shadow: 0 0 10px rgba(244,197,66,0.3);">0/100</div>
+</div>
 
 <!-- Hộp thoại xổ ra -->
 <div id="referral-modal">
@@ -18938,6 +18996,7 @@ async function submitReferralCode() {
             <div class="ref-my-code-box">
                 <div style="color: #dfe6e9; font-size: 13px;">Mã mời của bạn (Cứ có người nhập là +5 PMC)</div>
                 <div id="my-ref-code" class="ref-code-text">ĐANG TẠO...</div>
+                <div style="color: #55efc4; font-size: 13px; font-weight: bold; margin-bottom: 10px;">Đã mời thành công: <span id="modal-referral-count">0</span> bạn</div>                
                 <div class="ref-buttons">
                     <button class="ref-btn btn-copy" onclick="copyMyRefCode()">📋 COPY MÃ</button>
                     <button class="ref-btn btn-fb" onclick="shareRefToFB()">🌐 SHARE FACEBOOK</button>
@@ -18997,6 +19056,20 @@ function checkLevelRewardNotification() {
     if (oldDot) oldDot.remove();
     // Tạm thời ẩn chấm đỏ nếu chưa có logic rương mới
 }
+function bindReferralCount() {
+    const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "";
+    if(!walletKey) return;
+    db.ref("wallets/" + walletKey + "/referralCount").on("value", snap => {
+        const count = Math.floor(Number(snap.val() || 0));
+        const outBadge = document.getElementById("my-referral-count-badge");
+        const inModal = document.getElementById("modal-referral-count");
+        
+        if (outBadge) outBadge.innerText = count + "/100";
+        if (inModal) inModal.innerText = count;
+    });
+}
+// Chạy hàm đếm sau khi vô sảnh
+setTimeout(bindReferralCount, 3000);
 </script>
 </body>
 </html>
