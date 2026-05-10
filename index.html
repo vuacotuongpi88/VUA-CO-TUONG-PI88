@@ -6803,10 +6803,21 @@ currentRoomBucket = room.roomBucket || makeStakeBucket(currentRoomMode, currentR
 provider.setCustomParameters({
     prompt: 'select_account'
 });
-function applyLoggedInUI(displayName, photoURL) {
+async function applyLoggedInUI(displayName, photoURL) {
+    const user = auth.currentUser;
+    if (!user) return;
+    const walletKey = makeWalletDbKey();
+
+    // GHI ĐÈ UID VÀO VÍ NGAY LẬP TỨC ĐỂ MỞ KHÓA RULES
+    await db.ref("wallets/" + walletKey).update({
+        uid: user.uid,
+        name: displayName || "Người chơi",
+        photo: photoURL || "images/do_tuong.png",
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+    });
+
     const safeName = displayName || "Người chơi";
     const safePhoto = photoURL || "images/do_tuong.png";
-
     const loginScreen = document.getElementById("login-screen");
     const userDisplay = document.getElementById("user-display");
     const homeMenu = document.getElementById("home-menu");
@@ -6825,12 +6836,7 @@ function applyLoggedInUI(displayName, photoURL) {
     if (userPhoto) userPhoto.src = safePhoto;
 
     localStorage.setItem("user-name-display", safeName);
-localStorage.setItem("user-photo", safePhoto);
-
-currentWalletBalance = 0;
-currentPmcBalance = 0;
-updateBalanceUI(0);
-updatePmcUI(0);
+    localStorage.setItem("user-photo", safePhoto);
 
 loadWalletBalance()
     .then(() => loadAvatarSkinState())
@@ -7095,34 +7101,32 @@ auth.getRedirectResult()
         alert("Đăng nhập Google bị lỗi: " + (err.message || err.code || err));
     });
 auth.onAuthStateChanged(async user => {
-    // THÊM ĐOẠN NÀY: Nếu là người mới hoàn toàn, cấp thẻ ẩn danh để họ có quyền ĐỌC dữ liệu
     if (!user) {
-        console.log("Đang cấp quyền truy cập tạm thời...");
         await auth.signInAnonymously().catch(e => console.error("Lỗi cấp thẻ:", e));
         return; 
     }
 
-    // Lúc này chắc chắn user đã != null
     const piName = localStorage.getItem("pi-user-name");
     
     if (piName) {
-        // Người cũ đã có tên Pi
-        applyLoggedInUI(piName, "images/do_tuong.png");
+        await applyLoggedInUI(piName, "images/do_tuong.png");
         await ensureFriendProfileSynced().catch(() => {});
         await bindFriendSystem().catch(() => {});
         await tryResumeRealtimeMatch();
+        // Đợi 1 giây để ví kịp nhận UID rồi mới load nhiệm vụ
+        setTimeout(() => {
+            if (typeof refreshMissionLobbyBadgeSilently === 'function') refreshMissionLobbyBadgeSilently();
+        }, 1200);
     } else if (user.isAnonymous === false) {
-        // Người đăng nhập bằng Google/Pi thật
-        applyLoggedInUI(user.displayName, user.photoURL);
+        await applyLoggedInUI(user.displayName, user.photoURL);
+        setTimeout(() => {
+            if (typeof refreshMissionLobbyBadgeSilently === 'function') refreshMissionLobbyBadgeSilently();
+        }, 1200);
     } else {
-        // NGƯỜI MỚI LẦN ĐẦU VÀO: Đã có thẻ ẩn danh nhưng chưa đăng nhập
-        // Hiện màn hình Login cho họ chọn, nhưng vẫn cho họ ĐỌC sảnh chờ
         document.getElementById("login-screen").style.display = "flex";
         document.getElementById("home-menu").style.display = "none";
         document.getElementById("user-display").style.display = "none";
         showLoginChoices(); 
-        
-        // Vẫn cho load sảnh để họ thấy game đang sôi động
         bindLobbyRoomList(); 
     }
 });
@@ -13633,43 +13637,17 @@ async function refreshAdminFeeTreasury() {
       "Pi tài khoản admin hiện có: " + piText;
   }
 
-  function getCurrentAdminWalletKey() {
-    try {
-      if (typeof makeWalletDbKey === "function") {
-        const made = String(makeWalletDbKey() || "").trim();
-        if (made) return made;
-      }
-    } catch (_) {}
-
-    const candidates = [
-      "walletKey",
-      "wallet-key",
-      "current-wallet-key",
-      "pi-wallet-key",
-      "uid",
-      "currentUid"
-    ];
-
-    for (const key of candidates) {
-      const val = String(localStorage.getItem(key) || "").trim();
-      if (val) return val;
-    }
-
-    return "";
-  }
-
   setNote("Đang tải ví phí hệ thống...", "#7fffd4");
   setBalance("...", "...");
-  if (previewEl) previewEl.textContent = "Bạn sẽ nhận: 0 Pi";
 
   try {
-    const walletKey = getCurrentAdminWalletKey();
-    const headers = { "Content-Type": "application/json" };
-    if (walletKey) headers["x-wallet-key"] = walletKey;
-
+    const walletKey = makeWalletDbKey(); // SỬA: Lấy key chuẩn của Admin 406
     const res = await fetch("/api/convert-fee-pmc-to-pi?v=" + Date.now(), {
       method: "GET",
-      headers
+      headers: { 
+          "Content-Type": "application/json",
+          "x-wallet-key": walletKey 
+      }
     });
 
     const raw = await res.text();
@@ -19055,6 +19033,13 @@ async function submitReferralCode() {
     // Sau đó, cứ 15 phút (900.000 mili-giây) lại réo lên 1 lần
     setInterval(triggerTestnetWarning, 15 * 60 * 1000);
 })();
+function checkLevelRewardNotification() {
+    const btn = document.querySelector('.mission-top-tab[data-tab="level"]');
+    if (!btn) return;
+    const oldDot = btn.querySelector(".dot-red-small");
+    if (oldDot) oldDot.remove();
+    // Tạm thời ẩn chấm đỏ nếu chưa có logic rương mới
+}
 </script>
 </body>
 </html>
