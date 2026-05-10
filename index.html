@@ -18443,29 +18443,29 @@ async function submitReferralCode() {
             status: "unread"
         }).catch(()=>{});
 
-        // Việc 5: Ép KẾT BẠN CHÉO (Làm riêng rẽ từng thằng)
-        db.ref(`social/friends/${myWalletKey}/${referrerWalletKey}`).update({
-            walletKey: referrerWalletKey,
-            uid: refData.uid || referrerWalletKey,
+        // Việc 5: Ép KẾT BẠN CHÉO (Làm riêng rẽ từng thằng, lòi lỗi ra mặt)
+        await db.ref(`social/friends/${myWalletKey}/${referrerWalletKey}`).update({
+            walletKey: referrerWalletKey || "",
+            uid: refData.uid || referrerWalletKey || "",
             username: refData.username || "",
             displayName: refData.name || "Người mời",
             photo: refData.photo || "images/do_tuong.png",
             addedAt: firebase.database.ServerValue.TIMESTAMP
-        }).catch(()=>{});
+        }).catch(e => alert("Lỗi ghi bạn bè cho B: " + e));
 
-        db.ref(`social/friends/${referrerWalletKey}/${myWalletKey}`).update({
-            walletKey: myWalletKey,
-            uid: meProfile.uid,
-            username: meProfile.username,
-            displayName: meProfile.displayName,
-            photo: meProfile.photo,
+        await db.ref(`social/friends/${referrerWalletKey}/${myWalletKey}`).update({
+            walletKey: myWalletKey || "",
+            uid: meProfile.uid || "",
+            username: meProfile.username || "",
+            displayName: meProfile.displayName || "Người chơi",
+            photo: meProfile.photo || "images/do_tuong.png",
             addedAt: firebase.database.ServerValue.TIMESTAMP
-        }).catch(()=>{});
+        }).catch(e => alert("Lỗi ghi bạn bè cho A: " + e));
 
         // Việc 6: Cộng số người mời (referralCount) cho A
-        db.ref(`wallets/${referrerWalletKey}/referralCount`).set(
+        await db.ref(`wallets/${referrerWalletKey}/referralCount`).set(
             firebase.database.ServerValue.increment(1)
-        ).catch(()=>{});
+        ).catch(e => alert("Lỗi cộng số mời cho A: " + e));
 
         // Load lại ví để thấy tiền nhảy
         if (typeof loadWalletBalance === 'function') await loadWalletBalance();
