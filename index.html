@@ -18418,11 +18418,14 @@ async function submitReferralCode() {
         const meProfile = getCurrentFriendProfile();
 
         // =======================================================
-        // BẮT ĐẦU THỰC THI (ĐÃ CHIA NHỎ TỪNG VIỆC CHỐNG LỖI)
+        // BẮT ĐẦU THỰC THI (ĐÃ CHẶN IN TIỀN ẢO + FIX LỖI TĂNG SỐ ĐẾM)
         // =======================================================
 
-        // Việc 1: Trừ 10 PMC từ Quỹ (Kệ mẹ lỗi Rules, cho qua luôn)
-        try { await adjustPmcWalletByKey(adminWallet, -10, { name: "Quỹ Thưởng Hệ Thống" }); } catch (e) {}
+        // Việc 1: Trừ 10 PMC từ Quỹ Hệ Thống (Đéo trừ được thì CÚT, đéo có chuyện in tiền ảo)
+        const adminDeduct = await adjustPmcWalletByKey(adminWallet, -10, { name: "Quỹ Thưởng Hệ Thống" });
+        if (adminDeduct == null) {
+            throw new Error("Quỹ Hệ Thống đang khóa hoặc hết tiền! Hãy báo Admin.");
+        }
 
         // Việc 2: Cộng 5 PMC cho mình (Thằng B) và khóa ô nhập mã
         await adjustPmcWalletByKey(myWalletKey, 5);
@@ -18431,10 +18434,17 @@ async function submitReferralCode() {
             referredAt: firebase.database.ServerValue.TIMESTAMP
         });
 
-        // Việc 3: Cộng 5 PMC cho thằng mời (Thằng A)
-        try { await adjustPmcWalletByKey(referrerWalletKey, 5); } catch (e) {}
+        // Việc 3 & 4: Cộng 5 PMC + Tăng số lượng mời cho thằng mời (Thằng A) TRONG CÙNG 1 LỆNH
+        // (Làm kiểu này Firebase nó đéo bắt bẻ lỗi Permission Denied nữa)
+        const currentRefCount = Number(refData.referralCount || 0);
+        const currentRefPmc = Number(refData.pmcBalance || 0);
+        await db.ref("wallets/" + referrerWalletKey).update({
+            pmcBalance: currentRefPmc + 5,
+            referralCount: currentRefCount + 1,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        }).catch(e => console.log("Lỗi cập nhật ví A:", e));
 
-        // Việc 4: Bắn Thông Báo rình cho thằng A
+        // Việc 5: Bắn Thông Báo rình cho thằng A
         db.ref("notifications/" + referrerWalletKey).push({
             type: "referral_success",
             fromName: meProfile.displayName || "Bạn bè",
@@ -18443,34 +18453,29 @@ async function submitReferralCode() {
             status: "unread"
         }).catch(()=>{});
 
-        // Việc 5: Ép KẾT BẠN CHÉO (Làm riêng rẽ từng thằng, lòi lỗi ra mặt)
-        await db.ref(`social/friends/${myWalletKey}/${referrerWalletKey}`).update({
-            walletKey: referrerWalletKey || "",
-            uid: refData.uid || referrerWalletKey || "",
+        // Việc 6: Ép KẾT BẠN CHÉO
+        db.ref(`social/friends/${myWalletKey}/${referrerWalletKey}`).update({
+            walletKey: referrerWalletKey,
+            uid: refData.uid || referrerWalletKey,
             username: refData.username || "",
             displayName: refData.name || "Người mời",
             photo: refData.photo || "images/do_tuong.png",
             addedAt: firebase.database.ServerValue.TIMESTAMP
-        }).catch(e => alert("Lỗi ghi bạn bè cho B: " + e));
+        }).catch(()=>{});
 
-        await db.ref(`social/friends/${referrerWalletKey}/${myWalletKey}`).update({
-            walletKey: myWalletKey || "",
-            uid: meProfile.uid || "",
-            username: meProfile.username || "",
-            displayName: meProfile.displayName || "Người chơi",
-            photo: meProfile.photo || "images/do_tuong.png",
+        db.ref(`social/friends/${referrerWalletKey}/${myWalletKey}`).update({
+            walletKey: myWalletKey,
+            uid: meProfile.uid,
+            username: meProfile.username,
+            displayName: meProfile.displayName,
+            photo: meProfile.photo,
             addedAt: firebase.database.ServerValue.TIMESTAMP
-        }).catch(e => alert("Lỗi ghi bạn bè cho A: " + e));
-
-        // Việc 6: Cộng số người mời (referralCount) cho A
-        await db.ref(`wallets/${referrerWalletKey}/referralCount`).set(
-            firebase.database.ServerValue.increment(1)
-        ).catch(e => alert("Lỗi cộng số mời cho A: " + e));
+        }).catch(()=>{});
 
         // Load lại ví để thấy tiền nhảy
         if (typeof loadWalletBalance === 'function') await loadWalletBalance();
 
-        alert(`🎉 THÀNH CÔNG! Mày nhận được 5 PMC. Người mời cũng được cộng 5 PMC và hai đứa đã tự động kết bạn!`);
+        alert(`🎉 THÀNH CÔNG! Mày nhận được 5 PMC từ Quỹ. Người mời cũng đã được cộng 5 PMC và hai đứa đã kết bạn!`);
         closeReferralModal();
 
     } catch (err) {
