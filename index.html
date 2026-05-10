@@ -6842,7 +6842,7 @@ startPresenceHeartbeat();
 renderRoomInviteOverlay();
 if (typeof bindAdminNotification === 'function') bindAdminNotification(); // Bật radar
 }
-alert("Load xong rồi nè");
+
 function showLoginChoices() {
     const topBtn = document.getElementById("arena-top-btn");
     if (topBtn) topBtn.style.display = "none";
@@ -7077,30 +7077,26 @@ auth.getRedirectResult()
     });
 auth.onAuthStateChanged(async user => {
     const piName = localStorage.getItem("pi-user-name");
-    const piPhoto = localStorage.getItem("pi-user-photo");
-
+    
     if (piName) {
-        applyLoggedInUI(piName, piPhoto || "images/do_tuong.png");
-        await ensureFriendProfileSynced().catch(() => {});
-        await bindFriendSystem().catch(() => {});
-        await tryResumeRealtimeMatch();
+        // Người cũ đã nạp tên Pi
+        applyLoggedInUI(piName, "images/do_tuong.png");
         return;
     }
 
     if (user) {
-        const displayName = user.displayName || localStorage.getItem("user-name-display") || "Người chơi";
-        const photoURL = user.photoURL || localStorage.getItem("user-photo") || "images/do_tuong.png";
-        applyLoggedInUI(displayName, photoURL);
-        await ensureFriendProfileSynced().catch(() => {});
-        await bindFriendSystem().catch(() => {});
-        await tryResumeRealtimeMatch();
+        // Người cũ đã đăng nhập Google
+        const displayName = user.displayName || "Kỳ thủ";
+        applyLoggedInUI(displayName, user.photoURL);
     } else {
-        // --- CHỖ NÀY LÀ MẤU CHỐT: Xóa sạch lệnh signInAnonymously ---
-        // Để nó hiện trang Login và bắt người dùng tự chọn nút bấm
+        // ĐÂY LÀ NGƯỜI MỚI (Khách hoặc giả lập mới)
+        // Phải ẩn sảnh, ẩn bàn cờ, CHỈ hiện màn hình Đăng nhập
         document.getElementById("login-screen").style.display = "flex";
-        document.getElementById("user-display").style.display = "none";
         document.getElementById("home-menu").style.display = "none";
+        document.getElementById("user-display").style.display = "none";
         document.getElementById("game-arena").style.display = "none";
+        
+        // Quan trọng: Không được gọi loadWalletBalance() ở đây vì họ chưa có acc!
         showLoginChoices(); 
     }
 });
