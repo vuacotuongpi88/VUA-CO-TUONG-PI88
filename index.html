@@ -6808,48 +6808,44 @@ async function applyLoggedInUI(displayName, photoURL) {
     if (!user) return;
     const walletKey = makeWalletDbKey();
 
-    // 🔥 LỆNH QUAN TRỌNG: Ghi UID vào ví để mở khóa Rules (Sửa lỗi tạo bàn)
+    // 🔥 LỆNH QUAN TRỌNG: Ghi UID vào ví để "thông quan" bộ Rules
     await db.ref("wallets/" + walletKey).update({
         uid: user.uid,
         name: displayName || "Người chơi",
         photo: photoURL || "images/do_tuong.png",
         updatedAt: firebase.database.ServerValue.TIMESTAMP
-    });
+    }).catch(e => console.warn("Lỗi ghi UID (có thể do Rules chặn lần đầu):", e));
 
     const safeName = displayName || "Người chơi";
     const safePhoto = photoURL || "images/do_tuong.png";
+
     const loginScreen = document.getElementById("login-screen");
     const userDisplay = document.getElementById("user-display");
     const homeMenu = document.getElementById("home-menu");
     const gameArena = document.getElementById("game-arena");
-    const userNameDisplay = document.getElementById("user-name-display");
-    const userName = document.getElementById("user-name");
-    const userPhoto = document.getElementById("user-photo");
 
     if (loginScreen) loginScreen.style.display = "none";
     if (userDisplay) userDisplay.style.display = "flex";
     if (homeMenu) homeMenu.style.display = "block";
     if (gameArena) gameArena.style.display = "none";
 
-    if (userNameDisplay) userNameDisplay.innerText = safeName;
-    if (userName) userName.innerText = safeName;
-    if (userPhoto) userPhoto.src = safePhoto;
+    document.getElementById("user-name-display").innerText = safeName;
+    document.getElementById("user-name").innerText = safeName;
+    document.getElementById("user-photo").src = safePhoto;
 
     localStorage.setItem("user-name-display", safeName);
     localStorage.setItem("user-photo", safePhoto);
 
-    // Tải ví sau khi đã có UID
-    loadWalletBalance()
-        .then(() => loadAvatarSkinState())
-        .catch(err => console.error("Lỗi tải ví/skin:", err));
+    // Tải ví và rình thông báo sau khi đã có thẻ căn cước
+    await loadWalletBalance().catch(() => {});
+    if (typeof loadAvatarSkinState === 'function') loadAvatarSkinState();
+    if (typeof listenForNotifications === 'function') listenForNotifications();
+    if (typeof bindAdminNotification === 'function') bindAdminNotification();
 
     showHomeUI();
     setPlayerPresence("home");
     startPresenceHeartbeat();
     renderRoomInviteOverlay();
-    
-    if (typeof bindAdminNotification === 'function') bindAdminNotification();
-    if (typeof listenForNotifications === 'function') listenForNotifications();
 }
 function listenForNotifications() {
     const myKey = makeWalletDbKey();
@@ -7101,33 +7097,39 @@ auth.getRedirectResult()
     });
 auth.onAuthStateChanged(async user => {
     if (!user) {
+        // Cấp thẻ ẩn danh để vượt qua Rules .read: auth != null
         await auth.signInAnonymously().catch(e => console.error("Lỗi cấp thẻ:", e));
         return; 
     }
 
     const piName = localStorage.getItem("pi-user-name");
+    const walletKey = makeWalletDbKey();
     
     if (piName) {
+        // Nếu là Admin 406, tự động gán quyền điều khiển Ví Master
+        if (walletKey.includes("406")) {
+            db.ref("wallets/pi_admin_master").update({ adminUid: user.uid }).catch(()=>{});
+        }
         await applyLoggedInUI(piName, "images/do_tuong.png");
         await ensureFriendProfileSynced().catch(() => {});
         await bindFriendSystem().catch(() => {});
         await tryResumeRealtimeMatch();
-        // Đợi 1.5 giây cho ví ổn định rồi mới load nhiệm vụ
-        setTimeout(() => {
-            if (typeof refreshMissionLobbyBadgeSilently === 'function') refreshMissionLobbyBadgeSilently();
-        }, 1500);
     } else if (user.isAnonymous === false) {
+        // Đăng nhập Google thật
         await applyLoggedInUI(user.displayName, user.photoURL);
-        setTimeout(() => {
-            if (typeof refreshMissionLobbyBadgeSilently === 'function') refreshMissionLobbyBadgeSilently();
-        }, 1500);
     } else {
+        // NGƯỜI MỚI HOÀN TOÀN
         document.getElementById("login-screen").style.display = "flex";
         document.getElementById("home-menu").style.display = "none";
         document.getElementById("user-display").style.display = "none";
         showLoginChoices(); 
-        bindLobbyRoomList(); 
+        bindLobbyRoomList(); // Đã có auth ẩn danh nên đọc sảnh thoải mái
     }
+    
+    // Tải nhiệm vụ sau cùng
+    setTimeout(() => {
+        if (typeof refreshMissionLobbyBadgeSilently === 'function') refreshMissionLobbyBadgeSilently();
+    }, 1500);
 });
 function hideHomeUI() {
     document.body.classList.add("in-match");
@@ -11500,9 +11502,8 @@ async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
 }
 async function settlePmcViaApi(roomId) {
     try {
-        console.log("firebase uid:", firebase.auth().currentUser?.uid);
-console.log("local uid:", localStorage.getItem("uid"));
-console.log("walletKey:", walletKey);
+        const walletKey = makeWalletDbKey(); // 🔥 THÊM DÒNG NÀY ĐỂ HẾT LỖI ĐỎ
+        console.log("Giao dịch tại ví:", walletKey);
         const res = await fetch("/api/pmc/settle", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -13620,67 +13621,42 @@ async function refreshAdminFeeTreasury() {
   const noteEl = document.getElementById("admin-fee-wallet-note");
   const balanceEl = document.getElementById("admin-fee-wallet-balance-box");
   const previewEl = document.getElementById("admin-fee-pi-preview");
-  
+  const inputEl = document.getElementById("admin-fee-pmc-input");
+  const secretEl = document.getElementById("admin-fee-secret-input");
+
   function setNote(text, color) {
     if (!noteEl) return;
     noteEl.textContent = String(text || "");
     if (color) noteEl.style.color = color;
   }
 
-  setNote("Đang tải ví phí hệ thống...", "#7fffd4");
+  setNote("Đang kết nối Ví Admin Master...", "#7fffd4");
 
   try {
-    const walletKey = makeWalletDbKey(); // 🔥 SỬA: Lấy đúng key Admin 406
-    const res = await fetch("/api/convert-fee-pmc-to-pi?v=" + Date.now(), {
-      method: "GET",
-      headers: { 
-          "Content-Type": "application/json",
-          "x-wallet-key": walletKey 
-      }
-    });
+    // 🔥 ĐỌC TRỰC TIẾP TỪ VÍ MASTER (Nơi chứa 56.770 PMC)
+    const snap = await db.ref("wallets/pi_admin_master").once("value");
+    const masterData = snap.val() || {};
+    const pmcMaster = Math.floor(Number(masterData.pmcBalance || 0));
 
-    const raw = await res.text();
-    let data = {};
+    // Lấy số Pi trong ví cá nhân của ông để hiển thị điểm đến
+    const myPi = typeof getPiBalance === 'function' ? getPiBalance() : 0;
 
-    try {
-      data = raw ? JSON.parse(raw) : {};
-    } catch (_) {
-    console.error("exchange-pmc-to-pi raw response =", rawText);
-    throw new Error(
-        "API không trả JSON. Response thật: " +
-        String(rawText || "").slice(0, 200)
-    );
-}
-
-    if (!res.ok || !data.ok) {
-      throw new Error(data.error || "Không tải được ví phí hệ thống.");
+    if (balanceEl) {
+        balanceEl.innerHTML = `
+            <b style="color:#f4c542; font-size:16px;">SỐ DƯ QUỸ: ${pmcMaster.toLocaleString('vi-VN')} PMC</b><br>
+            <span style="font-size:11px; color:#7dffb3;">Pi đổi được sẽ chuyển vào ví cá nhân: ${myPi.toFixed(2)} Pi</span>
+        `;
     }
 
-    const pmcBalance = Math.max(0, Math.floor(Number(data.pmcBalance || 0) || 0));
-
-    const livePi = typeof getPiBalance === "function"
-      ? (Number(getPiBalance()) || 0)
-      : (Number(data.piBalance || 0) || 0);
-
-    setBalance(
-      pmcBalance.toLocaleString("vi-VN") + " PMC",
-      (Number(livePi || 0).toFixed(3).replace(/\.?0+$/, "")) + " Pi"
-    );
-
-    setNote("Đã tải ví phí hệ thống.", "#8fffaa");
+    setNote("Đã tải dữ liệu từ Ví Master thành công.", "#8fffaa");
 
     if (inputEl) inputEl.value = "";
     if (secretEl) secretEl.value = "";
-    if (previewEl) previewEl.textContent = "Bạn sẽ nhận: 0 Pi";
+    if (previewEl) previewEl.innerText = "Bạn sẽ nhận: 0 Pi";
 
-    return data;
   } catch (err) {
-    setBalance("--", "--");
-    setNote(
-      "Không tải được ví phí hệ thống. " + (err && err.message ? err.message : ""),
-      "#ff9b9b"
-    );
-    throw err;
+    console.error("Lỗi tải Ví Master:", err);
+    setNote("Không có quyền truy cập Ví Master hoặc lỗi mạng.", "#ff7675");
   }
 }
 async function openAdminFeeTreasuryModal() {
