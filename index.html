@@ -18890,14 +18890,19 @@ async function submitReferralCode() {
 }
 /* Bảng xổ ra bự chà bá */
 #referral-modal {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.85);
     display: none;
-    align-items: center;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    /* BẮT BUỘC: Thêm background đen mờ phía sau để che sảnh game */
+    background-color: rgba(0, 0, 0, 0.9);
+    /* 🔥 CHỈ SỐ VÔ ĐỊCH: Đè lên mọi thứ 🔥 */
+    z-index: 9999999; 
     justify-content: center;
-    z-index: 35000;
-    backdrop-filter: blur(5px);
+    align-items: center;
+    overflow: hidden; /* Cấm sảnh game cuộn khi mở modal */
 }
 
 .ref-box {
