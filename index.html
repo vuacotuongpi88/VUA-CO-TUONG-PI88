@@ -13688,7 +13688,9 @@ async function confirmAdminFeePmcToPi() {
 
     const pmcAmount = Math.max(0, Math.floor(Number(pmcInput?.value || 0) || 0));
     const adminSecret = String(secretInput?.value || "").trim();
-    const walletKey = makeWalletDbKey();
+    
+    // Lấy mã ví cá nhân của ông để API biết chuyển Pi về đâu
+    const myPersonalWalletKey = makeWalletDbKey(); 
 
     if (!isCurrentPiAdminKey()) {
         alert("Tài khoản Pi này không có quyền đổi ví phí hệ thống.");
@@ -13707,10 +13709,10 @@ async function confirmAdminFeePmcToPi() {
 
     const MIN_ADMIN_FEE_PMC_WITHDRAW = 500;
 
-if (pmcAmount < MIN_ADMIN_FEE_PMC_WITHDRAW) {
-    alert(`Mức rút tối thiểu là ${MIN_ADMIN_FEE_PMC_WITHDRAW.toLocaleString("vi-VN")} PMC.`);
-    return;
-}
+    if (pmcAmount < MIN_ADMIN_FEE_PMC_WITHDRAW) {
+        alert(`Mức rút tối thiểu là ${MIN_ADMIN_FEE_PMC_WITHDRAW.toLocaleString("vi-VN")} PMC.`);
+        return;
+    }
 
     try {
         const btns = document.querySelectorAll("#admin-fee-wallet-modal button");
@@ -13720,11 +13722,13 @@ if (pmcAmount < MIN_ADMIN_FEE_PMC_WITHDRAW) {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "x-wallet-key": walletKey
+                // 🔥 ĐIỂM CHẾT Ở ĐÂY: Phải gửi đúng mã Két Sắt lên cho Server
+                "x-wallet-key": "pi_admin_master" 
             },
             body: JSON.stringify({
                 pmcAmount,
-                adminSecret
+                adminSecret,
+                targetWalletKey: myPersonalWalletKey // Gửi kèm ví cá nhân để Server biết đường chuyển Pi
             })
         });
 
@@ -13737,27 +13741,28 @@ if (pmcAmount < MIN_ADMIN_FEE_PMC_WITHDRAW) {
         }
 
         if (!res.ok || !data?.ok) {
-    const errCode = String(data?.error || "").trim();
+            const errCode = String(data?.error || "").trim();
 
-    if (errCode === "cancelled_payment") {
-        throw new Error("Mày đã hủy giao dịch trong ví Pi. Bấm rút lại nếu muốn tạo giao dịch mới.");
-    }
+            if (errCode === "cancelled_payment") {
+                throw new Error("Mày đã hủy giao dịch trong ví Pi. Bấm rút lại nếu muốn tạo giao dịch mới.");
+            }
 
-    if (errCode === "ongoing_payment_found") {
-        throw new Error("Đang có giao dịch rút Pi trước đó chưa xong. Đợi chút rồi bấm rút lại.");
-    }
+            if (errCode === "ongoing_payment_found") {
+                throw new Error("Đang có giao dịch rút Pi trước đó chưa xong. Đợi chút rồi bấm rút lại.");
+            }
 
-    if (errCode === "Thiếu PI_API_KEY.") {
-        throw new Error("Server đang thiếu PI_API_KEY trên Vercel.");
-    }
+            if (errCode === "Thiếu PI_API_KEY.") {
+                throw new Error("Server đang thiếu PI_API_KEY trên Vercel.");
+            }
 
-    if (errCode === "Thiếu DEV_PUBLIC/DEV_SECRET.") {
-        throw new Error("Server đang thiếu DEV_PUBLIC hoặc DEV_SECRET trên Vercel.");
-    }
+            if (errCode === "Thiếu DEV_PUBLIC/DEV_SECRET.") {
+                throw new Error("Server đang thiếu DEV_PUBLIC hoặc DEV_SECRET trên Vercel.");
+            }
 
-    throw new Error(errCode || "Rút Pi thất bại.");
-}
+            throw new Error(errCode || "Rút Pi thất bại.");
+        }
 
+        // Tiền về! Cập nhật số Pi mới vào ví cá nhân của ông
         if (typeof data.newPlayerPiBalance === "number") {
             setPiBalance(data.newPlayerPiBalance);
         }
@@ -13770,7 +13775,7 @@ if (pmcAmount < MIN_ADMIN_FEE_PMC_WITHDRAW) {
         alert(
             `Đổi phí thành công!\n` +
             `-${pmcAmount.toLocaleString("vi-VN")} PMC từ ví phí hệ thống\n` +
-            `+${formatPiExchangeValue(data.piAmount || 0)} Pi vào tài khoản hiện tại`
+            `+${(data.piAmount || 0)} Pi vào tài khoản hiện tại`
         );
     } catch (err) {
         alert("Đổi ví phí lỗi: " + (err.message || "Không rõ lỗi"));
