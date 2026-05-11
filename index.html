@@ -19101,5 +19101,28 @@ function bindReferralCount() {
 // Chạy hàm đếm sau khi vô sảnh
 setTimeout(bindReferralCount, 3000);
 </script>
+<script>
+setTimeout(() => {
+    const box = document.getElementById("mobile-friend-box");
+    if (box) {
+        // 1. Nhấc bảng Bạn Bè quăng thẳng ra ngoài gốc (body) để nó đè lên tất cả
+        document.body.appendChild(box);
+        
+        // 2. Bơm z-index lên vô cực (Đè chết mọi thể loại nút bấm khác)
+        box.style.setProperty("z-index", "99999999", "important");
+        
+        // 3. Chặn click lọt ra ngoài làm đóng bảng oan uổng
+        box.addEventListener("click", function(e) {
+            e.stopPropagation();
+        });
+    }
+    
+    // Ghi đè lại hàm đóng bảng để nó hất văng mọi lỗi cũ
+    window.closeFriendBox = function() {
+        const friendBox = document.getElementById("mobile-friend-box");
+        if (friendBox) friendBox.classList.remove("show");
+    };
+}, 1000); // Chờ 1 giây cho HTML load xong hết rồi mới làm phép
+</script>
 </body>
 </html>
