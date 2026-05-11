@@ -1,6 +1,6 @@
 // ==========================================
 // FILE: botWorker.js (CHẠY NGẦM TRÊN MÁY KHÁCH)
-// BẢN FIX LỖI: BOT BIẾT BẢO VỆ TƯỚNG VÀ TRÁNH LỘ MẶT TƯỚNG
+// NÃO BỘ: MINIMAX + ALPHA-BETA PRUNING (BIẾT TÍNH KẾ PHẢN CÔNG)
 // ==========================================
 
 const PIECE_VALUES = {
@@ -13,6 +13,7 @@ const PIECE_VALUES = {
     '兵': 100, '卒': 100
 };
 
+// --- CÁC HÀM CƠ BẢN ---
 function buildMatrix(boardArray) {
     let mt = Array(10).fill(null).map(() => Array(9).fill(null));
     boardArray.forEach(p => { mt[p.r][p.c] = p; });
@@ -22,13 +23,9 @@ function buildMatrix(boardArray) {
 function countV(c1, r1, c2, r2, mt) {
     let count = 0;
     if (c1 === c2) {
-        for (let r = Math.min(r1, r2) + 1; r < Math.max(r1, r2); r++) {
-            if (mt[r][c1]) count++;
-        }
+        for (let r = Math.min(r1, r2) + 1; r < Math.max(r1, r2); r++) { if (mt[r][c1]) count++; }
     } else {
-        for (let c = Math.min(c1, c2) + 1; c < Math.max(c1, c2); c++) {
-            if (mt[r1][c]) count++;
-        }
+        for (let c = Math.min(c1, c2) + 1; c < Math.max(c1, c2); c++) { if (mt[r1][c]) count++; }
     }
     return count;
 }
@@ -81,10 +78,8 @@ function checkLuatWorker(type, side, c, r, tc, tr, mt, isCoUp) {
     return false;
 }
 
-// Hàm 1: Kiểm tra xem Tướng của phe "side" có đang bị địch chĩa súng vào không
 function laBiChieuWorker(side, mt, isCoUp) {
     let tPos = null;
-    // Tìm vị trí Tướng
     for (let r = 0; r < 10; r++) {
         for (let c = 0; c < 9; c++) {
             if (mt[r][c] && mt[r][c].side === side && (mt[r][c].type === '帥' || mt[r][c].type === '將')) {
@@ -94,8 +89,6 @@ function laBiChieuWorker(side, mt, isCoUp) {
         if (tPos) break;
     }
     if (!tPos) return false;
-
-    // Quét toàn bộ quân địch xem có con nào táng được vào mặt Tướng không
     for (let r = 0; r < 10; r++) {
         for (let c = 0; c < 9; c++) {
             if (mt[r][c] && mt[r][c].side !== side) {
@@ -106,7 +99,6 @@ function laBiChieuWorker(side, mt, isCoUp) {
     return false;
 }
 
-// Hàm 2: Kiểm tra luật "Lộ Mặt Tướng" (Hai con tướng nhìn nhau đéo có quân cản)
 function haiTuongDoiMat(mt) {
     let tDo = null, tDen = null;
     for(let r=0; r<10; r++) {
@@ -116,78 +108,160 @@ function haiTuongDoiMat(mt) {
         }
     }
     if(!tDo || !tDen) return false;
-    
-    // Nếu không cùng cột thì kệ mẹ nó
     if(tDo.c !== tDen.c) return false; 
-    
-    // Nếu cùng cột, đếm số quân ở giữa
     let count = 0;
     let minR = Math.min(tDo.r, tDen.r);
     let maxR = Math.max(tDo.r, tDen.r);
     for(let r = minR + 1; r < maxR; r++) {
         if(mt[r][tDo.c]) count++;
     }
-    return count === 0; // Nếu bằng 0 nghĩa là 2 tướng nhìn thấy nhau -> Bất hợp pháp
+    return count === 0;
 }
 
-function calculateMove(boardArray, botSide, isCoUp) {
-    let mt = buildMatrix(boardArray);
-    let validMoves = [];
+// --- NÃO BỘ AI ---
 
-    // Quét bàn cờ tìm quân Bot
+// Chấm điểm thế trận (Lấy điểm Bot trừ điểm Người)
+function evaluateBoard(mt, botSide) {
+    let score = 0;
+    for(let r=0; r<10; r++) {
+        for(let c=0; c<9; c++) {
+            const p = mt[r][c];
+            if(p) {
+                let val = PIECE_VALUES[p.type] || 10;
+                // Khuyến khích Tốt qua sông
+                if ((p.type === '兵' || p.type === '卒') && !p.isUp) {
+                    if (p.side === 'do' && r <= 4) val += 50;
+                    if (p.side === 'den' && r >= 5) val += 50;
+                }
+                // Khuyến khích cờ úp mở ra
+                if (p.isUp) val += 50; 
+
+                if(p.side === botSide) score += val;
+                else score -= val;
+            }
+        }
+    }
+    return score;
+}
+
+// Lấy toàn bộ nước đi hợp lệ của 1 phe
+function generateAllMoves(mt, side, isCoUp) {
+    let moves = [];
     for (let r = 0; r < 10; r++) {
         for (let c = 0; c < 9; c++) {
-            let piece = mt[r][c];
-            if (piece && piece.side === botSide) {
-                
-                // Quét 90 ô xem đi được ô nào
+            let p = mt[r][c];
+            if (p && p.side === side) {
                 for (let tr = 0; tr < 10; tr++) {
                     for (let tc = 0; tc < 9; tc++) {
-                        
-                        // 1. Phải đi đúng quy tắc của quân cờ
-                        if (checkLuatWorker(piece.type, botSide, c, r, tc, tr, mt, isCoUp)) {
-                            
-                            // GIẢ LẬP ĐI NƯỚC CỜ ĐỂ KIỂM TRA MẠNG SỐNG CỦA TƯỚNG
-                            let tempTarget = mt[tr][tc]; // Lưu lại quân bị đớp (nếu có)
-                            mt[tr][tc] = mt[r][c];       // Chuyển quân Bot đến chỗ mới
-                            mt[r][c] = null;             // Xóa chỗ cũ
-                            
-                            // 2. CHECK XEM ĐI XONG CÓ BỊ ĐỊCH CHIẾU KHÔNG VÀ CÓ BỊ LỘ MẶT TƯỚNG KHÔNG?
-                            let isSafe = !laBiChieuWorker(botSide, mt, isCoUp) && !haiTuongDoiMat(mt);
-
-                            // TRẢ BÀN CỜ VỀ NHƯ CŨ (Undo) ĐỂ THỬ NƯỚC KHÁC
-                            mt[r][c] = mt[tr][tc];
-                            mt[tr][tc] = tempTarget;
-
-                            // NẾU TƯỚNG AN TOÀN THÌ MỚI LƯU VÀO SỔ TAY
-                            if (isSafe) {
-                                let score = tempTarget && tempTarget.side !== botSide ? (PIECE_VALUES[tempTarget.type] || 10) : 0;
-                                validMoves.push({
-                                    from: { c, r },
-                                    to: { c: tc, r: tr },
-                                    score: score,
-                                    pieceObj: piece
-                                });
+                        if (checkLuatWorker(p.type, side, c, r, tc, tr, mt, isCoUp)) {
+                            let targetPiece = mt[tr][tc];
+                            mt[tr][tc] = mt[r][c];
+                            mt[r][c] = null;
+                            if (!laBiChieuWorker(side, mt, isCoUp) && !haiTuongDoiMat(mt)) {
+                                moves.push({from: {c, r}, to: {c: tc, r: tr}, pieceObj: p, captured: targetPiece});
                             }
+                            mt[r][c] = mt[tr][tc];
+                            mt[tr][tc] = targetPiece;
                         }
                     }
                 }
             }
         }
     }
+    return moves;
+}
 
-    // Nếu đéo có nước nào đi được (bị chiếu bí)
-    if (validMoves.length === 0) return null;
+// Hàm đệ quy thuật toán Minimax chặn lỗ hổng
+function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp) {
+    if (depth === 0) {
+        return evaluateBoard(mt, botSide);
+    }
 
-    // Phân loại điểm, đớp con nào béo nhất
-    validMoves.sort((a, b) => b.score - a.score);
-    const maxScore = validMoves[0].score;
-    const bestMoves = validMoves.filter(m => m.score === maxScore);
+    let currentSide = isMaximizing ? botSide : (botSide === 'do' ? 'den' : 'do');
+    let moves = generateAllMoves(mt, currentSide, isCoUp);
+
+    if (moves.length === 0) {
+        // Hết cờ đi = thua
+        return isMaximizing ? -99999 + (3-depth) : 99999 - (3-depth);
+    }
+
+    // Sắp xếp nước đi (ưu tiên ăn quân) để cắt tỉa (Alpha-Beta) nhanh hơn
+    moves.sort((a,b) => (b.captured ? PIECE_VALUES[b.captured.type] : 0) - (a.captured ? PIECE_VALUES[a.captured.type] : 0));
+
+    if (isMaximizing) {
+        let maxEval = -Infinity;
+        for (let move of moves) {
+            let target = mt[move.to.r][move.to.c];
+            mt[move.to.r][move.to.c] = mt[move.from.r][move.from.c];
+            mt[move.from.r][move.from.c] = null;
+
+            let ev = minimax(mt, depth - 1, alpha, beta, false, botSide, isCoUp);
+
+            mt[move.from.r][move.from.c] = mt[move.to.r][move.to.c];
+            mt[move.to.r][move.to.c] = target;
+
+            maxEval = Math.max(maxEval, ev);
+            alpha = Math.max(alpha, ev);
+            if (beta <= alpha) break; // Cắt tỉa
+        }
+        return maxEval;
+    } else {
+        let minEval = Infinity;
+        for (let move of moves) {
+            let target = mt[move.to.r][move.to.c];
+            mt[move.to.r][move.to.c] = mt[move.from.r][move.from.c];
+            mt[move.from.r][move.from.c] = null;
+
+            let ev = minimax(mt, depth - 1, alpha, beta, true, botSide, isCoUp);
+
+            mt[move.from.r][move.from.c] = mt[move.to.r][move.to.c];
+            mt[move.to.r][move.to.c] = target;
+
+            minEval = Math.min(minEval, ev);
+            beta = Math.min(beta, ev);
+            if (beta <= alpha) break; // Cắt tỉa
+        }
+        return minEval;
+    }
+}
+
+// Bắt đầu tính toán
+function calculateMove(boardArray, botSide, isCoUp) {
+    let mt = buildMatrix(boardArray);
+    let moves = generateAllMoves(mt, botSide, isCoUp);
     
-    // Chọn random 1 nước ngon nhất để nó đi khác nhau
+    if (moves.length === 0) return null;
+
+    // Sắp xếp ưu tiên ăn quân để tính nhanh
+    moves.sort((a,b) => (b.captured ? PIECE_VALUES[b.captured.type] : 0) - (a.captured ? PIECE_VALUES[a.captured.type] : 0));
+
+    let bestScore = -Infinity;
+    let bestMoves = [];
+
+    // TẦNG SÂU SUY NGHĨ: Để mức 2 là cực kỳ an toàn cho điện thoại (Mức 3 sẽ đánh hay hơn nhưng máy khách cùi sẽ bị lag)
+    const DEPTH = 2; 
+
+    for (let move of moves) {
+        let target = mt[move.to.r][move.to.c];
+        mt[move.to.r][move.to.c] = mt[move.from.r][move.from.c];
+        mt[move.from.r][move.from.c] = null;
+
+        // Bắt đầu soi xem nếu tao đi nước này, thằng kia đáp trả sao?
+        let score = minimax(mt, DEPTH - 1, -Infinity, Infinity, false, botSide, isCoUp);
+
+        mt[move.from.r][move.from.c] = mt[move.to.r][move.to.c];
+        mt[move.to.r][move.to.c] = target;
+
+        if (score > bestScore) {
+            bestScore = score;
+            bestMoves = [move];
+        } else if (score === bestScore) {
+            bestMoves.push(move);
+        }
+    }
+
     const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
 
-    // Lật cờ úp
     let movedPiece = { ...chosenMove.pieceObj, c: chosenMove.to.c, r: chosenMove.to.r };
     if (isCoUp && movedPiece.isUp) {
         movedPiece.isUp = false;
@@ -195,7 +269,6 @@ function calculateMove(boardArray, botSide, isCoUp) {
         if (names[movedPiece.type]) movedPiece.src = `images/${botSide}_${names[movedPiece.type]}.png`;
     }
 
-    // Tạo mảng mới báo lại cho Client
     let newBoardArray = boardArray.filter(p => {
         if (p.c === chosenMove.from.c && p.r === chosenMove.from.r) return false;
         if (p.c === chosenMove.to.c && p.r === chosenMove.to.r) return false;
@@ -210,7 +283,6 @@ function calculateMove(boardArray, botSide, isCoUp) {
     };
 }
 
-// Lắng nghe lệnh từ index.html
 self.onmessage = function(e) {
     const data = e.data;
     if (data.action === "think") {
