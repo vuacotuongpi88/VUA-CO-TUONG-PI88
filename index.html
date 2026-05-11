@@ -5752,6 +5752,54 @@ body.has-warning #game-arena {
 .avatar-shop-tab, .mission-top-tab {
     position: relative !important;
 }
+/* ===== BÙA ĐẶT TÊN CHO 5 ICON SẢNH ĐẸP NHƯ APP XỊN ===== */
+#arena-friend-btn::after { content: "BẠN BÈ"; }
+#arena-mission-btn::after { content: "NHIỆM VỤ"; }
+#arena-skin-btn::after { content: "CỬA HÀNG"; }
+#arena-top-btn::after { content: "BẢNG TOP"; }
+#arena-referral-btn::after { content: "MỜI BẠN"; }
+
+#arena-friend-btn::after,
+#arena-mission-btn::after,
+#arena-skin-btn::after,
+#arena-top-btn::after,
+#arena-referral-btn::after {
+    position: absolute;
+    bottom: -16px; /* Canh cho chữ rớt xuống vừa sát mép dưới cục tròn */
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    font-weight: 900;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0,0,0,1), 0 0 5px rgba(0,0,0,0.9); /* Viền đen cho chữ nổi bật */
+    white-space: nowrap;
+    pointer-events: none; /* Khách bấm trúng chữ thì vẫn tính là bấm nút */
+    z-index: 10;
+}
+
+/* Riêng cái hộp quà, đẩy cục đếm số xuống sâu thêm chút để nhường chỗ cho chữ MỜI BẠN */
+#my-referral-count-badge {
+    bottom: -28px !important;
+    font-size: 10px !important;
+    padding: 2px 6px !important;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.8);
+    z-index: 11;
+}
+
+/* Trên điện thoại thì chữ phải nhỏ lại chút xíu cho khỏi đụng nhau */
+@media (max-width: 600px) {
+    #arena-friend-btn::after,
+    #arena-mission-btn::after,
+    #arena-skin-btn::after,
+    #arena-top-btn::after,
+    #arena-referral-btn::after {
+        font-size: 9px;
+        bottom: -14px;
+    }
+    #my-referral-count-badge {
+        bottom: -26px !important;
+    }
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -19081,15 +19129,26 @@ function checkLevelRewardNotification() {
     if (oldDot) oldDot.remove();
     // Tạm thời ẩn chấm đỏ nếu chưa có logic rương mới
 }
+// Hàm đếm số người mời (Update logic mới: Trạng thái bản thân / Số đệ tử)
 function bindReferralCount() {
     const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "";
     if(!walletKey) return;
-    db.ref("wallets/" + walletKey + "/referralCount").on("value", snap => {
-        const count = Math.floor(Number(snap.val() || 0));
+    
+    // Quét toàn bộ ví để lấy cả 2 thông số
+    db.ref("wallets/" + walletKey).on("value", snap => {
+        const data = snap.val() || {};
+        
+        // VẾ PHẢI: Số đệ tử mày đã mời thành công
+        const count = Math.floor(Number(data.referralCount || 0));
+        
+        // VẾ TRÁI: Tình trạng của mày. Nếu mày đã nhập mã thằng khác thì = 1, làm cô nhi thì = 0
+        const hasMaster = data.referredBy ? 1 : 0;
+        
         const outBadge = document.getElementById("my-referral-count-badge");
         const inModal = document.getElementById("modal-referral-count");
         
-        if (outBadge) outBadge.innerText = count + "/100";
+        // Hiển thị ra ngoài giao diện: Bản thân / Đệ tử (VD: 0/1, 1/0, 1/10...)
+        if (outBadge) outBadge.innerText = `${hasMaster}/${count}`;
         if (inModal) inModal.innerText = count;
     });
 }
