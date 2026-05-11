@@ -18867,11 +18867,11 @@ async function submitReferralCode() {
 </script>
 <!-- ==================== GIAO DIỆN QUẢNG BÁ & KIẾM PMC ==================== -->
 <style>
-/* Nút bấm nhấp nháy ngoài sảnh */
+/* Nút Mời Bạn ngoài sảnh (ĐÃ BỎ CHỚP MẶC ĐỊNH) */
 #arena-referral-btn {
     position: fixed;
     top: 16px;
-    right: 256px; /* Trên PC thì nằm bên trái nút Bảng Top */
+    right: 256px; 
     width: 52px;
     height: 52px;
     border-radius: 50%;
@@ -18882,16 +18882,33 @@ async function submitReferralCode() {
     color: #fff;
     font-size: 24px;
     cursor: pointer;
-    z-index: 10000; /* Hạ z-index để bảng bạn bè có thể đè lên */
+    z-index: 10000; 
     box-shadow: 0 0 15px rgba(255, 159, 67, 0.6);
     border: 2px solid #ffeaa7;
-    animation: pulseGift 1.5s infinite;
+    /* ĐÃ BỎ LỆNH ANIMATION Ở ĐÂY ĐỂ NÓ ĐỨNG IM */
 }
 
-@keyframes pulseGift {
+/* ===== BÙA CHÓP CHÓP THÔNG MINH (CHỈ KÍCH HOẠT KHI CÓ QUÀ) ===== */
+@keyframes pulseAlertRef {
     0% { transform: scale(1); box-shadow: 0 0 15px rgba(255, 159, 67, 0.6); }
-    50% { transform: scale(1.1); box-shadow: 0 0 25px rgba(255, 159, 67, 1); }
+    50% { transform: scale(1.15); box-shadow: 0 0 30px rgba(255, 159, 67, 1); filter: brightness(1.2); }
     100% { transform: scale(1); box-shadow: 0 0 15px rgba(255, 159, 67, 0.6); }
+}
+
+@keyframes pulseAlertMis {
+    0% { transform: scale(1); box-shadow: 0 0 15px rgba(0, 195, 138, 0.6); }
+    50% { transform: scale(1.15); box-shadow: 0 0 30px rgba(0, 195, 138, 1); filter: brightness(1.2); }
+    100% { transform: scale(1); box-shadow: 0 0 15px rgba(0, 195, 138, 0.6); }
+}
+
+/* Công tắc bật chớp cho Hộp Quà */
+#arena-referral-btn.has-gift {
+    animation: pulseAlertRef 1s infinite !important;
+}
+
+/* Công tắc bật chớp cho Nhiệm Vụ */
+#arena-mission-btn.has-ready-mission {
+    animation: pulseAlertMis 1s infinite !important;
 }
 
 /* =======================================================
@@ -19131,12 +19148,15 @@ function checkLevelRewardNotification() {
     if (oldDot) oldDot.remove();
     // Tạm thời ẩn chấm đỏ nếu chưa có logic rương mới
 }
-// Hàm đếm số người mời (Update logic mới: Trạng thái bản thân / Số đệ tử)
+// Biến toàn cục lưu danh sách quà chờ duyệt để kiểm tra
+window.currentPendingReferralsForPulse = null;
+
+// Hàm đếm số người mời (Update logic mới: Trạng thái bản thân / Số đệ tử + QUÉT QUÀ CHÓP CHÓP)
 function bindReferralCount() {
     const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "";
     if(!walletKey) return;
     
-    // Quét toàn bộ ví để lấy cả 2 thông số
+    // Quét toàn bộ ví để lấy các thông số
     db.ref("wallets/" + walletKey).on("value", snap => {
         const data = snap.val() || {};
         
@@ -19152,10 +19172,34 @@ function bindReferralCount() {
         // Hiển thị ra ngoài giao diện: Bản thân / Đệ tử (VD: 0/1, 1/0, 1/10...)
         if (outBadge) outBadge.innerText = `${hasMaster}/${count}`;
         if (inModal) inModal.innerText = count;
+
+        // LƯU NGẦM DANH SÁCH QUÀ CHỜ VÀO RAM
+        window.currentPendingReferralsForPulse = data.pendingReferrals || null;
+        checkReferralPulse(); // Quét ngay lập tức 1 nhịp
     });
 }
-// Chạy hàm đếm sau khi vô sảnh
-setTimeout(bindReferralCount, 3000);
+
+// ĐỘNG CƠ QUÉT NHỊP TIM MỖI 3 GIÂY (Để lỡ mày đang đứng sảnh mà đến giờ nhận quà thì nó TỰ CHÓP luôn đéo cần F5)
+function checkReferralPulse() {
+    let hasGift = false;
+    if (window.currentPendingReferralsForPulse) {
+        const now = Date.now();
+        // Kiểm tra xem có bất kỳ khoản nào trạng thái "pending" và đã đến giờ nhận chưa
+        hasGift = Object.values(window.currentPendingReferralsForPulse).some(item => item.status === "pending" && now >= item.unlockAt);
+    }
+    
+    // Bật tắt công tắc điện
+    const refBtn = document.getElementById("arena-referral-btn");
+    if (refBtn) {
+        if (hasGift) {
+            refBtn.classList.add("has-gift"); // Sáng lên
+        } else {
+            refBtn.classList.remove("has-gift"); // Im re
+        }
+    }
+}
+// Cho động cơ chạy ngầm
+setInterval(checkReferralPulse, 3000);
 </script>
 <script>
 setTimeout(() => {
