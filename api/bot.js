@@ -62,14 +62,14 @@ module.exports = async (req, res) => {
                 return res.status(400).json({ ok: false, error: 'Lão phu nghèo, đéo đánh cược lớn.' });
             }
 
-            // BẢO VỆ 2: Giới hạn 3 ván/ngày
+           // BẢO VỆ 2: Giới hạn 3 ván/ngày (TẠM TẮT ĐỂ TEST)
             const hostBotKey = `bot_quota_${hostWallet}_${new Date().toISOString().split('T')[0]}`;
             const quotaSnap = await db.ref(`system_limits/${hostBotKey}`).once('value');
             const matchesToday = quotaSnap.val() || 0;
             
-            if (matchesToday >= 3) {
-                return res.status(400).json({ ok: false, error: 'Nay lão phu mỏi lưng rồi, tha cho lão.' });
-            }
+            // if (matchesToday >= 3) {
+            //     return res.status(400).json({ ok: false, error: 'Nay lão phu mỏi lưng rồi, tha cho lão.' });
+            // }
 
             const updates = {};
             updates[`matches/${roomId}/players/den`] = botProfile;
