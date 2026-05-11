@@ -10046,6 +10046,32 @@ if (room.winner) {
             if (room.winReason === "bochay" && room.winner === mySide) {
                 scheduleResetWinnerRoomAfterPaid(room, listeningRoomId);
             }
+            // --- BÙA ĐUỔI BOT NGAY KHI XONG TRẬN ---
+             const oppSide = mySide === "do" ? "den" : "do";
+             const opp = room.players?.[oppSide];
+             const isOppBot = opp && (opp.uid === "bot_master_100" || opp.isBot);
+
+             // Nếu trận đấu đã kết thúc và đối thủ là Bot
+             if (room.winner && isOppBot) {
+                 // Đợi chia tiền xong (paid === true) thì mới đá nó ra
+                 if (room.settlement && room.settlement.paid === true) {
+                     console.log("Đã chia tiền xong, mời Lão Tẩu rời bàn...");
+                     db.ref(`matches/${listeningRoomId}`).update({
+                         "players/den": null,
+                         "ready/den": false,
+                         "stakeLocked/den": false,
+                         "status": "waiting",
+                         "winner": null, // Reset trạng thái để phòng về chế độ chờ
+                         "winReason": null,
+                         "lobbyOpen": true, // Mở lại cửa phòng cho người khác thấy
+                         "updatedAt": firebase.database.ServerValue.TIMESTAMP
+                     });
+                     // Sau khi đá Bot, reset lịch sử chiếu nhây để ván sau không bị kẹt
+                     botMoveHistory = []; 
+                 }
+             }
+             // ----------------------------------------
+             
 // 🔥 BỎ CHỮ AWAIT: Gọi chia tiền chạy ngầm, luồng UI chạy tiếp bật bảng SS luôn!
         maybeSettleStakeRoom(room, listeningRoomId).catch(err => console.error("Settle lỗi:", err));
 
@@ -10120,11 +10146,11 @@ if (
 
 renderPlayersFromRoom(room);
 updateReadyUI();
-// Khởi động đếm ngược gọi Bot nếu mày là chủ phòng và chưa có ai vào
-if (mySide === "do" && room.status === "waiting" && !room.players?.den) {
+// Khởi động lại đếm ngược gọi Bot nếu mày là chủ phòng và ghế Đen đang trống
+if (mySide === "do" && room.status === "waiting" && !room.players?.den && !room.winner) {
     startBotWaitingTimer();
 } else {
-    // Có người thật vào thì hủy gọi Bot lập tức
+    // Có người vào hoặc đang trong trận/đang hiện kết quả thì tắt đồng hồ
     cancelBotWaiting();
 }
 
