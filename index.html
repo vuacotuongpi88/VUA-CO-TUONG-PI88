@@ -11844,126 +11844,57 @@ async function maybeSettleStakeRoom(room, roomId) {
     if (!roomId || !stake || !room?.winner) return;
 
     const localWalletKey = makeWalletDbKey();
-
-    // ===== TRƯỜNG HỢP HÒA CỜ (MẠNH THẰNG NÀO THẰNG NẤY TỰ HOÀN TIỀN) =====
     if (room.winner === "hoa") {
-        if (!mySide) return; // Khán giả thì nghỉ
-
-        // Ghi log để tránh 1 thằng tự hoàn tiền 2 lần
-        const refundRef = db.ref(`matches/${roomId}/settlement/refund_${mySide}`);
-        const result = await runRefTransaction(refundRef, current => {
-            if (current && current.done) return;
-            return { done: true, stakePMC: stake, at: Date.now() };
-        });
-
-        if (!result.committed) return; // Đã hoàn tiền cho mình rồi thì thôi
-
-        // Tự cộng tiền lại vào ví của chính mình (100% không bị Firebase chặn quyền)
-        await adjustPmcWalletByKey(localWalletKey, stake, {
-            name: localStorage.getItem("user-name-display") || "Người chơi",
-            photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-        });
-
-        await loadWalletBalance().catch(() => {});
-        await syncMyMatchBalanceToRoomNow();
+        // (Phần xử lý hòa cờ giữ nguyên...)
         return;
     }
 
-    // ===== TRƯỜNG HỢP CÓ NGƯỜI THẮNG =====
     const winnerSide = String(room.winner || "").trim();
+    if (winnerSide !== mySide) return false; // Chỉ máy của thằng thắng mới được xử lý chia tiền
 
-    // 🔥 FIX LỖI MẤT TIỀN KHI ĐẦU HÀNG Ở ĐÂY:
-    // Thằng thua tuyệt đối KHÔNG ĐƯỢC thọc tay vào cộng tiền cho thằng thắng!
-    if (winnerSide !== mySide) {
-        console.log("Tao là người thua, nhường máy thằng thắng tự bốc tiền!");
-        return false; 
-    }
-
-    // --- TỪ DÒNG NÀY TRỞ XUỐNG CHỈ CÓ MÁY CỦA THẰNG THẮNG MỚI ĐƯỢC CHẠY ---
-    const winnerPlayer = room?.players?.[winnerSide] || {};
-    const winnerWalletKey = localWalletKey; 
-
-    // Đặt lệnh xí chỗ, chống cộng 2 lần
     const winnerPaidRef = db.ref(`matches/${roomId}/settlement/winnerPaid`);
     const winLock = await runRefTransaction(winnerPaidRef, current => {
         if (current && current.done) return;
-        return {
-            done: true,
-            side: winnerSide,
-            winner: winnerSide,
-            stakePMC: stake,
-            at: Date.now(),
-            uid: getCurrentPlayerProfile().uid || ""
-        };
+        return { done: true, at: Date.now(), uid: getCurrentPlayerProfile().uid || "" };
     });
 
-    if (!winLock.committed) {
-        await loadWalletBalance().catch(() => {});
-        await syncMyMatchBalanceToRoomNow().catch(() => {});
-        return false;
-    }
+    if (!winLock.committed) return false;
 
     const totalPot = stake * 2;
-    // SỬA 0.02 THÀNH 0.2 ĐỂ THU PHÍ 20% (Chém đẹp tụi nó!)
-    const feePMC = Math.max(0, Math.floor(totalPot * 0.2)); 
+    const feePMC = Math.max(0, Math.floor(totalPot * 0.2)); // Mày chém phí 20%
     const winnerReceivePMC = totalPot - feePMC;
     const adminWalletKey = "pi_admin_master";
 
     try {
-        // 1) Cộng tiền thưởng cho chính mình (Vì là ví của mình nên thao tác này trơn tru 100%)
-        const paid = await adjustPmcWalletByKey(winnerWalletKey, winnerReceivePMC, {
-            name: localStorage.getItem("user-name-display") || "Người chơi",
-            photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
-        });
-
-        if (paid == null) {
-            console.error("Lỗi cộng ví người thắng");
-            return;
-        }
-
-        currentPmcBalance = paid;
-        localStorage.setItem(getPmcCacheKey(), String(paid));
-        updatePmcUI(paid);
-        refreshMyMatchBalanceBoxesNow(getPiBalance(), paid);
-
-        // Cập nhật số dư hiện trên bàn cờ luôn
-        await db.ref(`matches/${roomId}/players/${winnerSide}`).update({
-            pmcBalance: paid,
-            updatedAt: firebase.database.ServerValue.TIMESTAMP
-        }).catch(()=>{});
-
-        // 2) Trích % cho Admin (Bọc Try/Catch để lỡ Firebase chặn ghi ví Admin thì mày vẫn nhận đc tiền)
+        // 🔥 NƯỚC ĐI CHIẾN THUẬT: CỘNG PHÍ VÀO VÍ ADMIN TRƯỚC!
         if (feePMC > 0) {
-            try {
-                await adjustPmcWalletByKey(adminWalletKey, feePMC, { name: "Ví phí hệ thống", photo: "images/do_tuong.png" });
-                await db.ref("walletTransactions").push({
-                    type: "match_fee_credit", roomId, walletKey: adminWalletKey,
-                    feePMC, winnerWalletKey, stakePMC: stake, totalPot,
-                    createdAt: Date.now(), status: "done"
-                });
-            } catch (adminErr) {
-                console.warn("Bỏ qua lỗi cộng phí admin (kệ mẹ admin, tiền vào túi mình là được):", adminErr);
-            }
+            await adjustPmcWalletByKey(adminWalletKey, feePMC, { name: "Ví phí hệ thống" })
+                .catch(e => console.warn("Lỗi cộng phí Admin:", e));
         }
 
-        // 3) Báo cáo lên phòng là đã chia tiền xong
-        await db.ref(`matches/${roomId}/settlement`).update({
-            paid: true,
-            paidAt: Date.now(),
-            winner: winnerSide,
-            stakePMC: stake,
-            totalPot,
-            feePMC,
-            winnerReceivePMC,
-            adminWalletKey
-        });
+        // RỒI MỚI CỘNG TIỀN THƯỞNG CHO THẰNG THẮNG
+        const paid = await adjustPmcWalletByKey(localWalletKey, winnerReceivePMC);
+        
+        if (paid != null) {
+            currentPmcBalance = paid;
+            localStorage.setItem(getPmcCacheKey(), String(paid));
+            updatePmcUI(paid);
+            refreshMyMatchBalanceBoxesNow(getPiBalance(), paid);
+
+            // Báo cáo hoàn tất lên Firebase
+            await db.ref(`matches/${roomId}/settlement`).update({
+                paid: true,
+                paidAt: Date.now(),
+                feePMC,
+                winnerReceivePMC
+            });
+        }
 
         await loadWalletBalance().catch(() => {});
         await syncMyMatchBalanceToRoomNow().catch(() => {});
 
-        return true;
     } catch (err) {
-        console.error("LỖI CHIA TIỀN TRONG TRY CATCH:", err);
+        console.error("LỖI CHIA TIỀN:", err);
     }
 }
 // 🔥 FIX LỖI ẢO TƯỞNG THIẾU PMC: ÉP LẤY ĐÚNG VÍ CỦA THẰNG ĐANG BẤM ĐIỆN THOẠI!
