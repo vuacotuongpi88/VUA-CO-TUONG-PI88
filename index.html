@@ -18419,7 +18419,7 @@ async function submitReferralCode() {
         
         // CÔNG THỨC THỜI GIAN: 5 Ngày = 5 * 24 * 60 * 60 * 1000 mili-giây.
         // NẾU MÀY MUỐN TEST 1 PHÚT LÀ NHẬN ĐƯỢC THÌ ĐỔI THÀNH: 60 * 1000
-        const GIAM_TIME_MS = 5 * 24 * 60 * 60 * 1000; 
+        const GIAM_TIME_MS = 60 * 1000; 
         const unlockTime = Date.now() + GIAM_TIME_MS;
 
         updates[`wallets/${referrerWalletKey}/pendingReferrals/${pendingId}`] = {
@@ -19016,9 +19016,12 @@ async function submitReferralCode() {
                 </div>
                 
                 <div style="margin-top: 15px; background: rgba(0,0,0,0.6); padding: 12px; border-radius: 12px; border: 1px dashed #ff9f43;">
-                    <div style="color: #ff9f43; font-size: 14px; font-weight: bold; margin-bottom: 8px;">⏳ QUỸ CHỜ DUYỆT (5 NGÀY)</div>
+                    <div style="color: #ff9f43; font-size: 14px; font-weight: bold; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                        <span>⏳ QUỸ CHỜ DUYỆT</span>
+                        <span id="total-pending-pmc" style="background: #e67e22; color: #fff; padding: 2px 8px; border-radius: 8px; font-size: 12px;">Đang kẹt: 0 PMC</span>
+                    </div>
                     <div style="font-size: 11px; color: #b2bec3; margin-bottom: 10px; line-height: 1.4;">
-                        Khách tải game phải đánh ít nhất 5 ván thì tiền mới được mở khóa chống nick ảo.
+                        Khách nhập mã của bạn phải <b>đạt Cấp 5</b> hoặc <b>có mua đồ trong Shop</b> thì tiền mới được mở khóa chống nick ảo.
                     </div>
                     <div id="pending-ref-list" style="max-height: 140px; overflow-y: auto; text-align: left; font-size: 12px; padding-right: 5px;">
                         </div>
@@ -19117,22 +19120,26 @@ setTimeout(() => {
 }, 1000); // Chờ 1 giây cho HTML load xong hết rồi mới làm phép
 // ==================== HỆ THỐNG QUỸ CHỜ DUYỆT ====================
 
-// Hàm 1: Tải danh sách con nợ đang bị giam
+// Hàm 1: Tải danh sách con nợ đang bị giam (Có cộng dồn tổng tiền kẹt)
 function loadPendingReferrals() {
     const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "";
     if (!walletKey) return;
 
     db.ref(`wallets/${walletKey}/pendingReferrals`).on("value", snap => {
         const listEl = document.getElementById("pending-ref-list");
+        const totalEl = document.getElementById("total-pending-pmc"); // Nắm đầu cái nhãn tổng tiền
+        
         if (!listEl) return;
 
         if (!snap.exists()) {
             listEl.innerHTML = `<div style="text-align:center; color:#b2bec3; padding:10px;">Chưa có khoản tiền nào đang chờ.</div>`;
+            if (totalEl) totalEl.innerText = "Đang kẹt: 0 PMC";
             return;
         }
 
         const data = snap.val();
         let html = "";
+        let totalPendingPmc = 0; // Biến đếm tổng tiền đang kẹt
         const now = Date.now();
         
         const arr = Object.keys(data).map(key => ({ id: key, ...data[key] }));
@@ -19151,7 +19158,9 @@ function loadPendingReferrals() {
                     <span style="text-decoration:line-through;">❌ ${item.nameB}</span><span style="font-weight:bold;">BỊ HỦY (Clone)</span>
                 </div>`;
             } else {
-                // ĐANG PENDING
+                // NẾU ĐANG PENDING -> Cộng dồn tiền vào tổng
+                totalPendingPmc += (Number(item.amount) || 5);
+                
                 const isReady = now >= item.unlockAt;
                 if (isReady) {
                     html += `<div style="display:flex; justify-content:space-between; align-items:center; padding:8px; border-bottom:1px solid #333; background:rgba(85,239,196,0.1);">
@@ -19166,9 +19175,13 @@ function loadPendingReferrals() {
             }
         });
         listEl.innerHTML = html;
+        
+        // In cái tổng tiền ra màn hình cho đại gia ngắm
+        if (totalEl) {
+            totalEl.innerText = "Đang kẹt: " + totalPendingPmc.toLocaleString("vi-VN") + " PMC";
+        }
     });
 }
-
 // Hàm 2: Duyệt hồ sơ lúc bấm NHẬN (PHIÊN BẢN SÁT THỦ DIỆT CLONE + HOÀN VỐN)
 window.claimPendingReferral = async function(pendingId, walletKeyB) {
     const myWalletKey = makeWalletDbKey();
