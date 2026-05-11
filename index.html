@@ -7377,19 +7377,27 @@ async function acceptBotMatch() {
     if (!currentRoomId) return;
 
     try {
-        // Gọi lên API backend mày đã tạo để nhét Bot vào
-        const res = await fetch("/api/bot?action=join", {
+        // Đã sửa: Bỏ chữ ?action=join trên link đi, nhét thẳng vào trong body
+        const res = await fetch("/api/bot", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ roomId: currentRoomId, hostWallet: makeWalletDbKey() })
+            body: JSON.stringify({ 
+                action: "join",  // <--- Nhét chữ action vào đây thì Vercel mới đọc được
+                roomId: currentRoomId, 
+                hostWallet: typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "" 
+            })
         });
+        
         const data = await res.json();
         if (!data.ok) {
+            // Nếu Vercel chửi (ví dụ: cược quá 500 PMC, hoặc lùa bot quá 3 lần) thì nó báo ở đây
             alert(data.error || "Lão tẩu đang bận đánh bàn khác rồi!");
+        } else {
+            console.log("Bot đã nhập tiệc thành công!");
         }
     } catch(e) {
         console.error("Gọi bot lỗi:", e);
-        alert("Không kết nối được với Lão Tẩu!");
+        alert("Không kết nối được với Server Bot!");
     }
 }
 // ==========================================
