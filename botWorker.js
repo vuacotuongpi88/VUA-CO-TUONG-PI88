@@ -1,5 +1,6 @@
 // ==========================================
 // FILE: botWorker.js (CHẠY NGẦM TRÊN MÁY KHÁCH)
+// BẢN FIX LỖI: BOT BIẾT BẢO VỆ TƯỚNG VÀ TRÁNH LỘ MẶT TƯỚNG
 // ==========================================
 
 const PIECE_VALUES = {
@@ -80,26 +81,94 @@ function checkLuatWorker(type, side, c, r, tc, tr, mt, isCoUp) {
     return false;
 }
 
+// Hàm 1: Kiểm tra xem Tướng của phe "side" có đang bị địch chĩa súng vào không
+function laBiChieuWorker(side, mt, isCoUp) {
+    let tPos = null;
+    // Tìm vị trí Tướng
+    for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 9; c++) {
+            if (mt[r][c] && mt[r][c].side === side && (mt[r][c].type === '帥' || mt[r][c].type === '將')) {
+                tPos = { c, r }; break;
+            }
+        }
+        if (tPos) break;
+    }
+    if (!tPos) return false;
+
+    // Quét toàn bộ quân địch xem có con nào táng được vào mặt Tướng không
+    for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 9; c++) {
+            if (mt[r][c] && mt[r][c].side !== side) {
+                if (checkLuatWorker(mt[r][c].type, mt[r][c].side, c, r, tPos.c, tPos.r, mt, isCoUp)) return true;
+            }
+        }
+    }
+    return false;
+}
+
+// Hàm 2: Kiểm tra luật "Lộ Mặt Tướng" (Hai con tướng nhìn nhau đéo có quân cản)
+function haiTuongDoiMat(mt) {
+    let tDo = null, tDen = null;
+    for(let r=0; r<10; r++) {
+        for(let c=0; c<9; c++) {
+            if(mt[r][c] && mt[r][c].type === '帥') tDo = {c, r};
+            if(mt[r][c] && mt[r][c].type === '將') tDen = {c, r};
+        }
+    }
+    if(!tDo || !tDen) return false;
+    
+    // Nếu không cùng cột thì kệ mẹ nó
+    if(tDo.c !== tDen.c) return false; 
+    
+    // Nếu cùng cột, đếm số quân ở giữa
+    let count = 0;
+    let minR = Math.min(tDo.r, tDen.r);
+    let maxR = Math.max(tDo.r, tDen.r);
+    for(let r = minR + 1; r < maxR; r++) {
+        if(mt[r][tDo.c]) count++;
+    }
+    return count === 0; // Nếu bằng 0 nghĩa là 2 tướng nhìn thấy nhau -> Bất hợp pháp
+}
+
 function calculateMove(boardArray, botSide, isCoUp) {
     let mt = buildMatrix(boardArray);
     let validMoves = [];
 
+    // Quét bàn cờ tìm quân Bot
     for (let r = 0; r < 10; r++) {
         for (let c = 0; c < 9; c++) {
             let piece = mt[r][c];
             if (piece && piece.side === botSide) {
+                
+                // Quét 90 ô xem đi được ô nào
                 for (let tr = 0; tr < 10; tr++) {
                     for (let tc = 0; tc < 9; tc++) {
+                        
+                        // 1. Phải đi đúng quy tắc của quân cờ
                         if (checkLuatWorker(piece.type, botSide, c, r, tc, tr, mt, isCoUp)) {
-                            let targetPiece = mt[tr][tc];
-                            let score = targetPiece && targetPiece.side !== botSide ? (PIECE_VALUES[targetPiece.type] || 10) : 0;
                             
-                            validMoves.push({
-                                from: { c, r },
-                                to: { c: tc, r: tr },
-                                score: score,
-                                pieceObj: piece
-                            });
+                            // GIẢ LẬP ĐI NƯỚC CỜ ĐỂ KIỂM TRA MẠNG SỐNG CỦA TƯỚNG
+                            let tempTarget = mt[tr][tc]; // Lưu lại quân bị đớp (nếu có)
+                            mt[tr][tc] = mt[r][c];       // Chuyển quân Bot đến chỗ mới
+                            mt[r][c] = null;             // Xóa chỗ cũ
+                            
+                            // 2. CHECK XEM ĐI XONG CÓ BỊ ĐỊCH CHIẾU KHÔNG VÀ CÓ BỊ LỘ MẶT TƯỚNG KHÔNG?
+                            let isSafe = !laBiChieuWorker(botSide, mt, isCoUp) && !haiTuongDoiMat(mt);
+
+                            // TRẢ BÀN CỜ VỀ NHƯ CŨ (Undo) ĐỂ THỬ NƯỚC KHÁC
+                            mt[r][c] = mt[tr][tc];
+                            mt[tr][tc] = tempTarget;
+
+                            // NẾU TƯỚNG AN TOÀN THÌ MỚI LƯU VÀO SỔ TAY
+                            if (isSafe) {
+                                let score = tempTarget && tempTarget.side !== botSide ? (PIECE_VALUES[tempTarget.type] || 10) : 0;
+                                validMoves.push({
+                                    from: { c, r },
+                                    to: { c: tc, r: tr },
+                                    score: score,
+                                    pieceObj: piece
+                                });
+                            }
                         }
                     }
                 }
@@ -107,13 +176,18 @@ function calculateMove(boardArray, botSide, isCoUp) {
         }
     }
 
+    // Nếu đéo có nước nào đi được (bị chiếu bí)
     if (validMoves.length === 0) return null;
 
+    // Phân loại điểm, đớp con nào béo nhất
     validMoves.sort((a, b) => b.score - a.score);
     const maxScore = validMoves[0].score;
     const bestMoves = validMoves.filter(m => m.score === maxScore);
+    
+    // Chọn random 1 nước ngon nhất để nó đi khác nhau
     const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
 
+    // Lật cờ úp
     let movedPiece = { ...chosenMove.pieceObj, c: chosenMove.to.c, r: chosenMove.to.r };
     if (isCoUp && movedPiece.isUp) {
         movedPiece.isUp = false;
@@ -121,6 +195,7 @@ function calculateMove(boardArray, botSide, isCoUp) {
         if (names[movedPiece.type]) movedPiece.src = `images/${botSide}_${names[movedPiece.type]}.png`;
     }
 
+    // Tạo mảng mới báo lại cho Client
     let newBoardArray = boardArray.filter(p => {
         if (p.c === chosenMove.from.c && p.r === chosenMove.from.r) return false;
         if (p.c === chosenMove.to.c && p.r === chosenMove.to.r) return false;
@@ -135,7 +210,7 @@ function calculateMove(boardArray, botSide, isCoUp) {
     };
 }
 
-// Lắng nghe lệnh từ index.html gọi xuống
+// Lắng nghe lệnh từ index.html
 self.onmessage = function(e) {
     const data = e.data;
     if (data.action === "think") {
