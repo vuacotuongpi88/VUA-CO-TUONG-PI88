@@ -8447,7 +8447,7 @@ if (haiTuongDoiMat(mt)) {
         alert("Hai Tướng không được nhìn mặt nhau!");
         return;
     }
-    
+
     if (target) {
     target.remove();
     try {
@@ -8557,6 +8557,9 @@ refreshTimerRings();
                         db.ref("matches/" + currentRoomId).update({
                             board: result.move.newBoard,
                             turn: "do",
+                            timeDo: timeDo, // Lưu lại đồng hồ phe Đỏ
+                            timeDen: timeDen, // Lưu lại đồng hồ phe Đen
+                            turnStartedAt: firebase.database.ServerValue.TIMESTAMP, // Ghim giờ bắt đầu cho phe Đỏ
                             lastMoveFrom: result.move.from,
                             lastMoveTo: result.move.to,
                             moveCount: firebase.database.ServerValue.increment(1),
@@ -9327,8 +9330,9 @@ function syncRoomFromBoard(extra = {}) {
         turn: luotDi,
         isCoUp,
         timeDo,
-        timeDen,
-        lastMoveFrom: lastMoveFrom || null,
+         timeDen,
+         turnStartedAt: firebase.database.ServerValue.TIMESTAMP, // Reset lại mốc thời gian cho thằng kia
+         lastMoveFrom: lastMoveFrom || null,
         lastMoveTo: lastMoveTo || null,
         moveCount: firebase.database.ServerValue.increment ? firebase.database.ServerValue.increment(1) : ((window.__localMoveCountFallback = (window.__localMoveCountFallback || 0) + 1)),
         updatedAt: firebase.database.ServerValue.TIMESTAMP,
@@ -9851,8 +9855,9 @@ await waitingRoomRef.remove().catch(() => {});
         moveCount: 0,
         turn: "do",
         timeDo: 540,
-        timeDen: 540,
-        lastMoveFrom: null,
+         timeDen: 540,
+         turnStartedAt: firebase.database.ServerValue.TIMESTAMP, // Bùa ghim mốc thời gian bắt đầu
+         lastMoveFrom: null,
         lastMoveTo: null,
         winner: null,
         winReason: null,
@@ -10186,9 +10191,27 @@ if (!canRenderLiveBoard) {
 
         applyBoardStateFromRoom(room.board || []);
         isCoUp = !!room.isCoUp;
-        luotDi = room.turn || "do";
-        timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
-        timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
+         luotDi = room.turn || "do";
+         
+         let tDo = typeof room.timeDo === "number" ? room.timeDo : 540;
+         let tDen = typeof room.timeDen === "number" ? room.timeDen : 540;
+
+         // --- BÙA TRỪ LÙI THỜI GIAN KHI LOAD LẠI GAME CHỐNG GIAN LẬN ---
+         if (room.status === "playing" && room.turnStartedAt && !room.winner) {
+             // readyNowMs() là giờ Server Firebase chuẩn, đéo sợ tụi nó hack đổi giờ trên điện thoại
+             let elapsedSec = Math.floor((readyNowMs() - room.turnStartedAt) / 1000);
+             if (elapsedSec > 0) {
+                 if (luotDi === "do") {
+                     tDo = Math.max(0, tDo - elapsedSec);
+                 } else {
+                     tDen = Math.max(0, tDen - elapsedSec);
+                 }
+             }
+         }
+         
+         timeDo = tDo;
+         timeDen = tDen;
+         // -------------------------------------------------------------
 
         timerDoEl.innerText = formatTime(timeDo);
         timerDenEl.innerText = formatTime(timeDen);
