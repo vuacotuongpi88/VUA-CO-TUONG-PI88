@@ -1,6 +1,6 @@
 // ==========================================
 // FILE: botWorker.js (CHẠY NGẦM TRÊN MÁY KHÁCH)
-// NÃO BỘ: MINIMAX + ALPHA-BETA PRUNING (BIẾT TÍNH KẾ PHẢN CÔNG)
+// NÃO BỘ: MINIMAX DEPTH 3 + ALPHA-BETA + ĐỊNH GIÁ TRẬN PHÁP (CAO THỦ)
 // ==========================================
 
 const PIECE_VALUES = {
@@ -13,7 +13,6 @@ const PIECE_VALUES = {
     '兵': 100, '卒': 100
 };
 
-// --- CÁC HÀM CƠ BẢN ---
 function buildMatrix(boardArray) {
     let mt = Array(10).fill(null).map(() => Array(9).fill(null));
     boardArray.forEach(p => { mt[p.r][p.c] = p; });
@@ -118,24 +117,54 @@ function haiTuongDoiMat(mt) {
     return count === 0;
 }
 
-// --- NÃO BỘ AI ---
+// --- NÃO BỘ AI (CAO THỦ) ---
 
-// Chấm điểm thế trận (Lấy điểm Bot trừ điểm Người)
+// Chấm điểm thế trận (Biết điều quân chiếm chỗ ngon)
 function evaluateBoard(mt, botSide) {
     let score = 0;
     for(let r=0; r<10; r++) {
         for(let c=0; c<9; c++) {
             const p = mt[r][c];
             if(p) {
+                // 1. Điểm giá trị quân cờ
                 let val = PIECE_VALUES[p.type] || 10;
-                // Khuyến khích Tốt qua sông
+                
+                // 2. Tùy chỉnh trận pháp (Thêm điểm nếu đứng chỗ ngon)
+                
+                // Tốt: Qua sông được cộng điểm, tiến càng sát Tướng địch càng mạnh, kẹp vào trong cung thì bá cháy
                 if ((p.type === '兵' || p.type === '卒') && !p.isUp) {
-                    if (p.side === 'do' && r <= 4) val += 50;
-                    if (p.side === 'den' && r >= 5) val += 50;
+                    if (p.side === 'do' && r <= 4) {
+                        val += 30 + (4 - r) * 15; // Càng lên cao càng nguy hiểm
+                        if (c >= 3 && c <= 5) val += 30; // Chui vào giữa
+                    }
+                    if (p.side === 'den' && r >= 5) {
+                        val += 30 + (r - 5) * 15;
+                        if (c >= 3 && c <= 5) val += 30;
+                    }
                 }
-                // Khuyến khích cờ úp mở ra
-                if (p.isUp) val += 50; 
+                
+                // Mã: Đứng ở trung tâm (cộng 30đ), đứng góc (đéo làm được gì)
+                if (p.type === '傌' || p.type === '馬') {
+                    if (c >= 2 && c <= 6 && r >= 2 && r <= 7) val += 35;
+                }
+                
+                // Pháo: Vào pháo đầu hoặc pháo gánh rất mạnh
+                if (p.type === '炮' || p.type === '砲') {
+                    if (c === 4) val += 40; // Pháo đầu
+                    if (c === 3 || c === 5) val += 20; // Pháo sườn
+                }
+                
+                // Xe: Chiếm trục dọc thoáng, hoặc cắm thẳng xuống cửu/đáy địch
+                if (p.type === '俥' || p.type === '車') {
+                    if (c === 3 || c === 4 || c === 5) val += 30; // Chốt chặn giữa
+                    if (p.side === 'do' && r <= 2) val += 45; // Đỏ cắm xe xuống
+                    if (p.side === 'den' && r >= 7) val += 45; // Đen cắm xe xuống
+                }
 
+                // Cờ úp: Con nào chưa mở auto có giá trị ẩn cao để Bot ưu tiên mở
+                if (p.isUp) val += 60; 
+
+                // Cộng dồn
                 if(p.side === botSide) score += val;
                 else score -= val;
             }
@@ -144,7 +173,7 @@ function evaluateBoard(mt, botSide) {
     return score;
 }
 
-// Lấy toàn bộ nước đi hợp lệ của 1 phe
+// Lấy toàn bộ nước đi hợp lệ của 1 phe và SẮP XẾP KHÔN NGOAN
 function generateAllMoves(mt, side, isCoUp) {
     let moves = [];
     for (let r = 0; r < 10; r++) {
@@ -168,10 +197,26 @@ function generateAllMoves(mt, side, isCoUp) {
             }
         }
     }
+
+    // Sắp xếp nước đi để Alpha-Beta cắt tỉa cực nhanh
+    moves.sort((a,b) => {
+        // Ưu tiên 1: Đớp quân to
+        let scoreA = a.captured ? PIECE_VALUES[a.captured.type] : 0;
+        let scoreB = b.captured ? PIECE_VALUES[b.captured.type] : 0;
+        
+        // Ưu tiên 2: Tiến lên phía trước (gây áp lực) thay vì đi ngang đi lùi
+        if (scoreA === 0 && scoreB === 0) {
+            let advanceA = side === 'do' ? (a.from.r - a.to.r) : (a.to.r - a.from.r);
+            let advanceB = side === 'do' ? (b.from.r - b.to.r) : (b.to.r - b.from.r);
+            return advanceB - advanceA; 
+        }
+        return scoreB - scoreA;
+    });
+
     return moves;
 }
 
-// Hàm đệ quy thuật toán Minimax chặn lỗ hổng
+// Hàm đệ quy thuật toán Minimax (Đã bọc thép)
 function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp) {
     if (depth === 0) {
         return evaluateBoard(mt, botSide);
@@ -181,12 +226,10 @@ function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp) {
     let moves = generateAllMoves(mt, currentSide, isCoUp);
 
     if (moves.length === 0) {
-        // Hết cờ đi = thua
-        return isMaximizing ? -99999 + (3-depth) : 99999 - (3-depth);
+        // Bí cờ. Nếu phe đang xét là bot (Maximizing) bị bí -> Bot thua (Điểm cực âm).
+        // Phải cộng thêm depth để nó chọn cách chết lâu nhất nếu bắt buộc phải chết.
+        return isMaximizing ? -99999 + depth : 99999 - depth;
     }
-
-    // Sắp xếp nước đi (ưu tiên ăn quân) để cắt tỉa (Alpha-Beta) nhanh hơn
-    moves.sort((a,b) => (b.captured ? PIECE_VALUES[b.captured.type] : 0) - (a.captured ? PIECE_VALUES[a.captured.type] : 0));
 
     if (isMaximizing) {
         let maxEval = -Infinity;
@@ -202,7 +245,7 @@ function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp) {
 
             maxEval = Math.max(maxEval, ev);
             alpha = Math.max(alpha, ev);
-            if (beta <= alpha) break; // Cắt tỉa
+            if (beta <= alpha) break; // Cắt tỉa nhánh thừa (Alpha-Beta Pruning)
         }
         return maxEval;
     } else {
@@ -219,36 +262,36 @@ function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp) {
 
             minEval = Math.min(minEval, ev);
             beta = Math.min(beta, ev);
-            if (beta <= alpha) break; // Cắt tỉa
+            if (beta <= alpha) break; // Cắt tỉa nhánh thừa
         }
         return minEval;
     }
 }
 
-// Bắt đầu tính toán
+// Khởi chạy phân tích não bộ
 function calculateMove(boardArray, botSide, isCoUp) {
     let mt = buildMatrix(boardArray);
     let moves = generateAllMoves(mt, botSide, isCoUp);
     
-    if (moves.length === 0) return null;
-
-    // Sắp xếp ưu tiên ăn quân để tính nhanh
-    moves.sort((a,b) => (b.captured ? PIECE_VALUES[b.captured.type] : 0) - (a.captured ? PIECE_VALUES[a.captured.type] : 0));
+    if (moves.length === 0) return null; // Bí lù xin hàng
 
     let bestScore = -Infinity;
     let bestMoves = [];
 
-    // TẦNG SÂU SUY NGHĨ: Để mức 2 là cực kỳ an toàn cho điện thoại (Mức 3 sẽ đánh hay hơn nhưng máy khách cùi sẽ bị lag)
-    const DEPTH = 2; 
+    // TẦNG SÂU SUY NGHĨ (DEPTH = 3)
+    // Bot nhìn xa 3 bước: Bot tính -> Mày đỡ -> Bot khóa cổ. Đủ để né bẫy nhử quân!
+    // CẢNH BÁO: Đừng tăng lên 4, tăng lên 4 sẽ phải tính hơn 2.5 triệu trường hợp, đứng máy điện thoại!
+    const DEPTH = 3; 
 
     for (let move of moves) {
         let target = mt[move.to.r][move.to.c];
         mt[move.to.r][move.to.c] = mt[move.from.r][move.from.c];
         mt[move.from.r][move.from.c] = null;
 
-        // Bắt đầu soi xem nếu tao đi nước này, thằng kia đáp trả sao?
+        // Soi xem đi nước này thì đòn phản công của địch (minimax) là bao nhiêu
         let score = minimax(mt, DEPTH - 1, -Infinity, Infinity, false, botSide, isCoUp);
 
+        // Trả cờ về chỗ cũ
         mt[move.from.r][move.from.c] = mt[move.to.r][move.to.c];
         mt[move.to.r][move.to.c] = target;
 
@@ -260,6 +303,7 @@ function calculateMove(boardArray, botSide, isCoUp) {
         }
     }
 
+    // Nếu có nhiều nước ngon như nhau, random chọn 1 nước cho khách đỡ bắt bài
     const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
 
     let movedPiece = { ...chosenMove.pieceObj, c: chosenMove.to.c, r: chosenMove.to.r };
