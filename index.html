@@ -6356,6 +6356,21 @@ body.has-warning #game-arena {
 
 <div id="game-arena" style="display: none; padding: 10px;">
 <div class="game-wrapper">
+    <div id="bot-waiting-timer" style="display:none; position:absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.8); border: 1px solid #ff7675; color: #ff7675; padding: 4px 8px; border-radius: 8px; font-size: 10px; font-weight: bold; z-index: 25000;">
+    Lão Tẩu đang tới: <span id="bot-sec">30</span>s
+</div>
+
+<div id="bot-invite-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:99999; align-items:center; justify-content:center; backdrop-filter: blur(4px);">
+    <div style="background: linear-gradient(180deg, #1f1f1f, #0a0a0a); border: 2px solid #55efc4; border-radius: 15px; padding: 20px; width: 300px; text-align: center; box-shadow: 0 0 30px rgba(85, 239, 196, 0.3);">
+        <img src="https://i.imgur.com/QhT8A4O.png" style="width:80px; height:80px; border-radius:50%; border:2px solid #f4c542; margin-bottom:10px;">
+        <h3 style="color:#f4c542; margin:0 0 10px 0;">VÔ DANH LÃO TẨU (Cấp 100)</h3>
+        <p style="color:#dfe6e9; font-size:12px;">"Chờ lâu quá chưa ai vào à? Có muốn làm vài ván với lão phu không chàng trai trẻ?"</p>
+        <div style="display:flex; gap:10px; justify-content:center; margin-top:15px;">
+            <button onclick="closeBotInvite()" style="background:#636e72; color:white; border:none; padding:8px 15px; border-radius:8px; cursor: pointer; font-weight: bold;">THÔI</button>
+            <button onclick="acceptBotMatch()" style="background:linear-gradient(180deg, #00d2a0, #00b894); color:white; border:none; padding:8px 15px; border-radius:8px; font-weight:bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5);">ĐÁNH LUÔN</button>
+        </div>
+    </div>
+</div>
 <div id="ready-overlay">
 <div id="ready-box">
 <div id="ready-title">SẴN SÀNG</div>
@@ -7302,7 +7317,82 @@ function selectGame(mode) {
     hideHomeUI();
     document.getElementById("game-arena").style.display = "block";
 }
+// ==========================================
+// HỆ THỐNG VÔ DANH LÃO TẨU (BOT AI)
+// ==========================================
+let botWaitInterval = null;
+let botWaitSeconds = 30;
+let isBotTimerRunning = false;
 
+function startBotWaitingTimer() {
+    // Không chạy lại nếu đang đếm, chặn chạy nhiều lần
+    if (isBotTimerRunning) return;
+    
+    // BẢO VỆ KÉT SẮT: Chặn không cho Bot đánh nếu cược lớn hơn 500 PMC
+    if (currentRoomStakePMC > 500) return; 
+
+    isBotTimerRunning = true;
+    botWaitSeconds = 30;
+    
+    const botTimerEl = document.getElementById("bot-waiting-timer");
+    const botSecEl = document.getElementById("bot-sec");
+    if (botTimerEl) botTimerEl.style.display = "block";
+    if (botSecEl) botSecEl.innerText = botWaitSeconds;
+
+    clearInterval(botWaitInterval);
+    botWaitInterval = setInterval(() => {
+        // Nếu có thằng thật nhảy vào, hoặc đéo phải phòng chờ nữa thì hủy đếm
+        if (currentRoomStatus !== "waiting" || (window.__lastBoundRoom && window.__lastBoundRoom.players?.den)) {
+            cancelBotWaiting();
+            return;
+        }
+
+        botWaitSeconds--;
+        if (botSecEl) botSecEl.innerText = botWaitSeconds;
+
+        if (botWaitSeconds <= 0) {
+            cancelBotWaiting();
+            // Hết 30s bật bảng hỏi
+            const modal = document.getElementById("bot-invite-modal");
+            if (modal) modal.style.display = "flex";
+        }
+    }, 1000);
+}
+
+function cancelBotWaiting() {
+    clearInterval(botWaitInterval);
+    isBotTimerRunning = false;
+    const botTimerEl = document.getElementById("bot-waiting-timer");
+    const modal = document.getElementById("bot-invite-modal");
+    if (botTimerEl) botTimerEl.style.display = "none";
+    if (modal) modal.style.display = "none";
+}
+
+function closeBotInvite() {
+    document.getElementById("bot-invite-modal").style.display = "none";
+}
+
+async function acceptBotMatch() {
+    closeBotInvite();
+    if (!currentRoomId) return;
+
+    try {
+        // Gọi lên API backend mày đã tạo để nhét Bot vào
+        const res = await fetch("/api/bot?action=join", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ roomId: currentRoomId, hostWallet: makeWalletDbKey() })
+        });
+        const data = await res.json();
+        if (!data.ok) {
+            alert(data.error || "Lão tẩu đang bận đánh bàn khác rồi!");
+        }
+    } catch(e) {
+        console.error("Gọi bot lỗi:", e);
+        alert("Không kết nối được với Lão Tẩu!");
+    }
+}
+// ==========================================
 // --- BỘ NÚT THOÁT CHUẨN CHỈ, CHỐNG ĐƠ MÁY ---
 
 // Hàm này chuyên dùng để dọn dẹp hậu trường và cút ra sảnh
@@ -8394,6 +8484,23 @@ refreshTimerRings();
 
     if (currentRoomId) {
         syncRoomFromBoard();
+        
+        // --- GỌI BOT ĐI TRẢ ĐŨA NGAY LẬP TỨC ---
+        const topNameEl = document.getElementById("player-den-name");
+        if (topNameEl && topNameEl.innerText === "Vô Danh Lão Tẩu") {
+            // Cố tình delay 500ms (nửa giây) cho giống nó đang liếc mắt nhìn bàn cờ
+            setTimeout(() => {
+                fetch("/api/bot?action=move", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ 
+                        action: "move", 
+                        roomId: currentRoomId,
+                        boardState: exportBoardState()
+                    })
+                }).catch(e => console.error("Lỗi bot đi cờ:", e));
+            }, 500);
+        }
     }
 }; // Kết thúc board.onclick
 
@@ -9938,6 +10045,13 @@ if (
 
 renderPlayersFromRoom(room);
 updateReadyUI();
+// Khởi động đếm ngược gọi Bot nếu mày là chủ phòng và chưa có ai vào
+if (mySide === "do" && room.status === "waiting" && !room.players?.den) {
+    startBotWaitingTimer();
+} else {
+    // Có người thật vào thì hủy gọi Bot lập tức
+    cancelBotWaiting();
+}
 
 const hasEnoughPlayersWaiting =
     !!room.players?.do &&
