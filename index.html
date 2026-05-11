@@ -8716,11 +8716,16 @@ function scheduleResetWinnerRoomAfterPaid(room, roomId) {
             }
 
             const winnerSide = fresh.winner;
-            const winnerPlayer = fresh.players?.[winnerSide];
+             let winnerPlayer = fresh.players?.[winnerSide];
 
-            if (!winnerPlayer?.uid) return;
+             // BÙA DIỆT BOT: Nếu thằng thắng là Bot, tước quyền làm chủ của nó, bắt mày (người thật) làm chủ phòng để chờ khách mới!
+             if (winnerPlayer?.uid === "bot_master_100" || winnerPlayer?.isBot) {
+                 winnerPlayer = fresh.players?.[mySide]; 
+             }
 
-            const cleanMode = fresh.mode || currentRoomMode || "co-tuong";
+             if (!winnerPlayer?.uid) return;
+
+             const cleanMode = fresh.mode || currentRoomMode || "co-tuong";
             const cleanStake = Math.max(0, Math.floor(Number(fresh.stakePMC || currentRoomStakePMC || 0) || 0));
             const cleanBucket = fresh.roomBucket || currentRoomBucket || makeStakeBucket(cleanMode, cleanStake);
             const cleanInviteCode = String(fresh.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
@@ -9225,14 +9230,14 @@ async function leaveRealtimeMatch() {
         const cleanBucket = room.roomBucket || roomBucket || makeStakeBucket(cleanMode, cleanStake);
         const cleanInviteCode = String(room.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
 
-        // NẾU CHỈ CÓ 1 MÌNH -> DỌN LUÔN PHÒNG
-        if (!otherPlayer) {
-            await db.ref("waitingRooms/" + cleanBucket + "/" + roomId).remove().catch(()=>{});
-            await db.ref("matches/" + roomId).remove().catch(()=>{});
-            return;
-        }
+        // BÙA DIỆT BOT: NẾU CHỈ CÓ 1 MÌNH HOẶC ĐỐI THỦ LÀ BOT -> HỦY LUÔN PHÒNG, ĐÉO NHƯỜNG!
+         if (!otherPlayer || otherPlayer.uid === "bot_master_100" || otherPlayer.isBot) {
+             await db.ref("waitingRooms/" + cleanBucket + "/" + roomId).remove().catch(()=>{});
+             await db.ref("matches/" + roomId).remove().catch(()=>{});
+             return;
+         }
 
-        // ĐỐI THỦ CÒN ĐÓ -> NHƯỜNG LUÔN PHÒNG ĐANG CÓ CHO NÓ
+         // ĐỐI THỦ LÀ NGƯỜI THẬT CÒN ĐÓ -> NHƯỜNG LUÔN PHÒNG ĐANG CÓ CHO NÓ
         const updates = {};
         
         // Mình cút khỏi ghế
@@ -11892,10 +11897,16 @@ async function handoffFinishedRoomToRemainingPlayer(roomId, room, leavingSide, r
     if (!roomId || !room || !leavingSide) return false;
 
     const keepSide = leavingSide === "do" ? "den" : "do";
-    let freshRoom = room;
-    let newHost = freshRoom?.players?.[keepSide];
+     let freshRoom = room;
+     let newHost = freshRoom?.players?.[keepSide];
 
-    if (!newHost?.uid) return false;
+     // BÙA DIỆT BOT: Thấy người ở lại là Bot thì đéo bàn giao gì hết, đánh sập phòng luôn!
+     if (newHost?.uid === "bot_master_100" || newHost?.isBot) {
+         db.ref(`matches/${roomId}`).remove().catch(()=>{});
+         return false;
+     }
+
+     if (!newHost?.uid) return false;
 
     const stake = Math.max(0, Math.floor(Number(freshRoom?.stakePMC || 0) || 0));
 
