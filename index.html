@@ -19169,7 +19169,7 @@ function loadPendingReferrals() {
     });
 }
 
-// Hàm 2: Duyệt hồ sơ lúc bấm NHẬN (PHIÊN BẢN SÁT THỦ DIỆT CLONE)
+// Hàm 2: Duyệt hồ sơ lúc bấm NHẬN (PHIÊN BẢN SÁT THỦ DIỆT CLONE + HOÀN VỐN)
 window.claimPendingReferral = async function(pendingId, walletKeyB) {
     const myWalletKey = makeWalletDbKey();
     
@@ -19185,37 +19185,38 @@ window.claimPendingReferral = async function(pendingId, walletKeyB) {
         const dataB = snapB.val() || {};
         
         // --- 3 TIÊU CHUẨN ĐÁNH GIÁ NGƯỜI CHƠI THẬT ---
-        // 1. Cấp độ phải từ 5 trở lên
         const bLevel = Number(dataB.level) || 1;
-        
-        // 2. Có mua Skin nào trong shop chưa? (Ngoại trừ cái skin 'none' mặc định)
         const ownedSkins = dataB.ownedAvatarSkins || {};
         const hasBoughtSkin = Object.keys(ownedSkins).some(skinId => skinId !== 'none' && ownedSkins[skinId] === true);
-        
-        // 3. Có mua gói EXP nào chưa?
         const boughtExp = dataB.boughtExpPackages || {};
         const hasBoughtExp = Object.keys(boughtExp).length > 0;
 
         const updates = {};
         
-        // TÒA TUYÊN ÁN: Lên cấp 5 HOẶC chịu khó nạp tiền mua đồ thì duyệt!
+        // TÒA TUYÊN ÁN
         if (bLevel >= 5 || hasBoughtSkin || hasBoughtExp) {
-            // Khách VIP -> Duyệt cho A nhận 5 PMC
+            // KHÁCH XỊN -> Duyệt cho A nhận 5 PMC
             updates[`wallets/${myWalletKey}/pendingReferrals/${pendingId}/status`] = "claimed";
             updates[`wallets/${myWalletKey}/pmcBalance`] = firebase.database.ServerValue.increment(5);
             
             await db.ref().update(updates);
-            alert(`🎉 ĐÃ DUYỆT! Lính của mày rất chất lượng (Cấp ${bLevel} / Đã mua đồ). Đã cộng 5 PMC vào két sắt!`);
+            alert(`🎉 ĐÃ DUYỆT! Lính của mày rất chất lượng. Đã cộng 5 PMC vào két sắt!`);
             
-            // Ép hệ thống tải lại số dư
-            if (typeof loadWalletBalance === 'function') await loadWalletBalance();
         } else {
-            // Bắt được nick ảo / lười biếng -> Hủy tiền, thu hồi về hệ thống
+            // CLONE -> Hủy của A, TRẢ LẠI 5 PMC CHO VÍ ADMIN (pi_admin_master)
             updates[`wallets/${myWalletKey}/pendingReferrals/${pendingId}/status`] = "revoked";
             await db.ref().update(updates);
             
-            alert(`❌ TẠCH! Phát hiện nick ảo! Thằng này mới Cấp ${bLevel} và đéo thèm mua đồ. Tiền đã bị hệ thống thu hồi!`);
+            // Trả tiền về cho quỹ hệ thống
+            await adjustPmcWalletByKey("pi_admin_master", 5, { name: "Hoàn vốn chống Clone" })
+                .catch(e => console.warn("Lỗi hoàn vốn Admin:", e));
+            
+            alert(`❌ TẠCH! Phát hiện nick ảo! Thằng này mới Cấp ${bLevel} và đéo thèm mua đồ. 5 PMC đã bị thu hồi trả về Quỹ hệ thống!`);
         }
+
+        // Ép hệ thống tải lại số dư
+        if (typeof loadWalletBalance === 'function') await loadWalletBalance();
+        
     } catch (err) {
         console.error("Lỗi duyệt mã mời:", err);
         alert("Lỗi mạng, kiểm tra lại sau!");
