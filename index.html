@@ -3861,22 +3861,14 @@ margin-bottom: 14px;
     font-weight: 700;
 }
 .board-side {
-    width: min(92vw, 460px) !important;
-    margin: 0 auto !important;
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: center !important;
-    flex-shrink: 0 !important; /* 🔥 CHỐNG BÓP MÉO */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
 }
 
 .game-container {
     position: relative;
-    width: min(90vw, 450px) !important;
-    height: min(90vw, 450px) !important;
-    flex-shrink: 0 !important; /* 🔥 CHỐNG BÓP MÉO */
-    background: url('images/ban_co_go.jpg') center/100% 100% no-repeat;
-    border: 5px solid #2d3436;
-    border-radius: 8px;
 }
 
 .player-timer-row {
@@ -6379,13 +6371,8 @@ body.has-warning #game-arena {
 <div class="board-side">
     <div class="player-timer-row top-row">
        <div class="player-slot">
-    <div class="player-slot" style="position: relative;">
-            <div id="bot-timer-badge" style="display: none; position: absolute; top: -15px; left: 10px; background: linear-gradient(180deg, #d63031, #e17055); color: #fff; font-size: 10px; font-weight: 900; padding: 2px 8px; border-radius: 10px; border: 1px solid #ffeaa7; box-shadow: 0 0 10px rgba(214, 48, 49, 0.8); z-index: 100;">
-                ⏳ Tìm đối thủ: 30s
-            </div>
-
-            <div class="player-chip-row" onclick="openPlayerStats('den')">
-                <img id="player-den-avatar" class="player-avatar-outside" src="images/do_tuong.png" alt="Đen">
+    <div class="player-chip-row" onclick="openPlayerStats('den')">
+        <img id="player-den-avatar" class="player-avatar-outside" src="images/do_tuong.png" alt="Đen">
 
         <div class="player-chip-stack">
             <div class="player-chip-inline">
@@ -9959,34 +9946,30 @@ const hasEnoughPlayersWaiting =
     !room.winner;
 
 if (hasEnoughPlayersWaiting) {
-        isGameOver = false;
-        selectedPiece = null;
-        clearMoveHints();
-        hideVictoryPopup();
-        renderTimerUI();
-        
-        // CÓ ĐỦ NGƯỜI RỒI THÌ TẮT ĐỒNG HỒ BOT ĐI
-        clearInterval(botMatchingInterval);
-        const badge = document.getElementById("bot-timer-badge");
-        if(badge) badge.style.display = "none";
+    isGameOver = false;
+    selectedPiece = null;
+    clearMoveHints();
+    hideVictoryPopup();
+    renderTimerUI();
 
-        ensureReadyOverlayForWaitingRoom(room, listeningRoomId);
-    } else {
-        const reallyMustCloseReady = room.status === "playing" || !!room.winner || !room.players?.do || !room.players?.den;
-        if (reallyMustCloseReady) {
-            closeReadyOverlay();
-            readyOverlayRoomKey = "";
-        }
-        
-        // CHƯA ĐỦ NGƯỜI VÀ MÌNH LÀ CHỦ PHÒNG (ĐỎ) THÌ BẬT ĐẾM 30S LÊN
-        if (room.status === "waiting" && mySide === "do" && !room.players?.den) {
-            if (!botMatchingInterval && botTimeLeft === 30) {
-                startBotMatchingTimer(listeningRoomId);
-            }
-        }
+    // Mở bảng SS ổn định, không cho Firebase snapshot làm chớp tắt
+    ensureReadyOverlayForWaitingRoom(room, listeningRoomId);
+} else {
+    // Chỉ đóng bảng SS khi thật sự đã vào trận hoặc phòng không còn đủ người.
+    // Không đóng/mở theo mấy update phụ như số dư, ready, stakeLocked.
+    const reallyMustCloseReady =
+        room.status === "playing" ||
+        !!room.winner ||
+        !room.players?.do ||
+        !room.players?.den;
 
-        renderTimerUI();
+    if (reallyMustCloseReady) {
+        closeReadyOverlay();
+        readyOverlayRoomKey = "";
     }
+
+    renderTimerUI();
+}
 
 if (room.status === "playing" && !room.winner) {
     readyOverlayWaitingShown = false;
@@ -19378,69 +19361,6 @@ openReferralModal = async function() {
     await oldOpenReferralModal();
     loadPendingReferrals();
 };
-// ==================== HỆ THỐNG BOT: VÔ DANH LÃO TẨU ====================
-let botMatchingInterval = null;
-let botTimeLeft = 30;
-
-function startBotMatchingTimer(roomId) {
-    clearInterval(botMatchingInterval);
-    const badge = document.getElementById("bot-timer-badge");
-    if (!badge) return;
-
-    botTimeLeft = 30;
-    badge.style.display = "block";
-    badge.innerText = `⏳ Tìm đối thủ: ${botTimeLeft}s`;
-
-    botMatchingInterval = setInterval(() => {
-        botTimeLeft--;
-        badge.innerText = `⏳ Tìm đối thủ: ${botTimeLeft}s`;
-
-        if (botTimeLeft <= 0) {
-            clearInterval(botMatchingInterval);
-            badge.style.display = "none";
-            proposeBotMatch(roomId); 
-        }
-    }, 1000);
-}
-
-async function proposeBotMatch(roomId) {
-    const snap = await db.ref("matches/" + roomId + "/players/den").once("value");
-    if (snap.exists()) return; 
-
-    document.body.style.animation = "shakeScreen 0.4s ease-in-out";
-    setTimeout(() => document.body.style.animation = "", 400);
-
-    const ok = confirm("CHÚ Ý: Không có kỳ thủ nào quanh đây!\n\nCao thủ ẩn danh [VÔ DANH LÃO TẨU - Cấp 100] thấy mày ngồi một mình nên muốn gạ kèo!\n\nMày có dám tiếp chiêu không?\n(Thắng ăn bình thường, Thua tiền về quỹ Hệ Thống)");
-    
-    if (!ok) {
-        startBotMatchingTimer(roomId);
-        return;
-    }
-
-    try {
-        const btn = document.getElementById("ready-main-btn");
-        if (btn) btn.innerText = "ĐANG MỜI LÃO TẨU...";
-
-        const walletKey = makeWalletDbKey();
-        
-        // GỌI THẲNG API/BOT CHO ĐỠ BỊ VERCEL NGÁO
-        const res = await fetch("/api/bot?v=" + Date.now(), { 
-            method: "POST",
-            headers: { "Content-Type": "application/json", "x-wallet-key": walletKey },
-            body: JSON.stringify({ roomId: roomId })
-        });
-
-        if (!res.ok) throw new Error("Mày chưa Upload file api/bot.js lên Vercel kìa ba!");
-
-        const data = await res.json();
-        if (!data.ok) throw new Error(data.error || "Lão Tẩu bận rồi!");
-
-        alert("Vô Danh Lão Tẩu đã ngồi vào bàn! Tập trung tinh thần đi con trai!");
-    } catch (e) {
-        alert("Lỗi gọi Bot: " + e.message);
-        startBotMatchingTimer(roomId); 
-    }
-}
 </script>
 </body>
 </html>
