@@ -3861,14 +3861,22 @@ margin-bottom: 14px;
     font-weight: 700;
 }
 .board-side {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
+    width: min(92vw, 460px) !important;
+    margin: 0 auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    flex-shrink: 0 !important; /* 🔥 CHỐNG BÓP MÉO */
 }
 
 .game-container {
     position: relative;
+    width: min(90vw, 450px) !important;
+    height: min(90vw, 450px) !important;
+    flex-shrink: 0 !important; /* 🔥 CHỐNG BÓP MÉO */
+    background: url('images/ban_co_go.jpg') center/100% 100% no-repeat;
+    border: 5px solid #2d3436;
+    border-radius: 8px;
 }
 
 .player-timer-row {
@@ -19398,29 +19406,26 @@ function startBotMatchingTimer(roomId) {
 
 // Bật bảng gạ kèo
 async function proposeBotMatch(roomId) {
-    // Đã có thằng đen vào rồi thì thôi
     const snap = await db.ref("matches/" + roomId + "/players/den").once("value");
     if (snap.exists()) return; 
 
-    // Rung màn hình uy hiếp tinh thần
     document.body.style.animation = "shakeScreen 0.4s ease-in-out";
     setTimeout(() => document.body.style.animation = "", 400);
 
-    const ok = confirm("CHÚ Ý: Không có kỳ thủ nào quanh đây!\n\nCao thủ ẩn danh [VÔ DANH LÃO TẨU - Cấp 100] thấy mày ngồi một mình nên muốn gạ kèo!\n\nMày có dám tiếp chiêu không?\n(Thắng ăn bình thường, Thua tiền về quỹ Hệ Thống)");
+    const ok = confirm("CHÚ Ý: Không có kỳ thủ nào quanh đây!\n\nCao thủ ẩn danh [VÔ DANH LÃO TẨU - Cấp 100] thấy mày ngồi một mình nên muốn gạ kèo!\n\nMày có dám tiếp chiêu không?\n(Thắng ăn bình thường, Thua tiền cược chảy về quỹ Hệ Thống)");
     
     if (!ok) {
-        // Hèn nhát đéo đánh thì đếm lại 30s
         startBotMatchingTimer(roomId);
         return;
     }
 
-    // Dũng cảm nhận kèo -> Gọi API nhét Bot vào phòng
     try {
         const btn = document.getElementById("ready-main-btn");
         if (btn) btn.innerText = "ĐANG MỜI LÃO TẨU...";
 
         const walletKey = makeWalletDbKey();
-        const res = await fetch("/api/bot-match/join?v=" + Date.now(), {
+        
+        const res = await fetch("/api/bot-match/join?v=" + Date.now(), { // SỬA ĐÚNG DÒNG NÀY THEO THƯ MỤC CỦA MÀY
             method: "POST",
             headers: { 
                 "Content-Type": "application/json",
@@ -19429,13 +19434,21 @@ async function proposeBotMatch(roomId) {
             body: JSON.stringify({ roomId: roomId })
         });
 
+        // BẮT LỖI 404 CỦA VERCEL TRƯỚC KHI NÓ NỔ TUNG
+        if (!res.ok) {
+            const txt = await res.text();
+            if (txt.includes("<!DOCTYPE") || txt.includes("<html")) {
+                throw new Error("Mày chưa Upload cái file api/bot_join.js lên Vercel kìa ba!");
+            }
+        }
+
         const data = await res.json();
-        if (!res.ok || !data.ok) throw new Error(data.error || "Lão Tẩu bận rồi!");
+        if (!data.ok) throw new Error(data.error || "Lão Tẩu bận rồi!");
 
         alert("Vô Danh Lão Tẩu đã ngồi vào bàn! Tập trung tinh thần đi con trai!");
     } catch (e) {
         alert("Lỗi gọi Bot: " + e.message);
-        startBotMatchingTimer(roomId); // Lỗi thì đếm lại
+        startBotMatchingTimer(roomId); 
     }
 }
 </script>

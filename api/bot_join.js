@@ -25,11 +25,11 @@ module.exports = async (req, res) => {
             uid: "bot_master_100",
             walletKey: "bot_master_100",
             name: "Vô Danh Lão Tẩu",
-            photo: "https://i.imgur.com/QhT8A4G.png", 
+            photo: "https://i.imgur.com/QhT8A4G.png", // Ảnh giang hồ mạng
             level: 100,
             isBot: true, 
             pmcBalance: 99999999, 
-            avatarSkin: "dragon", 
+            avatarSkin: "dragon", // Ốp viền Rồng VIP
             statsV2: { wins: 9999, losses: 1, matches: 10000 } 
         };
 
@@ -51,7 +51,7 @@ module.exports = async (req, res) => {
         // 3. Bot Sẵn Sàng luôn!
         updates[`matches/${roomId}/ready/den`] = true;
         
-        // 4. Khóa cửa phòng
+        // 4. Khóa cửa phòng (Lobby Open = false)
         updates[`matches/${roomId}/lobbyOpen`] = false;
 
         await db.ref().update(updates);
