@@ -1,4 +1,4 @@
-const { db } = require("../firebaseAdmin"); 
+const { db } = require("./_firebaseAdmin");
 
 module.exports = async (req, res) => {
     if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method Not Allowed' });
