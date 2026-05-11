@@ -8485,20 +8485,51 @@ refreshTimerRings();
     if (currentRoomId) {
         syncRoomFromBoard();
         
-        // --- GỌI BOT ĐI TRẢ ĐŨA NGAY LẬP TỨC ---
+        // --- ÉP CPU MÁY KHÁCH TÍNH TOÁN CHO BOT ---
         const topNameEl = document.getElementById("player-den-name");
         if (topNameEl && topNameEl.innerText === "Vô Danh Lão Tẩu") {
-            // Cố tình delay 500ms (nửa giây) cho giống nó đang liếc mắt nhìn bàn cờ
+            // Khởi tạo công nhân chạy ngầm
+            if (!window.botWorker) {
+                window.botWorker = new Worker("botWorker.js");
+            }
+            
+            // Cố tình delay 500ms cho giống người đang nhìn bàn cờ
             setTimeout(() => {
-                fetch("/api/bot?action=move", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ 
-                        action: "move", 
-                        roomId: currentRoomId,
-                        boardState: exportBoardState()
-                    })
-                }).catch(e => console.error("Lỗi bot đi cờ:", e));
+                // Đẩy dữ liệu xuống luồng chạy ngầm để tính toán (Không đơ màn hình)
+                window.botWorker.postMessage({
+                    action: "think",
+                    boardState: exportBoardState(),
+                    botSide: "den",
+                    isCoUp: isCoUp
+                });
+
+                // Chờ luồng chạy ngầm trả kết quả lên
+                window.botWorker.onmessage = function(e) {
+                    const result = e.data;
+                    
+                    if (result.action === "done") {
+                        if (!result.move) {
+                            // Bot Bí cờ -> Báo Firebase Bot thua
+                            db.ref("matches/" + currentRoomId).update({
+                                winner: "do",
+                                winReason: "checkmate",
+                                finishedAt: firebase.database.ServerValue.TIMESTAMP,
+                                updatedAt: firebase.database.ServerValue.TIMESTAMP
+                            });
+                            return;
+                        }
+
+                        // Cập nhật Firebase nước đi của Bot (Client tự ghi lên)
+                        db.ref("matches/" + currentRoomId).update({
+                            board: result.move.newBoard,
+                            turn: "do", // Nhường lượt lại cho tao
+                            lastMoveFrom: result.move.from,
+                            lastMoveTo: result.move.to,
+                            moveCount: firebase.database.ServerValue.increment(1),
+                            updatedAt: firebase.database.ServerValue.TIMESTAMP
+                        });
+                    }
+                };
             }, 500);
         }
     }
