@@ -18414,11 +18414,23 @@ async function submitReferralCode() {
             referredAt: firebase.database.ServerValue.TIMESTAMP
         });
 
-        // --- BƯỚC 5: CỘNG 5 PMC VÀ TĂNG SỐ LƯỢNG MỜI CHO THẰNG A ---
-        // Dùng increment() để ép server tự cộng, thách bố con thằng nào trượt được!
-        await db.ref("wallets/" + referrerWalletKey + "/pmcBalance").set(firebase.database.ServerValue.increment(5));
-        await db.ref("wallets/" + referrerWalletKey + "/referralCount").set(firebase.database.ServerValue.increment(1));
-        await db.ref("wallets/" + referrerWalletKey + "/updatedAt").set(firebase.database.ServerValue.TIMESTAMP);
+        // --- BƯỚC 5: GIAM 5 PMC CỦA THẰNG A VÀO QUỸ CHỜ DUYỆT ---
+        const pendingId = db.ref().push().key;
+        
+        // CÔNG THỨC THỜI GIAN: 5 Ngày = 5 * 24 * 60 * 60 * 1000 mili-giây.
+        // NẾU MÀY MUỐN TEST 1 PHÚT LÀ NHẬN ĐƯỢC THÌ ĐỔI THÀNH: 60 * 1000
+        const GIAM_TIME_MS = 5 * 24 * 60 * 60 * 1000; 
+        const unlockTime = Date.now() + GIAM_TIME_MS;
+
+        updates[`wallets/${referrerWalletKey}/pendingReferrals/${pendingId}`] = {
+            walletKeyB: myWalletKey,
+            nameB: meProfile.displayName || meProfile.username || "Người chơi",
+            amount: 5,
+            createdAt: firebase.database.ServerValue.TIMESTAMP,
+            unlockAt: unlockTime,
+            status: "pending" // Trạng thái: pending (đang giam), claimed (đã ăn), revoked (bị hủy)
+        };
+        updates[`wallets/${referrerWalletKey}/referralCount`] = firebase.database.ServerValue.increment(1);
 
         // --- BƯỚC 6: ÉP KẾT BẠN & GỬI THÔNG BÁO (GỘP CHUNG 1 LỆNH) ---
         const updates = {};
@@ -18995,14 +19007,23 @@ async function submitReferralCode() {
         <div class="ref-body">
             
             <div class="ref-my-code-box">
-                <div style="color: #dfe6e9; font-size: 13px;">Mã mời của bạn (Cứ có người nhập là +5 PMC)</div>
+                <div style="color: #dfe6e9; font-size: 13px;">Mã mời của bạn (Nhận 5 PMC / 1 người)</div>
                 <div id="my-ref-code" class="ref-code-text">ĐANG TẠO...</div>
-                <div style="color: #55efc4; font-size: 13px; font-weight: bold; margin-bottom: 10px;">Đã mời thành công: <span id="modal-referral-count">0</span> bạn</div>                
+                <div style="color: #55efc4; font-size: 13px; font-weight: bold; margin-bottom: 10px;">Đã mời: <span id="modal-referral-count">0</span> bạn</div>                
                 <div class="ref-buttons">
                     <button class="ref-btn btn-copy" onclick="copyMyRefCode()">📋 COPY MÃ</button>
-                    <button class="ref-btn btn-fb" onclick="shareRefToFB()">🌐 SHARE FACEBOOK</button>
+                    <button class="ref-btn btn-fb" onclick="shareRefToFB()">🌐 SHARE FB</button>
                 </div>
-            </div>
+                
+                <div style="margin-top: 15px; background: rgba(0,0,0,0.6); padding: 12px; border-radius: 12px; border: 1px dashed #ff9f43;">
+                    <div style="color: #ff9f43; font-size: 14px; font-weight: bold; margin-bottom: 8px;">⏳ QUỸ CHỜ DUYỆT (5 NGÀY)</div>
+                    <div style="font-size: 11px; color: #b2bec3; margin-bottom: 10px; line-height: 1.4;">
+                        Khách tải game phải đánh ít nhất 5 ván thì tiền mới được mở khóa chống nick ảo.
+                    </div>
+                    <div id="pending-ref-list" style="max-height: 140px; overflow-y: auto; text-align: left; font-size: 12px; padding-right: 5px;">
+                        </div>
+                </div>
+            </div>>
 
             <div id="ref-input-section" class="ref-input-box">
                 <div style="color: #f4c542; font-size: 14px; font-weight: bold; margin-bottom: 10px;">AI GIỚI THIỆU BẠN VÀO ĐÂY?</div>
@@ -19094,6 +19115,124 @@ setTimeout(() => {
         if (friendBox) friendBox.classList.remove("show");
     };
 }, 1000); // Chờ 1 giây cho HTML load xong hết rồi mới làm phép
+// ==================== HỆ THỐNG QUỸ CHỜ DUYỆT ====================
+
+// Hàm 1: Tải danh sách con nợ đang bị giam
+function loadPendingReferrals() {
+    const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "";
+    if (!walletKey) return;
+
+    db.ref(`wallets/${walletKey}/pendingReferrals`).on("value", snap => {
+        const listEl = document.getElementById("pending-ref-list");
+        if (!listEl) return;
+
+        if (!snap.exists()) {
+            listEl.innerHTML = `<div style="text-align:center; color:#b2bec3; padding:10px;">Chưa có khoản tiền nào đang chờ.</div>`;
+            return;
+        }
+
+        const data = snap.val();
+        let html = "";
+        const now = Date.now();
+        
+        const arr = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+        // Sắp xếp: Pending nằm trên, Đã nhận/Bị hủy rớt xuống dưới
+        arr.sort((a, b) => (a.status === "pending" ? -1 : 1));
+
+        arr.forEach(item => {
+            const dateStr = new Date(item.unlockAt).toLocaleDateString('vi-VN');
+            
+            if (item.status === "claimed") {
+                html += `<div style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #333; color:#00b894;">
+                    <span>✅ ${item.nameB} (+5 PMC)</span><span style="font-weight:bold;">ĐÃ NHẬN</span>
+                </div>`;
+            } else if (item.status === "revoked") {
+                html += `<div style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #333; color:#d63031;">
+                    <span style="text-decoration:line-through;">❌ ${item.nameB}</span><span style="font-weight:bold;">BỊ HỦY (Clone)</span>
+                </div>`;
+            } else {
+                // ĐANG PENDING
+                const isReady = now >= item.unlockAt;
+                if (isReady) {
+                    html += `<div style="display:flex; justify-content:space-between; align-items:center; padding:8px; border-bottom:1px solid #333; background:rgba(85,239,196,0.1);">
+                        <span style="color:#55efc4;">⏳ ${item.nameB} (+5 PMC)</span>
+                        <button onclick="claimPendingReferral('${item.id}', '${item.walletKeyB}')" style="padding:4px 8px; font-size:10px; background:#00b894; color:white; border:none; border-radius:5px; cursor:pointer;">NHẬN</button>
+                    </div>`;
+                } else {
+                    html += `<div style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #333; color:#ffeaa7;">
+                        <span>⏳ ${item.nameB} (+5 PMC)</span><span style="font-size:10px;">Chờ đến: ${dateStr}</span>
+                    </div>`;
+                }
+            }
+        });
+        listEl.innerHTML = html;
+    });
+}
+
+// Hàm 2: Duyệt hồ sơ lúc bấm NHẬN (PHIÊN BẢN SÁT THỦ DIỆT CLONE)
+window.claimPendingReferral = async function(pendingId, walletKeyB) {
+    const myWalletKey = makeWalletDbKey();
+    
+    try {
+        const btn = event.currentTarget;
+        if (btn) {
+            btn.disabled = true;
+            btn.innerText = "ĐANG SOI...";
+        }
+
+        // Lấy toàn bộ hồ sơ gốc của thằng B lên soi
+        const snapB = await db.ref(`wallets/${walletKeyB}`).once("value");
+        const dataB = snapB.val() || {};
+        
+        // --- 3 TIÊU CHUẨN ĐÁNH GIÁ NGƯỜI CHƠI THẬT ---
+        // 1. Cấp độ phải từ 5 trở lên
+        const bLevel = Number(dataB.level) || 1;
+        
+        // 2. Có mua Skin nào trong shop chưa? (Ngoại trừ cái skin 'none' mặc định)
+        const ownedSkins = dataB.ownedAvatarSkins || {};
+        const hasBoughtSkin = Object.keys(ownedSkins).some(skinId => skinId !== 'none' && ownedSkins[skinId] === true);
+        
+        // 3. Có mua gói EXP nào chưa?
+        const boughtExp = dataB.boughtExpPackages || {};
+        const hasBoughtExp = Object.keys(boughtExp).length > 0;
+
+        const updates = {};
+        
+        // TÒA TUYÊN ÁN: Lên cấp 5 HOẶC chịu khó nạp tiền mua đồ thì duyệt!
+        if (bLevel >= 5 || hasBoughtSkin || hasBoughtExp) {
+            // Khách VIP -> Duyệt cho A nhận 5 PMC
+            updates[`wallets/${myWalletKey}/pendingReferrals/${pendingId}/status`] = "claimed";
+            updates[`wallets/${myWalletKey}/pmcBalance`] = firebase.database.ServerValue.increment(5);
+            
+            await db.ref().update(updates);
+            alert(`🎉 ĐÃ DUYỆT! Lính của mày rất chất lượng (Cấp ${bLevel} / Đã mua đồ). Đã cộng 5 PMC vào két sắt!`);
+            
+            // Ép hệ thống tải lại số dư
+            if (typeof loadWalletBalance === 'function') await loadWalletBalance();
+        } else {
+            // Bắt được nick ảo / lười biếng -> Hủy tiền, thu hồi về hệ thống
+            updates[`wallets/${myWalletKey}/pendingReferrals/${pendingId}/status`] = "revoked";
+            await db.ref().update(updates);
+            
+            alert(`❌ TẠCH! Phát hiện nick ảo! Thằng này mới Cấp ${bLevel} và đéo thèm mua đồ. Tiền đã bị hệ thống thu hồi!`);
+        }
+    } catch (err) {
+        console.error("Lỗi duyệt mã mời:", err);
+        alert("Lỗi mạng, kiểm tra lại sau!");
+        const btn = event.currentTarget;
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = "NHẬN";
+        }
+    }
+};
+
+// Móc hàm load vào lúc mở hộp quà
+const oldOpenReferralModal = openReferralModal;
+openReferralModal = async function() {
+    await oldOpenReferralModal();
+    loadPendingReferrals();
+};
 </script>
 </body>
 </html>
