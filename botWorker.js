@@ -1,7 +1,9 @@
 // ==========================================
 // FILE: botWorker.js (CHẠY NGẦM TRÊN MÁY KHÁCH)
-// NÃO BỘ: MINIMAX DEPTH 3 + ALPHA-BETA + ĐỊNH GIÁ TRẬN PHÁP (CAO THỦ)
+// NÃO BỘ: MINIMAX DEPTH 3 + TRẬN PHÁP + CHỐNG CHIẾU NHÂY
 // ==========================================
+
+let positionHistory = []; // Bộ nhớ ngắn hạn của Bot
 
 const PIECE_VALUES = {
     '帥': 10000, '將': 10000,
@@ -12,6 +14,17 @@ const PIECE_VALUES = {
     '仕': 200, '士': 200,
     '兵': 100, '卒': 100
 };
+
+// Hàm tạo mã băm (Hash) để ghi nhớ bàn cờ
+function getBoardHash(mt) {
+    let hash = "";
+    for(let r=0; r<10; r++) {
+        for(let c=0; c<9; c++) {
+            if(mt[r][c]) hash += r + "" + c + mt[r][c].type + (mt[r][c].isUp ? "U" : "D");
+        }
+    }
+    return hash;
+}
 
 function buildMatrix(boardArray) {
     let mt = Array(10).fill(null).map(() => Array(9).fill(null));
@@ -117,25 +130,19 @@ function haiTuongDoiMat(mt) {
     return count === 0;
 }
 
-// --- NÃO BỘ AI (CAO THỦ) ---
-
-// Chấm điểm thế trận (Biết điều quân chiếm chỗ ngon)
+// Chấm điểm thế trận
 function evaluateBoard(mt, botSide) {
     let score = 0;
     for(let r=0; r<10; r++) {
         for(let c=0; c<9; c++) {
             const p = mt[r][c];
             if(p) {
-                // 1. Điểm giá trị quân cờ
                 let val = PIECE_VALUES[p.type] || 10;
                 
-                // 2. Tùy chỉnh trận pháp (Thêm điểm nếu đứng chỗ ngon)
-                
-                // Tốt: Qua sông được cộng điểm, tiến càng sát Tướng địch càng mạnh, kẹp vào trong cung thì bá cháy
                 if ((p.type === '兵' || p.type === '卒') && !p.isUp) {
                     if (p.side === 'do' && r <= 4) {
-                        val += 30 + (4 - r) * 15; // Càng lên cao càng nguy hiểm
-                        if (c >= 3 && c <= 5) val += 30; // Chui vào giữa
+                        val += 30 + (4 - r) * 15;
+                        if (c >= 3 && c <= 5) val += 30;
                     }
                     if (p.side === 'den' && r >= 5) {
                         val += 30 + (r - 5) * 15;
@@ -143,28 +150,23 @@ function evaluateBoard(mt, botSide) {
                     }
                 }
                 
-                // Mã: Đứng ở trung tâm (cộng 30đ), đứng góc (đéo làm được gì)
                 if (p.type === '傌' || p.type === '馬') {
                     if (c >= 2 && c <= 6 && r >= 2 && r <= 7) val += 35;
                 }
                 
-                // Pháo: Vào pháo đầu hoặc pháo gánh rất mạnh
                 if (p.type === '炮' || p.type === '砲') {
-                    if (c === 4) val += 40; // Pháo đầu
-                    if (c === 3 || c === 5) val += 20; // Pháo sườn
+                    if (c === 4) val += 40;
+                    if (c === 3 || c === 5) val += 20;
                 }
                 
-                // Xe: Chiếm trục dọc thoáng, hoặc cắm thẳng xuống cửu/đáy địch
                 if (p.type === '俥' || p.type === '車') {
-                    if (c === 3 || c === 4 || c === 5) val += 30; // Chốt chặn giữa
-                    if (p.side === 'do' && r <= 2) val += 45; // Đỏ cắm xe xuống
-                    if (p.side === 'den' && r >= 7) val += 45; // Đen cắm xe xuống
+                    if (c === 3 || c === 4 || c === 5) val += 30;
+                    if (p.side === 'do' && r <= 2) val += 45;
+                    if (p.side === 'den' && r >= 7) val += 45;
                 }
 
-                // Cờ úp: Con nào chưa mở auto có giá trị ẩn cao để Bot ưu tiên mở
                 if (p.isUp) val += 60; 
 
-                // Cộng dồn
                 if(p.side === botSide) score += val;
                 else score -= val;
             }
@@ -173,7 +175,6 @@ function evaluateBoard(mt, botSide) {
     return score;
 }
 
-// Lấy toàn bộ nước đi hợp lệ của 1 phe và SẮP XẾP KHÔN NGOAN
 function generateAllMoves(mt, side, isCoUp) {
     let moves = [];
     for (let r = 0; r < 10; r++) {
@@ -198,13 +199,9 @@ function generateAllMoves(mt, side, isCoUp) {
         }
     }
 
-    // Sắp xếp nước đi để Alpha-Beta cắt tỉa cực nhanh
     moves.sort((a,b) => {
-        // Ưu tiên 1: Đớp quân to
         let scoreA = a.captured ? PIECE_VALUES[a.captured.type] : 0;
         let scoreB = b.captured ? PIECE_VALUES[b.captured.type] : 0;
-        
-        // Ưu tiên 2: Tiến lên phía trước (gây áp lực) thay vì đi ngang đi lùi
         if (scoreA === 0 && scoreB === 0) {
             let advanceA = side === 'do' ? (a.from.r - a.to.r) : (a.to.r - a.from.r);
             let advanceB = side === 'do' ? (b.from.r - b.to.r) : (b.to.r - b.from.r);
@@ -216,7 +213,6 @@ function generateAllMoves(mt, side, isCoUp) {
     return moves;
 }
 
-// Hàm đệ quy thuật toán Minimax (Đã bọc thép)
 function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp) {
     if (depth === 0) {
         return evaluateBoard(mt, botSide);
@@ -226,8 +222,6 @@ function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp) {
     let moves = generateAllMoves(mt, currentSide, isCoUp);
 
     if (moves.length === 0) {
-        // Bí cờ. Nếu phe đang xét là bot (Maximizing) bị bí -> Bot thua (Điểm cực âm).
-        // Phải cộng thêm depth để nó chọn cách chết lâu nhất nếu bắt buộc phải chết.
         return isMaximizing ? -99999 + depth : 99999 - depth;
     }
 
@@ -245,7 +239,7 @@ function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp) {
 
             maxEval = Math.max(maxEval, ev);
             alpha = Math.max(alpha, ev);
-            if (beta <= alpha) break; // Cắt tỉa nhánh thừa (Alpha-Beta Pruning)
+            if (beta <= alpha) break;
         }
         return maxEval;
     } else {
@@ -262,25 +256,20 @@ function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp) {
 
             minEval = Math.min(minEval, ev);
             beta = Math.min(beta, ev);
-            if (beta <= alpha) break; // Cắt tỉa nhánh thừa
+            if (beta <= alpha) break;
         }
         return minEval;
     }
 }
 
-// Khởi chạy phân tích não bộ
 function calculateMove(boardArray, botSide, isCoUp) {
     let mt = buildMatrix(boardArray);
     let moves = generateAllMoves(mt, botSide, isCoUp);
     
-    if (moves.length === 0) return null; // Bí lù xin hàng
+    if (moves.length === 0) return null;
 
     let bestScore = -Infinity;
     let bestMoves = [];
-
-    // TẦNG SÂU SUY NGHĨ (DEPTH = 3)
-    // Bot nhìn xa 3 bước: Bot tính -> Mày đỡ -> Bot khóa cổ. Đủ để né bẫy nhử quân!
-    // CẢNH BÁO: Đừng tăng lên 4, tăng lên 4 sẽ phải tính hơn 2.5 triệu trường hợp, đứng máy điện thoại!
     const DEPTH = 3; 
 
     for (let move of moves) {
@@ -288,10 +277,20 @@ function calculateMove(boardArray, botSide, isCoUp) {
         mt[move.to.r][move.to.c] = mt[move.from.r][move.from.c];
         mt[move.from.r][move.from.c] = null;
 
-        // Soi xem đi nước này thì đòn phản công của địch (minimax) là bao nhiêu
-        let score = minimax(mt, DEPTH - 1, -Infinity, Infinity, false, botSide, isCoUp);
+        // BỘ LỌC CHỐNG CHIẾU NHÂY
+        let currentHash = getBoardHash(mt);
+        let oppSide = botSide === 'do' ? 'den' : 'do';
+        let isChecking = laBiChieuWorker(oppSide, mt, isCoUp);
+        
+        let repeatCount = positionHistory.filter(h => h.hash === currentHash && h.isCheck).length;
 
-        // Trả cờ về chỗ cũ
+        let score = 0;
+        if (isChecking && repeatCount >= 3) {
+            score = -100000; // Phạt chết cụ nó nếu lặp lại chiếu quá 3 lần
+        } else {
+            score = minimax(mt, DEPTH - 1, -Infinity, Infinity, false, botSide, isCoUp);
+        }
+
         mt[move.from.r][move.from.c] = mt[move.to.r][move.to.c];
         mt[move.to.r][move.to.c] = target;
 
@@ -303,7 +302,6 @@ function calculateMove(boardArray, botSide, isCoUp) {
         }
     }
 
-    // Nếu có nhiều nước ngon như nhau, random chọn 1 nước cho khách đỡ bắt bài
     const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
 
     let movedPiece = { ...chosenMove.pieceObj, c: chosenMove.to.c, r: chosenMove.to.r };
@@ -320,16 +318,25 @@ function calculateMove(boardArray, botSide, isCoUp) {
     });
     newBoardArray.push(movedPiece);
 
+    // Tạo giả lập bàn cờ sau khi đi để lấy hash gửi lên Client ghi nhớ
+    let tempMt = buildMatrix(newBoardArray);
+    let resultHash = getBoardHash(tempMt);
+    let oppSide = botSide === 'do' ? 'den' : 'do';
+    let resultIsCheck = laBiChieuWorker(oppSide, tempMt, isCoUp);
+
     return {
         from: chosenMove.from,
         to: chosenMove.to,
-        newBoard: newBoardArray
+        newBoard: newBoardArray,
+        hash: resultHash,
+        isCheck: resultIsCheck
     };
 }
 
 self.onmessage = function(e) {
     const data = e.data;
     if (data.action === "think") {
+        if (data.recentHistory) positionHistory = data.recentHistory;
         const bestMove = calculateMove(data.boardState, data.botSide, data.isCoUp);
         postMessage({ action: "done", move: bestMove });
     }

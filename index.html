@@ -7469,6 +7469,7 @@ let isCoUp = false;
 let lastMoveFrom = null;
 let lastMoveTo = null;
 let viewSide = 'do'; // 'do' = góc nhìn đỏ, 'den' = góc nhìn đen
+let botMoveHistory = []; // Bùa ghi nhớ của Bot chống chiếu nhây
 
 let pendingGameMode = 'co-tuong';
 let readyDo = false; 
@@ -8496,28 +8497,24 @@ refreshTimerRings();
         // --- ÉP CPU MÁY KHÁCH TÍNH TOÁN CHO BOT ---
         const topNameEl = document.getElementById("player-den-name");
         if (topNameEl && topNameEl.innerText === "Vô Danh Lão Tẩu") {
-            // Khởi tạo công nhân chạy ngầm
             if (!window.botWorker) {
                 window.botWorker = new Worker("botWorker.js");
             }
             
-            // Cố tình delay 500ms cho giống người đang nhìn bàn cờ
             setTimeout(() => {
-                // Đẩy dữ liệu xuống luồng chạy ngầm để tính toán (Không đơ màn hình)
                 window.botWorker.postMessage({
                     action: "think",
                     boardState: exportBoardState(),
                     botSide: "den",
-                    isCoUp: isCoUp
+                    isCoUp: isCoUp,
+                    recentHistory: botMoveHistory // Ném cái sổ bộ nhớ cho não Bot nó đọc
                 });
 
-                // Chờ luồng chạy ngầm trả kết quả lên
                 window.botWorker.onmessage = function(e) {
                     const result = e.data;
                     
                     if (result.action === "done") {
                         if (!result.move) {
-                            // Bot Bí cờ -> Báo Firebase Bot thua
                             db.ref("matches/" + currentRoomId).update({
                                 winner: "do",
                                 winReason: "checkmate",
@@ -8527,10 +8524,13 @@ refreshTimerRings();
                             return;
                         }
 
-                        // Cập nhật Firebase nước đi của Bot (Client tự ghi lên)
+                        // Ghi nước cờ vào sổ tay chống nhây
+                        botMoveHistory.push({ hash: result.move.hash, isCheck: result.move.isCheck });
+                        if (botMoveHistory.length > 10) botMoveHistory.shift(); // Chỉ nhớ 10 bước gần nhất
+
                         db.ref("matches/" + currentRoomId).update({
                             board: result.move.newBoard,
-                            turn: "do", // Nhường lượt lại cho tao
+                            turn: "do",
                             lastMoveFrom: result.move.from,
                             lastMoveTo: result.move.to,
                             moveCount: firebase.database.ServerValue.increment(1),
