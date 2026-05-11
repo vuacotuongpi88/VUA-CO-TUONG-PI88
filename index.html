@@ -15719,14 +15719,31 @@ function toggleFriendBox(event) {
     if (event) event.stopPropagation();
 
     const box = document.getElementById("mobile-friend-box");
+    const wrap = document.getElementById("mobile-friend-wrap"); // Nắm đầu thằng cha
     if (!box) return;
 
     box.classList.toggle("show");
+    
+    // BÙA GIẢI CỨU LỒNG CHIM: Mở bảng thì bơm z-index lên trời để đè mọi thứ
+    if (wrap) {
+        if (box.classList.contains("show")) {
+            wrap.style.setProperty("z-index", "9999999", "important");
+        } else {
+            wrap.style.setProperty("z-index", "11000", "important");
+        }
+    }
 }
 
 function closeFriendBox() {
     const box = document.getElementById("mobile-friend-box");
+    const wrap = document.getElementById("mobile-friend-wrap"); // Nắm đầu thằng cha
+    
     if (box) box.classList.remove("show");
+    
+    // Đóng bảng thì rút nội công thằng cha về lại bình thường
+    if (wrap) {
+        wrap.style.setProperty("z-index", "11000", "important");
+    }
 }
 
 document.addEventListener("click", function (e) {
