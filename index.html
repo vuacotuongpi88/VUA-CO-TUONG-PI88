@@ -8303,6 +8303,28 @@ function spawnDragonAttack(kingElement) {
 
     }, 2800); 
 }
+function haiTuongDoiMat(mt) {
+    let tDo = null, tDen = null;
+    for(let r = 0; r < 10; r++) {
+        for(let c = 0; c < 9; c++) {
+            if(mt[r][c] && mt[r][c].type === '帥') tDo = {c, r};
+            if(mt[r][c] && mt[r][c].type === '將') tDen = {c, r};
+        }
+    }
+    if(!tDo || !tDen) return false;
+    
+    // Nếu đéo cùng cột thì kệ mẹ nó
+    if(tDo.c !== tDen.c) return false; 
+    
+    // Đếm số quân cản ở giữa
+    let count = 0;
+    let minR = Math.min(tDo.r, tDen.r);
+    let maxR = Math.max(tDo.r, tDen.r);
+    for(let r = minR + 1; r < maxR; r++) {
+        if(mt[r][tDo.c]) count++;
+    }
+    return count === 0; // Bằng 0 nghĩa là 2 Tướng đang nhìn mặt nhau
+}
 function laBiChieu(side, mt) {
 let tPos = null;
 for (let r = 0; r < 10; r++) {
@@ -8331,7 +8353,7 @@ if (mt[r1][c1] && mt[r1][c1].side === side) {
 for (let r2 = 0; r2 < 10; r2++) for (let c2 = 0; c2 < 9; c2++) {
 if (checkLuat(mt[r1][c1].type, side, c1, r1, c2, r2, mt)) {
 let temp = mt[r2][c2]; mt[r2][c2] = mt[r1][c1]; mt[r1][c1] = null;
-let safe = !laBiChieu(side, mt);
+let safe = !laBiChieu(side, mt) && !haiTuongDoiMat(mt);
 mt[r1][c1] = mt[r2][c2]; mt[r2][c2] = temp;
 if (safe) return false;
 }
@@ -8421,7 +8443,11 @@ if (isOwnTurnPiece) {
     alert("Không được để Tướng bị chiếu!");
     return;
 }
-
+if (haiTuongDoiMat(mt)) {
+        alert("Hai Tướng không được nhìn mặt nhau!");
+        return;
+    }
+    
     if (target) {
     target.remove();
     try {
