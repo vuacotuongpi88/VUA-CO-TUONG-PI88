@@ -132,52 +132,73 @@ function haiTuongDoiMat(mt) {
 
 function evaluateBoard(mt, botSide) {
     let score = 0;
+    
     for(let r=0; r<10; r++) {
         for(let c=0; c<9; c++) {
             const p = mt[r][c];
             if(p) {
                 let val = PIECE_VALUES[p.type] || 10;
+                let isMyPiece = (p.side === botSide);
+
+                // 1. LUẬT LÍNH / CHỐT (Sang sông là như mãnh hổ)
                 if ((p.type === '兵' || p.type === '卒') && !p.isUp) {
                     if (p.side === 'do' && r <= 4) {
-                        val += 50 + (4 - r) * 20; 
-                        if (c >= 3 && c <= 5) val += 40; 
+                        val += 50 + (4 - r) * 30; // Càng tiến sâu càng cộng nhiều
+                        if (c >= 3 && c <= 5) val += 50; // Lọt vào giữa cung tướng địch thì cực mạnh
                     }
                     if (p.side === 'den' && r >= 5) {
-                        val += 50 + (r - 5) * 20;
-                        if (c >= 3 && c <= 5) val += 40;
+                        val += 50 + (r - 5) * 30;
+                        if (c >= 3 && c <= 5) val += 50;
                     }
                 }
+
+                // 2. LUẬT MÃ (Thoáng là sống, kẹt là chết)
                 if (p.type === '傌' || p.type === '馬') {
-                    if (c === 0 || c === 8) val -= 30;
-                    if (c >= 2 && c <= 6 && r >= 2 && r <= 7) val += 60;
-                    if (p.side === 'do' && (r === 1 || r === 2) && (c === 2 || c === 6)) val += 150;
-                    if (p.side === 'den' && (r === 7 || r === 8) && (c === 2 || c === 6)) val += 150;
+                    if (c === 0 || c === 8) val -= 60; // Kẹt sát vách biên -> Trừ điểm nặng
+                    if (c >= 2 && c <= 6 && r >= 2 && r <= 7) val += 90; // Nhảy vào giữa bàn -> Cộng điểm
+                    // Thưởng Mã ngọa tào (mã kẹp cổ)
+                    if (p.side === 'do' && (r === 1 || r === 2) && (c === 2 || c === 6)) val += 200;
+                    if (p.side === 'den' && (r === 7 || r === 8) && (c === 2 || c === 6)) val += 200;
                 }
+
+                // 3. LUẬT PHÁO (Pháo đầu là vua)
                 if (p.type === '炮' || p.type === '砲') {
-                    if (c === 4) val += 80;
-                    if (c === 3 || c === 5) val += 50;
-                    if (p.side === 'do' && r === 9) val += 30;
+                    if (c === 4) val += 120; // Khống chế trung lộ (Pháo Đầu) -> RẤT MẠNH
+                    if (c === 3 || c === 5) val += 60; // Pháo giác cũng tốt
+                    if (p.side === 'do' && r === 9) val += 30; // Giữ gầm thủ cung
                     if (p.side === 'den' && r === 0) val += 30;
                 }
-                if (p.type === '俥' || p.type === '車') {
-                    if (c === 3 || c === 4 || c === 5) val += 60;
-                    if (p.side === 'do' && r <= 2 && c >= 3 && c <= 5) val += 100;
-                    if (p.side === 'den' && r >= 7 && c >= 3 && c <= 5) val += 100;
-                }
-                if (p.type === '帥' || p.type === '將') {
-                    if (p.side === 'do' && r !== 9) val -= 50; 
-                    if (p.side === 'den' && r !== 0) val -= 50; 
-                }
-                if (p.isUp) val += 150; 
 
-                if(p.side === botSide) score += val;
+                // 4. LUẬT XE (Đại ca ra trận, giam quân là NGU)
+                if (p.type === '俥' || p.type === '車') {
+                    if (c === 3 || c === 4 || c === 5) val += 150; // Cầm Xe càn quét trung lộ
+                    
+                    // BÙA ÉP XUẤT XE: Nếu Xe chưa đi khỏi nhà, phạt trừ đi 200 điểm!
+                    if (p.side === 'do' && r === 9 && (c === 0 || c === 8)) val -= 200;
+                    if (p.side === 'den' && r === 0 && (c === 0 || c === 8)) val -= 200;
+                    
+                    // Khen thưởng Xe lên tuần hà (hàng 3 hoặc hàng 6)
+                    if (p.side === 'do' && r === 6) val += 80;
+                    if (p.side === 'den' && r === 3) val += 80;
+                }
+
+                // 5. TƯỚNG (Phải núp cho kỹ)
+                if (p.type === '帥' || p.type === '將') {
+                    if (p.side === 'do' && r !== 9) val -= 100; // Tướng bò lên cao dễ chết
+                    if (p.side === 'den' && r !== 0) val -= 100; 
+                }
+
+                // 6. CỜ ÚP (Lật lên mở đường là lợi thế)
+                if (p.isUp) val += 180; 
+
+                // --- TỔNG KẾT GIA TÀI ---
+                if (isMyPiece) score += val;
                 else score -= val;
             }
         }
     }
     return score;
 }
-
 function generateAllMoves(mt, side, isCoUp) {
     let moves = [];
     for (let r = 0; r < 10; r++) {
