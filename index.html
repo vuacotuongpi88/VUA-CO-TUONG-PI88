@@ -3171,8 +3171,9 @@ color: transparent;
     font-size: 12px;
 }
     .hamburger-menu-container {
-        top: 16px;
+        top: 8px; /* Kéo lên bằng hàng với cụm nút bên phải */
         left: 10px;
+        margin-top: 0 !important;
     }
 }
 
@@ -5674,27 +5675,7 @@ margin-bottom: 14px;
     100% { transform: translateX(-100%); }
 }
 
-/* CHỈ đẩy UI xuống KHI banner xuất hiện (dựa vào class has-warning) */
-body.has-warning .hamburger-menu-container, 
-body.has-warning #arena-mission-btn, 
-body.has-warning #arena-skin-btn, 
-body.has-warning #arena-top-btn, 
-body.has-warning #arena-referral-btn, 
-body.has-warning #mobile-friend-wrap,
-body.has-warning #game-arena {
-    margin-top: 50px !important;
-}
 
-/* Thêm hiệu ứng trượt mượt mà lên xuống cho các nút */
-.hamburger-menu-container, 
-#arena-mission-btn, 
-#arena-skin-btn, 
-#arena-top-btn, 
-#arena-referral-btn, 
-#mobile-friend-wrap,
-#game-arena {
-    transition: margin-top 0.4s ease;
-}
 /* Đẩy các nút UI ở góc trên và CẢ BÀN CỜ xuống 45px để nhường chỗ cho thanh cảnh báo, chống đè nút */
 .hamburger-menu-container, 
 #arena-mission-btn, 
@@ -5716,8 +5697,9 @@ body.has-warning #game-arena {
     #arena-top-btn {
         width: 40px !important;
         height: 40px !important;
-        font-size: 18px !important; /* Thu nhỏ icon bên trong một chút */
-        top: 16px !important;       /* Đưa hết lên cùng 1 độ cao */
+        font-size: 18px !important; 
+        top: 8px !important; /* Hút sát rạt lên nóc */
+        margin-top: 0 !important; /* Xóa khoảng đệm */
     }
 
     /* 2. Đẩy cả đám xuống 50px để né thanh cảnh báo màu đỏ */
@@ -5726,9 +5708,8 @@ body.has-warning #game-arena {
     #arena-mission-btn,  
     #arena-skin-btn,     
     #arena-top-btn {
-        margin-top: 50px !important;
+        margin-top: 0 !important;
     }
-
     /* 3. Canh tọa độ từ phải qua trái (mỗi nút cách nhau 8px) */
     #mobile-friend-wrap { right: 10px !important; }
     #arena-referral-btn { right: 58px !important; }
