@@ -1,23 +1,20 @@
 // ==========================================
 // FILE: botWorker.js (CHẠY NGẦM TRÊN MÁY KHÁCH)
-// BẢN HYBRID CLOUD: BÚ ĐÁM MÂY TÀU KHỰA (CHESSDB) + FALLBACK MINIMAX
+// BẢN NÂNG CẤP VƯƠNG THIÊN NHẤT: BÙA TĨNH TÂM (QUIESCENCE) + ĐÁM MÂY
 // ==========================================
 
 let positionHistory = []; 
 
 const PIECE_VALUES = {
-    '帥': 20000, '將': 20000,
+    '帥': 1000000, '將': 1000000,
     '俥': 1000, '車': 1000,
-    '炮': 450,  '砲': 450,
-    '傌': 420,  '馬': 420, 
+    '炮': 500,  '砲': 500,  // Tăng giá trị Pháo/Mã lên để nó quý trọng mạng sống hơn
+    '傌': 450,  '馬': 450, 
     '相': 250,  '象': 250,
     '仕': 250,  '士': 250,
     '兵': 100,  '卒': 100
 };
 
-// ==========================================
-// KHO ĐỘNG CƠ CƠ BẢN CỦA JS (GIỮ NGUYÊN BẢN CŨ)
-// ==========================================
 function getBoardHash(mt) {
     let hash = "";
     for(let r=0; r<10; r++) {
@@ -132,7 +129,6 @@ function haiTuongDoiMat(mt) {
 
 function evaluateBoard(mt, botSide) {
     let score = 0;
-    
     for(let r=0; r<10; r++) {
         for(let c=0; c<9; c++) {
             const p = mt[r][c];
@@ -140,11 +136,11 @@ function evaluateBoard(mt, botSide) {
                 let val = PIECE_VALUES[p.type] || 10;
                 let isMyPiece = (p.side === botSide);
 
-                // 1. LUẬT LÍNH / CHỐT (Sang sông là như mãnh hổ)
+                // Lính qua sông giá trị x3
                 if ((p.type === '兵' || p.type === '卒') && !p.isUp) {
                     if (p.side === 'do' && r <= 4) {
-                        val += 50 + (4 - r) * 30; // Càng tiến sâu càng cộng nhiều
-                        if (c >= 3 && c <= 5) val += 50; // Lọt vào giữa cung tướng địch thì cực mạnh
+                        val += 50 + (4 - r) * 30; 
+                        if (c >= 3 && c <= 5) val += 50; 
                     }
                     if (p.side === 'den' && r >= 5) {
                         val += 50 + (r - 5) * 30;
@@ -152,46 +148,35 @@ function evaluateBoard(mt, botSide) {
                     }
                 }
 
-                // 2. LUẬT MÃ (Thoáng là sống, kẹt là chết)
+                // Khen Mã ngọa tào, chê Mã góc
                 if (p.type === '傌' || p.type === '馬') {
-                    if (c === 0 || c === 8) val -= 60; // Kẹt sát vách biên -> Trừ điểm nặng
-                    if (c >= 2 && c <= 6 && r >= 2 && r <= 7) val += 90; // Nhảy vào giữa bàn -> Cộng điểm
-                    // Thưởng Mã ngọa tào (mã kẹp cổ)
+                    if (c === 0 || c === 8) val -= 60; 
+                    if (c >= 2 && c <= 6 && r >= 2 && r <= 7) val += 90; 
                     if (p.side === 'do' && (r === 1 || r === 2) && (c === 2 || c === 6)) val += 200;
                     if (p.side === 'den' && (r === 7 || r === 8) && (c === 2 || c === 6)) val += 200;
                 }
 
-                // 3. LUẬT PHÁO (Pháo đầu là vua)
+                // Pháo đầu vô đối
                 if (p.type === '炮' || p.type === '砲') {
-                    if (c === 4) val += 120; // Khống chế trung lộ (Pháo Đầu) -> RẤT MẠNH
-                    if (c === 3 || c === 5) val += 60; // Pháo giác cũng tốt
-                    if (p.side === 'do' && r === 9) val += 30; // Giữ gầm thủ cung
-                    if (p.side === 'den' && r === 0) val += 30;
+                    if (c === 4) val += 120; 
+                    if (c === 3 || c === 5) val += 60; 
                 }
 
-                // 4. LUẬT XE (Đại ca ra trận, giam quân là NGU)
+                // Ép Xe xuất cung
                 if (p.type === '俥' || p.type === '車') {
-                    if (c === 3 || c === 4 || c === 5) val += 150; // Cầm Xe càn quét trung lộ
-                    
-                    // BÙA ÉP XUẤT XE: Nếu Xe chưa đi khỏi nhà, phạt trừ đi 200 điểm!
+                    if (c === 3 || c === 4 || c === 5) val += 150; 
                     if (p.side === 'do' && r === 9 && (c === 0 || c === 8)) val -= 200;
                     if (p.side === 'den' && r === 0 && (c === 0 || c === 8)) val -= 200;
-                    
-                    // Khen thưởng Xe lên tuần hà (hàng 3 hoặc hàng 6)
-                    if (p.side === 'do' && r === 6) val += 80;
-                    if (p.side === 'den' && r === 3) val += 80;
                 }
 
-                // 5. TƯỚNG (Phải núp cho kỹ)
+                // Tướng giữ gầm
                 if (p.type === '帥' || p.type === '將') {
-                    if (p.side === 'do' && r !== 9) val -= 100; // Tướng bò lên cao dễ chết
+                    if (p.side === 'do' && r !== 9) val -= 100; 
                     if (p.side === 'den' && r !== 0) val -= 100; 
                 }
 
-                // 6. CỜ ÚP (Lật lên mở đường là lợi thế)
                 if (p.isUp) val += 180; 
 
-                // --- TỔNG KẾT GIA TÀI ---
                 if (isMyPiece) score += val;
                 else score -= val;
             }
@@ -199,7 +184,9 @@ function evaluateBoard(mt, botSide) {
     }
     return score;
 }
-function generateAllMoves(mt, side, isCoUp) {
+
+// SINH NƯỚC ĐI VÀ SẮP XẾP MVV-LVA (LẤY NHỎ ĐÁNH LỚN)
+function generateAllMoves(mt, side, isCoUp, onlyCaptures = false) {
     let moves = [];
     for (let r = 0; r < 10; r++) {
         for (let c = 0; c < 9; c++) {
@@ -207,6 +194,9 @@ function generateAllMoves(mt, side, isCoUp) {
             if (p && p.side === side) {
                 for (let tr = 0; tr < 10; tr++) {
                     for (let tc = 0; tc < 9; tc++) {
+                        // Nếu đang ở Bùa Tĩnh Tâm (Quiescence), chỉ quan tâm nước ăn quân
+                        if (onlyCaptures && !mt[tr][tc]) continue; 
+
                         if (checkLuatWorker(p.type, side, c, r, tc, tr, mt, isCoUp)) {
                             let targetPiece = mt[tr][tc];
                             mt[tr][tc] = mt[r][c];
@@ -222,24 +212,68 @@ function generateAllMoves(mt, side, isCoUp) {
             }
         }
     }
+    
+    // Thuật toán MVV-LVA: Ưu tiên dùng Lính/Mã ăn Xe/Pháo trước. Tránh vác Xe đi đổi Lính.
     moves.sort((a,b) => {
-        let scoreA = a.captured ? PIECE_VALUES[a.captured.type] : 0;
-        let scoreB = b.captured ? PIECE_VALUES[b.captured.type] : 0;
-        if (scoreA === 0 && scoreB === 0) {
-            let advanceA = side === 'do' ? (a.from.r - a.to.r) : (a.to.r - a.from.r);
-            let advanceB = side === 'do' ? (b.from.r - b.to.r) : (b.to.r - b.from.r);
-            return advanceB - advanceA; 
-        }
+        let scoreA = a.captured ? (PIECE_VALUES[a.captured.type] * 10 - PIECE_VALUES[a.pieceObj.type]) : 0;
+        let scoreB = b.captured ? (PIECE_VALUES[b.captured.type] * 10 - PIECE_VALUES[b.pieceObj.type]) : 0;
         return scoreB - scoreA;
     });
     return moves;
 }
 
-function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp) {
-    if (depth === 0) return evaluateBoard(mt, botSide);
+// BÙA TĨNH TÂM (Trị bệnh đui mù, thí quân nhảm)
+function quiesce(mt, alpha, beta, isMaximizing, botSide, isCoUp, qDepth) {
+    let stand_pat = evaluateBoard(mt, botSide);
+    if (qDepth > 4) return stand_pat; // Khóa mỏm đéo cho đấm nhau quá 4 hiệp lủng RAM
+
+    if (isMaximizing) {
+        if (stand_pat >= beta) return beta;
+        if (alpha < stand_pat) alpha = stand_pat;
+    } else {
+        if (stand_pat <= alpha) return alpha;
+        if (beta > stand_pat) beta = stand_pat;
+    }
 
     let currentSide = isMaximizing ? botSide : (botSide === 'do' ? 'den' : 'do');
-    let moves = generateAllMoves(mt, currentSide, isCoUp);
+    // Chỉ tạo các nước ĐANG CẮN NHAU
+    let moves = generateAllMoves(mt, currentSide, isCoUp, true); 
+
+    if (isMaximizing) {
+        for (let move of moves) {
+            let target = mt[move.to.r][move.to.c];
+            mt[move.to.r][move.to.c] = mt[move.from.r][move.from.c];
+            mt[move.from.r][move.from.c] = null;
+            let score = quiesce(mt, alpha, beta, false, botSide, isCoUp, qDepth + 1);
+            mt[move.from.r][move.from.c] = mt[move.to.r][move.to.c];
+            mt[move.to.r][move.to.c] = target;
+
+            if (score >= beta) return beta;
+            if (score > alpha) alpha = score;
+        }
+        return alpha;
+    } else {
+        for (let move of moves) {
+            let target = mt[move.to.r][move.to.c];
+            mt[move.to.r][move.to.c] = mt[move.from.r][move.from.c];
+            mt[move.from.r][move.from.c] = null;
+            let score = quiesce(mt, alpha, beta, true, botSide, isCoUp, qDepth + 1);
+            mt[move.from.r][move.from.c] = mt[move.to.r][move.to.c];
+            mt[move.to.r][move.to.c] = target;
+
+            if (score <= alpha) return alpha;
+            if (score < beta) beta = score;
+        }
+        return beta;
+    }
+}
+
+function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp) {
+    // Hết Depth thì không chốt điểm ngay, mà mở Bùa Tĩnh Tâm coi còn cắn nhau không!
+    if (depth === 0) return quiesce(mt, alpha, beta, isMaximizing, botSide, isCoUp, 0);
+
+    let currentSide = isMaximizing ? botSide : (botSide === 'do' ? 'den' : 'do');
+    let moves = generateAllMoves(mt, currentSide, isCoUp, false);
 
     if (moves.length === 0) return isMaximizing ? -99999 + depth : 99999 - depth;
 
@@ -283,23 +317,17 @@ function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp) {
 // BỘ MÁY FALLBACK: CHẠY BẰNG RAM CỦA KHÁCH
 function calculateLocalMove(boardArray, botSide, isCoUp) {
     let mt = buildMatrix(boardArray);
-    let moves = generateAllMoves(mt, botSide, isCoUp);
+    let moves = generateAllMoves(mt, botSide, isCoUp, false);
     if (moves.length === 0) return null;
 
     let pieceCount = boardArray.length;
     let DEPTH = 3; 
 
-    if (pieceCount <= 5) {
-        DEPTH = 8; 
-    } else if (pieceCount <= 8) {
-        DEPTH = 6;
-    } else if (pieceCount <= 14) {
-        DEPTH = 5;
-    } else if (pieceCount <= 22) {
-        DEPTH = 4;
-    } else {
-        DEPTH = 3; 
-    }
+    // Tăng xíu trí thông minh cho mấy con dt xịn
+    if (pieceCount <= 5) DEPTH = 7; 
+    else if (pieceCount <= 8) DEPTH = 5;
+    else if (pieceCount <= 14) DEPTH = 4;
+    else DEPTH = 3; 
 
     let bestScore = -Infinity;
     let bestMoves = [];
@@ -379,7 +407,6 @@ async function fetchCloudMove(fen) {
     try {
         const res = await fetch(url);
         const text = await res.text();
-        // Server trả về: move:h2e2,score:123...
         if (text.startsWith("move:")) {
             const bestMoveUCI = text.split(",")[0].split(":")[1];
             return parseUCIMove(bestMoveUCI);
@@ -402,13 +429,11 @@ self.onmessage = async function(e) {
         let isCloudUsed = false;
         let mt = buildMatrix(data.boardState);
 
-        // 1. NẾU LÀ CỜ TƯỚNG THƯỜNG -> DÙNG PHÉP TRIỆU HỒI SIÊU MÁY TÍNH
         if (!data.isCoUp) {
             let fen = boardToFEN(mt, data.botSide);
             const cloudMove = await fetchCloudMove(fen);
             
             if (cloudMove) {
-                // Kiểm tra tính hợp lệ của nước Cloud (Phòng hờ API lỗi)
                 let p = mt[cloudMove.from.r][cloudMove.from.c];
                 if (p && p.side === data.botSide && checkLuatWorker(p.type, data.botSide, cloudMove.from.c, cloudMove.from.r, cloudMove.to.c, cloudMove.to.r, mt, false)) {
                     bestMoveObject = {
@@ -421,12 +446,10 @@ self.onmessage = async function(e) {
             }
         }
 
-        // 2. NẾU CỜ ÚP HOẶC CLOUD TỊT NGÒI -> ÉP XUNG CPU BẰNG JAVASCRIPT
         if (!bestMoveObject) {
             bestMoveObject = calculateLocalMove(data.boardState, data.botSide, data.isCoUp);
         }
 
-        // 3. ĐÓNG GÓI KẾT QUẢ GỬI VỀ CHO UI
         if (bestMoveObject) {
             let movedPiece = { ...bestMoveObject.pieceObj, c: bestMoveObject.to.c, r: bestMoveObject.to.r };
             if (data.isCoUp && movedPiece.isUp) {
@@ -455,7 +478,7 @@ self.onmessage = async function(e) {
             
             postMessage({ action: "done", move: finalMoveData });
         } else {
-            postMessage({ action: "done", move: null }); // Bí lù
+            postMessage({ action: "done", move: null }); 
         }
     }
 };
