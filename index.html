@@ -6779,6 +6779,34 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.database();
+// ==========================================
+// BÙA GHI ĐÈ: THAY THẾ HOÀN TOÀN ALERT TRÌNH DUYỆT BẰNG UI GAME
+// ==========================================
+window.alert = function(message) {
+    const modal = document.getElementById("custom-alert-modal");
+    const msgEl = document.getElementById("custom-alert-msg");
+    
+    if (modal && msgEl) {
+        // Replace \n bằng thẻ <br> để xuống dòng cho đẹp
+        msgEl.innerHTML = String(message).replace(/\n/g, '<br>'); 
+        modal.style.display = "flex";
+        
+        // Phát tiếng ting một cái cho nó giống thông báo
+        if (typeof playSnd === 'function') {
+            playSnd('tap'); 
+        }
+    } else {
+        // Fallback phòng hờ bị lỗi thì vẫn in ra console
+        console.log("ALERT FALLBACK:", message);
+    }
+};
+
+function closeCustomAlert() {
+    const modal = document.getElementById("custom-alert-modal");
+    if (modal) modal.style.display = "none";
+    if (typeof playSnd === 'function') playSnd('tap');
+}
+// ==========================================
 const provider = new firebase.auth.GoogleAuthProvider();
 
 let readyServerOffsetMs = 0;
