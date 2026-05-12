@@ -1,21 +1,23 @@
 // ==========================================
 // FILE: botWorker.js (CHẠY NGẦM TRÊN MÁY KHÁCH)
-// NÃO BỘ: MINIMAX DEPTH 3 + TRẬN PHÁP + CHỐNG CHIẾU NHÂY
+// BẢN HYBRID CLOUD: BÚ ĐÁM MÂY TÀU KHỰA (CHESSDB) + FALLBACK MINIMAX
 // ==========================================
 
-let positionHistory = []; // Bộ nhớ ngắn hạn của Bot
+let positionHistory = []; 
 
 const PIECE_VALUES = {
-    '帥': 10000, '將': 10000,
-    '俥': 900, '車': 900,
-    '炮': 450, '砲': 450,
-    '傌': 400, '馬': 400,
-    '相': 200, '象': 200,
-    '仕': 200, '士': 200,
-    '兵': 100, '卒': 100
+    '帥': 20000, '將': 20000,
+    '俥': 1000, '車': 1000,
+    '炮': 450,  '砲': 450,
+    '傌': 420,  '馬': 420, 
+    '相': 250,  '象': 250,
+    '仕': 250,  '士': 250,
+    '兵': 100,  '卒': 100
 };
 
-// Hàm tạo mã băm (Hash) để ghi nhớ bàn cờ
+// ==========================================
+// KHO ĐỘNG CƠ CƠ BẢN CỦA JS (GIỮ NGUYÊN BẢN CŨ)
+// ==========================================
 function getBoardHash(mt) {
     let hash = "";
     for(let r=0; r<10; r++) {
@@ -63,10 +65,8 @@ function checkLuatWorker(type, side, c, r, tc, tr, mt, isCoUp) {
     }
 
     switch (luatType) {
-        case '帥': case '將': 
-            return dx + dy === 1 && tc >= 3 && tc <= 5 && (side === 'do' ? tr >= 7 : tr <= 2);
-        case '仕': case '士':
-            return dx === 1 && dy === 1 && tc >= 3 && tc <= 5 && (side === 'do' ? tr >= 7 : tr <= 2);
+        case '帥': case '將': return dx + dy === 1 && tc >= 3 && tc <= 5 && (side === 'do' ? tr >= 7 : tr <= 2);
+        case '仕': case '士': return dx === 1 && dy === 1 && tc >= 3 && tc <= 5 && (side === 'do' ? tr >= 7 : tr <= 2);
         case '相': case '象':
             if (!isCoUp && (side === 'do' ? tr < 5 : tr > 4)) return false;
             if (dx !== 2 || dy !== 2) return false;
@@ -130,7 +130,6 @@ function haiTuongDoiMat(mt) {
     return count === 0;
 }
 
-// Chấm điểm thế trận
 function evaluateBoard(mt, botSide) {
     let score = 0;
     for(let r=0; r<10; r++) {
@@ -138,34 +137,38 @@ function evaluateBoard(mt, botSide) {
             const p = mt[r][c];
             if(p) {
                 let val = PIECE_VALUES[p.type] || 10;
-                
                 if ((p.type === '兵' || p.type === '卒') && !p.isUp) {
                     if (p.side === 'do' && r <= 4) {
-                        val += 30 + (4 - r) * 15;
-                        if (c >= 3 && c <= 5) val += 30;
+                        val += 50 + (4 - r) * 20; 
+                        if (c >= 3 && c <= 5) val += 40; 
                     }
                     if (p.side === 'den' && r >= 5) {
-                        val += 30 + (r - 5) * 15;
-                        if (c >= 3 && c <= 5) val += 30;
+                        val += 50 + (r - 5) * 20;
+                        if (c >= 3 && c <= 5) val += 40;
                     }
                 }
-                
                 if (p.type === '傌' || p.type === '馬') {
-                    if (c >= 2 && c <= 6 && r >= 2 && r <= 7) val += 35;
+                    if (c === 0 || c === 8) val -= 30;
+                    if (c >= 2 && c <= 6 && r >= 2 && r <= 7) val += 60;
+                    if (p.side === 'do' && (r === 1 || r === 2) && (c === 2 || c === 6)) val += 150;
+                    if (p.side === 'den' && (r === 7 || r === 8) && (c === 2 || c === 6)) val += 150;
                 }
-                
                 if (p.type === '炮' || p.type === '砲') {
-                    if (c === 4) val += 40;
-                    if (c === 3 || c === 5) val += 20;
+                    if (c === 4) val += 80;
+                    if (c === 3 || c === 5) val += 50;
+                    if (p.side === 'do' && r === 9) val += 30;
+                    if (p.side === 'den' && r === 0) val += 30;
                 }
-                
                 if (p.type === '俥' || p.type === '車') {
-                    if (c === 3 || c === 4 || c === 5) val += 30;
-                    if (p.side === 'do' && r <= 2) val += 45;
-                    if (p.side === 'den' && r >= 7) val += 45;
+                    if (c === 3 || c === 4 || c === 5) val += 60;
+                    if (p.side === 'do' && r <= 2 && c >= 3 && c <= 5) val += 100;
+                    if (p.side === 'den' && r >= 7 && c >= 3 && c <= 5) val += 100;
                 }
-
-                if (p.isUp) val += 60; 
+                if (p.type === '帥' || p.type === '將') {
+                    if (p.side === 'do' && r !== 9) val -= 50; 
+                    if (p.side === 'den' && r !== 0) val -= 50; 
+                }
+                if (p.isUp) val += 150; 
 
                 if(p.side === botSide) score += val;
                 else score -= val;
@@ -198,7 +201,6 @@ function generateAllMoves(mt, side, isCoUp) {
             }
         }
     }
-
     moves.sort((a,b) => {
         let scoreA = a.captured ? PIECE_VALUES[a.captured.type] : 0;
         let scoreB = b.captured ? PIECE_VALUES[b.captured.type] : 0;
@@ -209,21 +211,16 @@ function generateAllMoves(mt, side, isCoUp) {
         }
         return scoreB - scoreA;
     });
-
     return moves;
 }
 
 function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp) {
-    if (depth === 0) {
-        return evaluateBoard(mt, botSide);
-    }
+    if (depth === 0) return evaluateBoard(mt, botSide);
 
     let currentSide = isMaximizing ? botSide : (botSide === 'do' ? 'den' : 'do');
     let moves = generateAllMoves(mt, currentSide, isCoUp);
 
-    if (moves.length === 0) {
-        return isMaximizing ? -99999 + depth : 99999 - depth;
-    }
+    if (moves.length === 0) return isMaximizing ? -99999 + depth : 99999 - depth;
 
     if (isMaximizing) {
         let maxEval = -Infinity;
@@ -239,7 +236,7 @@ function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp) {
 
             maxEval = Math.max(maxEval, ev);
             alpha = Math.max(alpha, ev);
-            if (beta <= alpha) break;
+            if (beta <= alpha) break; 
         }
         return maxEval;
     } else {
@@ -262,31 +259,43 @@ function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp) {
     }
 }
 
-function calculateMove(boardArray, botSide, isCoUp) {
+// BỘ MÁY FALLBACK: CHẠY BẰNG RAM CỦA KHÁCH
+function calculateLocalMove(boardArray, botSide, isCoUp) {
     let mt = buildMatrix(boardArray);
     let moves = generateAllMoves(mt, botSide, isCoUp);
-    
     if (moves.length === 0) return null;
+
+    let pieceCount = boardArray.length;
+    let DEPTH = 3; 
+
+    if (pieceCount <= 5) {
+        DEPTH = 8; 
+    } else if (pieceCount <= 8) {
+        DEPTH = 6;
+    } else if (pieceCount <= 14) {
+        DEPTH = 5;
+    } else if (pieceCount <= 22) {
+        DEPTH = 4;
+    } else {
+        DEPTH = 3; 
+    }
 
     let bestScore = -Infinity;
     let bestMoves = [];
-    const DEPTH = 3; 
 
     for (let move of moves) {
         let target = mt[move.to.r][move.to.c];
         mt[move.to.r][move.to.c] = mt[move.from.r][move.from.c];
         mt[move.from.r][move.from.c] = null;
 
-        // BỘ LỌC CHỐNG CHIẾU NHÂY
         let currentHash = getBoardHash(mt);
         let oppSide = botSide === 'do' ? 'den' : 'do';
         let isChecking = laBiChieuWorker(oppSide, mt, isCoUp);
-        
         let repeatCount = positionHistory.filter(h => h.hash === currentHash && h.isCheck).length;
 
         let score = 0;
         if (isChecking && repeatCount >= 3) {
-            score = -100000; // Phạt chết cụ nó nếu lặp lại chiếu quá 3 lần
+            score = -100000; 
         } else {
             score = minimax(mt, DEPTH - 1, -Infinity, Infinity, false, botSide, isCoUp);
         }
@@ -301,43 +310,131 @@ function calculateMove(boardArray, botSide, isCoUp) {
             bestMoves.push(move);
         }
     }
+    return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+}
 
-    const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+// ==========================================
+// KHO ĐỘNG CƠ CƯỚP BIỂN: DỊCH FEN VÀ GỌI CHESSDB
+// ==========================================
+function boardToFEN(mt, botSide) {
+    const mapRed = {'俥':'R', '車':'R', '傌':'N', '馬':'N', '相':'B', '象':'B', '仕':'A', '士':'A', '帥':'K', '將':'K', '炮':'C', '砲':'C', '兵':'P', '卒':'P'};
+    const mapBlack = {'俥':'r', '車':'r', '傌':'n', '馬':'n', '相':'b', '象':'b', '仕':'a', '士':'a', '帥':'k', '將':'k', '炮':'c', '砲':'c', '兵':'p', '卒':'p'};
 
-    let movedPiece = { ...chosenMove.pieceObj, c: chosenMove.to.c, r: chosenMove.to.r };
-    if (isCoUp && movedPiece.isUp) {
-        movedPiece.isUp = false;
-        const names = {'車':'xe','馬':'ma','象':'tuong','士':'si','將':'tuong_soai','砲':'phao','卒':'tot'};
-        if (names[movedPiece.type]) movedPiece.src = `images/${botSide}_${names[movedPiece.type]}.png`;
+    let fen = "";
+    for (let r = 0; r < 10; r++) {
+        let emptyCount = 0;
+        for (let c = 0; c < 9; c++) {
+            const p = mt[r][c];
+            if (!p) {
+                emptyCount++;
+            } else {
+                if (emptyCount > 0) {
+                    fen += emptyCount;
+                    emptyCount = 0;
+                }
+                fen += p.side === 'do' ? mapRed[p.type] : mapBlack[p.type];
+            }
+        }
+        if (emptyCount > 0) fen += emptyCount;
+        if (r < 9) fen += "/";
     }
+    let turn = botSide === 'do' ? 'w' : 'b'; 
+    return fen + " " + turn + " - - 0 1";
+}
 
-    let newBoardArray = boardArray.filter(p => {
-        if (p.c === chosenMove.from.c && p.r === chosenMove.from.r) return false;
-        if (p.c === chosenMove.to.c && p.r === chosenMove.to.r) return false;
-        return true;
-    });
-    newBoardArray.push(movedPiece);
-
-    // Tạo giả lập bàn cờ sau khi đi để lấy hash gửi lên Client ghi nhớ
-    let tempMt = buildMatrix(newBoardArray);
-    let resultHash = getBoardHash(tempMt);
-    let oppSide = botSide === 'do' ? 'den' : 'do';
-    let resultIsCheck = laBiChieuWorker(oppSide, tempMt, isCoUp);
-
+function parseUCIMove(uci) {
+    const f1 = uci.charCodeAt(0) - 97; 
+    const r1 = 9 - parseInt(uci.charAt(1)); 
+    const f2 = uci.charCodeAt(2) - 97; 
+    const r2 = 9 - parseInt(uci.charAt(3)); 
     return {
-        from: chosenMove.from,
-        to: chosenMove.to,
-        newBoard: newBoardArray,
-        hash: resultHash,
-        isCheck: resultIsCheck
+        from: {c: f1, r: r1},
+        to: {c: f2, r: r2}
     };
 }
 
-self.onmessage = function(e) {
+async function fetchCloudMove(fen) {
+    const url = `https://www.chessdb.cn/cdb.php?action=queryall&board=${encodeURIComponent(fen)}`;
+    try {
+        const res = await fetch(url);
+        const text = await res.text();
+        // Server trả về: move:h2e2,score:123...
+        if (text.startsWith("move:")) {
+            const bestMoveUCI = text.split(",")[0].split(":")[1];
+            return parseUCIMove(bestMoveUCI);
+        }
+    } catch(e) {
+        return null;
+    }
+    return null;
+}
+
+// ==========================================
+// TỔNG TRẠM ĐIỀU PHỐI (CHẠY KHI ĐƯỢC GỌI)
+// ==========================================
+self.onmessage = async function(e) {
     const data = e.data;
     if (data.action === "think") {
         if (data.recentHistory) positionHistory = data.recentHistory;
-        const bestMove = calculateMove(data.boardState, data.botSide, data.isCoUp);
-        postMessage({ action: "done", move: bestMove });
+
+        let bestMoveObject = null;
+        let isCloudUsed = false;
+        let mt = buildMatrix(data.boardState);
+
+        // 1. NẾU LÀ CỜ TƯỚNG THƯỜNG -> DÙNG PHÉP TRIỆU HỒI SIÊU MÁY TÍNH
+        if (!data.isCoUp) {
+            let fen = boardToFEN(mt, data.botSide);
+            const cloudMove = await fetchCloudMove(fen);
+            
+            if (cloudMove) {
+                // Kiểm tra tính hợp lệ của nước Cloud (Phòng hờ API lỗi)
+                let p = mt[cloudMove.from.r][cloudMove.from.c];
+                if (p && p.side === data.botSide && checkLuatWorker(p.type, data.botSide, cloudMove.from.c, cloudMove.from.r, cloudMove.to.c, cloudMove.to.r, mt, false)) {
+                    bestMoveObject = {
+                        from: cloudMove.from,
+                        to: cloudMove.to,
+                        pieceObj: p
+                    };
+                    isCloudUsed = true;
+                }
+            }
+        }
+
+        // 2. NẾU CỜ ÚP HOẶC CLOUD TỊT NGÒI -> ÉP XUNG CPU BẰNG JAVASCRIPT
+        if (!bestMoveObject) {
+            bestMoveObject = calculateLocalMove(data.boardState, data.botSide, data.isCoUp);
+        }
+
+        // 3. ĐÓNG GÓI KẾT QUẢ GỬI VỀ CHO UI
+        if (bestMoveObject) {
+            let movedPiece = { ...bestMoveObject.pieceObj, c: bestMoveObject.to.c, r: bestMoveObject.to.r };
+            if (data.isCoUp && movedPiece.isUp) {
+                movedPiece.isUp = false;
+                const names = {'車':'xe','馬':'ma','象':'tuong','士':'si','將':'tuong_soai','砲':'phao','卒':'tot'};
+                if (names[movedPiece.type]) movedPiece.src = `images/${data.botSide}_${names[movedPiece.type]}.png`;
+            }
+
+            let newBoardArray = data.boardState.filter(p => {
+                if (p.c === bestMoveObject.from.c && p.r === bestMoveObject.from.r) return false;
+                if (p.c === bestMoveObject.to.c && p.r === bestMoveObject.to.r) return false;
+                return true;
+            });
+            newBoardArray.push(movedPiece);
+
+            let tempMt = buildMatrix(newBoardArray);
+            let oppSide = data.botSide === 'do' ? 'den' : 'do';
+            
+            const finalMoveData = {
+                from: bestMoveObject.from,
+                to: bestMoveObject.to,
+                newBoard: newBoardArray,
+                hash: getBoardHash(tempMt),
+                isCheck: laBiChieuWorker(oppSide, tempMt, data.isCoUp)
+            };
+            
+            postMessage({ action: "done", move: finalMoveData });
+        } else {
+            postMessage({ action: "done", move: null }); // Bí lù
+        }
     }
 };
