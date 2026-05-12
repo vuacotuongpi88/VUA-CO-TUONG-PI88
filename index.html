@@ -7416,26 +7416,32 @@ function closeBotInvite() {
     document.getElementById("bot-invite-modal").style.display = "none";
 }
 
+window.isCallingBot = false;
 async function acceptBotMatch() {
+    // BÙA CHỐNG NHẤP ĐÚP: Đang gọi Bot rồi thì cấm bấm tiếp!
+    if (window.isCallingBot) return;
+    window.isCallingBot = true;
+
     closeBotInvite();
-    if (!currentRoomId) return;
+    if (!currentRoomId) {
+        window.isCallingBot = false;
+        return;
+    }
 
     try {
-        // Đã sửa: Bỏ chữ ?action=join trên link đi, nhét thẳng vào trong body
         const res = await fetch("/api/bot", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                    action: "join", 
-                    roomId: currentRoomId,
-                    hostWallet: typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "",
-                    botData: window.currentInvitingBot // <-- THÊM ĐÚNG DÒNG NÀY VÀO LÀ XONG
-                })
+                action: "join", 
+                roomId: currentRoomId,
+                hostWallet: typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "",
+                botData: window.currentInvitingBot
+            })
         });
         
         const data = await res.json();
         if (!data.ok) {
-            // Nếu Vercel chửi (ví dụ: cược quá 500 PMC, hoặc lùa bot quá 3 lần) thì nó báo ở đây
             alert(data.error || "Lão tẩu đang bận đánh bàn khác rồi!");
         } else {
             console.log("Bot đã nhập tiệc thành công!");
@@ -7443,6 +7449,9 @@ async function acceptBotMatch() {
     } catch(e) {
         console.error("Gọi bot lỗi:", e);
         alert("Không kết nối được với Server Bot!");
+    } finally {
+        // Mở khóa để ván sau còn gọi được
+        window.isCallingBot = false; 
     }
 }
 // ==========================================
@@ -12256,16 +12265,23 @@ const hostStillInThisRoom =
 }
 async function maybeSettleStakeRoom(room, roomId) {
     const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
-    if (!roomId || !stake || !room?.winner) return;
+    if (!roomId || !stake || !room?.winner || room.winner === "hoa") return;
 
-    if (room.winner === "hoa") return;
+    // --- BỌC THÉP MÁY KHÁCH: MỖI VÁN ĐẤU CHỈ ĐƯỢC CHIA TIỀN ĐÚNG 1 LẦN ---
+    window.__settledRooms = window.__settledRooms || {};
+    // Dùng activeRoundId làm chìa khóa để phân biệt các ván đấu khác nhau trong cùng 1 phòng
+    const roundKey = room.activeRoundId || (roomId + "_" + room.startedAt); 
+    if (window.__settledRooms[roundKey]) {
+        console.log("Ván này đã chia tiền rồi, cấm chia lại!");
+        return false; 
+    }
+    window.__settledRooms[roundKey] = true; 
+    // ---------------------------------------------------------------------
 
     const winnerSide = String(room.winner || "").trim();
     const winnerPlayer = room.players?.[winnerSide] || {};
-    // Kiểm tra xem thằng thắng có phải là Bot không
     const isWinnerBot = winnerPlayer.uid === "bot_master_100" || winnerPlayer.isBot;
 
-    // BÙA TRỌNG TÀI: Nếu tao đéo phải thằng thắng, mà thằng thắng CŨNG ĐÉO PHẢI LÀ BOT thì tao đéo rảnh chia tiền hộ!
     if (winnerSide !== mySide && !isWinnerBot) return false; 
 
     const winnerPaidRef = db.ref(`matches/${roomId}/settlement/winnerPaid`);
@@ -12276,26 +12292,23 @@ async function maybeSettleStakeRoom(room, roomId) {
 
     if (!winLock.committed) return false;
 
+    // TÍNH TOÁN CẮT PHẾ 20% TRÊN TIỀN LỜI (Đúng luật giang hồ)
     const totalPot = stake * 2;
-    // FIX LUẬT CẮT PHẾ: Chỉ thu phí 20% trên TIỀN LỜI (Tiền cược của đối thủ), đéo thu phí phần Vốn của người thắng
     const feePMC = Math.max(0, Math.floor(stake * 0.2)); 
     const winnerReceivePMC = totalPot - feePMC;
     const adminWalletKey = "pi_admin_master";
 
     try {
-        // 1. CHIA PHÍ CHO HỆ THỐNG
+        // 1. Nộp phế cho Admin
         if (feePMC > 0) {
             await adjustPmcWalletByKey(adminWalletKey, feePMC, { name: "Ví phí hệ thống" }).catch(e => console.warn(e));
         }
 
-        // 2. CHUYỂN TIỀN CHO THẰNG THẮNG
+        // 2. Chuyển tiền thưởng cho người thắng
         let paid = null;
         if (isWinnerBot) {
-            // NẾU LÀ BOT THẮNG: Chuyển tiền thưởng chạy thẳng về két sắt Admin
             paid = await adjustPmcWalletByKey(adminWalletKey, winnerReceivePMC, { name: "Quỹ hệ thống (Bot Thắng)" });
-            console.log("Bot thắng! Tiền thưởng đã chuyển về ví Admin.");
         } else {
-            // NẾU LÀ NGƯỜI THẬT THẮNG: Chuyển tiền về ví người chơi
             const localWalletKey = makeWalletDbKey();
             paid = await adjustPmcWalletByKey(localWalletKey, winnerReceivePMC);
             
@@ -12307,7 +12320,7 @@ async function maybeSettleStakeRoom(room, roomId) {
             }
         }
 
-        // 3. ĐÓNG DẤU ĐÃ THANH TOÁN
+        // 3. Đóng dấu xác nhận hoàn tất
         if (paid != null) {
             await db.ref(`matches/${roomId}/settlement`).update({
                 paid: true,
@@ -12324,6 +12337,8 @@ async function maybeSettleStakeRoom(room, roomId) {
 
     } catch (err) {
         console.error("LỖI CHIA TIỀN:", err);
+        // Nếu lỡ bị lỗi mạng lúc đang chia, mở khóa ra để khách F5 còn nhận được tiền
+        delete window.__settledRooms[roundKey]; 
     }
 }
 // 🔥 FIX LỖI ẢO TƯỞNG THIẾU PMC: ÉP LẤY ĐÚNG VÍ CỦA THẰNG ĐANG BẤM ĐIỆN THOẠI!
