@@ -5790,6 +5790,76 @@ margin-bottom: 14px;
         bottom: -26px !important;
     }
 }
+/* ==========================================
+   BẢNG THÔNG BÁO (ALERT) CUSTOM GAME THEME
+   ========================================== */
+#custom-alert-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 99999999; /* Đè lên mọi thứ trên đời */
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(5px);
+}
+
+.custom-alert-box {
+    background: linear-gradient(180deg, #1f1f1f, #0a0a0a);
+    border: 2px solid #55efc4;
+    border-radius: 20px;
+    width: min(85vw, 320px);
+    padding: 25px 20px;
+    text-align: center;
+    box-shadow: 0 0 30px rgba(85, 239, 196, 0.3), inset 0 0 15px rgba(85, 239, 196, 0.1);
+    animation: alertPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.custom-alert-icon {
+    font-size: 40px;
+    margin-bottom: 10px;
+    filter: drop-shadow(0 0 10px rgba(244, 197, 66, 0.8));
+}
+
+.custom-alert-title {
+    color: #f4c542;
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+}
+
+.custom-alert-msg {
+    color: #dfe6e9;
+    font-size: 14px;
+    line-height: 1.6;
+    margin-bottom: 20px;
+    word-break: break-word;
+}
+
+.custom-alert-btn {
+    background: linear-gradient(180deg, #00d2a0, #00b894);
+    color: #fff;
+    border: none;
+    padding: 12px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 900;
+    cursor: pointer;
+    width: 100%;
+    box-shadow: 0 4px 15px rgba(0, 195, 138, 0.4);
+    transition: 0.2s;
+}
+
+.custom-alert-btn:active {
+    transform: scale(0.95);
+}
+
+@keyframes alertPop {
+    0% { transform: scale(0.5); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -19823,6 +19893,15 @@ openReferralModal = async function() {
     await oldOpenReferralModal();
     loadPendingReferrals();
 };
+<!-- BẢNG THÔNG BÁO CUSTOM THAY THẾ ALERT MẶC ĐỊNH -->
+<div id="custom-alert-modal">
+    <div class="custom-alert-box">
+        <div class="custom-alert-icon">⚠️</div>
+        <div class="custom-alert-title">THÔNG BÁO</div>
+        <div id="custom-alert-msg" class="custom-alert-msg">Nội dung thông báo ở đây</div>
+        <button class="custom-alert-btn" onclick="closeCustomAlert()">ĐÃ HIỂU</button>
+    </div>
+</div>
 </script>
 </body>
 </html>
