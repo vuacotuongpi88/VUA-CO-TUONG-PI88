@@ -10288,6 +10288,28 @@ if (!canRenderLiveBoard) {
         }
 
         startTimer();
+        // --- BÙA TỰ ĐỘNG PHÁT HIỆN CHIẾU BÍ & HẾT NƯỚC ĐI (RADAR TỬ THẦN) ---
+             // Cố tình delay 400ms để mầy kịp nhìn thấy cái tia sét đỏ chớp chớp rồi mới báo thua
+             setTimeout(() => {
+                 if (!isGameOver && currentRoomStatus === "playing" && luotDi === mySide && !isSpectatorMode) {
+                     // Kiểm tra xem phe mình (Đỏ) còn bất kỳ nước đi nào hợp lệ để sống sót không
+                     if (checkMate(mySide)) {
+                         const isCheck = laBiChieu(mySide, taoMaTran());
+                         console.log(isCheck ? "Bị chiếu bí!" : "Bị hết nước đi (Bí lù)!");
+                         
+                         const winnerSide = mySide === "do" ? "den" : "do";
+                         
+                         // Báo lên Firebase là phe mình đã chết
+                         db.ref("matches/" + currentRoomId).update({
+                             winner: winnerSide,
+                             winReason: isCheck ? "checkmate" : "stalemate", // checkmate: Chiếu bí | stalemate: Hết nước đi
+                             finishedAt: firebase.database.ServerValue.TIMESTAMP,
+                             updatedAt: firebase.database.ServerValue.TIMESTAMP
+                         });
+                     }
+                 }
+             }, 400);
+             // -------------------------------------------------------------------
         // --- BÙA ĐÁNH THỨC BOT KHI NGƯỜI CHƠI F5 HOẶC RỚT MẠNG VÀO LẠI ---
          if (room.status === "playing" && room.turn === "den" && !room.winner) {
              const oppP = room.players?.den;
