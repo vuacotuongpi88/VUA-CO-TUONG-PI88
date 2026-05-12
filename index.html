@@ -8546,9 +8546,13 @@ refreshTimerRings();
     if (currentRoomId) {
         syncRoomFromBoard();
         
-        // --- ÉP CPU MÁY KHÁCH TÍNH TOÁN CHO BOT ---
-        const topNameEl = document.getElementById("player-den-name");
-        if (topNameEl && topNameEl.innerText === "Vô Danh Lão Tẩu") {
+        // --- ÉP CPU MÁY KHÁCH TÍNH TOÁN CHO BOT (DỰA VÀO UID, KHÔNG DỰA VÀO TÊN) ---
+        const currentRoom = window.__lastBoundRoom || {};
+        const oppPlayer = currentRoom.players?.den;
+        const isBotTurn = oppPlayer && (oppPlayer.uid === "bot_master_100" || oppPlayer.isBot);
+        
+        if (isBotTurn && !window.__isBotThinking) {
+            window.__isBotThinking = true;
             if (!window.botWorker) {
                 window.botWorker = new Worker("botWorker.js");
             }
@@ -8566,6 +8570,7 @@ refreshTimerRings();
                     const result = e.data;
                     
                     if (result.action === "done") {
+                        window.__isBotThinking = false;
                         if (!result.move) {
                             db.ref("matches/" + currentRoomId).update({
                                 winner: "do",
@@ -10283,6 +10288,54 @@ if (!canRenderLiveBoard) {
         }
 
         startTimer();
+        // --- BÙA ĐÁNH THỨC BOT KHI NGƯỜI CHƠI F5 HOẶC RỚT MẠNG VÀO LẠI ---
+         if (room.status === "playing" && room.turn === "den" && !room.winner) {
+             const oppP = room.players?.den;
+             if (oppP && (oppP.uid === "bot_master_100" || oppP.isBot)) {
+                 // Chỉ máy chủ phòng (Phe Đỏ) mới được quyền bắt CPU chạy ngầm cho Bot
+                 if (mySide === "do" && !window.__isBotThinking) {
+                     window.__isBotThinking = true;
+                     if (!window.botWorker) window.botWorker = new Worker("botWorker.js");
+                     
+                     setTimeout(() => {
+                         window.botWorker.postMessage({
+                             action: "think",
+                             boardState: room.board,
+                             botSide: "den",
+                             isCoUp: !!room.isCoUp,
+                             recentHistory: typeof botMoveHistory !== 'undefined' ? botMoveHistory : []
+                         });
+
+                         window.botWorker.onmessage = function(e) {
+                             window.__isBotThinking = false;
+                             const result = e.data;
+                             if (result.action === "done") {
+                                 if (!result.move) {
+                                     db.ref("matches/" + currentRoomId).update({
+                                         winner: "do", winReason: "checkmate",
+                                         finishedAt: firebase.database.ServerValue.TIMESTAMP,
+                                         updatedAt: firebase.database.ServerValue.TIMESTAMP
+                                     });
+                                     return;
+                                 }
+                                 if(typeof botMoveHistory !== 'undefined') {
+                                     botMoveHistory.push({ hash: result.move.hash, isCheck: result.move.isCheck });
+                                     if (botMoveHistory.length > 10) botMoveHistory.shift();
+                                 }
+                                 db.ref("matches/" + currentRoomId).update({
+                                     board: result.move.newBoard, turn: "do",
+                                     timeDo: timeDo, timeDen: timeDen, turnStartedAt: firebase.database.ServerValue.TIMESTAMP,
+                                     lastMoveFrom: result.move.from, lastMoveTo: result.move.to,
+                                     moveCount: firebase.database.ServerValue.increment(1),
+                                     updatedAt: firebase.database.ServerValue.TIMESTAMP
+                                 });
+                             }
+                         };
+                     }, 1000); // Chờ 1 giây cho giao diện load mượt rồi mới bắt CPU gánh
+                 }
+             }
+         }
+         // -------------------------------------------------------------
     }
 }
 
