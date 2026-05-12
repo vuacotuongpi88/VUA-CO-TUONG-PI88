@@ -211,6 +211,23 @@ transform: translate(-50%, -50%) scale(1.15);
     border: 2px solid rgba(255, 255, 255, 0.95);
     box-shadow: 0 0 7px rgba(255, 255, 255, 0.5);
 }
+/* VÒNG SÁNG ĐỎ XOAY ĐÁNH DẤU QUÂN VỪA ĐI */
+.last-move-ring {
+    position: absolute;
+    width: 10.5%; /* To hơn quân cờ (9%) một chút để làm viền */
+    height: 10.5%;
+    border-radius: 50%;
+    border: 3px dashed #ff0000; /* Viền đứt nét màu đỏ */
+    box-shadow: 0 0 12px rgba(255, 0, 0, 0.8), inset 0 0 8px rgba(255, 0, 0, 0.6);
+    z-index: 19; /* Nằm ngay dưới quân cờ (z-index cờ là 20) */
+    pointer-events: none;
+    animation: radar-xoay 3s linear infinite;
+}
+
+@keyframes radar-xoay {
+    from { transform: translate(-50%, -50%) rotate(0deg); }
+    to { transform: translate(-50%, -50%) rotate(360deg); }
+}
 /* Hiệu ứng hào quang điện xẹt đỏ rực */
 .is-chieu {
 animation: dien-giat 0.2s infinite alternate !important;
@@ -8099,7 +8116,8 @@ function clearMoveHints() {
 }
 
 function clearLastMoveMarks() {
-    document.querySelectorAll(".last-move-from, .last-move-to").forEach(el => el.remove());
+    // Thêm .last-move-ring vào danh sách cần dọn dẹp mỗi lần đi nước mới
+    document.querySelectorAll(".last-move-from, .last-move-to, .last-move-ring").forEach(el => el.remove());
 }
 
 function drawLastMoveMarks() {
@@ -8118,11 +8136,19 @@ function drawLastMoveMarks() {
     if (lastMoveTo) {
         const toView = mapBoardToView(lastMoveTo.c, lastMoveTo.r);
 
+        // Chấm tròn nhỏ ở giữa (giữ nguyên)
         const toMark = document.createElement("div");
         toMark.className = "last-move-to";
         toMark.style.left = columns[toView.c] + "%";
         toMark.style.top = rows[toView.r] + "%";
         board.appendChild(toMark);
+
+        // THÊM MỚI: Vòng radar đỏ xoay vòng vòng báo hiệu quân vừa đáp
+        const ring = document.createElement("div");
+        ring.className = "last-move-ring";
+        ring.style.left = columns[toView.c] + "%";
+        ring.style.top = rows[toView.r] + "%";
+        board.appendChild(ring);
     }
 }
 
@@ -9261,6 +9287,11 @@ async function leaveRealtimeMatch() {
 
         // BÙA DIỆT BOT: NẾU CHỈ CÓ 1 MÌNH HOẶC ĐỐI THỦ LÀ BOT -> HỦY LUÔN PHÒNG, ĐÉO NHƯỜNG!
          if (!otherPlayer || otherPlayer.uid === "bot_master_100" || otherPlayer.isBot) {
+             // HOÀN TIỀN VỀ QUỸ ADMIN TRƯỚC KHI ĐÁNH SẬP PHÒNG CHỐNG THẤT THOÁT
+             if (otherPlayer && (otherPlayer.uid === "bot_master_100" || otherPlayer.isBot)) {
+                 const botSide = side === "do" ? "den" : "do";
+                 await maybeRefundWaitingStakePMC(roomId, room, botSide).catch(()=>{});
+             }
              await db.ref("waitingRooms/" + cleanBucket + "/" + roomId).remove().catch(()=>{});
              await db.ref("matches/" + roomId).remove().catch(()=>{});
              return;
@@ -12135,45 +12166,56 @@ async function maybeSettleStakeRoom(room, roomId) {
     const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
     if (!roomId || !stake || !room?.winner) return;
 
-    const localWalletKey = makeWalletDbKey();
-    if (room.winner === "hoa") {
-        // (Phần xử lý hòa cờ giữ nguyên...)
-        return;
-    }
+    if (room.winner === "hoa") return;
 
     const winnerSide = String(room.winner || "").trim();
-    if (winnerSide !== mySide) return false; // Chỉ máy của thằng thắng mới được xử lý chia tiền
+    const winnerPlayer = room.players?.[winnerSide] || {};
+    // Kiểm tra xem thằng thắng có phải là Bot không
+    const isWinnerBot = winnerPlayer.uid === "bot_master_100" || winnerPlayer.isBot;
+
+    // BÙA TRỌNG TÀI: Nếu tao đéo phải thằng thắng, mà thằng thắng CŨNG ĐÉO PHẢI LÀ BOT thì tao đéo rảnh chia tiền hộ!
+    if (winnerSide !== mySide && !isWinnerBot) return false; 
 
     const winnerPaidRef = db.ref(`matches/${roomId}/settlement/winnerPaid`);
     const winLock = await runRefTransaction(winnerPaidRef, current => {
         if (current && current.done) return;
-        return { done: true, at: Date.now(), uid: getCurrentPlayerProfile().uid || "" };
+        return { done: true, at: Date.now(), uid: getCurrentPlayerProfile().uid || "bot_helper" };
     });
 
     if (!winLock.committed) return false;
 
     const totalPot = stake * 2;
-    const feePMC = Math.max(0, Math.floor(totalPot * 0.2)); // Mày chém phí 20%
+    const feePMC = Math.max(0, Math.floor(totalPot * 0.2)); // Phí hệ thống
     const winnerReceivePMC = totalPot - feePMC;
     const adminWalletKey = "pi_admin_master";
 
     try {
-        // 🔥 NƯỚC ĐI CHIẾN THUẬT: CỘNG PHÍ VÀO VÍ ADMIN TRƯỚC!
+        // 1. CHIA PHÍ CHO HỆ THỐNG
         if (feePMC > 0) {
-            await adjustPmcWalletByKey(adminWalletKey, feePMC, { name: "Ví phí hệ thống" })
-                .catch(e => console.warn("Lỗi cộng phí Admin:", e));
+            await adjustPmcWalletByKey(adminWalletKey, feePMC, { name: "Ví phí hệ thống" }).catch(e => console.warn(e));
         }
 
-        // RỒI MỚI CỘNG TIỀN THƯỞNG CHO THẰNG THẮNG
-        const paid = await adjustPmcWalletByKey(localWalletKey, winnerReceivePMC);
-        
-        if (paid != null) {
-            currentPmcBalance = paid;
-            localStorage.setItem(getPmcCacheKey(), String(paid));
-            updatePmcUI(paid);
-            refreshMyMatchBalanceBoxesNow(getPiBalance(), paid);
+        // 2. CHUYỂN TIỀN CHO THẰNG THẮNG
+        let paid = null;
+        if (isWinnerBot) {
+            // NẾU LÀ BOT THẮNG: Chuyển tiền thưởng chạy thẳng về két sắt Admin
+            paid = await adjustPmcWalletByKey(adminWalletKey, winnerReceivePMC, { name: "Quỹ hệ thống (Bot Thắng)" });
+            console.log("Bot thắng! Tiền thưởng đã chuyển về ví Admin.");
+        } else {
+            // NẾU LÀ NGƯỜI THẬT THẮNG: Chuyển tiền về ví người chơi
+            const localWalletKey = makeWalletDbKey();
+            paid = await adjustPmcWalletByKey(localWalletKey, winnerReceivePMC);
+            
+            if (paid != null) {
+                currentPmcBalance = paid;
+                localStorage.setItem(getPmcCacheKey(), String(paid));
+                updatePmcUI(paid);
+                refreshMyMatchBalanceBoxesNow(getPiBalance(), paid);
+            }
+        }
 
-            // Báo cáo hoàn tất lên Firebase
+        // 3. ĐÓNG DẤU ĐÃ THANH TOÁN
+        if (paid != null) {
             await db.ref(`matches/${roomId}/settlement`).update({
                 paid: true,
                 paidAt: Date.now(),
@@ -12183,7 +12225,9 @@ async function maybeSettleStakeRoom(room, roomId) {
         }
 
         await loadWalletBalance().catch(() => {});
-        await syncMyMatchBalanceToRoomNow().catch(() => {});
+        if (!isWinnerBot) {
+            await syncMyMatchBalanceToRoomNow().catch(() => {});
+        }
 
     } catch (err) {
         console.error("LỖI CHIA TIỀN:", err);

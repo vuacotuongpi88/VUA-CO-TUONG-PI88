@@ -1,16 +1,15 @@
 // ==========================================
 // FILE: botWorker.js (CHẠY NGẦM TRÊN MÁY KHÁCH)
-// BẢN CAO THỦ: BIẾT TRẬN PHÁP (NGỌA TÀO, KẸP NÁCH, PHÁO ĐẦU) + ENDGAME
+// NÃO BỘ: MINIMAX DYNAMIC DEPTH (10) + TRẬN PHÁP + CHỐNG CHIẾU NHÂY
 // ==========================================
 
 let positionHistory = []; 
 
-// Chỉnh lại giá trị quân cờ chuẩn chỉ hơn
 const PIECE_VALUES = {
     '帥': 20000, '將': 20000,
     '俥': 1000, '車': 1000,
     '炮': 450,  '砲': 450,
-    '傌': 420,  '馬': 420, // Mã đầu game hơi yếu, nhưng tàn cuộc rất mạnh
+    '傌': 420,  '馬': 420, 
     '相': 250,  '象': 250,
     '仕': 250,  '士': 250,
     '兵': 100,  '卒': 100
@@ -130,7 +129,6 @@ function haiTuongDoiMat(mt) {
     return count === 0;
 }
 
-// --- BỘ NÃO ĐỊNH GIÁ TRẬN PHÁP CỰC ĐỘC ---
 function evaluateBoard(mt, botSide) {
     let score = 0;
     for(let r=0; r<10; r++) {
@@ -139,11 +137,10 @@ function evaluateBoard(mt, botSide) {
             if(p) {
                 let val = PIECE_VALUES[p.type] || 10;
                 
-                // 1. TỐT QUA SÔNG LÀ MÃNH HỔ
                 if ((p.type === '兵' || p.type === '卒') && !p.isUp) {
                     if (p.side === 'do' && r <= 4) {
-                        val += 50 + (4 - r) * 20; // Càng chui sâu càng nhiều điểm
-                        if (c >= 3 && c <= 5) val += 40; // Áp sát Tướng
+                        val += 50 + (4 - r) * 20; 
+                        if (c >= 3 && c <= 5) val += 40; 
                     }
                     if (p.side === 'den' && r >= 5) {
                         val += 50 + (r - 5) * 20;
@@ -151,50 +148,33 @@ function evaluateBoard(mt, botSide) {
                     }
                 }
                 
-                // 2. MÃ NGỌA TÀO & MÃ TRUNG TÂM
                 if (p.type === '傌' || p.type === '馬') {
-                    // Cấm Mã nằm góc xó xỉnh (Trừ điểm)
                     if (c === 0 || c === 8) val -= 30;
-                    
-                    // Mã phi lên giữa bàn cờ (Trục 2->6)
                     if (c >= 2 && c <= 6 && r >= 2 && r <= 7) val += 60;
-
-                    // MÃ NGỌA TÀO (Vị trí sát thủ hiểm độc nhất)
                     if (p.side === 'do' && (r === 1 || r === 2) && (c === 2 || c === 6)) val += 150;
                     if (p.side === 'den' && (r === 7 || r === 8) && (c === 2 || c === 6)) val += 150;
                 }
                 
-                // 3. PHÁO ĐẦU & PHÁO GIĂNG
                 if (p.type === '炮' || p.type === '砲') {
-                    // Pháo đầu (Đường số 4) -> Trấn áp Tướng địch
                     if (c === 4) val += 80;
-                    // Pháo khống chế 2 trục Sĩ (Đường 3 và 5)
                     if (c === 3 || c === 5) val += 50;
-                    // Pháo lùi về hàng đáy thủ
                     if (p.side === 'do' && r === 9) val += 30;
                     if (p.side === 'den' && r === 0) val += 30;
                 }
                 
-                // 4. XE KẸP NÁCH TƯỚNG
                 if (p.type === '俥' || p.type === '車') {
-                    // Xe chiếm đường thông (Đường 3,4,5)
                     if (c === 3 || c === 4 || c === 5) val += 60;
-                    
-                    // Xe cắm xuống tận nách Tướng địch
                     if (p.side === 'do' && r <= 2 && c >= 3 && c <= 5) val += 100;
                     if (p.side === 'den' && r >= 7 && c >= 3 && c <= 5) val += 100;
                 }
 
-                // 5. BẢO VỆ TƯỚNG (Núp trong cung)
                 if (p.type === '帥' || p.type === '將') {
-                    if (p.side === 'do' && r !== 9) val -= 50; // Tướng đỏ bò lên cao -> Trừ điểm
-                    if (p.side === 'den' && r !== 0) val -= 50; // Tướng đen bò lên cao -> Trừ điểm
+                    if (p.side === 'do' && r !== 9) val -= 50; 
+                    if (p.side === 'den' && r !== 0) val -= 50; 
                 }
 
-                // 6. CỜ ÚP: Ưu tiên mở những quân bị úp chặn đường
-                if (p.isUp) val += 150; // Kích thích Bot mở cờ thay vì chạy loanh quanh
+                if (p.isUp) val += 150; 
 
-                // CỘNG TRỪ TỔNG ĐIỂM
                 if(p.side === botSide) score += val;
                 else score -= val;
             }
@@ -203,7 +183,6 @@ function evaluateBoard(mt, botSide) {
     return score;
 }
 
-// Sắp xếp nước đi thông minh để tăng tốc độ Alpha-Beta (Nước xịn tính trước)
 function generateAllMoves(mt, side, isCoUp) {
     let moves = [];
     for (let r = 0; r < 10; r++) {
@@ -233,7 +212,6 @@ function generateAllMoves(mt, side, isCoUp) {
         let scoreB = b.captured ? PIECE_VALUES[b.captured.type] : 0;
         
         if (scoreA === 0 && scoreB === 0) {
-            // Khuyến khích lao lên tấn công
             let advanceA = side === 'do' ? (a.from.r - a.to.r) : (a.to.r - a.from.r);
             let advanceB = side === 'do' ? (b.from.r - b.to.r) : (b.to.r - b.from.r);
             return advanceB - advanceA; 
@@ -299,23 +277,26 @@ function calculateMove(boardArray, botSide, isCoUp) {
     
     if (moves.length === 0) return null;
 
-    // ĐẾM SỐ QUÂN CÒN LẠI ĐỂ SANG SỐ (ÉP ĐỘ SÂU MINIMAX)
+    // ĐẾM SỐ QUÂN CÒN LẠI ĐỂ SANG SỐ (ÉP XUNG DEPTH 8-9-10)
     let pieceCount = boardArray.length;
-    let DEPTH = 3; // Mặc định đầu game đông quân
+    let DEPTH = 4; // Mặc định khai cuộc, đẩy lên mức 4 (Mức 5 lúc 32 quân JS chạy sẽ mất khoảng 10-20 giây)
 
-    if (pieceCount <= 6) {
-        // CỜ TÀN KHỐC: Cả bàn cờ còn lèo tèo vài con (ví dụ 1 Xe, 1 Pháo, 2 Tướng, 2 Tốt)
-        // Số trường hợp rất ít -> Mở khóa siêu trí tuệ DEPTH = 6. Cắm đầu truy sát Tướng!
-        DEPTH = 6; 
-    } else if (pieceCount <= 10) {
-        // CÒN ÍT QUÂN: Nâng não lên mức 5
+    if (pieceCount <= 5) {
+        // TÀN CUỘC VẮNG VẺ: Mở khóa siêu trí tuệ DEPTH = 10.
+        // Nhìn thấu 10 bước (Tao đi -> Mày đỡ -> ... 5 vòng lặp). Nó sẽ vắt kiệt CPU để dồn Tướng mày vào góc chết!
+        DEPTH = 10; 
+    } else if (pieceCount <= 8) {
+        // CÒN 8 QUÂN: Mức 8. Đã đủ khôn để nhìn ra mọi đòn hy sinh quân cạm bẫy.
+        DEPTH = 8;
+    } else if (pieceCount <= 14) {
+        // CÒN KHOẢNG NỬA BÀN CỜ: Mức 6. Bắt đầu ép sân.
+        DEPTH = 6;
+    } else if (pieceCount <= 22) {
+        // RỤNG ĐƯỢC VÀI QUÂN: Mức 5.
         DEPTH = 5;
-    } else if (pieceCount <= 16) {
-        // TRUNG CUỘC: Tăng lên mức 4
-        DEPTH = 4;
     } else {
-        // KHAI CUỘC: Đầy bàn cờ (32 quân), giữ nguyên mức 3 để chống cháy nổ điện thoại
-        DEPTH = 3; 
+        // KHAI CUỘC (Hơn 22 quân): Giữ mức 4 để tránh đơ app quá 30 giây ngay nước đầu.
+        DEPTH = 4; 
     }
 
     let bestScore = -Infinity;
@@ -335,7 +316,7 @@ function calculateMove(boardArray, botSide, isCoUp) {
 
         let score = 0;
         if (isChecking && repeatCount >= 3) {
-            score = -100000; // Mày thích nhây tao cho mày ăn đạn!
+            score = -100000; // Phạt chết cụ nó nếu lặp lại chiếu quá 3 lần
         } else {
             score = minimax(mt, DEPTH - 1, -Infinity, Infinity, false, botSide, isCoUp);
         }
@@ -369,8 +350,8 @@ function calculateMove(boardArray, botSide, isCoUp) {
 
     let tempMt = buildMatrix(newBoardArray);
     let resultHash = getBoardHash(tempMt);
-    let oppSide = botSide === 'do' ? 'den' : 'do';
-    let resultIsCheck = laBiChieuWorker(oppSide, tempMt, isCoUp);
+    let oppSideCheck = botSide === 'do' ? 'den' : 'do';
+    let resultIsCheck = laBiChieuWorker(oppSideCheck, tempMt, isCoUp);
 
     return {
         from: chosenMove.from,

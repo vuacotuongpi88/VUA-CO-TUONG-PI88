@@ -29,20 +29,6 @@ module.exports = async (req, res) => {
 
     if (!roomId) return res.status(400).json({ ok: false, error: 'Thiếu Room ID' });
 
-    // HỒ SƠ BOT
-    const botProfile = {
-        uid: "bot_master_100",
-        walletKey: "bot_master_100",
-        name: "Vô Danh Lão Tẩu",
-        photo: "https://i.imgur.com/QhT8A4O.png",
-        level: 100,
-        isBot: true,
-        pmcBalance: 99999999,
-        avatarSkin: "dragon",
-        statsV2: { wins: 9999, losses: 1, matches: 10000 },
-        updatedAt: admin.database.ServerValue.TIMESTAMP
-    };
-
     try {
         const roomRef = db.ref(`matches/${roomId}`);
         const snap = await roomRef.once('value');
@@ -70,12 +56,77 @@ module.exports = async (req, res) => {
             // if (matchesToday >= 3) {
             //     return res.status(400).json({ ok: false, error: 'Nay lão phu mỏi lưng rồi, tha cho lão.' });
             // }
+            // CHỈ XỬ LÝ ACTION 'JOIN' ĐỂ CHO BOT VÀO BÀN
+        if (action === 'join') {
+            if (room.status !== "waiting" || room.players?.den) {
+                return res.status(400).json({ ok: false, error: 'Phòng đéo trống.' });
+            }
 
-            const updates = {};
+            // BẢO VỆ 1: Mức cược tối đa
+            const stake = Math.max(0, Number(room.stakePMC || 0));
+            if (stake > 500) {
+                return res.status(400).json({ ok: false, error: 'Lão phu nghèo, đéo đánh cược lớn.' });
+            }
+
+            // BẢO VỆ 2: Giới hạn 3 ván/ngày (TẠM TẮT ĐỂ TEST)
+            // const hostBotKey = `bot_quota_${hostWallet}_${new Date().toISOString().split('T')[0]}`;
+            // ... (đoạn code giới hạn tao kêu mày comment hôm trước giữ nguyên)
+
+            // ==========================================
+            // KHO TRANG PHỤC & TÊN GIẢ CHO BOT
+            // ==========================================
+            const botNames = [
+                "Vô Danh Lão Tẩu", "Kỳ Thủ Ẩn Danh", "Thích Ăn Hành", "Độc Cô Cầu Bại",
+                "Chấp Một Xe", "Ông Lão Đánh Cờ", "Thần Bài Pi", "Gà Mờ Đi Dạo",
+                "Ma Tôn", "Lý Tầm Hoan", "Châu Bá Thông", "Tây Độc", "Nam Đế",
+                "Người Chơi Hệ Tâm Linh", "Đánh Là Thua", "Hủy Diệt Tướng"
+            ];
+            
+            // Mày có thể tự up thêm link ảnh khác vào đây để nó random đa dạng hơn
+            const botPhotos = [
+                "https://i.imgur.com/QhT8A4O.png",
+                "images/do_tuong.png",
+                "images/den_tuong.png",
+                "https://i.imgur.com/8x8mC6Q.png", 
+                "https://i.imgur.com/H1XyYf8.png"
+            ];
+
+            const botSkins = ["none", "bronze", "jade", "dragon", "phoenix"];
+
+            // Lệnh Random ngẫu nhiên
+            const randomName = botNames[Math.floor(Math.random() * botNames.length)];
+            const randomPhoto = botPhotos[Math.floor(Math.random() * botPhotos.length)];
+            const randomSkin = botSkins[Math.floor(Math.random() * botSkins.length)];
+            const randomLevel = Math.floor(Math.random() * 80) + 20; // Random cấp độ từ 20 đến 99
+            const randomWins = Math.floor(Math.random() * 2000) + 100;
+            const randomLosses = Math.floor(Math.random() * 1000) + 50;
+
+            const botProfile = {
+                uid: "bot_master_100",           
+                walletKey: "pi_admin_master",    // <--- SỬA CHỖ NÀY THÀNH VÍ ADMIN
+                isBot: true,                     
+                name: randomName,                
+                photo: randomPhoto,              
+                // ... (Các dòng dưới giữ nguyên)
+                level: randomLevel,              // Cấp độ giả
+                avatarSkin: randomSkin,          // Khung VIP giả
+                pmcBalance: Math.floor(Math.random() * 900000) + 10000, // Cầm vài chục ngàn PMC lừa tình
+                statsV2: { wins: randomWins, losses: randomLosses, matches: randomWins + randomLosses },
+                updatedAt: admin.database.ServerValue.TIMESTAMP
+            };
+            // ==========================================
+        }
+           const updates = {};
+
+            // --- BÙA MỚI: TRỪ TIỀN TỪ KÉT ADMIN TRƯỚC KHI VÀO BÀN ---
+            if (stake > 0) {
+                updates[`wallets/pi_admin_master/pmcBalance`] = admin.database.ServerValue.increment(-stake);
+            }
+
             updates[`matches/${roomId}/players/den`] = botProfile;
             updates[`matches/${roomId}/stakeLocked/den`] = {
                 done: true,
-                walletKey: "bot_master_100",
+                walletKey: "pi_admin_master", // <--- SỬA CHỖ NÀY THÀNH VÍ ADMIN
                 stake: stake,
                 at: Date.now(),
                 uid: "bot_master_100",
