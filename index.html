@@ -10450,8 +10450,6 @@ roomChatRef.on("child_added", (snap) => {
     content.appendChild(msg);
     content.scrollTop = content.scrollHeight;
 
-    // Chỉ báo bong bóng cho tin nhắn mới của đối thủ.
-    // Chặn tin nhắn cũ lúc vừa bindRoom không tự bật lên.
     const msgAt = Number(data.at || 0) || 0;
     const isNewOpponentMsg =
         !mine &&
@@ -10461,6 +10459,53 @@ roomChatRef.on("child_added", (snap) => {
     if (isNewOpponentMsg) {
         showMatchChatPeek(data);
     }
+
+    // ==========================================
+    // 🔥 BÙA TRASH TALK: BOT AUTO CHỬI LẠI SAU 5 GIÂY 🔥
+    // ==========================================
+    if (mine) {
+        // Kiểm tra xem đối thủ có phải Bot không
+        const oppSide = mySide === "do" ? "den" : "do";
+        const opp = window.__lastBoundRoom?.players?.[oppSide];
+        const isOppBot = opp && (opp.uid === "bot_master_100" || opp.isBot || (opp.name && opp.name.includes("Lão Tẩu")));
+
+        if (isOppBot) {
+            // Xóa bộ đếm cũ nếu người chơi đang spam chat (Chỉ chửi lại 1 câu sau khi người chơi chat xong)
+            if (window.__botChatTimer) clearTimeout(window.__botChatTimer);
+            
+            window.__botChatTimer = setTimeout(() => {
+                // Kho tàng gáy bẩn của Lão Tẩu
+                const khoGach = [
+                    "Cờ dở mà mỏ hỗn thế cháu? 🤣",
+                    "Gáy to lên! Đánh như gà mà mồm mép gớm nhỉ?",
+                    "Cờ bí quá thì bấm nút Đầu Hàng đi cháu, tao đéo chê đâu.",
+                    "Suy nghĩ 5 phút đi được nước cờ mù mắt vãi lồn 🤡",
+                    "Đánh tiếp đi, tao đang chấp mày nửa bàn cờ đấy.",
+                    "Khóc đi, khóc to lên tao xem nào?",
+                    "Nước này tao nhắm mắt đánh bằng ngón chân cũng ăn mày.",
+                    "Tính xin hòa à? Không có cửa đâu con trai!",
+                    "Ủa nay mầm non được nghỉ học hả cháu?",
+                    "Chơi cờ hay chơi tấu hài vậy? Đánh thế bao giờ mới lớn?",
+                    "Tao thấy mày sắp mất con Xe rồi kìa, lo mà chạy đi 🤣",
+                    "Đánh yếu thì bớt gõ phím lại, lo nhìn bàn cờ đi cháu!"
+                ];
+                
+                const cauChui = khoGach[Math.floor(Math.random() * khoGach.length)];
+                
+                // Bắn tin nhắn của Bot thẳng lên Firebase
+                if (currentRoomId && roomChatRef) {
+                    roomChatRef.push({
+                        uid: "bot_master_100",
+                        name: opp.name || "Vô Danh Lão Tẩu",
+                        side: oppSide,
+                        text: cauChui,
+                        at: firebase.database.ServerValue.TIMESTAMP
+                    });
+                }
+            }, 5000); // 5000ms = Đợi đúng 5 giây mới sủa lại
+        }
+    }
+    // ==========================================
 });
 }
 function normalizeInviteCode(value = "") {
