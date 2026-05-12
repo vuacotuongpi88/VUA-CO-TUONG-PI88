@@ -129,6 +129,35 @@ function haiTuongDoiMat(mt) {
 }
 
 function evaluateBoard(mt, botSide) {
+    let botMaterial = 0;
+    let oppMaterial = 0;
+    let tBot = null, tOpp = null;
+
+    // QUÉT BÀN CỜ ĐỂ BẮT MẠCH TRẬN ĐẤU & TÌM TỌA ĐỘ 2 TƯỚNG
+    for(let r=0; r<10; r++) {
+        for(let c=0; c<9; c++) {
+            const p = mt[r][c];
+            if(p) {
+                let val = PIECE_VALUES[p.type] || 10;
+                // Cộng tổng tài sản 2 bên (không tính cờ úp chưa lật)
+                if (!p.isUp) {
+                    if(p.side === botSide) botMaterial += val;
+                    else oppMaterial += val;
+                }
+                
+                // Ghi nhớ tọa độ Tướng để lát ám sát
+                if(p.type === '帥' || p.type === '將') {
+                    if(p.side === botSide) tBot = {r, c};
+                    else tOpp = {r, c};
+                }
+            }
+        }
+    }
+
+    // NHẬN DIỆN THẾ TRẬN (Lệch 400 điểm tương đương 1 con Mã/Pháo)
+    let isWinning = (botMaterial - oppMaterial) > 400; 
+    let isLosing = (oppMaterial - botMaterial) > 400;  
+
     let score = 0;
     for(let r=0; r<10; r++) {
         for(let c=0; c<9; c++) {
@@ -137,7 +166,7 @@ function evaluateBoard(mt, botSide) {
                 let val = PIECE_VALUES[p.type] || 10;
                 let isMyPiece = (p.side === botSide);
 
-                // Lính qua sông giá trị x3
+                // 1. Lính qua sông giá trị x3
                 if ((p.type === '兵' || p.type === '卒') && !p.isUp) {
                     if (p.side === 'do' && r <= 4) {
                         val += 50 + (4 - r) * 30; 
@@ -149,7 +178,7 @@ function evaluateBoard(mt, botSide) {
                     }
                 }
 
-                // Khen Mã ngọa tào, chê Mã góc
+                // 2. Khen Mã ngọa tào, chê Mã góc
                 if (p.type === '傌' || p.type === '馬') {
                     if (c === 0 || c === 8) val -= 60; 
                     if (c >= 2 && c <= 6 && r >= 2 && r <= 7) val += 90; 
@@ -157,29 +186,64 @@ function evaluateBoard(mt, botSide) {
                     if (p.side === 'den' && (r === 7 || r === 8) && (c === 2 || c === 6)) val += 200;
                 }
 
-                // Pháo đầu vô đối
+                // 3. Pháo đầu vô đối
                 if (p.type === '炮' || p.type === '砲') {
                     if (c === 4) val += 120; 
                     if (c === 3 || c === 5) val += 60; 
                 }
 
-                // Ép Xe xuất cung mạnh hơn
+                // 4. Ép Xe xuất cung
                 if (p.type === '俥' || p.type === '車') {
                     if (c === 3 || c === 4 || c === 5) val += 150; 
                     if (p.side === 'do' && r === 9 && (c === 0 || c === 8)) val -= 200;
                     if (p.side === 'den' && r === 0 && (c === 0 || c === 8)) val -= 200;
-                    if (p.side === 'do' && r === 6) val += 80; // Xe tuần hà
+                    if (p.side === 'do' && r === 6) val += 80; 
                     if (p.side === 'den' && r === 3) val += 80;
                 }
 
-                // Tướng giữ gầm
+                // 5. Tướng giữ gầm
                 if (p.type === '帥' || p.type === '將') {
                     if (p.side === 'do' && r !== 9) val -= 100; 
                     if (p.side === 'den' && r !== 0) val -= 100; 
                 }
 
+                // ==========================================
+                // 🔥 BÙA SÁT KHÍ (ĐÒN KẾT LIỄU): TRUY CÙNG DIỆT TẬN
+                // ==========================================
+                if (isMyPiece && tOpp && (p.type === '俥' || p.type === '車' || p.type === '炮' || p.type === '砲' || p.type === '傌' || p.type === '馬')) {
+                    // Tính khoảng cách Mahattan từ quân tao tới cổ Tướng địch
+                    let distToEnemyKing = Math.abs(r - tOpp.r) + Math.abs(c - tOpp.c);
+                    // Càng gần Tướng địch càng cộng điểm bạo (Tối đa +200 điểm nếu kề sát)
+                    val += Math.max(0, (14 - distToEnemyKing) * 15);
+                }
+
+                // ==========================================
+                // 🐢 BÙA QUY TỨC CÔNG (TỬ THỦ CẦU HÒA)
+                // ==========================================
+                if (isLosing && isMyPiece) {
+                    if (tBot) {
+                        let distToHomeKing = Math.abs(r - tBot.r) + Math.abs(c - tBot.c);
+                        if (distToHomeKing <= 3) {
+                            val += 80; // Trọng thưởng cho những đứa lùi về bảo vệ Tướng
+                        } else {
+                            val -= 50; // Phạt nặng mấy con chạy rông bên sân địch để nộp mạng
+                        }
+                    }
+                }
+
+                // ==========================================
+                // ⚔️ BÙA LƯỠNG BẠI CÂU THƯƠNG (ÉP ĐỔI QUÂN KHI ĐANG LỜI)
+                // ==========================================
+                if (isWinning && isMyPiece && p.type !== '兵' && p.type !== '卒' && p.type !== '帥' && p.type !== '將') {
+                    // Giảm nhẹ 5% giá trị quân mình. Về mặt thuật toán Minimax, 
+                    // điều này kích thích nó chủ động nhào vô đổi Xe, đổi Pháo để dọn dẹp bàn cờ!
+                    val = Math.floor(val * 0.95);
+                }
+
+                // Ưu tiên lật cờ úp
                 if (p.isUp) val += 200; 
 
+                // Cộng trừ vào tổng gia tài
                 if (isMyPiece) score += val;
                 else score -= val;
             }
@@ -187,7 +251,6 @@ function evaluateBoard(mt, botSide) {
     }
     return score;
 }
-
 // SINH NƯỚC ĐI VÀ SẮP XẾP MVV-LVA + KILLER MOVES
 function generateAllMoves(mt, side, isCoUp, depth, onlyCaptures = false) {
     let moves = [];
