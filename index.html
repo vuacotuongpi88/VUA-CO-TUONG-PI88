@@ -8696,7 +8696,7 @@ function exportBoardState() {
 }
 
 function applyBoardStateFromRoom(pieces) {
-    isGameOver = false;
+    // XÓA BỎ DÒNG isGameOver = false; Ở ĐÂY VÌ NÓ LÀM LỖI X2 KINH NGHIỆM
     hideVictoryPopup();
     document.querySelectorAll(".piece").forEach(p => p.remove());
     clearMoveHints();
@@ -10288,6 +10288,7 @@ if (!canRenderLiveBoard) {
         }
 
         startTimer();
+        
         // --- BÙA TỰ ĐỘNG PHÁT HIỆN CHIẾU BÍ & HẾT NƯỚC ĐI (RADAR TỬ THẦN) ---
              // Cố tình delay 400ms để mầy kịp nhìn thấy cái tia sét đỏ chớp chớp rồi mới báo thua
              setTimeout(() => {
@@ -10377,38 +10378,6 @@ if (!canRenderLiveBoard) {
                 await db.ref("matches/" + roomId + "/drawRequest").remove();
             }
         }
-        
-        if (room.winner) {
-    window.__shownVictoryKeys = window.__shownVictoryKeys || {};
-
-    const victoryKey = [
-        listeningRoomId,
-        room.winner || "",
-        room.winReason || "",
-        room.finishedAt || room.settlement?.paidAt || ""
-    ].join("|");
-
-    if (!window.__shownVictoryKeys[victoryKey] && !isGameOver) {
-        window.__shownVictoryKeys[victoryKey] = true;
-
-        if (room.winner === "hoa") {
-            endGame("HÒA CỜ", "2 BÊN HÒA");
-        } else {
-            let title = "CHIẾU BÍ";
-            if (room.winReason === "dauhang") title = "ĐẦU HÀNG";
-            if (room.winReason === "bochay") title = "ĐỐI THỦ THOÁT";
-
-            endGame(
-    title,
-    `BÊN ${room.winner === "do" ? "ĐỎ" : "ĐEN"} THẮNG`
-);
-
-if (room.winReason === "bochay") {
-    scheduleResetWinnerRoomAfterPaid(room, listeningRoomId);
-}
-        }
-    }
-}
 
         if (!room.winner && !isSpectatorMode) {
     await maybeStartRoomFromHost(room, listeningRoomId);
