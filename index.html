@@ -7812,7 +7812,7 @@ async function preloadNextMatchData() {
             if (!room.winner || room.winner === "hoa" || stake === 0) break;
             if (room.settlement && room.settlement.paid === true) break;
             
-            await new Promise(r => setTimeout(r, 200)); // Nhấp nháy check liên tục
+            await new Promise(r => setTimeout(r, 200)); 
         }
 
         // 2. Tiền đã vào túi -> Đẩy lệnh dọn sạch bàn trên Firebase (không để UI phải đợi)
@@ -7820,7 +7820,7 @@ async function preloadNextMatchData() {
         const room2 = snap2.val() || {};
 
         if (room2.winner || room2.status === "finished") {
-            await db.ref("matches/" + roomId).update({
+            const updates = {
                 status: "waiting",
                 turn: "do",
                 board: null,
@@ -7837,7 +7837,18 @@ async function preloadNextMatchData() {
                 "stakeLocked/do": false,
                 "stakeLocked/den": false,
                 updatedAt: firebase.database.ServerValue.TIMESTAMP
-            });
+            };
+
+            // --- BÙA ĐUỔI BOT NGẦM: ĐÁ ĐÍT LÃO TẨU NGAY TRONG LÚC DỌN BÀN ---
+            const oppP = room2.players?.den;
+            if (oppP && (oppP.uid === "bot_master_100" || oppP.isBot)) {
+                updates["players/den"] = null;
+                updates["lobbyOpen"] = true; // Mở lại cửa phòng cho người khác thấy
+                if (typeof botMoveHistory !== 'undefined') botMoveHistory = [];
+            }
+            // ---------------------------------------------------------------
+
+            await db.ref("matches/" + roomId).update(updates);
         }
 
         // 3. Tải lại ví ngầm để chuẩn bị cho trận sau
