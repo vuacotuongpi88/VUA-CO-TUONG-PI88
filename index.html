@@ -12277,7 +12277,8 @@ async function maybeSettleStakeRoom(room, roomId) {
     if (!winLock.committed) return false;
 
     const totalPot = stake * 2;
-    const feePMC = Math.max(0, Math.floor(totalPot * 0.2)); // Phí hệ thống
+    // FIX LUẬT CẮT PHẾ: Chỉ thu phí 20% trên TIỀN LỜI (Tiền cược của đối thủ), đéo thu phí phần Vốn của người thắng
+    const feePMC = Math.max(0, Math.floor(stake * 0.2)); 
     const winnerReceivePMC = totalPot - feePMC;
     const adminWalletKey = "pi_admin_master";
 
