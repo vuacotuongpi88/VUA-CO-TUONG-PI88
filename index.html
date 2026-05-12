@@ -15660,9 +15660,7 @@ function closeMatchOpponentProfile() {
 
 async function openOpponentMatchProfile() {
     try {
-        if (!document.body.classList.contains("in-match") || !currentRoomId) {
-            return;
-        }
+        if (!document.body.classList.contains("in-match") || !currentRoomId) return;
 
         const roomSnap = await db.ref("matches/" + currentRoomId).once("value");
         const room = roomSnap.val();
@@ -15676,58 +15674,70 @@ async function openOpponentMatchProfile() {
         const oppSide = sideNow === "den" ? "do" : "den";
         const opp = room.players?.[oppSide];
 
-        if (!opp?.walletKey) {
-            alert("Chưa đọc được ví đối thủ.");
-            return;
+        // --- BÙA NHẬN DIỆN BOT ---
+        const isBot = opp && (opp.uid === "bot_master_100" || opp.isBot || (opp.name && opp.name.includes("Lão Tẩu")));
+
+        let level, title, monthWins, monthLosses, totalWins, totalLosses;
+        let oppName = opp?.name || "Người chơi";
+        let oppPhoto = opp?.photo || "images/den_tuong.png";
+        let skinId = opp?.avatarSkin || "none";
+
+        if (isBot) {
+            // TẠO THÔNG SỐ GIẢ CHO BOT DỰA VÀO MÃ PHÒNG (Để mở lên mở xuống không bị đổi số)
+            let hash = 0;
+            for (let i = 0; i < currentRoomId.length; i++) hash += currentRoomId.charCodeAt(i);
+            
+            level = opp.level || (hash % 40) + 60; // Bot luôn ở Cấp 60 -> 99
+            title = getSimpleLevelTitle(level);
+            
+            let totalMatches = (hash % 4000) + 1200; // Đánh từ 1200 đến 5200 ván
+            let winRate = 0.30 + ((hash % 15) / 100); // Tỉ lệ thắng 30% -> 44% (Thua luôn nhiều hơn thắng)
+            
+            totalWins = Math.floor(totalMatches * winRate);
+            totalLosses = totalMatches - totalWins;
+            monthWins = Math.floor(totalWins * 0.1);
+            monthLosses = Math.floor(totalLosses * 0.1);
+
+            // Fix vụ tên bị đổi thành "Quỹ hệ thống"
+            if (oppName.includes("Quỹ hệ thống")) oppName = "Vô Danh Lão Tẩu";
+            
+            // Mặc định cho bot mặc skin rồng hoặc ngọc cho ngầu lòi
+            skinId = hash % 2 === 0 ? "dragon" : "jade"; 
+
+        } else {
+            // NGƯỜI THẬT
+            if (!opp?.walletKey) {
+                alert("Chưa đọc được ví đối thủ.");
+                return;
+            }
+            const walletSnap = await db.ref("wallets/" + opp.walletKey).once("value");
+            const wallet = walletSnap.val() || {};
+
+            const levelMeta = wallet.levelMeta || opp.levelMeta || {};
+            level = Math.max(1, Math.floor(Number(levelMeta.level || wallet.level || opp.level || 1) || 1));
+            title = levelMeta.title || wallet.levelTitle || opp.levelTitle || getSimpleLevelTitle(level);
+
+            const monthKey = getVNMonthKeyForProfile();
+            const statsV2 = wallet.statsV2 || {};
+            const statsV2Month = statsV2.months?.[monthKey] || {};
+
+            monthWins = Math.max(0, Math.floor(Number(statsV2Month.wins ?? statsV2.monthWins ?? 0) || 0));
+            monthLosses = Math.max(0, Math.floor(Number(statsV2Month.losses ?? statsV2.monthLosses ?? 0) || 0));
+            totalWins = Math.max(0, Math.floor(Number(statsV2.wins ?? statsV2.totalWins ?? 0) || 0));
+            totalLosses = Math.max(0, Math.floor(Number(statsV2.losses ?? statsV2.totalLosses ?? 0) || 0));
+
+            oppName = wallet.name || wallet.displayName || opp.name || "Người chơi";
+            oppPhoto = wallet.photo || opp.photo || "images/do_tuong.png";
+            skinId = wallet.avatarSkin || opp.avatarSkin || "none";
         }
 
-        const walletSnap = await db.ref("wallets/" + opp.walletKey).once("value");
-        const wallet = walletSnap.val() || {};
-
-        const levelMeta = wallet.levelMeta || opp.levelMeta || {};
-        const level = Math.max(1, Math.floor(Number(
-            levelMeta.level ||
-            wallet.level ||
-            opp.level ||
-            1
-        ) || 1));
-
-        const title = levelMeta.title || wallet.levelTitle || opp.levelTitle || getSimpleLevelTitle(level);
-
-        const monthKey = getVNMonthKeyForProfile();
-        const statsV2 = wallet.statsV2 || {};
-        const statsV2Month = statsV2.months?.[monthKey] || {};
-
-        const monthWins = Math.max(0, Math.floor(Number(
-            statsV2Month.wins ??
-            statsV2.monthWins ??
-            0
-        ) || 0));
-
-        const monthLosses = Math.max(0, Math.floor(Number(
-            statsV2Month.losses ??
-            statsV2.monthLosses ??
-            0
-        ) || 0));
-
-        const totalWins = Math.max(0, Math.floor(Number(
-            statsV2.wins ??
-            statsV2.totalWins ??
-            0
-        ) || 0));
-
-        const totalLosses = Math.max(0, Math.floor(Number(
-            statsV2.losses ??
-            statsV2.totalLosses ??
-            0
-        ) || 0));
-
+        // Gắn vào biến toàn cục
         currentMatchOpponentProfile = {
-            walletKey: opp.walletKey,
-            uid: opp.uid || wallet.uid || opp.walletKey,
-            username: wallet.username || opp.username || opp.name || "Người chơi",
-            displayName: wallet.name || wallet.displayName || opp.name || "Người chơi",
-            photo: wallet.photo || opp.photo || "images/do_tuong.png",
+            walletKey: isBot ? "bot_key" : opp.walletKey,
+            uid: isBot ? "bot_uid" : (opp.uid || opp.walletKey),
+            username: oppName,
+            displayName: oppName,
+            photo: oppPhoto,
             level,
             title,
             monthWins,
@@ -15736,50 +15746,68 @@ async function openOpponentMatchProfile() {
             totalLosses
         };
 
-        const alreadyFriend = liveFriendCache.some(f => f.walletKey === opp.walletKey);
-        const alreadySent = liveFriendSentCache.some(f => f.walletKey === opp.walletKey);
-        const alreadyIncoming = liveFriendRequestCache.some(f => f.walletKey === opp.walletKey);
-
+        // SETUP NÚT KẾT BẠN
         let btnText = "GỬI LỜI MỜI KẾT BẠN";
         let disabled = "";
+        let btnAction = `onclick="sendFriendRequestToMatchOpponent()"`;
 
-        if (alreadyFriend) {
-            btnText = "ĐÃ LÀ BẠN BÈ";
+        if (isBot) {
+            btnText = "ĐỐI THỦ ĐÃ KHÓA KẾT BẠN"; // Trả lời khéo cho Bot
             disabled = "disabled";
-        } else if (alreadySent) {
-            btnText = "ĐÃ GỬI LỜI MỜI";
-            disabled = "disabled";
-        } else if (alreadyIncoming) {
-            btnText = "NGƯỜI NÀY ĐÃ MỜI MÀY";
-            disabled = "disabled";
+            btnAction = "";
+        } else {
+            const alreadyFriend = liveFriendCache.some(f => f.walletKey === opp.walletKey);
+            const alreadySent = liveFriendSentCache.some(f => f.walletKey === opp.walletKey);
+            const alreadyIncoming = liveFriendRequestCache.some(f => f.walletKey === opp.walletKey);
+
+            if (alreadyFriend) {
+                btnText = "ĐÃ LÀ BẠN BÈ";
+                disabled = "disabled";
+            } else if (alreadySent) {
+                btnText = "ĐÃ GỬI LỜI MỜI";
+                disabled = "disabled";
+            } else if (alreadyIncoming) {
+                btnText = "NGƯỜI NÀY ĐÃ MỜI MÀY";
+                disabled = "disabled";
+            }
         }
 
         const modal = ensureMatchOpponentProfileModal();
         const body = document.getElementById("match-opponent-profile-body");
 
+        // Tự tạo html cho khung avatar có skin (kể cả Bot)
+        const skinData = getAvatarSkinById(skinId);
+        const frameSrc = skinData.frameImage || "";
+        const frameDisplay = (skinId === "none" || !frameSrc) ? "display:none;" : "";
+
+        const avatarWithSkinHtml = `
+            <div class="avatar-frame-shell" style="width:64px; height:64px; min-width:64px; position:relative; display:inline-flex; align-items:center; justify-content:center;">
+                <img class="avatar-core" src="${escapeFriendHtml(oppPhoto)}" alt="avatar" style="width:68%; height:68%; object-fit:cover; border-radius:50%; border:2px solid rgba(244,197,66,0.8); background:#111;" onerror="this.src='images/den_tuong.png'">
+                <img class="avatar-frame-overlay" src="${escapeFriendHtml(frameSrc)}" style="position:absolute; width:135%; height:135%; top:50%; left:50%; transform:translate(-50%, -50%); object-fit:contain; pointer-events:none; z-index:6; filter:drop-shadow(0 0 5px rgba(0,0,0,0.8)); ${frameDisplay}">
+            </div>
+        `;
+
         body.innerHTML = `
             <div class="match-opponent-top">
-                <img class="match-opponent-avatar" src="${escapeFriendHtml(currentMatchOpponentProfile.photo)}" alt="avatar">
+                ${avatarWithSkinHtml}
                 <div>
-                    <div class="match-opponent-name">${escapeFriendHtml(currentMatchOpponentProfile.displayName)}</div>
+                    <div class="match-opponent-name">${escapeFriendHtml(oppName)}</div>
                     <div class="match-opponent-sub">Lever ${level} • ${escapeFriendHtml(title)}</div>
                 </div>
             </div>
 
             <div class="match-opponent-grid">
                 <div class="match-opponent-stat">
-                    <strong>${totalWins}</strong>
+                    <strong>${totalWins.toLocaleString('vi-VN')}</strong>
                     <span>Tổng thắng</span>
                 </div>
                 <div class="match-opponent-stat">
-                    <strong>${totalLosses}</strong>
+                    <strong style="color: #ff7675;">${totalLosses.toLocaleString('vi-VN')}</strong>
                     <span>Tổng thua</span>
                 </div>
             </div>
 
-            <button class="match-opponent-friend-btn"
-                    ${disabled}
-                    onclick="sendFriendRequestToMatchOpponent()">
+            <button class="match-opponent-friend-btn" ${disabled} ${btnAction}>
                 ${btnText}
             </button>
         `;
