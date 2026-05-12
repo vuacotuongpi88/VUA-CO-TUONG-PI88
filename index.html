@@ -12849,6 +12849,15 @@ async function openWallet(type) {
     }
 
     if (type === "rut") {
+        // ==========================================
+        // 🔥 BÙA BẢO TRÌ: KHÓA TẤT CẢ, CHỪA ĐÚNG ADMIN 406
+        // ==========================================
+        if (typeof window.isCurrentPiAdminKey === 'function' && !window.isCurrentPiAdminKey()) {
+            alert("Hệ thống đang bảo trì chờ xử lý. Tính năng Rút Pi tạm thời khóa, vui lòng quay lại sau!");
+            return; // Đuổi về luôn, đéo cho chạy tiếp
+        }
+        
+        // Nếu là Admin 406 thì nó đi lọt qua đây và rút bình thường
         await processWithdraw();
     }
 }
