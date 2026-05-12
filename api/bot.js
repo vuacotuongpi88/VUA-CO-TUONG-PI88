@@ -25,7 +25,7 @@ module.exports = async (req, res) => {
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
-    const { action, roomId, hostWallet } = req.body;
+    const { action, roomId, hostWallet, botData } = req.body;
 
     if (!roomId) return res.status(400).json({ ok: false, error: 'Thiếu Room ID' });
 
@@ -76,10 +76,11 @@ module.exports = async (req, res) => {
 
             const botSkins = ["none", "bronze", "jade", "dragon", "phoenix"];
 
-            const randomName = botNames[Math.floor(Math.random() * botNames.length)];
-            const randomPhoto = botPhotos[Math.floor(Math.random() * botPhotos.length)];
+            // Nếu dưới máy khách có gửi botData lên thì lấy xài, đéo có thì tự random
+            const randomName = (botData && botData.name) ? botData.name : botNames[Math.floor(Math.random() * botNames.length)];
+            const randomPhoto = (botData && botData.photo) ? botData.photo : botPhotos[Math.floor(Math.random() * botPhotos.length)];
+            const randomLevel = (botData && botData.level) ? botData.level : (Math.floor(Math.random() * 80) + 20);
             const randomSkin = botSkins[Math.floor(Math.random() * botSkins.length)];
-            const randomLevel = Math.floor(Math.random() * 80) + 20; 
             const randomWins = Math.floor(Math.random() * 2000) + 100;
             const randomLosses = Math.floor(Math.random() * 1000) + 50;
 

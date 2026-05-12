@@ -6379,9 +6379,11 @@ body.has-warning #game-arena {
 
 <div id="bot-invite-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:99999; align-items:center; justify-content:center; backdrop-filter: blur(4px);">
     <div style="background: linear-gradient(180deg, #1f1f1f, #0a0a0a); border: 2px solid #55efc4; border-radius: 15px; padding: 20px; width: 300px; text-align: center; box-shadow: 0 0 30px rgba(85, 239, 196, 0.3);">
-        <img src="https://i.imgur.com/QhT8A4O.png" style="width:80px; height:80px; border-radius:50%; border:2px solid #f4c542; margin-bottom:10px;">
-        <h3 style="color:#f4c542; margin:0 0 10px 0;">VÔ DANH LÃO TẨU (Cấp 100)</h3>
-        <p style="color:#dfe6e9; font-size:12px;">"Chờ lâu quá chưa ai vào à? Có muốn làm vài ván với lão phu không chàng trai trẻ?"</p>
+        <div style="width: 80px; height: 80px; margin: 0 auto 10px; border-radius: 50%; border: 2px solid #f4c542; overflow: hidden; background: #111;">
+            <img id="bot-popup-avatar" src="images/den_tuong.png" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='images/do_tuong.png'">
+        </div>
+        <h3 id="bot-popup-name" style="color:#f4c542; margin:0 0 10px 0; text-transform: uppercase;">VÔ DANH LÃO TẨU (Cấp 100)</h3>
+        <p id="bot-popup-quote" style="color:#dfe6e9; font-size:13px; font-style: italic;">"Chờ lâu quá chưa ai vào à? Có muốn làm vài ván với lão phu không chàng trai trẻ?"</p>
         <div style="display:flex; gap:10px; justify-content:center; margin-top:15px;">
             <button onclick="closeBotInvite()" style="background:#636e72; color:white; border:none; padding:8px 15px; border-radius:8px; cursor: pointer; font-weight: bold;">THÔI</button>
             <button onclick="acceptBotMatch()" style="background:linear-gradient(180deg, #00d2a0, #00b894); color:white; border:none; padding:8px 15px; border-radius:8px; font-weight:bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5);">ĐÁNH LUÔN</button>
@@ -7369,7 +7371,32 @@ function startBotWaitingTimer() {
 
         if (botWaitSeconds <= 0) {
             cancelBotWaiting();
-            // Hết 30s bật bảng hỏi
+            
+            // --- KHO DATA BOT KHỊA NGƯỜI CHƠI ---
+            const botList = [
+                { name: "Vô Danh Lão Tẩu", photo: "images/den_tuong.png", quote: "Chờ lâu quá à? Có muốn thử vài đường quyền với lão phu không chàng trai trẻ?" },
+                { name: "Chấp Một Xe", photo: "images/do_tuong.png", quote: "Tao chấp mày một chiếc Xe đấy. Vào đây mà lấy PMC của tao nè!" },
+                { name: "Độc Cô Cầu Bại", photo: "images/den_tuong.png", quote: "Cả đời này ta chỉ mong một lần được nếm mùi thất bại... Mày giúp ta được không?" },
+                { name: "Thần Bài Pi", photo: "images/do_tuong.png", quote: "Tiền PMC nhiều quá xài không hết. Mày có giỏi thì vào đây mà bốc!" },
+                { name: "Kỳ Thủ Ẩn Danh", photo: "images/den_tuong.png", quote: "Đừng hỏi ta là ai, hãy tự hỏi bản thân xem có đỡ nổi 30 nước không?" },
+                { name: "Ma Tôn", photo: "images/do_tuong.png", quote: "Khặc khặc! Nộp mạng... à nhầm, nộp PMC ra đây!" },
+                { name: "Trùm Pháo Đầu", photo: "images/den_tuong.png", quote: "Cứ đưa pháo đầu vào giữa là tao thấy mày khóc rồi. Chơi không?" }
+            ];
+            
+            // Bốc ngẫu nhiên 1 con
+            window.currentInvitingBot = botList[Math.floor(Math.random() * botList.length)];
+            window.currentInvitingBot.level = Math.floor(Math.random() * 80) + 20;
+
+            // Gắn lên bảng thông báo
+            const avatarEl = document.getElementById("bot-popup-avatar");
+            const nameEl = document.getElementById("bot-popup-name");
+            const quoteEl = document.getElementById("bot-popup-quote");
+            
+            if (avatarEl) avatarEl.src = window.currentInvitingBot.photo;
+            if (nameEl) nameEl.innerText = `${window.currentInvitingBot.name} (Cấp ${window.currentInvitingBot.level})`;
+            if (quoteEl) quoteEl.innerText = `"${window.currentInvitingBot.quote}"`;
+
+            // Bật bảng hỏi
             const modal = document.getElementById("bot-invite-modal");
             if (modal) modal.style.display = "flex";
         }
@@ -7398,11 +7425,12 @@ async function acceptBotMatch() {
         const res = await fetch("/api/bot", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
-                action: "join",  // <--- Nhét chữ action vào đây thì Vercel mới đọc được
-                roomId: currentRoomId, 
-                hostWallet: typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "" 
-            })
+            body: JSON.stringify({
+                    action: "join", 
+                    roomId: currentRoomId,
+                    hostWallet: typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "",
+                    botData: window.currentInvitingBot // <-- THÊM ĐÚNG DÒNG NÀY VÀO LÀ XONG
+                })
         });
         
         const data = await res.json();
