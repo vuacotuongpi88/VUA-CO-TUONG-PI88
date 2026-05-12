@@ -10371,6 +10371,14 @@ if (room.status === "playing" && !room.winner) {
     if (overlay) overlay.style.display = "none";
 
     clearInterval(readyInterval);
+
+    // ==========================================
+    // 🔥 BÙA RESET CHAT: VÀO TRẬN LÀ PHẢI XÓA CHỮ "ĐANG GHÉP" ĐI
+    // ==========================================
+    const chatContent = document.getElementById("match-content-popup");
+    if (chatContent && chatContent.innerHTML.includes("Đang ghép phòng...")) {
+        chatContent.innerHTML = '<p style="color:#55efc4;">Hệ thống: Trận đấu bắt đầu! Kẻ thua mất tiền, người thắng ăn tất!</p>';
+    }
 }
 const hasBothPlayersInRoom = !!room.players?.do && !!room.players?.den;
 const canRenderLiveBoard =
