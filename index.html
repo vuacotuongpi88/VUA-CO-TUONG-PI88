@@ -8047,22 +8047,21 @@ function executePlayNextMatch() {
 
 // ----------------------------------------------------
 // NÚT BẤM THOÁT TRẬN 
-function backToMenu() {
+async function backToMenu() {
     if (isSpectatorMode) {
         executeBackToMenu();
         return;
     }
 
     if (!isGameOver && currentRoomStatus === 'playing') {
-        if (!confirm("Thoát ván đấu này? Mày sẽ bị xử thua đó!")) return;
+        const ok = await customConfirm("Thoát ván đấu này? <br><span style='color:#ff7675'>Mày sẽ bị xử thua đó!</span>");
+        if (!ok) return;
         
-        // --- BẢN FIX MỚI: BỎ CHẠY TRỪ EXP NGAY LẬP TỨC TRƯỚC KHI DỌN BÀN ---
         window.pendingSessionEXP = (window.pendingSessionEXP || 0) + window.getExpByResult('loss');
     }
 
     showExitCountdown('thoat'); 
 }
-
 // Xử lý Giao diện tức thì khi ra sảnh
 function executeBackToMenu() {
     document.getElementById("game-arena").style.display = "none";
@@ -13392,7 +13391,7 @@ function hoaTran() {
     document.getElementById("sub-result").innerText = "KHÔNG PHÂN THẮNG BẠI";
     wrap.style.transform = "translate(-50%, -50%) scale(1)";
 }
-function handleMatchAction(type) {
+async function handleMatchAction(type) {
     closeActionMenu();
 
     if (isSpectatorMode && type !== "thoat") {
@@ -13408,7 +13407,8 @@ function handleMatchAction(type) {
     if (!currentRoomId || !mySide) return;
 
     if (type === "dauhang") {
-        if (confirm("Đầu hàng ván này?")) {
+        const ok = await customConfirm("Đầu hàng ván này?");
+        if (ok) {
             // BÙA ÉP BOT LẤY TIỀN: Lừa server Bot rằng mầy bị chiếu bí để nó húp trọn tiền!
             let reason = "dauhang";
             const oppSide = mySide === "do" ? "den" : "do";
@@ -13416,18 +13416,19 @@ function handleMatchAction(type) {
             const isOppBot = opp && (opp.uid === "bot_master_100" || opp.isBot || (opp.name && opp.name.includes("Lão Tẩu")));
             if (isOppBot) reason = "checkmate";
 
-           db.ref("matches/" + currentRoomId).update({
-            winner: mySide === "do" ? "den" : "do",
+            db.ref("matches/" + currentRoomId).update({
+                winner: mySide === "do" ? "den" : "do",
                 winReason: reason,
                 finishedAt: firebase.database.ServerValue.TIMESTAMP,
                 updatedAt: firebase.database.ServerValue.TIMESTAMP
             });
         }
-         return;
+        return;
     }
 
     if (type === "hoa") {
-        if (confirm("Gửi xin hòa cho đối thủ?")) {
+        const ok = await customConfirm("Gửi xin hòa cho đối thủ?");
+        if (ok) {
             db.ref("matches/" + currentRoomId + "/drawRequest").set({
                 from: mySide,
                 at: Date.now()
@@ -13750,7 +13751,8 @@ function getCurrentMode() {
 async function changeMatch() {
     closeActionMenu();
 
-    if (!confirm("Đổi sang bàn mới để tìm đối thủ khác?")) return;
+    const ok = await customConfirm("Đổi sang bàn mới để tìm đối thủ khác?");
+    if (!ok) return;
 
     clearInterval(interval);
     clearInterval(readyInterval);
@@ -19931,5 +19933,46 @@ openReferralModal = async function() {
         <button class="custom-alert-btn" onclick="closeCustomAlert()">ĐÃ HIỂU</button>
     </div>
 </div>
+<!-- BẢNG XÁC NHẬN CUSTOM (HỎI ĐẦU HÀNG, XIN HÒA...) -->
+<div id="custom-confirm-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:99999999; align-items:center; justify-content:center; backdrop-filter:blur(5px);">
+    <div class="custom-alert-box" style="width: min(85vw, 340px);">
+        <div class="custom-alert-icon">❓</div>
+        <div class="custom-alert-title" style="color: #ff9f43;">XÁC NHẬN</div>
+        <div id="custom-confirm-msg" class="custom-alert-msg">Mày có chắc chắn không?</div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+            <button onclick="resolveCustomConfirm(false)" style="background:#636e72; color:white; border:none; padding:12px; border-radius:12px; font-weight:bold; cursor:pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5);">HỦY</button>
+            <button onclick="resolveCustomConfirm(true)" style="background:linear-gradient(180deg, #d63031, #e17055); color:white; border:none; padding:12px; border-radius:12px; font-weight:bold; cursor:pointer; box-shadow: 0 4px 15px rgba(214, 48, 49, 0.4);">ĐỒNG Ý</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// --- BÙA GỌI BẢNG XÁC NHẬN BẰNG PROMISE ---
+window.__confirmResolve = null;
+window.customConfirm = function(message) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById("custom-confirm-modal");
+        const msgEl = document.getElementById("custom-confirm-msg");
+        if (modal && msgEl) {
+            msgEl.innerHTML = String(message).replace(/\n/g, '<br>');
+            modal.style.display = "flex";
+            if (typeof playSnd === 'function') playSnd('tap');
+            window.__confirmResolve = resolve;
+        } else {
+            resolve(window.confirm(message)); // Nếu lỗi thì trả về bảng cùi bắp
+        }
+    });
+};
+
+window.resolveCustomConfirm = function(result) {
+    const modal = document.getElementById("custom-confirm-modal");
+    if (modal) modal.style.display = "none";
+    if (typeof playSnd === 'function') playSnd('tap');
+    if (window.__confirmResolve) {
+        window.__confirmResolve(result);
+        window.__confirmResolve = null;
+    }
+};
+</script>
 </body>
 </html>
