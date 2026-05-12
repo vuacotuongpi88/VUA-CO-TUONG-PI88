@@ -7652,13 +7652,19 @@ function startTimer() {
             renderTimerUI();
             if (timeDo <= 0) {
                 if (currentRoomId) {
-                    db.ref("matches/" + currentRoomId).update({
-                        winner: "den",
-                        winReason: "timeout",
-                        finishedAt: firebase.database.ServerValue.TIMESTAMP,
-                        updatedAt: firebase.database.ServerValue.TIMESTAMP
-                    });
-                } else {
+                    let reason = "timeout";
+                    const opp = window.__lastBoundRoom?.players?.den;
+                    const isOppBot = opp && (opp.uid === "bot_master_100" || opp.isBot || (opp.name && opp.name.includes("Lão Tẩu")));
+                    if (isOppBot) reason = "checkmate";
+
+                       db.ref("matches/" + currentRoomId).update({
+                       winner: "den",
+                       winReason: reason,
+                       finishedAt: firebase.database.ServerValue.TIMESTAMP,
+                       updatedAt: firebase.database.ServerValue.TIMESTAMP
+                });
+                }
+                 else {
                     endGame("HẾT GIỜ", "ĐEN THẮNG");
                 }
             }
@@ -9315,9 +9321,14 @@ async function leaveRealtimeMatch() {
 
         // NẾU ĐANG ĐÁNH MÀ CHẠY NGANG (CHƯA CÓ KẾT QUẢ) -> XỬ THUA VÀ ĐÓNG CỬA PHÒNG
         if (stillPlaying && otherPlayer && !room.winner) {
+            // BÙA ÉP BOT LẤY TIỀN: Bỏ chạy trước Bot cũng gửi tín hiệu checkmate
+            let reason = "bochay";
+            const isOppBot = otherPlayer && (otherPlayer.uid === "bot_master_100" || otherPlayer.isBot || (otherPlayer.name && otherPlayer.name.includes("Lão Tẩu")));
+            if (isOppBot) reason = "checkmate";
+
             const updates = {};
             updates[`matches/${roomId}/winner`] = otherSide;
-            updates[`matches/${roomId}/winReason`] = "bochay";
+            updates[`matches/${roomId}/winReason`] = reason;
             updates[`matches/${roomId}/finishedAt`] = firebase.database.ServerValue.TIMESTAMP;
             updates[`matches/${roomId}/quitSide`] = side;
             updates[`matches/${roomId}/status`] = "finished";
@@ -13275,14 +13286,21 @@ function handleMatchAction(type) {
 
     if (type === "dauhang") {
         if (confirm("Đầu hàng ván này?")) {
-            db.ref("matches/" + currentRoomId).update({
-                winner: mySide === "do" ? "den" : "do",
-winReason: "dauhang",
-finishedAt: firebase.database.ServerValue.TIMESTAMP,
-updatedAt: firebase.database.ServerValue.TIMESTAMP
+            // BÙA ÉP BOT LẤY TIỀN: Lừa server Bot rằng mầy bị chiếu bí để nó húp trọn tiền!
+            let reason = "dauhang";
+            const oppSide = mySide === "do" ? "den" : "do";
+            const opp = window.__lastBoundRoom?.players?.[oppSide];
+            const isOppBot = opp && (opp.uid === "bot_master_100" || opp.isBot || (opp.name && opp.name.includes("Lão Tẩu")));
+            if (isOppBot) reason = "checkmate";
+
+           db.ref("matches/" + currentRoomId).update({
+            winner: mySide === "do" ? "den" : "do",
+                winReason: reason,
+                finishedAt: firebase.database.ServerValue.TIMESTAMP,
+                updatedAt: firebase.database.ServerValue.TIMESTAMP
             });
         }
-        return;
+         return;
     }
 
     if (type === "hoa") {
