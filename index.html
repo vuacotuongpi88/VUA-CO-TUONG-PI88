@@ -6779,6 +6779,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.database();
+const provider = new firebase.auth.GoogleAuthProvider();
 // ==========================================
 // BÙA GHI ĐÈ: THAY THẾ HOÀN TOÀN ALERT TRÌNH DUYỆT BẰNG UI GAME
 // ==========================================
@@ -6807,7 +6808,6 @@ function closeCustomAlert() {
     if (typeof playSnd === 'function') playSnd('tap');
 }
 // ==========================================
-const provider = new firebase.auth.GoogleAuthProvider();
 
 let readyServerOffsetMs = 0;
 
