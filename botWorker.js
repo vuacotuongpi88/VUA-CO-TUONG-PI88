@@ -215,33 +215,65 @@ function evaluateBoard(mt, botSide, isCoUp) {
             let isMyPiece = (p.side === botSide);
             let val = PIECE_VALUES[p.type] || 10;
 
+            let isMyPiece = (p.side === botSide);
+            let baseVal = PIECE_VALUES[p.type] || 10;
+
+            // 1. MA GIÁO: ÉP BOT BIẾT TIẾC QUÂN ÚP XỊN CỦA MÌNH
             if (isCoUp && p.isUp) {
-                // MA GIÁO: Bot biết trước quân
-                if (currentMatchMoveCount < 6) val = (['兵','卒','仕','士','相','象'].includes(p.type)) ? 800 : 100;
-                else val = (['俥','車','炮','砲','傌','馬'].includes(p.type)) ? 1800 : 400;
-                
-                // RADAR ĂN QUÂN MẠNH ĐỊCH
-                if (!isMyPiece && ['俥','車','炮','砲','傌','馬'].includes(p.type)) {
-                    if (isSquareAttacked(c, r, botSide, mt, false)) score += 1000;
+                // Hack nhìn xuyên: Biết bên trong là hàng xịn thì định giá cực cao để nó giấu như mả tổ
+                if (['俥','車','炮','砲','傌','馬'].includes(p.type)) {
+                    baseVal = 2000; 
+                } else {
+                    baseVal = 250; // Hàng cùi (tốt, sĩ, tượng) thì cho giá thấp
                 }
             }
 
-            // BẢO VỆ QUÂN THEO TRỌNG ĐIỂM (CỨU XE/PHÁO)
+            // ĐÁNH GIÁ TÌNH TRẠNG BỊ TẤN CÔNG / BẢO KÊ
             let attacked = isSquareAttacked(c, r, isMyPiece ? oppSide : botSide, mt, isCoUp);
             let defended = isSquareDefended(c, r, p.side, mt, isCoUp);
-            
-            if (isMyPiece && attacked) {
-                val -= defended ? (val * 0.25) : (val * 0.98); // ÉP CHẠY BẰNG MỌI GIÁ NẾU KHÔNG CÓ BẢO KÊ
-            } else if (!isMyPiece && attacked) {
-                val += defended ? 60 : (val * 0.6); // ƯU TIÊN ĂN QUÂN ĐỊCH HỞ
-            }
 
+            // --- XỬ LÝ ĐẶC BIỆT CHO TƯỚNG (Bị chiếu là rén ngang) ---
             if (p.type === '帥' || p.type === '將') {
-                if (isMyPiece && isSquareAttacked(c, r, oppSide, mt, isCoUp)) val -= 50000;
+                if (isMyPiece && attacked) score -= 500000; // Tướng mình bị đánh: Phạt sấp mặt
+                if (!isMyPiece && attacked) score += 500000; // Chiếu tướng địch: Thưởng bung nóc
+                if (isMyPiece) score += baseVal; else score -= baseVal;
+                continue; // Tính xong Tướng thì qua quân khác luôn
             }
 
-            if (isMyPiece) score += val; else score -= val;
-        }
+            // --- NHỒI NÃO KỸ NĂNG CHẠY TRỐN & ĂN CHÙA ---
+            let pieceScore = baseVal;
+
+            if (isMyPiece) {
+                // NẾU LÀ QUÂN CỦA BOT
+                if (attacked) {
+                    if (!defended) {
+                        // Bị địch ngắm mà KHÔNG CÓ BẢO KÊ -> Trừ x4 giá trị để hoảng loạn mà né ngay
+                        pieceScore -= (baseVal * 4); 
+                    } else {
+                        // CÓ BẢO KÊ (Kèo đổi quân): 
+                        if (baseVal >= 600) {
+                            // Quân xịn (Xe, Pháo, Mã) thì cấm đổi bậy bạ, phạt x1.5 ép nó né
+                            pieceScore -= (baseVal * 1.5); 
+                        } else {
+                            // Quân cùi (Tốt, Sĩ) thì trừ nhẹ, cho phép lấy chốt đổi chốt
+                            pieceScore -= (baseVal * 0.2); 
+                        }
+                    }
+                }
+                score += pieceScore;
+            } else {
+                // NẾU LÀ QUÂN CỦA NGƯỜI CHƠI (ĐỊCH)
+                if (attacked) {
+                    if (!defended) {
+                        // Địch hở sườn không bảo vệ -> Giảm mạnh giá trị của nó để Bot khoái lao vào húp
+                        pieceScore -= (baseVal * 1.5); 
+                    } else {
+                        // Địch có bảo vệ -> Giảm nhẹ thôi để ưu tiên đớp nếu kèo thơm
+                        pieceScore -= 100;
+                    }
+                }
+                score -= pieceScore;
+            }
     }
     return score;
 }
