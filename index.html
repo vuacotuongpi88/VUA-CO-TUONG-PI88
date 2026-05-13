@@ -14019,11 +14019,16 @@ async function setReady() {
         // BÙA KÍCH NỔ TRẬN ĐẤU (Vì mầy dùng thẻ, server đéo thèm kích nổ, mình phải tự kích)
         setTimeout(() => {
             if (currentRoomStatus !== "playing") {
+                
+                // 🔥 SỬA LỖI MẤT QUÂN CỜ Ở ĐÂY: Xếp cờ ra bàn trước khi báo cáo cho Server
+                isCoUp = (room.mode === "co-up");
+                if (typeof resetToStartup === 'function') resetToStartup();
+
                 // Giả danh thằng Đỏ (chủ phòng) để kick-start ván cờ
                 db.ref("matches/" + currentRoomId).update({
                     status: "playing",
-                    isCoUp: room.mode === "co-up",
-                    board: exportBoardState(), 
+                    isCoUp: isCoUp,
+                    board: exportBoardState(), // Bây giờ xuất ra mới có cờ nè!
                     activeRoundId: currentRoomId + "_r" + (Math.floor(Number(room.roundNo || 0)) + 1) + "_" + Date.now(),
                     roundNo: Math.floor(Number(room.roundNo || 0)) + 1,
                     startedAt: firebase.database.ServerValue.TIMESTAMP,
@@ -14035,7 +14040,7 @@ async function setReady() {
                     updatedAt: firebase.database.ServerValue.TIMESTAMP
                 });
             }
-        }, 800); // Đợi 0.8 giây cho Firebase nhận diện xong vụ khóa tiền là kick-start luôn
+        }, 800);
     }
     // ==========================================
 }
