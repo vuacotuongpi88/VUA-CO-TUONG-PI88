@@ -13926,8 +13926,33 @@ async function setReady() {
         return;
     }
 
-    // Gửi lệnh SS thành công lên Firebase
+    // Gửi lệnh SS thành công lên Firebase cho phe mình
     await db.ref("matches/" + currentRoomId + "/ready/" + mySide).set(true);
+
+    // ==========================================
+    // 🔥 BÙA CHỮA BỆNH BOT ĐỨNG HÌNH KHI XÀI VÉ MIỄN PHÍ 🔥
+    // ==========================================
+    const roomSnap = await db.ref("matches/" + currentRoomId).once("value");
+    const room = roomSnap.val() || {};
+    const oppSide = mySide === "do" ? "den" : "do";
+    const opp = room.players?.[oppSide];
+    
+    // Nhận diện xem ghế đối diện có phải Lão Tẩu không
+    const isBot = opp && (opp.uid === "bot_master_100" || opp.isBot || (opp.name && opp.name.includes("Lão Tẩu")));
+
+    if (isBot) {
+        // Tao là chủ phòng tao có quyền ÉP mày Sẵn Sàng luôn đéo cần Server duyệt!
+        const stake = Math.max(0, Math.floor(Number(room.stakePMC || 0)));
+        await db.ref("matches/" + currentRoomId + "/stakeLocked/" + oppSide).set({
+            done: true,
+            walletKey: "pi_admin_master",
+            stake: stake,
+            at: firebase.database.ServerValue.TIMESTAMP,
+            uid: opp.uid || "bot_master_100"
+        });
+        await db.ref("matches/" + currentRoomId + "/ready/" + oppSide).set(true);
+    }
+    // ==========================================
 }
 
 async function batDauTranDau(loai) {
