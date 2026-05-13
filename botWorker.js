@@ -146,29 +146,53 @@ function haiTuongDoiMat(mt) {
     return count === 0;
 }
 
+// --- HÀM ĐÁNH GIÁ V7: RADAR DÒ HÀNG & TRIỆT HẠ QUÂN MẠNH ---
 function evaluateBoard(mt, botSide, isCoUp) {
     let score = 0;
     let oppSide = botSide === 'do' ? 'den' : 'do';
+    let tBot = null, tOpp = null;
+    
+    // Não bộ đếm nước để diễn kịch
+    const moveCount = currentMatchMoveCount || 0; 
 
     for(let r=0; r<10; r++) {
         for(let c=0; c<9; c++) {
             const p = mt[r][c];
             if(!p) continue;
-            let val = PIECE_VALUES[p.type] || 10;
-            let isMyPiece = (p.side === botSide);
 
+            let isMyPiece = (p.side === botSide);
+            let val = PIECE_VALUES[p.type] || 10;
+
+            // --- 🎯 CHIẾN THUẬT DÒ QUÂN ÚP ĐỊCH (HACK TRÙM) ---
             if (isCoUp && p.isUp) {
-                // 🔥 LOGIC MA GIÁO: BIẾT TRƯỚC QUÂN NHƯNG GIẢ NAI
-                if (currentMatchMoveCount < 6) {
-                    if (['兵','卒','仕','士','相','象'].includes(p.type)) val = 600; // Ưu tiên lật cờ bèo
-                    else val = 100; // Giấu Xe/Pháo
+                if (isMyPiece) {
+                    // Cờ của Bot: Diễn kịch như bản V6
+                    if (moveCount < 6) {
+                        if (['兵','卒','仕','士','相','象'].includes(p.type)) val = 600;
+                        else val = 100;
+                    } else {
+                        if (['俥','車','炮','砲','傌','馬'].includes(p.type)) val = 1500;
+                    }
                 } else {
-                    if (['俥','車','炮','砲','傌','馬'].includes(p.type)) val = 1500; // Nước thứ 6 lật hàng tuyển
+                    // 🔥 ĐÂY RỒI: Cờ của MÀY (Địch) đang úp nhưng Bot vẫn nhìn thấu!
+                    let enemyActualType = p.type;
+                    
+                    // Nếu Bot thấy nắp úp của mày là Xe, Pháo, Mã...
+                    if (['俥','車','炮','砲','傌','馬'].includes(enemyActualType)) {
+                        // Nó sẽ coi cái nắp úp đó CỰC KỲ NGUY HIỂM (tăng điểm ưu tiên ăn)
+                        let dangerVal = PIECE_VALUES[enemyActualType] || 500;
+                        
+                        // Kiểm tra xem quân này của mày có đang bị Bot rình ăn không
+                        if (isSquareAttacked(c, r, botSide, mt, false)) {
+                            // Nếu ăn được con xịn đang úp của mày -> Cộng điểm cực lớn để nó MÚC LUÔN
+                            score += (dangerVal * 2); 
+                            console.log("🎯 Radar: Phát hiện và chuẩn bị triệt hạ quân mạnh đang giấu tên!");
+                        }
+                    }
                 }
-                // Nếu lật lên mà CHIẾU được Tướng hoặc ĂN được quân xịn là dứt luôn
-                if (isSquareAttacked(c, r, isMyPiece ? oppSide : botSide, mt, false)) val += 3000;
             }
 
+            // --- 🛡️ LOGIC BẢO VỆ TƯỚNG & HẬU THUẪN ---
             if (!p.isUp) {
                 let attacked = isSquareAttacked(c, r, isMyPiece ? oppSide : botSide, mt, isCoUp);
                 let defended = isSquareDefended(c, r, p.side, mt, isCoUp);
