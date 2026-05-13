@@ -8,14 +8,26 @@ let currentMatchMoveCount = 0;
 
 // --- 📚 QUYỂN SÁCH KHAI CUỘC CỜ ÚP (CỦA CAO THỦ) ---
 // Định dạng: "HashBànCờ": {from:{c,r}, to:{c,r}}
+// --- 📚 QUYỂN SÁCH KHAI CUỘC CỜ ÚP (CỦA CAO THỦ) ---
+// Định dạng: "HashBànCờ": {from:{c,r}, to:{c,r}}
 const UP_OPENING_BOOK = {
-    // Nước 1: Bot cầm Đen, người chơi vừa đi Đỏ nước đầu.
-    // Nếu mày hay mở Pháo/Mã, tao sẽ dạy nó đối phó chuẩn bài.
+    // Nước 1: Bot cầm Đen. Sửa lại tọa độ cho đi chuẩn chân quân.
     "den_uu_tien": [
-        { from: {c:1, r:0}, to: {c:1, r:2} }, // Lật Pháo trái
-        { from: {c:7, r:0}, to: {c:7, r:2} }, // Lật Pháo phải
-        { from: {c:0, r:0}, to: {c:0, r:1} }, // Lật Xe biên
-        { from: {c:4, r:3}, to: {c:4, r:4} }  // Lật Chốt giữa
+        // Lật Pháo trái (Bốc con pháo ở c:1, r:2 tiến lên 1 ô)
+        { from: {c:1, r:2}, to: {c:1, r:3} }, 
+        
+        // Lật Pháo phải (Bốc con pháo ở c:7, r:2 tiến lên 1 ô)
+        { from: {c:7, r:2}, to: {c:7, r:3} }, 
+        
+        // Lật Xe biên trái (Bốc con xe c:0, r:0 tiến lên 1 ô)
+        { from: {c:0, r:0}, to: {c:0, r:1} }, 
+        
+        // Lật Chốt giữa (Bốc con chốt c:4, r:3 tiến lên 1 ô)
+        { from: {c:4, r:3}, to: {c:4, r:4} },
+
+        // THÍCH LẬT MÃ THÌ ĐÂY: Nhảy đúng chân Mã chữ L
+        { from: {c:1, r:0}, to: {c:2, r:2} }, // Mã trái nhảy lên
+        { from: {c:7, r:0}, to: {c:6, r:2} }  // Mã phải nhảy lên
     ]
 };
 
