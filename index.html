@@ -8704,6 +8704,17 @@ refreshTimerRings();
                     
                     if (result.action === "done") {
                         window.__isBotThinking = false;
+                        // --- BÙA BOT CHỌC QUÊ KHI ĂN ĐƯỢC QUÂN XỊN CỦA MÀY ---
+                            if (result.move && result.move.to) {
+                                let oldTargetType = null;
+                                const mt = typeof taoMaTran === 'function' ? taoMaTran() : [];
+                                if (mt[result.move.to.r] && mt[result.move.to.r][result.move.to.c]) {
+                                    oldTargetType = mt[result.move.to.r][result.move.to.c].type;
+                                }
+                                if (oldTargetType && ['車','俥','炮','砲','馬','傌'].includes(oldTargetType)) {
+                                    if (typeof botTrashTalk === 'function') botTrashTalk('bot_eat', oldTargetType);
+                                }
+                            }
                         if (!result.move) {
                             db.ref("matches/" + currentRoomId).update({
                                 winner: "do",
@@ -10518,6 +10529,17 @@ if (!canRenderLiveBoard) {
                              window.__isBotThinking = false;
                              const result = e.data;
                              if (result.action === "done") {
+                                // --- BÙA BOT CHỌC QUÊ KHI ĂN ĐƯỢC QUÂN XỊN CỦA MÀY ---
+                            if (result.move && result.move.to) {
+                                let oldTargetType = null;
+                                const mt = typeof taoMaTran === 'function' ? taoMaTran() : [];
+                                if (mt[result.move.to.r] && mt[result.move.to.r][result.move.to.c]) {
+                                    oldTargetType = mt[result.move.to.r][result.move.to.c].type;
+                                }
+                                if (oldTargetType && ['車','俥','炮','砲','馬','傌'].includes(oldTargetType)) {
+                                    if (typeof botTrashTalk === 'function') botTrashTalk('bot_eat', oldTargetType);
+                                }
+                            }
                                  if (!result.move) {
                                      db.ref("matches/" + currentRoomId).update({
                                          winner: "do", winReason: "checkmate",
@@ -13940,7 +13962,7 @@ async function setReady() {
     // 🔥 TỐI ƯU 3: CHỐNG SPAM CLICK LÀM KẸT ĐƯỜNG TRUYỀN
     const btn = document.getElementById("ready-main-btn");
     if (btn) {
-        if (btn.disabled) return; // Đang ấn rồi thì cấm ấn tiếp
+        if (btn.disabled) return; 
         btn.disabled = true;
         btn.textContent = "ĐANG XỬ LÝ...";
         btn.style.opacity = "0.6";
@@ -13971,7 +13993,7 @@ async function setReady() {
     await db.ref("matches/" + currentRoomId + "/ready/" + mySide).set(true);
 
     // ==========================================
-    // 🔥 BÙA CHỮA BỆNH BOT ĐỨNG HÌNH KHI XÀI VÉ MIỄN PHÍ 🔥
+    // 🔥 BÙA ÉP ĐÁNH BOT (BẤT KỂ DÙNG THẺ HAY TIỀN TƯƠI) 🔥
     // ==========================================
     const roomSnap = await db.ref("matches/" + currentRoomId).once("value");
     const room = roomSnap.val() || {};
@@ -13982,8 +14004,9 @@ async function setReady() {
     const isBot = opp && (opp.uid === "bot_master_100" || opp.isBot || (opp.name && opp.name.includes("Lão Tẩu")));
 
     if (isBot) {
-        // Tao là chủ phòng tao có quyền ÉP mày Sẵn Sàng luôn đéo cần Server duyệt!
+        // Đóng vai giang hồ mạng: Mày ấn SS xong là bố ép thằng Bot SS theo luôn!
         const stake = Math.max(0, Math.floor(Number(room.stakePMC || 0)));
+        
         await db.ref("matches/" + currentRoomId + "/stakeLocked/" + oppSide).set({
             done: true,
             walletKey: "pi_admin_master",
@@ -13992,6 +14015,27 @@ async function setReady() {
             uid: opp.uid || "bot_master_100"
         });
         await db.ref("matches/" + currentRoomId + "/ready/" + oppSide).set(true);
+
+        // BÙA KÍCH NỔ TRẬN ĐẤU (Vì mầy dùng thẻ, server đéo thèm kích nổ, mình phải tự kích)
+        setTimeout(() => {
+            if (currentRoomStatus !== "playing") {
+                // Giả danh thằng Đỏ (chủ phòng) để kick-start ván cờ
+                db.ref("matches/" + currentRoomId).update({
+                    status: "playing",
+                    isCoUp: room.mode === "co-up",
+                    board: exportBoardState(), 
+                    activeRoundId: currentRoomId + "_r" + (Math.floor(Number(room.roundNo || 0)) + 1) + "_" + Date.now(),
+                    roundNo: Math.floor(Number(room.roundNo || 0)) + 1,
+                    startedAt: firebase.database.ServerValue.TIMESTAMP,
+                    moveCount: 0,
+                    turn: "do",
+                    timeDo: 900,
+                    timeDen: 900,
+                    turnStartedAt: firebase.database.ServerValue.TIMESTAMP, 
+                    updatedAt: firebase.database.ServerValue.TIMESTAMP
+                });
+            }
+        }, 800); // Đợi 0.8 giây cho Firebase nhận diện xong vụ khóa tiền là kick-start luôn
     }
     // ==========================================
 }
