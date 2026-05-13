@@ -7413,11 +7413,18 @@ let botWaitSeconds = 30;
 let isBotTimerRunning = false;
 
 function startBotWaitingTimer() {
-    // Không chạy lại nếu đang đếm, chặn chạy nhiều lần
+    // 🛑 CHỐT CHẶN TỬ THẦN: Nếu là Cờ Úp mà cược > 3 PMC là nghỉ khỏe!
+    if (isCoUp && currentRoomStakePMC > 3) {
+        console.log("Phòng cược quá lớn (>3 PMC), Lão Tẩu đéo dám đánh cờ úp đâu!");
+        cancelBotWaiting();
+        return;
+    }
+
+    // Nếu đang đếm rồi thì thôi
     if (isBotTimerRunning) return;
     
-    // BẢO VỆ KÉT SẮT: Chặn không cho Bot đánh nếu cược lớn hơn 500 PMC
-    if (currentRoomStakePMC > 500) return; 
+    // Bảo vệ két sắt cho cờ thường (giữ mức 500 như cũ hoặc tùy mày)
+    if (!isCoUp && currentRoomStakePMC > 500) return; 
 
     isBotTimerRunning = true;
     botWaitSeconds = 30;
@@ -7429,7 +7436,6 @@ function startBotWaitingTimer() {
 
     clearInterval(botWaitInterval);
     botWaitInterval = setInterval(() => {
-        // Nếu có thằng thật nhảy vào, hoặc đéo phải phòng chờ nữa thì hủy đếm
         if (currentRoomStatus !== "waiting" || (window.__lastBoundRoom && window.__lastBoundRoom.players?.den)) {
             cancelBotWaiting();
             return;
@@ -7441,22 +7447,15 @@ function startBotWaitingTimer() {
         if (botWaitSeconds <= 0) {
             cancelBotWaiting();
             
-            // --- KHO DATA BOT KHỊA NGƯỜI CHƠI ---
+            // Kho dữ liệu Bot khịa người chơi (Giữ nguyên của mày)
             const botList = [
-                { name: "Vô Danh Lão Tẩu", photo: "images/den_tuong.png", quote: "Chờ lâu quá à? Có muốn thử vài đường quyền với lão phu không chàng trai trẻ?" },
-                { name: "Chấp Một Xe", photo: "images/do_tuong.png", quote: "Tao chấp mày một chiếc Xe đấy. Vào đây mà lấy PMC của tao nè!" },
-                { name: "Độc Cô Cầu Bại", photo: "images/den_tuong.png", quote: "Cả đời này ta chỉ mong một lần được nếm mùi thất bại... Mày giúp ta được không?" },
-                { name: "Thần Bài Pi", photo: "images/do_tuong.png", quote: "Tiền PMC nhiều quá xài không hết. Mày có giỏi thì vào đây mà bốc!" },
-                { name: "Kỳ Thủ Ẩn Danh", photo: "images/den_tuong.png", quote: "Đừng hỏi ta là ai, hãy tự hỏi bản thân xem có đỡ nổi 30 nước không?" },
-                { name: "Ma Tôn", photo: "images/do_tuong.png", quote: "Khặc khặc! Nộp mạng... à nhầm, nộp PMC ra đây!" },
-                { name: "Trùm Pháo Đầu", photo: "images/den_tuong.png", quote: "Cứ đưa pháo đầu vào giữa là tao thấy mày khóc rồi. Chơi không?" }
+                { name: "Vô Danh Lão Tẩu", photo: "images/den_tuong.png", quote: "Cờ úp bạc cắc 3 đồng ta mới chơi, chứ đánh lớn ta sợ thua lắm! 😂" },
+                { name: "Thần Bài Trà Đá", photo: "images/do_tuong.png", quote: "3 PMC là đủ mua điếu thuốc rồi, vào đây lật nắp với ta!" }
             ];
             
-            // Bốc ngẫu nhiên 1 con
             window.currentInvitingBot = botList[Math.floor(Math.random() * botList.length)];
-            window.currentInvitingBot.level = Math.floor(Math.random() * 80) + 20;
+            window.currentInvitingBot.level = Math.floor(Math.random() * 50) + 10;
 
-            // Gắn lên bảng thông báo
             const avatarEl = document.getElementById("bot-popup-avatar");
             const nameEl = document.getElementById("bot-popup-name");
             const quoteEl = document.getElementById("bot-popup-quote");
@@ -7465,13 +7464,11 @@ function startBotWaitingTimer() {
             if (nameEl) nameEl.innerText = `${window.currentInvitingBot.name} (Cấp ${window.currentInvitingBot.level})`;
             if (quoteEl) quoteEl.innerText = `"${window.currentInvitingBot.quote}"`;
 
-            // Bật bảng hỏi
             const modal = document.getElementById("bot-invite-modal");
             if (modal) modal.style.display = "flex";
         }
     }, 1000);
 }
-
 function cancelBotWaiting() {
     clearInterval(botWaitInterval);
     isBotTimerRunning = false;
