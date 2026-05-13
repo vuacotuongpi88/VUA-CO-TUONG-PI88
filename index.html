@@ -8373,64 +8373,70 @@ function showMoveHints(pieceEl) {
     }
 }
 function checkLuat(type, side, c, r, tc, tr, mt) {
-if (tc < 0 || tc > 8 || tr < 0 || tr > 9) return false;
-const dx = Math.abs(tc - c), dy = Math.abs(tr - r);
-if (mt[tr][tc] && mt[tr][tc].side === side) return false;
+    if (tc < 0 || tc > 8 || tr < 0 || tr > 9) return false;
+    const dx = Math.abs(tc - c), dy = Math.abs(tr - r);
+    
+    // 🔥 FIX LỖI 1: CẤM ĐÈ QUÂN MÌNH (KỂ CẢ NẮP ÚP) 🔥
+    if (mt[tr][tc] && mt[tr][tc].side === side) return false;
 
-let luatType = type;
-// XÁC ĐỊNH LUẬT CỜ ÚP DỰA TRÊN VỊ TRÍ XUẤT PHÁT
-const pieceAtPos = getPieceAtBoardPos(c, r);
-if (isCoUp && pieceAtPos && pieceAtPos.dataset.isUp === "true") {
-if (r === 0 || r === 9) {
-if (c === 0 || c === 8) luatType = (side === 'do' ? '俥' : '車');
-else if (c === 1 || c === 7) luatType = (side === 'do' ? '傌' : '馬');
-else if (c === 2 || c === 6) luatType = (side === 'do' ? '相' : '象');
-else if (c === 3 || c === 5) luatType = (side === 'do' ? '仕' : '士');
-} else if ((r === 2 && side === 'den') || (r === 7 && side === 'do')) {
-if (c === 1 || c === 7) luatType = (side === 'do' ? '炮' : '砲');
-} else if ((r === 3 && side === 'den') || (r === 6 && side === 'do')) {
-if (c % 2 === 0) luatType = (side === 'do' ? '兵' : '卒');
-}
-}
+    let luatType = type;
+    const pieceAtPos = getPieceAtBoardPos(c, r);
 
-switch (luatType) {
-case '帥': case '將': return dx + dy === 1 && tc >= 3 && tc <= 5 && (side === 'do' ? tr >= 7 : tr <= 2);
-case '仕': case '士':
-            if (isCoUp) return dx === 1 && dy === 1; // 🔥 Cờ Úp: Sĩ đi chéo tự do đéo cần trong cung
-            return dx === 1 && dy === 1 && tc >= 3 && tc <= 5 && (side === 'do' ? tr >= 7 : tr <= 2);
+    // 🔥 FIX LỖI 2: SIẾT LUẬT NƯỚC ĐẦU (ĐI THEO CHÂN Ô ĐỨNG) 🔥
+    if (isCoUp && pieceAtPos && pieceAtPos.dataset.isUp === "true") {
+        if (r === 0 || r === 9) {
+            if (c === 0 || c === 8) luatType = (side === 'do' ? '俥' : '車'); // Chân Xe
+            else if (c === 1 || c === 7) luatType = (side === 'do' ? '傌' : '馬'); // Chân Mã
+            else if (c === 2 || c === 6) luatType = (side === 'do' ? '相' : '象'); // Chân Tượng
+            else if (c === 3 || c === 5) luatType = (side === 'do' ? '仕' : '士'); // Chân Sĩ
+        } else if ((r === 2 && side === 'den') || (r === 7 && side === 'do')) {
+            if (c === 1 || c === 7) luatType = (side === 'do' ? '炮' : '砲'); // Chân Pháo
+        } else if ((r === 3 && side === 'den') || (r === 6 && side === 'do')) {
+            if (c % 2 === 0) luatType = (side === 'do' ? '兵' : '卒'); // Chân Tốt
+        }
+    }
+
+    switch (luatType) {
+        case '帥': case '將': 
+            return dx + dy === 1 && tc >= 3 && tc <= 5 && (side === 'do' ? tr >= 7 : tr <= 2);
+        
+        case '仕': case '士': 
+            // Nếu đang ÚP -> BUỘC phải ở trong cung
+            if (isCoUp && pieceAtPos && pieceAtPos.dataset.isUp === "true") {
+                return dx === 1 && dy === 1 && tc >= 3 && tc <= 5 && (side === 'do' ? tr >= 7 : tr <= 2);
+            }
+            // Nếu đã lật (ngửa) hoặc cờ thường -> Đi chéo tự do (cờ úp ngửa sĩ đi đâu cũng được)
+            return dx === 1 && dy === 1;
 
         case '相': case '象':
-            if (dx !== 2 || dy !== 2) return false; 
-            if (!isCoUp && (side === 'do' ? tr < 5 : tr > 4)) return false; // 🔥 Cờ thường: Cấm qua sông. Cờ Úp: Thả cửa!
-            return !mt[(r + tr) / 2][(c + tc) / 2];
-case '傌': case '馬':
-if (!((dx === 1 && dy === 2) || (dx === 2 && dy === 1))) return false;
-return !mt[r + (dy === 2 ? (tr > r ? 1 : -1) : 0)][c + (dx === 2 ? (tc > c ? 1 : -1) : 0)];
-case '俥': case '車':
-if (dx !== 0 && dy !== 0) return false;
-return countV(c, r, tc, tr, mt) === 0;
-case '炮': case '砲':
-const v = countV(c, r, tc, tr, mt);
-return (mt[tr][tc] ? v === 1 : v === 0) && (dx === 0 || dy === 0);
+            if (dx !== 2 || dy !== 2) return false;
+            if (mt[(r + tr) / 2][(c + tc) / 2]) return false; // Bị cản chân
+            // Nếu đang ÚP -> CẤM qua sông
+            if (isCoUp && pieceAtPos && pieceAtPos.dataset.isUp === "true") {
+                return (side === 'do' ? tr >= 5 : tr <= 4);
+            }
+            // Nếu đã lật -> Qua sông thoải mái
+            return true;
 
-case '兵': case '卒': {
-    const daQuaSong = (side === 'do') ? (r <= 4) : (r >= 5);
+        case '傌': case '馬':
+            if (!((dx === 1 && dy === 2) || (dx === 2 && dy === 1))) return false;
+            return !mt[r + (dy === 2 ? (tr > r ? 1 : -1) : 0)][c + (dx === 2 ? (tc > c ? 1 : -1) : 0)];
 
-    const diTien = (side === 'do')
-        ? (dx === 0 && dy === 1 && tr < r)
-        : (dx === 0 && dy === 1 && tr > r);
+        case '俥': case '車':
+            if (dx !== 0 && dy !== 0) return false;
+            return countV(c, r, tc, tr, mt) === 0;
 
-    const diNgang = (dx === 1 && dy === 0);
+        case '炮': case '砲':
+            const v = countV(c, r, tc, tr, mt);
+            return (mt[tr][tc] ? v === 1 : v === 0) && (dx === 0 || dy === 0);
 
-    // Chưa qua sông: chỉ được đi tới
-    if (!daQuaSong) return diTien;
-
-    // Qua sông rồi: được đi tới hoặc đi ngang, không được lùi
-    return diTien || diNgang;
-}
-}
-
-return false;
+        case '兵': case '卒':
+            const daQuaSong = (side === 'do') ? (r <= 4) : (r >= 5);
+            const diTien = (side === 'do') ? (dx === 0 && dy === 1 && tr < r) : (dx === 0 && dy === 1 && tr > r);
+            const diNgang = (dx === 1 && dy === 0);
+            return daQuaSong ? (diTien || diNgang) : diTien;
+    }
+    return false;
 }
 // 🔥 BÙA TẢI TRƯỚC 45 ẢNH RỒNG MỚI (ĐỌC ĐÚNG TÊN FILE CỦA REMOVE.BG)
 const SO_LUONG_ANH = 45; // Tao cập nhật lên 45 tấm rồi nè
