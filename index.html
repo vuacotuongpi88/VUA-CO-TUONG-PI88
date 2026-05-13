@@ -8381,14 +8381,13 @@ if (c % 2 === 0) luatType = (side === 'do' ? '兵' : '卒');
 switch (luatType) {
 case '帥': case '將': return dx + dy === 1 && tc >= 3 && tc <= 5 && (side === 'do' ? tr >= 7 : tr <= 2);
 case '仕': case '士':
-    return dx === 1
-        && dy === 1
-        && tc >= 3 && tc <= 5
-        && (side === 'do' ? tr >= 7 : tr <= 2);
-case '相': case '象':
-if (!isCoUp && (side === 'do' ? tr < 5 : tr > 4)) return false;
-if (dx !== 2 || dy !== 2) return false;
-return !mt[(r + tr) / 2][(c + tc) / 2]; // Tượng đi tự do nếu là cờ úp
+            if (isCoUp) return dx === 1 && dy === 1; // 🔥 Cờ Úp: Sĩ đi chéo tự do đéo cần trong cung
+            return dx === 1 && dy === 1 && tc >= 3 && tc <= 5 && (side === 'do' ? tr >= 7 : tr <= 2);
+
+        case '相': case '象':
+            if (dx !== 2 || dy !== 2) return false; 
+            if (!isCoUp && (side === 'do' ? tr < 5 : tr > 4)) return false; // 🔥 Cờ thường: Cấm qua sông. Cờ Úp: Thả cửa!
+            return !mt[(r + tr) / 2][(c + tc) / 2];
 case '傌': case '馬':
 if (!((dx === 1 && dy === 2) || (dx === 2 && dy === 1))) return false;
 return !mt[r + (dy === 2 ? (tr > r ? 1 : -1) : 0)][c + (dx === 2 ? (tc > c ? 1 : -1) : 0)];
@@ -8769,7 +8768,16 @@ refreshTimerRings();
                         // Ghi nước cờ vào sổ tay chống nhây
                         botMoveHistory.push({ hash: result.move.hash, isCheck: result.move.isCheck });
                         if (botMoveHistory.length > 10) botMoveHistory.shift(); // Chỉ nhớ 10 bước gần nhất
-
+                        // 🟢 BÙA ÉP BOT LẬT CỜ ÚP 🟢
+                        if (isCoUp && result.move && result.move.to && result.move.newBoard) {
+                            let botMovedPiece = result.move.newBoard.find(p => p.c === result.move.to.c && p.r === result.move.to.r);
+                            if (botMovedPiece && botMovedPiece.isUp) {
+                                botMovedPiece.isUp = false;
+                                const names = {'車': 'xe', '馬': 'ma', '象': 'tuong', '士': 'si', '將': 'tuong_soai', '砲': 'phao', '卒': 'tot', '俥': 'xe', '傌': 'ma', '相': 'tuong', '仕': 'si', '帥': 'tuong_soai', '炮': 'phao', '兵': 'tot'};
+                                botMovedPiece.src = `images/${botMovedPiece.side}_${names[botMovedPiece.type]}.png`;
+                            }
+                        }
+                        // 🟢 KẾT THÚC BÙA 🟢
                         db.ref("matches/" + currentRoomId).update({
                             board: result.move.newBoard,
                             turn: "do",
@@ -10593,6 +10601,16 @@ if (!canRenderLiveBoard) {
                                      botMoveHistory.push({ hash: result.move.hash, isCheck: result.move.isCheck });
                                      if (botMoveHistory.length > 10) botMoveHistory.shift();
                                  }
+                                 // 🟢 BÙA ÉP BOT LẬT CỜ ÚP 🟢
+                        if (isCoUp && result.move && result.move.to && result.move.newBoard) {
+                            let botMovedPiece = result.move.newBoard.find(p => p.c === result.move.to.c && p.r === result.move.to.r);
+                            if (botMovedPiece && botMovedPiece.isUp) {
+                                botMovedPiece.isUp = false;
+                                const names = {'車': 'xe', '馬': 'ma', '象': 'tuong', '士': 'si', '將': 'tuong_soai', '砲': 'phao', '卒': 'tot', '俥': 'xe', '傌': 'ma', '相': 'tuong', '仕': 'si', '帥': 'tuong_soai', '炮': 'phao', '兵': 'tot'};
+                                botMovedPiece.src = `images/${botMovedPiece.side}_${names[botMovedPiece.type]}.png`;
+                            }
+                        }
+                        // 🟢 KẾT THÚC BÙA 🟢
                                  db.ref("matches/" + currentRoomId).update({
                                      board: result.move.newBoard, turn: "do",
                                      timeDo: timeDo, timeDen: timeDen, turnStartedAt: firebase.database.ServerValue.TIMESTAMP,
