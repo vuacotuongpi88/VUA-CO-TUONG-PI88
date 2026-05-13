@@ -8195,44 +8195,41 @@ function createPiece(cIdx, rIdx, type, up) {
     const img = document.createElement("img");
     img.className = "piece";
 
-    const side = ["帥", "俥", "傌", "相", "仕", "炮", "兵"].includes(type) ? "do" : "den";
+    // 🔥 FIX LỖI ĂN CẮP CỜ Ở ĐÂY: 
+    // Ép quân cờ phải nhận phe theo Vị Trí Sân (Đỏ/Đen) chứ đéo được nhận theo Chữ Bị Giấu!
+    let side;
+    if (isCoUp) {
+        // Cờ Úp: Nửa bàn trên (hàng 0 -> 4) là Đen, nửa bàn dưới (hàng 5 -> 9) là Đỏ
+        side = (rIdx <= 4) ? "den" : "do";
+    } else {
+        // Cờ Tướng thường: Phân loại chuẩn theo tên chữ Hán
+        side = ["帥", "俥", "傌", "相", "仕", "炮", "兵"].includes(type) ? "do" : "den";
+    }
+
     img.dataset.side = side;
     img.dataset.type = type;
     img.dataset.isUp = up ? "true" : "false";
 
     const names = {
-        '車': 'xe',
-        '馬': 'ma',
-        '象': 'tuong',
-        '士': 'si',
-        '將': 'tuong_soai',
-        '砲': 'phao',
-        '卒': 'tot',
-
-        '俥': 'xe',
-        '傌': 'ma',
-        '相': 'tuong',
-        '仕': 'si',
-        '帥': 'tuong_soai',
-        '炮': 'phao',
-        '兵': 'tot'
+        '車': 'xe', '馬': 'ma', '象': 'tuong', '士': 'si', '將': 'tuong_soai', '砲': 'phao', '卒': 'tot',
+        '俥': 'xe', '傌': 'ma', '相': 'tuong', '仕': 'si', '帥': 'tuong_soai', '炮': 'phao', '兵': 'tot'
     };
 
-   if (up) {
-    img.src = "images/up_mat_trang.png";
-} else {
-    img.src = `images/${side}_${names[type]}.png`;
-}
+    if (up) {
+        img.src = "images/up_mat_trang.png";
+    } else {
+        img.src = `images/${side}_${names[type]}.png`;
+    }
 
     img.onerror = function () {
-    this.onerror = null;
-    this.src = side === "do" ? "images/do_tuong.png" : "images/den_tuong.png";
-};
+        this.onerror = null;
+        this.src = side === "do" ? "images/do_tuong.png" : "images/den_tuong.png";
+    };
 
     img.style.left = columns[cIdx] + "%";
     img.style.top = rows[rIdx] + "%";
 
-    // ép nổi lên trên cho riêng 2 con Tướng
+    // Ép nổi lên trên cho riêng 2 con Tướng
     if (isKingPiece(type)) {
         img.style.zIndex = "30";
         img.style.opacity = "1";
