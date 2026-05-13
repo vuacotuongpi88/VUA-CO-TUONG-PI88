@@ -8597,15 +8597,21 @@ if (haiTuongDoiMat(mt)) {
     }
 
     if (target) {
-    target.remove();
-    try {
-        sounds.capture.pause();
-        sounds.capture.currentTime = 0;
-        sounds.capture.play().catch(() => {});
-    } catch (e) {}
-} else {
-    playSnd('click');
-}
+        // --- BÙA BOT ĐỔ THỪA KHI MẤT QUÂN XỊN ---
+        const typeBiAn = target.dataset.type;
+        if (['車','俥','炮','砲','馬','傌'].includes(typeBiAn)) {
+            botTrashTalk('bot_lost', typeBiAn);
+        }
+        
+        target.remove();
+        try {
+            sounds.capture.pause();
+            sounds.capture.currentTime = 0;
+            sounds.capture.play().catch(() => {});
+        } catch (e) {}
+    } else {
+        playSnd('click');
+    }
 
     lastMoveFrom = { c: c1, r: r1 };
     lastMoveTo = { c: c2, r: r2 };
@@ -8647,6 +8653,11 @@ refreshTimerRings();
     setTimeout(() => {
         // Kiểm tra Chiếu Bí (Checkmate)
         if (laBiChieu(luotDi, taoMaTran())) {
+            // --- BÙA BOT LA LÀNG KHI BỊ CHIẾU TƯỚNG ---
+            if (luotDi === (mySide === 'do' ? 'den' : 'do')) {
+                botTrashTalk('bot_checked');
+            }
+            
             if (checkMate(luotDi)) {
                 const winnerSide = (luotDi === 'do') ? 'den' : 'do';
                 const resultSub = `BÊN ${winnerSide === 'do' ? 'ĐỎ' : 'ĐEN'} THẮNG`;
@@ -8725,35 +8736,65 @@ refreshTimerRings();
     }
 }; // Kết thúc board.onclick
 
-function resetToStartup() {
-clearInterval(interval);
-playSnd('welcome'); playSnd('bgm');
-isGameOver = false; luotDi = 'do'; timeDo = 900; timeDen = 900;
-document.getElementById("victory-wrap").style.transform = "translate(-50%, -50%) scale(0)";
-document.querySelectorAll(".piece").forEach(p => p.remove());
-clearMoveHints();
-clearLastMoveMarks();
-lastMoveFrom = null;
-lastMoveTo = null;
-selectedPiece = null;
-let den_pieces = ["車", "車", "馬", "馬", "象", "象", "士", "士", "砲", "砲", "卒", "卒", "卒", "卒", "卒"];
-let do_pieces = ["俥", "俥", "傌", "傌", "相", "相", "仕", "仕", "炮", "炮", "兵", "兵", "兵", "兵", "兵"];
+// ==========================================
+// 🔥 MỎ HỖN ENGINE - TRÍ TUỆ NHÂN TẠO KHỊA ĐỂU 🔥
+// ==========================================
+function botTrashTalk(type, pieceCode = "") {
+    if (!currentRoomId || isSpectatorMode) return;
+    
+    // Chỉ kích hoạt nếu đối thủ là Bot
+    const oppSide = mySide === "do" ? "den" : "do";
+    const opp = window.__lastBoundRoom?.players?.[oppSide];
+    const isOppBot = opp && (opp.uid === "bot_master_100" || opp.isBot || (opp.name && opp.name.includes("Lão Tẩu")));
+    
+    if (!isOppBot) return;
 
-if (isCoUp) {
-den_pieces = shuffle(den_pieces);
-do_pieces = shuffle(do_pieces);
-}
+    // Chống spam: Cách nhau ít nhất 5 giây mới chửi 1 câu
+    const now = Date.now();
+    if (window.__lastBotTrashTalk && now - window.__lastBotTrashTalk < 5000) return;
+    window.__lastBotTrashTalk = now;
 
-const posDen = [{ c: 0, r: 0 }, { c: 8, r: 0 }, { c: 1, r: 0 }, { c: 7, r: 0 }, { c: 2, r: 0 }, { c: 6, r: 0 }, { c: 3, r: 0 }, { c: 5, r: 0 }, { c: 1, r: 2 }, { c: 7, r: 2 }, { c: 0, r: 3 }, { c: 2, r: 3 }, { c: 4, r: 3 }, { c: 6, r: 3 }, { c: 8, r: 3 }];
-const posDo = [{ c: 0, r: 9 }, { c: 8, r: 9 }, { c: 1, r: 9 }, { c: 7, r: 9 }, { c: 2, r: 9 }, { c: 6, r: 9 }, { c: 3, r: 9 }, { c: 5, r: 9 }, { c: 1, r: 7 }, { c: 7, r: 7 }, { c: 0, r: 6 }, { c: 2, r: 6 }, { c: 4, r: 6 }, { c: 6, r: 6 }, { c: 8, r: 6 }];
+    const tenQuan = {
+        '俥': 'Xe', '車': 'Xe', '炮': 'Pháo', '砲': 'Pháo', '傌': 'Mã', '馬': 'Mã'
+    }[pieceCode] || "quân";
 
-createPiece(4, 0, "將", false);
-createPiece(4, 9, "帥", false);
+    const khaoTuvung = {
+        'bot_eat': [
+            `Ngon! Mất con ${tenQuan} rồi nha con trai 🤣`,
+            `Đưa con ${tenQuan} đây Lão Tẩu giữ giùm cho.`,
+            `Đi cờ mù mắt vãi lồn, nộp con ${tenQuan} lãng xẹt 🤡`,
+            `Tao nói rồi, đánh với tao mầy chỉ có nát gáo!`
+        ],
+        'bot_lost': [
+            `Đù má màn hình tao bị đơ! Trượt tay thôi con ạ 😡`,
+            `Mày ăn ${tenQuan} tao thì lát tao vặt đầu Tướng mày.`,
+            `Cho mày con ${tenQuan} đó, tí tao lấy lại cả bàn!`,
+            `Láo lếu! Dám vuốt râu hùm à?`
+        ],
+        'bot_checked': [
+            `Á à, định ám sát Lão Tẩu à? Đéo dễ đâu 🤫`,
+            `Chiếu tí làm gì căng? Tao lách nhẹ cái là xong.`,
+            `Mày dồn tao thì tao gài lại mày thôi, chờ đấy.`
+        ],
+        'time_running': [
+            `Gì lâu vậy cha nội? Nhanh tay lên thằng gà! ⏰`,
+            `Rặn ỉa à cháu? Cờ rõ ràng thế mà nghĩ mãi đéo ra.`,
+            `Còn có mấy chục giây kìa, hay là bấm nút Đầu Hàng mẹ đi cho lẹ? 🤣`
+        ]
+    };
 
-posDen.forEach((p, i) => createPiece(p.c, p.r, den_pieces[i], isCoUp));
-posDo.forEach((p, i) => createPiece(p.c, p.r, do_pieces[i], isCoUp));
+    const cauChui = khaoTuvung[type][Math.floor(Math.random() * khaoTuvung[type].length)];
 
-startTimer();
+    // Chờ 2 giây sau khi xảy ra sự kiện mới nhả chữ (giả vờ như đang gõ phím)
+    setTimeout(() => {
+        db.ref("matches/" + currentRoomId + "/chat").push({
+            uid: "bot_master_100",
+            name: opp.name || "Vô Danh Lão Tẩu",
+            side: oppSide,
+            text: cauChui,
+            at: firebase.database.ServerValue.TIMESTAMP
+        });
+    }, 2000);
 }
 function getCurrentPlayerProfile() {
     const user = auth.currentUser;
