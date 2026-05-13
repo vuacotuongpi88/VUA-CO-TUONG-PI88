@@ -1,22 +1,22 @@
 // ==========================================
-// FILE: botWorker.js (BẢN SIÊU CẤP MA GIÁO V5)
-// CHẾ ĐỘ: HACK NHÌN XUYÊN THẤU + DIỄN VIÊN ĐIỆN ẢNH
+// FILE: botWorker.js (BẢN SIÊU CẤP MA GIÁO V6)
+// CHẾ ĐỘ: HACK NHÌN XUYÊN + DIỄN VIÊN + SÁCH TÀU
 // ==========================================
 
 let positionHistory = []; 
-let killerMoves = Array(100).fill(null).map(() => []); 
-let currentMatchMoveCount = 0; // Biến đếm nước đi nội bộ của não
+let currentMatchMoveCount = 0; 
 
 const PIECE_VALUES = {
     '帥': 1000000, '將': 1000000,
-    '俥': 1200, '車': 1200,
-    '炮': 550,  '砲': 550,
-    '傌': 500,  '馬': 500,  
-    '相': 250,  '象': 250,
-    '仕': 250,  '士': 250,
-    '兵': 120,  '卒': 120
+    '俥': 1500, '車': 1500,
+    '炮': 650,  '砲': 650,
+    '傌': 600,  '馬': 600,  
+    '相': 300,  '象': 250,
+    '仕': 300,  '士': 250,
+    '兵': 150,  '卒': 150
 };
 
+// --- HÀM BỔ TRỢ ---
 function buildMatrix(boardArray) {
     let mt = Array(10).fill(null).map(() => Array(9).fill(null));
     boardArray.forEach(p => { mt[p.r][p.c] = p; });
@@ -43,6 +43,7 @@ function countV(c1, r1, c2, r2, mt) {
     return count;
 }
 
+// --- LUẬT CHƠI & QUÉT AN TOÀN ---
 function checkLuatWorker(type, side, c, r, tc, tr, mt, isCoUp) {
     if (tc < 0 || tc > 8 || tr < 0 || tr > 9) return false;
     if (mt[tr][tc] && mt[tr][tc].side === side) return false; 
@@ -83,117 +84,70 @@ function checkLuatWorker(type, side, c, r, tc, tr, mt, isCoUp) {
             return (mt[tr][tc] ? v === 1 : v === 0) && (dx === 0 || dy === 0);
         case '兵': case '卒':
             const daQuaSong = (side === 'do') ? (r <= 4) : (r >= 5);
-            const diTien = (side === 'do') ? (dx === 0 && dy === 1 && tr < r) : (dx === 0 && dy === 1 && tr > r);
-            const diNgang = (dx === 1 && dy === 0);
-            return daQuaSong ? (diTien || diNgang) : diTien;
+            return daQuaSong ? (dx + dy === 1 && (side === 'do' ? tr <= r : tr >= r)) : (dx === 0 && dy === 1 && (side === 'do' ? tr < r : tr > r));
     }
     return false;
 }
 
-function laBiChieuWorker(side, mt, isCoUp) {
-    let tPos = null;
-    for (let r = 0; r < 10; r++) {
-        for (let c = 0; c < 9; c++) {
-            if (mt[r][c] && mt[r][c].side === side && (mt[r][c].type === '帥' || mt[r][c].type === '將')) {
-                tPos = { c, r }; break;
-            }
-        }
-        if (tPos) break;
-    }
-    if (!tPos) return false;
-    for (let r = 0; r < 10; r++) {
-        for (let c = 0; c < 9; c++) {
-            if (mt[r][c] && mt[r][c].side !== side) {
-                if (checkLuatWorker(mt[r][c].type, mt[r][c].side, c, r, tPos.c, tPos.r, mt, isCoUp)) return true;
-            }
-        }
+function isSquareAttacked(tc, tr, enemySide, mt, isCoUp) {
+    for(let r=0; r<10; r++) for(let c=0; c<9; c++) {
+        const p = mt[r][c];
+        if(p && p.side === enemySide && checkLuatWorker(p.type, enemySide, c, r, tc, tr, mt, isCoUp)) return true;
     }
     return false;
 }
 
-function isSquareAttackedWorker(tc, tr, enemySide, mt, isCoUp) {
-    for (let r = 0; r < 10; r++) {
-        for (let c = 0; c < 9; c++) {
-            const p = mt[r][c];
-            if (p && p.side === enemySide) {
-                if (checkLuatWorker(p.type, enemySide, c, r, tc, tr, mt, isCoUp)) return true;
-            }
-        }
-    }
-    return false;
-}
-
-function isSquareDefendedWorker(tc, tr, mySide, mt, isCoUp) {
+function isSquareDefended(tc, tr, mySide, mt, isCoUp) {
     let temp = mt[tr][tc]; mt[tr][tc] = null;
-    let isDefended = false;
-    for (let r = 0; r < 10; r++) {
-        for (let c = 0; c < 9; c++) {
-            const p = mt[r][c];
-            if (p && p.side === mySide) {
-                if (checkLuatWorker(p.type, mySide, c, r, tc, tr, mt, isCoUp)) { isDefended = true; break; }
-            }
-        }
+    let def = false;
+    for(let r=0; r<10; r++) for(let c=0; c<9; c++) {
+        const p = mt[r][c];
+        if(p && p.side === mySide && checkLuatWorker(p.type, mySide, c, r, tc, tr, mt, isCoUp)) { def = true; break; }
     }
-    mt[tr][tc] = temp; return isDefended;
+    mt[tr][tc] = temp; return def;
 }
 
+// --- HÀM ĐÁNH GIÁ (DIỄN KỊCH + BẢO VỆ QUÂN) ---
 function evaluateBoard(mt, botSide, isCoUp) {
     let score = 0;
     let oppSide = botSide === 'do' ? 'den' : 'do';
     let tBot = null, tOpp = null;
-    let myMaterial = 0, oppMaterial = 0;
 
     for(let r=0; r<10; r++) {
         for(let c=0; c<9; c++) {
             const p = mt[r][c];
             if(!p) continue;
-            let val = PIECE_VALUES[p.type] || 0;
-            if(p.side === botSide) {
-                myMaterial += val;
-                if(p.type === '帥' || p.type === '將') tBot = {r, c};
-            } else {
-                oppMaterial += val;
-                if(p.type === '帥' || p.type === '將') tOpp = {r, c};
-            }
-        }
-    }
-
-    const isWinning = (myMaterial - oppMaterial) > 400;
-
-    for(let r=0; r<10; r++) {
-        for(let c=0; c<9; c++) {
-            const p = mt[r][c];
-            if(!p) continue;
-            let isMyPiece = (p.side === botSide);
             let val = PIECE_VALUES[p.type] || 10;
+            let isMyPiece = (p.side === botSide);
 
             if (isCoUp && p.isUp) {
-                // 🔥 HACK NHÌN XUYÊN THẤU + DIỄN KỊCH 🔥
-                let actualType = p.type;
+                // 🔥 HACK NHÌN XUYÊN THẤU: Bot biết quân nào là Xe/Pháo/Mã
                 if (currentMatchMoveCount < 6) {
-                    // Giả ngu: Lật Sĩ/Tượng/Tốt trước
-                    if (['兵','卒','仕','士','相','象'].includes(actualType)) val = 400;
-                    else val = 50; 
+                    // GIẢ NGU: Ưu tiên lật Sĩ/Tượng/Tốt (điểm cộng cao để lật trước)
+                    if (['兵','卒','仕','士','相','象'].includes(p.type)) val = 500;
+                    else val = 100; // Giấu Xe/Pháo/Mã
                 } else {
-                    // Lộ diện: Lật Xe/Pháo/Mã
-                    if (['俥','車','炮','砲','傌','馬'].includes(actualType)) val = 800;
+                    // LỘ DIỆN: Ưu tiên lật quân xịn
+                    if (['俥','車','炮','砲','傌','馬'].includes(p.type)) val = 1200;
                 }
-                // Nếu lật lên mà CHIẾU được hoặc ĂN XỊN thì lật luôn đéo diễn nữa
-                if (isSquareAttackedWorker(c, r, isMyPiece ? oppSide : botSide, mt, false)) val += 1000;
+                // SƠ HỞ: Thấy lật lên mà CHIẾU được Tướng hoặc ĂN được quân xịn là dứt luôn
+                if (isSquareAttacked(c, r, isMyPiece ? oppSide : botSide, mt, false)) val += 2000;
             }
 
-            if (!p.isUp && p.type !== '帥' && p.type !== '將') {
-                let attacked = isSquareAttackedWorker(c, r, isMyPiece ? oppSide : botSide, mt, isCoUp);
+            if (!p.isUp) {
+                let attacked = isSquareAttacked(c, r, isMyPiece ? oppSide : botSide, mt, isCoUp);
+                let defended = isSquareDefended(c, r, p.side, mt, isCoUp);
                 if (attacked) {
-                    let defended = isSquareDefendedWorker(c, r, p.side, mt, isCoUp);
-                    val -= isWinning ? (val * 0.8) : (val * 0.4);
-                    if (defended) val += (val * 0.2);
-                }
+                    // BÙA SINH TỒN: Quân bị dọa mà đéo có bảo kê -> Trừ cực nặng (ép chạy)
+                    val -= defended ? (val * 0.2) : (val * 0.95);
+                } else if (defended) { val += 50; } // Thưởng đứng liên hoàn
             }
 
-            if (isMyPiece && tOpp && !p.isUp) {
-                let dist = Math.abs(r - tOpp.r) + Math.abs(c - tOpp.c);
-                val += Math.max(0, (14 - dist) * 15);
+            if (p.type === '帥' || p.type === '將') {
+                if (isMyPiece) {
+                    tBot = {r, c};
+                    if (isSquareAttacked(c, r, oppSide, mt, isCoUp)) val -= 10000; // Tướng nguy kịch
+                } else tOpp = {r, c};
             }
 
             if (isMyPiece) score += val; else score -= val;
@@ -202,24 +156,20 @@ function evaluateBoard(mt, botSide, isCoUp) {
     return score;
 }
 
-function generateAllMoves(mt, side, isCoUp, depth, onlyCaptures = false) {
+// --- MINIMAX & DỊCH FEN ---
+function generateAllMoves(mt, side, isCoUp) {
     let moves = [];
-    for (let r = 0; r < 10; r++) {
-        for (let c = 0; c < 9; c++) {
-            let p = mt[r][c];
-            if (p && p.side === side) {
-                for (let tr = 0; tr < 10; tr++) {
-                    for (let tc = 0; tc < 9; tc++) {
-                        if (onlyCaptures && !mt[tr][tc]) continue; 
-                        if (checkLuatWorker(p.type, side, c, r, tc, tr, mt, isCoUp)) {
-                            let target = mt[tr][tc];
-                            mt[tr][tc] = p; mt[r][c] = null;
-                            if (!laBiChieuWorker(side, mt, isCoUp)) {
-                                moves.push({from: {c, r}, to: {c: tc, r: tr}, pieceObj: p, captured: target});
-                            }
-                            mt[r][c] = p; mt[tr][tc] = target;
-                        }
+    for(let r=0; r<10; r++) for(let c=0; c<9; c++) {
+        let p = mt[r][c];
+        if(p && p.side === side) {
+            for(let tr=0; tr<10; tr++) for(let tc=0; tc<9; tc++) {
+                if(checkLuatWorker(p.type, side, c, r, tc, tr, mt, isCoUp)) {
+                    let target = mt[tr][tc];
+                    mt[tr][tc] = p; mt[r][c] = null;
+                    if(!laBiChieuWorker(side, mt, isCoUp) && !haiTuongDoiMat(mt)) {
+                        moves.push({from: {c, r}, to: {c: tc, r: tr}, pieceObj: p});
                     }
+                    mt[r][c] = p; mt[tr][tc] = target;
                 }
             }
         }
@@ -230,18 +180,15 @@ function generateAllMoves(mt, side, isCoUp, depth, onlyCaptures = false) {
 function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp) {
     if (depth <= 0) return evaluateBoard(mt, botSide, isCoUp);
     let currentSide = isMaximizing ? botSide : (botSide === 'do' ? 'den' : 'do');
-    let moves = generateAllMoves(mt, currentSide, isCoUp, depth);
+    let moves = generateAllMoves(mt, currentSide, isCoUp);
     if (moves.length === 0) return isMaximizing ? -1000000 : 1000000;
 
     if (isMaximizing) {
         let maxEval = -Infinity;
         for (let m of moves) {
             let target = mt[m.to.r][m.to.c];
-            let wasUp = m.pieceObj.isUp;
             mt[m.to.r][m.to.c] = m.pieceObj; mt[m.from.r][m.from.c] = null;
-            if (isCoUp && wasUp) m.pieceObj.isUp = false; 
-            let ev = minimax(mt, depth - 1, alpha, beta, false, botSide, isCoUp);
-            if (isCoUp && wasUp) m.pieceObj.isUp = true;
+            let ev = minimax(mt, depth-1, alpha, beta, false, botSide, isCoUp);
             mt[m.from.r][m.from.c] = m.pieceObj; mt[m.to.r][m.to.c] = target;
             maxEval = Math.max(maxEval, ev); alpha = Math.max(alpha, ev);
             if (beta <= alpha) break;
@@ -251,11 +198,8 @@ function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp) {
         let minEval = Infinity;
         for (let m of moves) {
             let target = mt[m.to.r][m.to.c];
-            let wasUp = m.pieceObj.isUp;
             mt[m.to.r][m.to.c] = m.pieceObj; mt[m.from.r][m.from.c] = null;
-            if (isCoUp && wasUp) m.pieceObj.isUp = false;
-            let ev = minimax(mt, depth - 1, alpha, beta, true, botSide, isCoUp);
-            if (isCoUp && wasUp) m.pieceObj.isUp = true;
+            let ev = minimax(mt, depth-1, alpha, beta, true, botSide, isCoUp);
             mt[m.from.r][m.from.c] = m.pieceObj; mt[m.to.r][m.to.c] = target;
             minEval = Math.min(minEval, ev); beta = Math.min(beta, ev);
             if (beta <= alpha) break;
@@ -264,27 +208,20 @@ function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp) {
     }
 }
 
-// ==========================================
-// CÁC HÀM CƯỚP BIỂN (CHESSDB)
-// ==========================================
 function boardToFEN(mt, botSide) {
-    const mapRed = {'俥':'R', '車':'R', '傌':'N', '馬':'N', '相':'B', '象':'B', '仕':'A', '士':'A', '帥':'K', '將':'K', '炮':'C', '砲':'C', '兵':'P', '卒':'P'};
-    const mapBlack = {'俥':'r', '車':'r', '傌':'n', '馬':'n', '相':'b', '象':'b', '仕':'a', '士':'a', '帥':'k', '將':'k', '炮':'c', '砲':'c', '兵':'p', '卒':'p'};
+    const mapRed = {'俥':'R','車':'R','傌':'N','馬':'N','相':'B','象':'B','仕':'A','士':'A','帥':'K','將':'K','炮':'C','砲':'C','兵':'P','卒':'P'};
+    const mapBlack = {'俥':'r','車':'r','傌':'n','馬':'n','相':'b','象':'b','仕':'a','士':'a','帥':'k','將':'k','炮':'c','砲':'c','兵':'p','卒':'p'};
     let fen = "";
-    for (let r = 0; r < 10; r++) {
+    for(let r=0; r<10; r++) {
         let empty = 0;
-        for (let c = 0; c < 9; c++) {
+        for(let c=0; c<9; c++) {
             const p = mt[r][c];
-            if (!p) empty++;
-            else {
-                if (empty > 0) { fen += empty; empty = 0; }
-                fen += p.side === 'do' ? mapRed[p.type] : mapBlack[p.type];
-            }
+            if(!p) empty++;
+            else { if(empty>0){fen+=empty; empty=0;} fen += p.side==='do'?mapRed[p.type]:mapBlack[p.type]; }
         }
-        if (empty > 0) fen += empty;
-        if (r < 9) fen += "/";
+        if(empty>0) fen += empty; if(r<9) fen += "/";
     }
-    return fen + " " + (botSide === 'do' ? 'w' : 'b') + " - - 0 1";
+    return fen + " " + (botSide==='do'?'w':'b') + " - - 0 1";
 }
 
 async function fetchCloudMove(fen) {
@@ -298,6 +235,7 @@ async function fetchCloudMove(fen) {
     } catch(e) {} return null;
 }
 
+// --- TỔNG TRẠM ĐIỀU PHỐI ---
 self.onmessage = async function(e) {
     const data = e.data;
     if (data.action === "think") {
@@ -305,19 +243,20 @@ self.onmessage = async function(e) {
         let mt = buildMatrix(data.boardState);
         let bestMove = null;
 
-        if (!data.isCoUp) {
+        // Nếu là cờ thường, hoặc cờ úp đã lật hơn 10 quân -> Hỏi Sách Tàu (ChessDB)
+        const nguaCount = data.boardState.filter(p => !p.isUp).length;
+        if (!data.isCoUp || nguaCount > 10) {
             bestMove = await fetchCloudMove(boardToFEN(mt, data.botSide));
         }
 
         if (!bestMove) {
-            let moves = generateAllMoves(mt, data.botSide, data.isCoUp, 4);
+            let moves = generateAllMoves(mt, data.botSide, data.isCoUp);
             let bestScore = -Infinity;
-            let depth = data.boardState.length <= 10 ? 6 : 4;
-
+            let depth = data.boardState.length <= 12 ? 5 : 4;
             for (let m of moves) {
                 let target = mt[m.to.r][m.to.c];
                 mt[m.to.r][m.to.c] = m.pieceObj; mt[m.from.r][m.from.c] = null;
-                let score = minimax(mt, depth - 1, -Infinity, Infinity, false, data.botSide, data.isCoUp);
+                let score = minimax(mt, depth-1, -Infinity, Infinity, false, data.botSide, data.isCoUp);
                 mt[m.from.r][m.from.c] = m.pieceObj; mt[m.to.r][m.to.c] = target;
                 if (score > bestScore) { bestScore = score; bestMove = m; }
             }
