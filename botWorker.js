@@ -67,18 +67,23 @@ function checkLuatWorker(type, side, c, r, tc, tr, mt, isCoUp) {
 
     // --- 🚨 BẢN FIX SIẾT LUẬT CHÂN QUÂN (CẤM SĨ ÚP RA CUNG) 🚨 ---
     if (isCoUp && mt[r][c] && mt[r][c].isUp) {
-        // Nếu quân đang ÚP, đéo cần biết bên trong là con gì, 
-        // nó BUỘC PHẢI đi theo luật của cái ô nó đang đứng.
+        // ÉP BOT ĐI THEO CHÂN QUÂN TẠI Ô ĐANG ĐỨNG
         if (r === 0 || r === 9) {
-            if (c === 0 || c === 8) luatType = (side === 'do' ? '俥' : '車'); // Chân Xe
-            else if (c === 1 || c === 7) luatType = (side === 'do' ? '傌' : '馬'); // Chân Mã
-            else if (c === 2 || c === 6) luatType = (side === 'do' ? '相' : '象'); // Chân Tượng
-            else if (c === 3 || c === 5) luatType = (side === 'do' ? '仕' : '士'); // Chân Sĩ
+            if (c === 0 || c === 8) luatType = (side === 'do' ? '俥' : '車');
+            else if (c === 1 || c === 7) luatType = (side === 'do' ? '傌' : '馬');
+            else if (c === 2 || c === 6) luatType = (side === 'do' ? '相' : '象');
+            else if (c === 3 || c === 5) luatType = (side === 'do' ? '仕' : '士');
+            else if (c === 4) luatType = (side === 'do' ? '帥' : '將');
         } else if ((r === 2 && side === 'den') || (r === 7 && side === 'do')) {
-            if (c === 1 || c === 7) luatType = (side === 'do' ? '炮' : '砲'); // Chân Pháo
+            if (c === 1 || c === 7) luatType = (side === 'do' ? '炮' : '砲');
+            else luatType = 'NONE'; // Không phải chân pháo thì không cho đi
         } else if ((r === 3 && side === 'den') || (r === 6 && side === 'do')) {
-            if (c % 2 === 0) luatType = (side === 'do' ? '兵' : '卒'); // Chân Tốt
+            if (c === 0 || c === 2 || c === 4 || c === 6 || c === 8) luatType = (side === 'do' ? '兵' : '卒');
+            else luatType = 'NONE';
+        } else {
+            luatType = 'NONE'; // Nếu quân úp nằm ở vị trí không hợp lệ thì đứng im
         }
+        if (luatType === 'NONE') return false;
     }
 
     switch (luatType) {
@@ -231,17 +236,33 @@ function evaluateBoard(mt, botSide, isCoUp) {
 
 function generateAllMoves(mt, side, isCoUp) {
     let moves = [];
-    for(let r=0; r<10; r++) for(let c=0; c<9; c++) {
-        let p = mt[r][c];
-        if(p && p.side === side) {
-            for(let tr=0; tr<10; tr++) for(let tc=0; tc<9; tc++) {
-                if(checkLuatWorker(p.type, side, c, r, tc, tr, mt, isCoUp)) {
-                    let target = mt[tr][tc];
-                    mt[tr][tc] = p; mt[r][c] = null;
-                    if(!laBiChieuWorker(side, mt, isCoUp) && !haiTuongDoiMat(mt)) {
-                        moves.push({from: {c, r}, to: {c: tc, r: tr}, pieceObj: p});
+    for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 9; c++) {
+            let p = mt[r][c];
+            if (p && p.side === side) {
+                for (let tr = 0; tr < 10; tr++) {
+                    for (let tc = 0; tc < 9; tc++) {
+                        // 1. Kiểm tra luật đi cơ bản
+                        if (checkLuatWorker(p.type, side, c, r, tc, tr, mt, isCoUp)) {
+                            let target = mt[tr][tc];
+                            
+                            // 2. GIẢ LẬP ĐI THỬ
+                            mt[tr][tc] = p; 
+                            mt[r][c] = null;
+
+                            // 3. KIỂM TRA SAU KHI ĐI: Tướng mình có bị đối phương ăn không?
+                            // Phải check cả "Lộ mặt tướng" và "Bị quân địch chiếu"
+                            let hopLe = !laBiChieuWorker(side, mt, isCoUp) && !haiTuongDoiMat(mt);
+
+                            // 4. HOÀN TÁC GIẢ LẬP
+                            mt[r][c] = p; 
+                            mt[tr][tc] = target;
+
+                            if (hopLe) {
+                                moves.push({ from: { c, r }, to: { c: tc, r: tr }, pieceObj: p });
+                            }
+                        }
                     }
-                    mt[r][c] = p; mt[tr][tc] = target;
                 }
             }
         }
