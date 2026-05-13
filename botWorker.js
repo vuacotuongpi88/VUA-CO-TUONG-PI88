@@ -145,6 +145,26 @@ function isSquareAttackedWorker(tc, tr, enemySide, mt, isCoUp) {
     return false;
 }
 
+// 🛡️ BÙA BẢO KÊ: QUÉT XEM QUÂN NHÀ CÓ ĐANG YỂM TRỢ NHAU KHÔNG
+function isSquareDefendedWorker(tc, tr, mySide, mt, isCoUp) {
+    let temp = mt[tr][tc];
+    mt[tr][tc] = null; // Tạm cất con đang đứng đó đi để anh em đằng sau chiếu đèn xuyên qua
+    let isDefended = false;
+    for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 9; c++) {
+            const p = mt[r][c];
+            if (p && p.side === mySide) {
+                if (checkLuatWorker(p.type, mySide, c, r, tc, tr, mt, isCoUp)) {
+                    isDefended = true; break;
+                }
+            }
+        }
+        if (isDefended) break;
+    }
+    mt[tr][tc] = temp; // Trả về chỗ cũ
+    return isDefended;
+}
+
 function evaluateBoard(mt, botSide, isCoUp) {
     let botMaterial = 0;
     let oppMaterial = 0;
@@ -205,22 +225,25 @@ function evaluateBoard(mt, botSide, isCoUp) {
                     if (p.side === 'den' && r !== 0) val -= 100; 
                 }
 
-                // 🔥 BÙA SINH TỒN & SÁT THỦ 🔥
-                if (!p.isUp) { // Chỉ áp dụng cho cờ đã lật mặt (Biết chính xác nó là con gì)
-                    if (isSquareAttackedWorker(c, r, isMyPiece ? oppSide : botSide, mt, isCoUp)) {
+                // 🔥 BÙA SINH TỒN & BẢO KÊ TỐI THƯỢNG 🔥
+                // Cấm áp dụng cho Tướng để triệt tiêu bệnh "Nghiện Chiếu Tướng nộp mạng"
+                if (!p.isUp && p.type !== '帥' && p.type !== '將') { 
+                    let isAttacked = isSquareAttackedWorker(c, r, isMyPiece ? oppSide : botSide, mt, isCoUp);
+                    if (isAttacked) {
+                        let isDefended = isSquareDefendedWorker(c, r, p.side, mt, isCoUp);
                         if (isMyPiece) {
-                            // Quân mình đang bị ngắm bắn -> Trừ điểm sấp mặt để ép nó phải chạy đi hoặc đem quân ra đỡ
-                            val -= (val * 0.85); 
+                            // Quân mình bị đánh: Đéo có bảo kê -> Trừ nặng (50%) ép phải chạy! Có bảo kê -> Trừ nhẹ (10%) dám hiên ngang đổi quân.
+                            val -= isDefended ? (val * 0.1) : (val * 0.5); 
                         } else {
-                            // Quân địch đang bị mình ngắm bắn -> Trừ giá trị quân địch đi, tổng điểm sẽ TĂNG MẠNH, kích thích Bot lao vào xơi tái!
-                            val -= (val * 0.85); 
+                            // Quân địch bị ngắm bắn: Đéo có bảo kê -> Trừ nặng (50%) xúi Bot nhào vô xơi tái! Có bảo kê -> Trừ nhẹ (10%) để nó tính toán cẩn thận.
+                            val -= isDefended ? (val * 0.1) : (val * 0.5); 
                         }
                     }
                 }
 
                 if (isMyPiece && tOpp && (p.type === '俥' || p.type === '車' || p.type === '炮' || p.type === '砲' || p.type === '傌' || p.type === '馬')) {
                     let distToEnemyKing = Math.abs(r - tOpp.r) + Math.abs(c - tOpp.c);
-                    val += Math.max(0, (14 - distToEnemyKing) * 15);
+                    val += Math.max(0, (14 - distToEnemyKing) * 10); // Hãm bớt độ háu chiến lại
                 }
 
                 if (isLosing && isMyPiece) {
