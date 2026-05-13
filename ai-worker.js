@@ -129,138 +129,118 @@ function haiTuongDoiMat(mt) {
     return count === 0;
 }
 
-function evaluateBoard(mt, botSide) {
+// --- HÀM ĐÁNH GIÁ NÂNG CAO CHO CỜ ÚP ---
+function evaluateBoard(mt, botSide, isCoUp) {
     let score = 0;
-    for(let r=0; r<10; r++) {
-        for(let c=0; c<9; c++) {
-            const p = mt[r][c];
-            if(p) {
-                let val = PIECE_VALUES[p.type] || 10;
-                
-                if ((p.type === '兵' || p.type === '卒') && !p.isUp) {
-                    if (p.side === 'do' && r <= 4) {
-                        val += 50 + (4 - r) * 20; 
-                        if (c >= 3 && c <= 5) val += 40; 
-                    }
-                    if (p.side === 'den' && r >= 5) {
-                        val += 50 + (r - 5) * 20;
-                        if (c >= 3 && c <= 5) val += 40;
-                    }
-                }
-                
-                if (p.type === '傌' || p.type === '馬') {
-                    if (c === 0 || c === 8) val -= 30;
-                    if (c >= 2 && c <= 6 && r >= 2 && r <= 7) val += 60;
-                    if (p.side === 'do' && (r === 1 || r === 2) && (c === 2 || c === 6)) val += 150;
-                    if (p.side === 'den' && (r === 7 || r === 8) && (c === 2 || c === 6)) val += 150;
-                }
-                
-                if (p.type === '炮' || p.type === '砲') {
-                    if (c === 4) val += 80;
-                    if (c === 3 || c === 5) val += 50;
-                    if (p.side === 'do' && r === 9) val += 30;
-                    if (p.side === 'den' && r === 0) val += 30;
-                }
-                
-                if (p.type === '俥' || p.type === '車') {
-                    if (c === 3 || c === 4 || c === 5) val += 60;
-                    if (p.side === 'do' && r <= 2 && c >= 3 && c <= 5) val += 100;
-                    if (p.side === 'den' && r >= 7 && c >= 3 && c <= 5) val += 100;
-                }
+    let oppSide = botSide === 'do' ? 'den' : 'do';
+    let tOpp = null;
 
-                if (p.type === '帥' || p.type === '將') {
-                    if (p.side === 'do' && r !== 9) val -= 50; 
-                    if (p.side === 'den' && r !== 0) val -= 50; 
-                }
-
-                if (p.isUp) val += 150; 
-
-                if(p.side === botSide) score += val;
-                else score -= val;
+    // Tìm tướng địch trước để tính sát khí
+    for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 9; c++) {
+            if (mt[r][c] && mt[r][c].side === oppSide && (mt[r][c].type === '帥' || mt[r][c].type === '將')) {
+                tOpp = { r, c }; break;
             }
+        }
+    }
+
+    for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 9; c++) {
+            const p = mt[r][c];
+            if (!p) continue;
+
+            let val = PIECE_VALUES[p.type] || 10;
+            let isMyPiece = (p.side === botSide);
+
+            // --- CHIẾN THUẬT CỜ ÚP ĐẶC BIỆT ---
+            if (isCoUp && p.isUp) {
+                // Nếu quân đang úp, giá trị trung bình là 300 điểm (giá trị kỳ vọng)
+                val = 300; 
+                
+                // Phạt nặng nếu vác nắp úp đi vào chỗ chết (nơi địch đang canh giữ)
+                if (isSquareAttackedWorker(c, r, isMyPiece ? oppSide : botSide, mt, isCoUp)) {
+                    val -= 150; 
+                }
+            }
+
+            // --- BÙA BẢO KÊ & SINH TỒN ---
+            if (!p.isUp && p.type !== '帥' && p.type !== '將') {
+                let isAttacked = isSquareAttackedWorker(c, r, isMyPiece ? oppSide : botSide, mt, isCoUp);
+                let isDefended = isSquareDefendedWorker(c, r, p.side, mt, isCoUp);
+
+                if (isAttacked) {
+                    // Nếu bị tấn công mà ĐÉO có bảo kê -> Trừ 70% giá trị (ép nó phải chạy)
+                    // Nếu bị tấn công mà CÓ bảo kê -> Chỉ trừ 15% (dám đứng lại đổi quân)
+                    val -= isDefended ? (val * 0.15) : (val * 0.7);
+                } else if (isDefended) {
+                    // Thưởng điểm cho việc các quân đứng gần nhau bảo vệ nhau
+                    val += 30;
+                }
+            }
+
+            // Cộng điểm vị trí (Xe, Pháo, Mã...) như cũ nhưng gắt hơn
+            if (p.type === '俥' || p.type === '車') val += 50; 
+            if (isMyPiece && tOpp) {
+                let dist = Math.abs(r - tOpp.r) + Math.abs(c - tOpp.c);
+                val += Math.max(0, (14 - dist) * 10);
+            }
+
+            if (isMyPiece) score += val;
+            else score -= val;
         }
     }
     return score;
 }
 
-function generateAllMoves(mt, side, isCoUp) {
-    let moves = [];
-    for (let r = 0; r < 10; r++) {
-        for (let c = 0; c < 9; c++) {
-            let p = mt[r][c];
-            if (p && p.side === side) {
-                for (let tr = 0; tr < 10; tr++) {
-                    for (let tc = 0; tc < 9; tc++) {
-                        if (checkLuatWorker(p.type, side, c, r, tc, tr, mt, isCoUp)) {
-                            let targetPiece = mt[tr][tc];
-                            mt[tr][tc] = mt[r][c];
-                            mt[r][c] = null;
-                            if (!laBiChieuWorker(side, mt, isCoUp) && !haiTuongDoiMat(mt)) {
-                                moves.push({from: {c, r}, to: {c: tc, r: tr}, pieceObj: p, captured: targetPiece});
-                            }
-                            mt[r][c] = mt[tr][tc];
-                            mt[tr][tc] = targetPiece;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    moves.sort((a,b) => {
-        let scoreA = a.captured ? PIECE_VALUES[a.captured.type] : 0;
-        let scoreB = b.captured ? PIECE_VALUES[b.captured.type] : 0;
-        
-        if (scoreA === 0 && scoreB === 0) {
-            let advanceA = side === 'do' ? (a.from.r - a.to.r) : (a.to.r - a.from.r);
-            let advanceB = side === 'do' ? (b.from.r - b.to.r) : (b.to.r - b.from.r);
-            return advanceB - advanceA; 
-        }
-        return scoreB - scoreA;
-    });
-
-    return moves;
-}
-
-function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp) {
-    if (depth === 0) {
-        return evaluateBoard(mt, botSide);
-    }
+// --- MINIMAX VỚI TẦM NHÌN XUYÊN THẤU CỜ ÚP ---
+function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp, isNullMove = false) {
+    if (depth <= 0) return quiesce(mt, alpha, beta, isMaximizing, botSide, isCoUp, 0);
 
     let currentSide = isMaximizing ? botSide : (botSide === 'do' ? 'den' : 'do');
-    let moves = generateAllMoves(mt, currentSide, isCoUp);
-
-    if (moves.length === 0) {
-        return isMaximizing ? -99999 + depth : 99999 - depth;
-    }
+    let moves = generateAllMoves(mt, currentSide, isCoUp, depth, false);
+    
+    if (moves.length === 0) return isMaximizing ? -1000000 + depth : 1000000 - depth;
 
     if (isMaximizing) {
         let maxEval = -Infinity;
         for (let move of moves) {
             let target = mt[move.to.r][move.to.c];
-            mt[move.to.r][move.to.c] = mt[move.from.r][move.from.c];
+            let movingPiece = mt[move.from.r][move.from.c];
+            let wasUp = movingPiece.isUp;
+
+            mt[move.to.r][move.to.c] = movingPiece;
             mt[move.from.r][move.from.c] = null;
+            
+            // 🔥 GIẢ LẬP LẬT CỜ: Bot tính toán dựa trên việc lật con cờ đó ra
+            if (isCoUp && wasUp) movingPiece.isUp = false; 
 
-            let ev = minimax(mt, depth - 1, alpha, beta, false, botSide, isCoUp);
+            let ev = minimax(mt, depth - 1, alpha, beta, false, botSide, isCoUp, false);
 
-            mt[move.from.r][move.from.c] = mt[move.to.r][move.to.c];
+            if (isCoUp && wasUp) movingPiece.isUp = true; 
+            mt[move.from.r][move.from.c] = movingPiece;
             mt[move.to.r][move.to.c] = target;
 
             maxEval = Math.max(maxEval, ev);
             alpha = Math.max(alpha, ev);
-            if (beta <= alpha) break; 
+            if (beta <= alpha) break;
         }
         return maxEval;
     } else {
         let minEval = Infinity;
         for (let move of moves) {
             let target = mt[move.to.r][move.to.c];
-            mt[move.to.r][move.to.c] = mt[move.from.r][move.from.c];
+            let movingPiece = mt[move.from.r][move.from.c];
+            let wasUp = movingPiece.isUp;
+
+            mt[move.to.r][move.to.c] = movingPiece;
             mt[move.from.r][move.from.c] = null;
+            
+            if (isCoUp && wasUp) movingPiece.isUp = false;
 
-            let ev = minimax(mt, depth - 1, alpha, beta, true, botSide, isCoUp);
+            let ev = minimax(mt, depth - 1, alpha, beta, true, botSide, isCoUp, false);
 
-            mt[move.from.r][move.from.c] = mt[move.to.r][move.to.c];
+            if (isCoUp && wasUp) movingPiece.isUp = true;
+            mt[move.from.r][move.from.c] = movingPiece;
             mt[move.to.r][move.to.c] = target;
 
             minEval = Math.min(minEval, ev);
