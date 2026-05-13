@@ -48,28 +48,38 @@ function checkLuatWorker(type, side, c, r, tc, tr, mt, isCoUp) {
     const dx = Math.abs(tc - c), dy = Math.abs(tr - r);
     let luatType = type;
 
+    // --- BÙA SIẾT KỶ LUẬT CỜ ÚP NƯỚC ĐẦU ---
     if (isCoUp && mt[r][c] && mt[r][c].isUp) {
+        // Nếu quân đang ÚP, đéo quan tâm nó là con gì bên trong, 
+        // nó phải đi theo luật của CÁI Ô nó đang đứng!
         if (r === 0 || r === 9) {
-            if (c === 0 || c === 8) luatType = (side === 'do' ? '俥' : '車');
-            else if (c === 1 || c === 7) luatType = (side === 'do' ? '傌' : '馬');
-            else if (c === 2 || c === 6) luatType = (side === 'do' ? '相' : '象');
-            else if (c === 3 || c === 5) luatType = (side === 'do' ? '仕' : '士');
+            if (c === 0 || c === 8) luatType = (side === 'do' ? '俥' : '車'); // Ô Xe
+            else if (c === 1 || c === 7) luatType = (side === 'do' ? '傌' : '馬'); // Ô Mã
+            else if (c === 2 || c === 6) luatType = (side === 'do' ? '相' : '象'); // Ô Tượng
+            else if (c === 3 || c === 5) luatType = (side === 'do' ? '仕' : '士'); // Ô Sĩ
         } else if ((r === 2 && side === 'den') || (r === 7 && side === 'do')) {
-            if (c === 1 || c === 7) luatType = (side === 'do' ? '炮' : '砲');
+            if (c === 1 || c === 7) luatType = (side === 'do' ? '炮' : '砲'); // Ô Pháo
         } else if ((r === 3 && side === 'den') || (r === 6 && side === 'do')) {
-            if (c % 2 === 0) luatType = (side === 'do' ? '兵' : '卒');
+            if (c % 2 === 0) luatType = (side === 'do' ? '兵' : '卒'); // Ô Tốt
         }
     }
 
     switch (luatType) {
-        case '帥': case '將': 
-            return dx + dy === 1 && tc >= 3 && tc <= 5 && (side === 'do' ? tr >= 7 : tr <= 2);
-        case '仕': case '士':
+        case '帥': case '將': return dx + dy === 1 && tc >= 3 && tc <= 5 && (side === 'do' ? tr >= 7 : tr <= 2);
+        case '仕': case '士': 
+            // Nếu cờ ĐÃ LẬT (ngửa mặt) thì cho đi chéo tự do (isCoUp)
+            if (isCoUp && mt[r][c] && !mt[r][c].isUp) return dx === 1 && dy === 1;
+            // Nếu cờ CHƯA LẬT (đang ÚP) hoặc cờ thường -> Phải ở trong cung
             return dx === 1 && dy === 1 && tc >= 3 && tc <= 5 && (side === 'do' ? tr >= 7 : tr <= 2);
+
         case '相': case '象':
-            if (!isCoUp && (side === 'do' ? tr < 5 : tr > 4)) return false;
             if (dx !== 2 || dy !== 2) return false;
+            // Nếu cờ ĐÃ LẬT -> Cho qua sông thoải mái
+            if (isCoUp && mt[r][c] && !mt[r][c].isUp) return !mt[(r + tr) / 2][(c + tc) / 2];
+            // Nếu cờ CHƯA LẬT hoặc cờ thường -> Cấm qua sông
+            if (side === 'do' ? tr < 5 : tr > 4) return false;
             return !mt[(r + tr) / 2][(c + tc) / 2];
+
         case '傌': case '馬':
             if (!((dx === 1 && dy === 2) || (dx === 2 && dy === 1))) return false;
             return !mt[r + (dy === 2 ? (tr > r ? 1 : -1) : 0)][c + (dx === 2 ? (tc > c ? 1 : -1) : 0)];
