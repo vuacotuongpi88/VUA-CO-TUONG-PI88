@@ -6415,7 +6415,7 @@ margin-bottom: 14px;
 <div id="game-arena" style="display: none; padding: 10px;">
 <div class="game-wrapper">
     <div id="bot-waiting-timer" style="display:none; position:absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.8); border: 1px solid #ff7675; color: #ff7675; padding: 4px 8px; border-radius: 8px; font-size: 10px; font-weight: bold; z-index: 25000;">
-    Lão Tẩu đang tới: <span id="bot-sec">15</span>s
+    Lão Tẩu đang tới: <span id="bot-sec">30</span>s
 </div>
 
 <div id="bot-invite-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:99999; align-items:center; justify-content:center; backdrop-filter: blur(4px);">
@@ -7409,25 +7409,18 @@ function selectGame(mode) {
 // HỆ THỐNG VÔ DANH LÃO TẨU (BOT AI)
 // ==========================================
 let botWaitInterval = null;
-let botWaitSeconds = 15; // <-- Đổi thành 15
+let botWaitSeconds = 30;
 let isBotTimerRunning = false;
 
 function startBotWaitingTimer() {
-    // 🛑 CHỐT CHẶN TỬ THẦN: Nếu là Cờ Úp mà cược > 3 PMC là nghỉ khỏe!
-    if (isCoUp && currentRoomStakePMC > 3) {
-        console.log("Phòng cược quá lớn (>3 PMC), Lão Tẩu đéo dám đánh cờ úp đâu!");
-        cancelBotWaiting();
-        return;
-    }
-
-    // Nếu đang đếm rồi thì thôi
+    // Không chạy lại nếu đang đếm, chặn chạy nhiều lần
     if (isBotTimerRunning) return;
     
-    // Bảo vệ két sắt cho cờ thường (giữ mức 500 như cũ hoặc tùy mày)
-    if (!isCoUp && currentRoomStakePMC > 500) return; 
+    // BẢO VỆ KÉT SẮT: Chặn không cho Bot đánh nếu cược lớn hơn 500 PMC
+    if (currentRoomStakePMC > 500) return; 
 
     isBotTimerRunning = true;
-    botWaitSeconds = 15; // <-- Đổi thành 15
+    botWaitSeconds = 30;
     
     const botTimerEl = document.getElementById("bot-waiting-timer");
     const botSecEl = document.getElementById("bot-sec");
@@ -7436,6 +7429,7 @@ function startBotWaitingTimer() {
 
     clearInterval(botWaitInterval);
     botWaitInterval = setInterval(() => {
+        // Nếu có thằng thật nhảy vào, hoặc đéo phải phòng chờ nữa thì hủy đếm
         if (currentRoomStatus !== "waiting" || (window.__lastBoundRoom && window.__lastBoundRoom.players?.den)) {
             cancelBotWaiting();
             return;
@@ -7447,15 +7441,22 @@ function startBotWaitingTimer() {
         if (botWaitSeconds <= 0) {
             cancelBotWaiting();
             
-            // Kho dữ liệu Bot khịa người chơi (Giữ nguyên của mày)
+            // --- KHO DATA BOT KHỊA NGƯỜI CHƠI ---
             const botList = [
-                { name: "Vô Danh Lão Tẩu", photo: "images/den_tuong.png", quote: "Cờ úp bạc cắc 3 đồng ta mới chơi, chứ đánh lớn ta sợ thua lắm! 😂" },
-                { name: "Thần Bài Trà Đá", photo: "images/do_tuong.png", quote: "3 PMC là đủ mua điếu thuốc rồi, vào đây lật nắp với ta!" }
+                { name: "Vô Danh Lão Tẩu", photo: "images/den_tuong.png", quote: "Chờ lâu quá à? Có muốn thử vài đường quyền với lão phu không chàng trai trẻ?" },
+                { name: "Chấp Một Xe", photo: "images/do_tuong.png", quote: "Tao chấp mày một chiếc Xe đấy. Vào đây mà lấy PMC của tao nè!" },
+                { name: "Độc Cô Cầu Bại", photo: "images/den_tuong.png", quote: "Cả đời này ta chỉ mong một lần được nếm mùi thất bại... Mày giúp ta được không?" },
+                { name: "Thần Bài Pi", photo: "images/do_tuong.png", quote: "Tiền PMC nhiều quá xài không hết. Mày có giỏi thì vào đây mà bốc!" },
+                { name: "Kỳ Thủ Ẩn Danh", photo: "images/den_tuong.png", quote: "Đừng hỏi ta là ai, hãy tự hỏi bản thân xem có đỡ nổi 30 nước không?" },
+                { name: "Ma Tôn", photo: "images/do_tuong.png", quote: "Khặc khặc! Nộp mạng... à nhầm, nộp PMC ra đây!" },
+                { name: "Trùm Pháo Đầu", photo: "images/den_tuong.png", quote: "Cứ đưa pháo đầu vào giữa là tao thấy mày khóc rồi. Chơi không?" }
             ];
             
+            // Bốc ngẫu nhiên 1 con
             window.currentInvitingBot = botList[Math.floor(Math.random() * botList.length)];
-            window.currentInvitingBot.level = Math.floor(Math.random() * 50) + 10;
+            window.currentInvitingBot.level = Math.floor(Math.random() * 80) + 20;
 
+            // Gắn lên bảng thông báo
             const avatarEl = document.getElementById("bot-popup-avatar");
             const nameEl = document.getElementById("bot-popup-name");
             const quoteEl = document.getElementById("bot-popup-quote");
@@ -7464,11 +7465,13 @@ function startBotWaitingTimer() {
             if (nameEl) nameEl.innerText = `${window.currentInvitingBot.name} (Cấp ${window.currentInvitingBot.level})`;
             if (quoteEl) quoteEl.innerText = `"${window.currentInvitingBot.quote}"`;
 
+            // Bật bảng hỏi
             const modal = document.getElementById("bot-invite-modal");
             if (modal) modal.style.display = "flex";
         }
     }, 1000);
 }
+
 function cancelBotWaiting() {
     clearInterval(botWaitInterval);
     isBotTimerRunning = false;
@@ -7482,22 +7485,19 @@ function closeBotInvite() {
     document.getElementById("bot-invite-modal").style.display = "none";
 }
 
+window.isCallingBot = false;
 async function acceptBotMatch() {
     // BÙA CHỐNG NHẤP ĐÚP: Đang gọi Bot rồi thì cấm bấm tiếp!
     if (window.isCallingBot) return;
     window.isCallingBot = true;
 
-    if (typeof closeBotInvite === 'function') closeBotInvite();
-
+    closeBotInvite();
     if (!currentRoomId) {
         window.isCallingBot = false;
-        alert("Lỗi: Không tìm thấy ID phòng!");
         return;
     }
 
     try {
-        console.log("Đang gọi Bot cho phòng:", currentRoomId);
-        
         const res = await fetch("/api/bot", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -7508,32 +7508,18 @@ async function acceptBotMatch() {
                 botData: window.currentInvitingBot
             })
         });
-
-        // --- KHỐI KIỂM TRA BỌC THÉP ---
-        const rawText = await res.text(); // Lấy dữ liệu thô trước
-        console.log("Dữ liệu thô từ Server:", rawText);
-
-        if (!res.ok) {
-            throw new Error(`Server báo lỗi ${res.status}: ${rawText.slice(0, 100)}`);
-        }
-
-        let data;
-        try {
-            data = JSON.parse(rawText); // Tự dịch JSON bằng tay
-        } catch (parseErr) {
-            throw new Error("Server đéo trả về JSON chuẩn! Nội dung: " + rawText.slice(0, 100));
-        }
-        // ------------------------------
-
+        
+        const data = await res.json();
         if (!data.ok) {
             alert(data.error || "Lão tẩu đang bận đánh bàn khác rồi!");
         } else {
             console.log("Bot đã nhập tiệc thành công!");
         }
     } catch(e) {
-        console.error("LỖI GỌI BOT CHI TIẾT:", e);
-        alert("Lỗi kết nối Server Bot: " + e.message);
+        console.error("Gọi bot lỗi:", e);
+        alert("Không kết nối được với Server Bot!");
     } finally {
+        // Mở khóa để ván sau còn gọi được
         window.isCallingBot = false; 
     }
 }
@@ -7586,13 +7572,13 @@ function exitAfterMatch() {
     backToMenu(); // Chạy thẳng vào logic an toàn ở trên
 }
 function shuffle(array) {
-    let currentIndex = array.length, randomIndex;
-    while (currentIndex != 0) {
-        randomIndex = Math.floor(Math.random() * currentIndex);
-        currentIndex--;
-        [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
-    }
-    return array;
+let currentIndex = array.length, randomIndex;
+while (currentIndex != 0) {
+randomIndex = Math.floor(Math.random() * currentIndex);
+currentIndex--;
+[array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+}
+return array;
 }
 
 // --- LOGIC GAME ---
@@ -7600,14 +7586,7 @@ const board = document.getElementById("board"), turnBox = document.getElementByI
 const timerDoEl = document.getElementById("timer-do"), timerDenEl = document.getElementById("timer-den");
 const columns = [7.6, 18.2, 28.8, 39.4, 50, 60.6, 71.2, 81.8, 92.4];
 const rows = [7.5, 17, 26, 35.1, 44.3, 53.8, 63, 72.7, 81.9, 91.4];
-// --- BỘ DỤNG CỤ XÓC ĐĨA CỜ ÚP CHUẨN ---
-function layTuiCoUpChuan() {
-    let tuiDo = ['俥', '俥', '傌', '傌', '炮', '炮', '相', '相', '仕', '仕', '兵', '兵', '兵', '兵', '兵'];
-    let tuiDen = ['車', '車', '馬', '馬', '砲', '砲', '象', '象', '士', '士', '卒', '卒', '卒', '卒', '卒'];
-    tuiDo = shuffle(tuiDo);
-    tuiDen = shuffle(tuiDen);
-    return { tuiDo, tuiDen };
-}
+
 let selectedPiece = null, luotDi = 'do', isGameOver = false, timeDo = 30, timeDen = 30, interval = null;
 let isCoUp = false;
 let lastMoveFrom = null;
@@ -7631,44 +7610,6 @@ let currentViewerCountRef = null;
 let currentViewerWalletKey = "";
 let presenceHeartbeatTimer = null;
 
-function resetToStartup() {
-    document.querySelectorAll(".piece").forEach(p => p.remove());
-
-    let tuiDo = [], tuiDen = [];
-    if (isCoUp) {
-        const tui = layTuiCoUpChuan();
-        tuiDo = tui.tuiDo;
-        tuiDen = tui.tuiDen;
-    }
-
-    // --- XẾP CỜ ĐEN (PHE TRÊN) ---
-    createPiece(0, 0, isCoUp ? tuiDen.pop() : '車', isCoUp);
-    createPiece(1, 0, isCoUp ? tuiDen.pop() : '馬', isCoUp);
-    createPiece(2, 0, isCoUp ? tuiDen.pop() : '象', isCoUp);
-    createPiece(3, 0, isCoUp ? tuiDen.pop() : '士', isCoUp);
-    createPiece(4, 0, '將', false);
-    createPiece(5, 0, isCoUp ? tuiDen.pop() : '士', isCoUp);
-    createPiece(6, 0, isCoUp ? tuiDen.pop() : '象', isCoUp);
-    createPiece(7, 0, isCoUp ? tuiDen.pop() : '馬', isCoUp);
-    createPiece(8, 0, isCoUp ? tuiDen.pop() : '車', isCoUp);
-    createPiece(1, 2, isCoUp ? tuiDen.pop() : '砲', isCoUp);
-    createPiece(7, 2, isCoUp ? tuiDen.pop() : '砲', isCoUp);
-    [0, 2, 4, 6, 8].forEach(c => createPiece(c, 3, isCoUp ? tuiDen.pop() : '卒', isCoUp));
-
-    // --- XẾP CỜ ĐỎ (PHE DƯỚI) ---
-    createPiece(0, 9, isCoUp ? tuiDo.pop() : '俥', isCoUp);
-    createPiece(1, 9, isCoUp ? tuiDo.pop() : '傌', isCoUp);
-    createPiece(2, 9, isCoUp ? tuiDo.pop() : '相', isCoUp);
-    createPiece(3, 9, isCoUp ? tuiDo.pop() : '仕', isCoUp);
-    createPiece(4, 9, '帥', false);
-    createPiece(5, 9, isCoUp ? tuiDo.pop() : '仕', isCoUp);
-    createPiece(6, 9, isCoUp ? tuiDo.pop() : '相', isCoUp);
-    createPiece(7, 9, isCoUp ? tuiDo.pop() : '傌', isCoUp);
-    createPiece(8, 9, isCoUp ? tuiDo.pop() : '俥', isCoUp);
-    createPiece(1, 7, isCoUp ? tuiDo.pop() : '炮', isCoUp);
-    createPiece(7, 7, isCoUp ? tuiDo.pop() : '炮', isCoUp);
-    [0, 2, 4, 6, 8].forEach(c => createPiece(c, 6, isCoUp ? tuiDo.pop() : '兵', isCoUp));
-}
 
 function updateViewerCountBadge(count = 0) {
     const badge = document.getElementById("viewer-count-badge");
@@ -8210,41 +8151,44 @@ function createPiece(cIdx, rIdx, type, up) {
     const img = document.createElement("img");
     img.className = "piece";
 
-    // 🔥 FIX LỖI ĂN CẮP CỜ Ở ĐÂY: 
-    // Ép quân cờ phải nhận phe theo Vị Trí Sân (Đỏ/Đen) chứ đéo được nhận theo Chữ Bị Giấu!
-    let side;
-    if (isCoUp) {
-        // Cờ Úp: Nửa bàn trên (hàng 0 -> 4) là Đen, nửa bàn dưới (hàng 5 -> 9) là Đỏ
-        side = (rIdx <= 4) ? "den" : "do";
-    } else {
-        // Cờ Tướng thường: Phân loại chuẩn theo tên chữ Hán
-        side = ["帥", "俥", "傌", "相", "仕", "炮", "兵"].includes(type) ? "do" : "den";
-    }
-
+    const side = ["帥", "俥", "傌", "相", "仕", "炮", "兵"].includes(type) ? "do" : "den";
     img.dataset.side = side;
     img.dataset.type = type;
     img.dataset.isUp = up ? "true" : "false";
 
     const names = {
-        '車': 'xe', '馬': 'ma', '象': 'tuong', '士': 'si', '將': 'tuong_soai', '砲': 'phao', '卒': 'tot',
-        '俥': 'xe', '傌': 'ma', '相': 'tuong', '仕': 'si', '帥': 'tuong_soai', '炮': 'phao', '兵': 'tot'
+        '車': 'xe',
+        '馬': 'ma',
+        '象': 'tuong',
+        '士': 'si',
+        '將': 'tuong_soai',
+        '砲': 'phao',
+        '卒': 'tot',
+
+        '俥': 'xe',
+        '傌': 'ma',
+        '相': 'tuong',
+        '仕': 'si',
+        '帥': 'tuong_soai',
+        '炮': 'phao',
+        '兵': 'tot'
     };
 
-    if (up) {
-        img.src = "images/up_mat_trang.png";
-    } else {
-        img.src = `images/${side}_${names[type]}.png`;
-    }
+   if (up) {
+    img.src = "images/up_mat_trang.png";
+} else {
+    img.src = `images/${side}_${names[type]}.png`;
+}
 
     img.onerror = function () {
-        this.onerror = null;
-        this.src = side === "do" ? "images/do_tuong.png" : "images/den_tuong.png";
-    };
+    this.onerror = null;
+    this.src = side === "do" ? "images/do_tuong.png" : "images/den_tuong.png";
+};
 
     img.style.left = columns[cIdx] + "%";
     img.style.top = rows[rIdx] + "%";
 
-    // Ép nổi lên trên cho riêng 2 con Tướng
+    // ép nổi lên trên cho riêng 2 con Tướng
     if (isKingPiece(type)) {
         img.style.zIndex = "30";
         img.style.opacity = "1";
@@ -8373,70 +8317,65 @@ function showMoveHints(pieceEl) {
     }
 }
 function checkLuat(type, side, c, r, tc, tr, mt) {
-    if (tc < 0 || tc > 8 || tr < 0 || tr > 9) return false;
-    const dx = Math.abs(tc - c), dy = Math.abs(tr - r);
-    
-    // 🔥 FIX LỖI 1: CẤM ĐÈ QUÂN MÌNH (KỂ CẢ NẮP ÚP) 🔥
-    if (mt[tr][tc] && mt[tr][tc].side === side) return false;
+if (tc < 0 || tc > 8 || tr < 0 || tr > 9) return false;
+const dx = Math.abs(tc - c), dy = Math.abs(tr - r);
+if (mt[tr][tc] && mt[tr][tc].side === side) return false;
 
-    let luatType = type;
-    const pieceAtPos = getPieceAtBoardPos(c, r);
+let luatType = type;
+// XÁC ĐỊNH LUẬT CỜ ÚP DỰA TRÊN VỊ TRÍ XUẤT PHÁT
+const pieceAtPos = getPieceAtBoardPos(c, r);
+if (isCoUp && pieceAtPos && pieceAtPos.dataset.isUp === "true") {
+if (r === 0 || r === 9) {
+if (c === 0 || c === 8) luatType = (side === 'do' ? '俥' : '車');
+else if (c === 1 || c === 7) luatType = (side === 'do' ? '傌' : '馬');
+else if (c === 2 || c === 6) luatType = (side === 'do' ? '相' : '象');
+else if (c === 3 || c === 5) luatType = (side === 'do' ? '仕' : '士');
+} else if ((r === 2 && side === 'den') || (r === 7 && side === 'do')) {
+if (c === 1 || c === 7) luatType = (side === 'do' ? '炮' : '砲');
+} else if ((r === 3 && side === 'den') || (r === 6 && side === 'do')) {
+if (c % 2 === 0) luatType = (side === 'do' ? '兵' : '卒');
+}
+}
 
-    // 🔥 FIX LỖI 2: SIẾT LUẬT NƯỚC ĐẦU (ĐI THEO CHÂN Ô ĐỨNG) 🔥
-    if (isCoUp && pieceAtPos && pieceAtPos.dataset.isUp === "true") {
-        if (r === 0 || r === 9) {
-            if (c === 0 || c === 8) luatType = (side === 'do' ? '俥' : '車'); // Chân Xe
-            else if (c === 1 || c === 7) luatType = (side === 'do' ? '傌' : '馬'); // Chân Mã
-            else if (c === 2 || c === 6) luatType = (side === 'do' ? '相' : '象'); // Chân Tượng
-            else if (c === 3 || c === 5) luatType = (side === 'do' ? '仕' : '士'); // Chân Sĩ
-        } else if ((r === 2 && side === 'den') || (r === 7 && side === 'do')) {
-            if (c === 1 || c === 7) luatType = (side === 'do' ? '炮' : '砲'); // Chân Pháo
-        } else if ((r === 3 && side === 'den') || (r === 6 && side === 'do')) {
-            if (c % 2 === 0) luatType = (side === 'do' ? '兵' : '卒'); // Chân Tốt
-        }
-    }
+switch (luatType) {
+case '帥': case '將': return dx + dy === 1 && tc >= 3 && tc <= 5 && (side === 'do' ? tr >= 7 : tr <= 2);
+case '仕': case '士':
+    return dx === 1
+        && dy === 1
+        && tc >= 3 && tc <= 5
+        && (side === 'do' ? tr >= 7 : tr <= 2);
+case '相': case '象':
+if (!isCoUp && (side === 'do' ? tr < 5 : tr > 4)) return false;
+if (dx !== 2 || dy !== 2) return false;
+return !mt[(r + tr) / 2][(c + tc) / 2]; // Tượng đi tự do nếu là cờ úp
+case '傌': case '馬':
+if (!((dx === 1 && dy === 2) || (dx === 2 && dy === 1))) return false;
+return !mt[r + (dy === 2 ? (tr > r ? 1 : -1) : 0)][c + (dx === 2 ? (tc > c ? 1 : -1) : 0)];
+case '俥': case '車':
+if (dx !== 0 && dy !== 0) return false;
+return countV(c, r, tc, tr, mt) === 0;
+case '炮': case '砲':
+const v = countV(c, r, tc, tr, mt);
+return (mt[tr][tc] ? v === 1 : v === 0) && (dx === 0 || dy === 0);
 
-    switch (luatType) {
-        case '帥': case '將': 
-            return dx + dy === 1 && tc >= 3 && tc <= 5 && (side === 'do' ? tr >= 7 : tr <= 2);
-        
-        case '仕': case '士': 
-            // Nếu đang ÚP -> BUỘC phải ở trong cung
-            if (isCoUp && pieceAtPos && pieceAtPos.dataset.isUp === "true") {
-                return dx === 1 && dy === 1 && tc >= 3 && tc <= 5 && (side === 'do' ? tr >= 7 : tr <= 2);
-            }
-            // Nếu đã lật (ngửa) hoặc cờ thường -> Đi chéo tự do (cờ úp ngửa sĩ đi đâu cũng được)
-            return dx === 1 && dy === 1;
+case '兵': case '卒': {
+    const daQuaSong = (side === 'do') ? (r <= 4) : (r >= 5);
 
-        case '相': case '象':
-            if (dx !== 2 || dy !== 2) return false;
-            if (mt[(r + tr) / 2][(c + tc) / 2]) return false; // Bị cản chân
-            // Nếu đang ÚP -> CẤM qua sông
-            if (isCoUp && pieceAtPos && pieceAtPos.dataset.isUp === "true") {
-                return (side === 'do' ? tr >= 5 : tr <= 4);
-            }
-            // Nếu đã lật -> Qua sông thoải mái
-            return true;
+    const diTien = (side === 'do')
+        ? (dx === 0 && dy === 1 && tr < r)
+        : (dx === 0 && dy === 1 && tr > r);
 
-        case '傌': case '馬':
-            if (!((dx === 1 && dy === 2) || (dx === 2 && dy === 1))) return false;
-            return !mt[r + (dy === 2 ? (tr > r ? 1 : -1) : 0)][c + (dx === 2 ? (tc > c ? 1 : -1) : 0)];
+    const diNgang = (dx === 1 && dy === 0);
 
-        case '俥': case '車':
-            if (dx !== 0 && dy !== 0) return false;
-            return countV(c, r, tc, tr, mt) === 0;
+    // Chưa qua sông: chỉ được đi tới
+    if (!daQuaSong) return diTien;
 
-        case '炮': case '砲':
-            const v = countV(c, r, tc, tr, mt);
-            return (mt[tr][tc] ? v === 1 : v === 0) && (dx === 0 || dy === 0);
+    // Qua sông rồi: được đi tới hoặc đi ngang, không được lùi
+    return diTien || diNgang;
+}
+}
 
-        case '兵': case '卒':
-            const daQuaSong = (side === 'do') ? (r <= 4) : (r >= 5);
-            const diTien = (side === 'do') ? (dx === 0 && dy === 1 && tr < r) : (dx === 0 && dy === 1 && tr > r);
-            const diNgang = (dx === 1 && dy === 0);
-            return daQuaSong ? (diTien || diNgang) : diTien;
-    }
-    return false;
+return false;
 }
 // 🔥 BÙA TẢI TRƯỚC 45 ẢNH RỒNG MỚI (ĐỌC ĐÚNG TÊN FILE CỦA REMOVE.BG)
 const SO_LUONG_ANH = 45; // Tao cập nhật lên 45 tấm rồi nè
@@ -8658,21 +8597,15 @@ if (haiTuongDoiMat(mt)) {
     }
 
     if (target) {
-        // --- BÙA BOT ĐỔ THỪA KHI MẤT QUÂN XỊN ---
-        const typeBiAn = target.dataset.type;
-        if (['車','俥','炮','砲','馬','傌'].includes(typeBiAn)) {
-            botTrashTalk('bot_lost', typeBiAn);
-        }
-        
-        target.remove();
-        try {
-            sounds.capture.pause();
-            sounds.capture.currentTime = 0;
-            sounds.capture.play().catch(() => {});
-        } catch (e) {}
-    } else {
-        playSnd('click');
-    }
+    target.remove();
+    try {
+        sounds.capture.pause();
+        sounds.capture.currentTime = 0;
+        sounds.capture.play().catch(() => {});
+    } catch (e) {}
+} else {
+    playSnd('click');
+}
 
     lastMoveFrom = { c: c1, r: r1 };
     lastMoveTo = { c: c2, r: r2 };
@@ -8714,11 +8647,6 @@ refreshTimerRings();
     setTimeout(() => {
         // Kiểm tra Chiếu Bí (Checkmate)
         if (laBiChieu(luotDi, taoMaTran())) {
-            // --- BÙA BOT LA LÀNG KHI BỊ CHIẾU TƯỚNG ---
-            if (luotDi === (mySide === 'do' ? 'den' : 'do')) {
-                botTrashTalk('bot_checked');
-            }
-            
             if (checkMate(luotDi)) {
                 const winnerSide = (luotDi === 'do') ? 'den' : 'do';
                 const resultSub = `BÊN ${winnerSide === 'do' ? 'ĐỎ' : 'ĐEN'} THẮNG`;
@@ -8765,17 +8693,6 @@ refreshTimerRings();
                     
                     if (result.action === "done") {
                         window.__isBotThinking = false;
-                        // --- BÙA BOT CHỌC QUÊ KHI ĂN ĐƯỢC QUÂN XỊN CỦA MÀY ---
-                            if (result.move && result.move.to) {
-                                let oldTargetType = null;
-                                const mt = typeof taoMaTran === 'function' ? taoMaTran() : [];
-                                if (mt[result.move.to.r] && mt[result.move.to.r][result.move.to.c]) {
-                                    oldTargetType = mt[result.move.to.r][result.move.to.c].type;
-                                }
-                                if (oldTargetType && ['車','俥','炮','砲','馬','傌'].includes(oldTargetType)) {
-                                    if (typeof botTrashTalk === 'function') botTrashTalk('bot_eat', oldTargetType);
-                                }
-                            }
                         if (!result.move) {
                             db.ref("matches/" + currentRoomId).update({
                                 winner: "do",
@@ -8789,16 +8706,7 @@ refreshTimerRings();
                         // Ghi nước cờ vào sổ tay chống nhây
                         botMoveHistory.push({ hash: result.move.hash, isCheck: result.move.isCheck });
                         if (botMoveHistory.length > 10) botMoveHistory.shift(); // Chỉ nhớ 10 bước gần nhất
-                        // 🟢 BÙA ÉP BOT LẬT CỜ ÚP 🟢
-                        if (isCoUp && result.move && result.move.to && result.move.newBoard) {
-                            let botMovedPiece = result.move.newBoard.find(p => p.c === result.move.to.c && p.r === result.move.to.r);
-                            if (botMovedPiece && botMovedPiece.isUp) {
-                                botMovedPiece.isUp = false;
-                                const names = {'車': 'xe', '馬': 'ma', '象': 'tuong', '士': 'si', '將': 'tuong_soai', '砲': 'phao', '卒': 'tot', '俥': 'xe', '傌': 'ma', '相': 'tuong', '仕': 'si', '帥': 'tuong_soai', '炮': 'phao', '兵': 'tot'};
-                                botMovedPiece.src = `images/${botMovedPiece.side}_${names[botMovedPiece.type]}.png`;
-                            }
-                        }
-                        // 🟢 KẾT THÚC BÙA 🟢
+
                         db.ref("matches/" + currentRoomId).update({
                             board: result.move.newBoard,
                             turn: "do",
@@ -8817,65 +8725,35 @@ refreshTimerRings();
     }
 }; // Kết thúc board.onclick
 
-// ==========================================
-// 🔥 MỎ HỖN ENGINE - TRÍ TUỆ NHÂN TẠO KHỊA ĐỂU 🔥
-// ==========================================
-function botTrashTalk(type, pieceCode = "") {
-    if (!currentRoomId || isSpectatorMode) return;
-    
-    // Chỉ kích hoạt nếu đối thủ là Bot
-    const oppSide = mySide === "do" ? "den" : "do";
-    const opp = window.__lastBoundRoom?.players?.[oppSide];
-    const isOppBot = opp && (opp.uid === "bot_master_100" || opp.isBot || (opp.name && opp.name.includes("Lão Tẩu")));
-    
-    if (!isOppBot) return;
+function resetToStartup() {
+clearInterval(interval);
+playSnd('welcome'); playSnd('bgm');
+isGameOver = false; luotDi = 'do'; timeDo = 900; timeDen = 900;
+document.getElementById("victory-wrap").style.transform = "translate(-50%, -50%) scale(0)";
+document.querySelectorAll(".piece").forEach(p => p.remove());
+clearMoveHints();
+clearLastMoveMarks();
+lastMoveFrom = null;
+lastMoveTo = null;
+selectedPiece = null;
+let den_pieces = ["車", "車", "馬", "馬", "象", "象", "士", "士", "砲", "砲", "卒", "卒", "卒", "卒", "卒"];
+let do_pieces = ["俥", "俥", "傌", "傌", "相", "相", "仕", "仕", "炮", "炮", "兵", "兵", "兵", "兵", "兵"];
 
-    // Chống spam: Cách nhau ít nhất 5 giây mới chửi 1 câu
-    const now = Date.now();
-    if (window.__lastBotTrashTalk && now - window.__lastBotTrashTalk < 5000) return;
-    window.__lastBotTrashTalk = now;
+if (isCoUp) {
+den_pieces = shuffle(den_pieces);
+do_pieces = shuffle(do_pieces);
+}
 
-    const tenQuan = {
-        '俥': 'Xe', '車': 'Xe', '炮': 'Pháo', '砲': 'Pháo', '傌': 'Mã', '馬': 'Mã'
-    }[pieceCode] || "quân";
+const posDen = [{ c: 0, r: 0 }, { c: 8, r: 0 }, { c: 1, r: 0 }, { c: 7, r: 0 }, { c: 2, r: 0 }, { c: 6, r: 0 }, { c: 3, r: 0 }, { c: 5, r: 0 }, { c: 1, r: 2 }, { c: 7, r: 2 }, { c: 0, r: 3 }, { c: 2, r: 3 }, { c: 4, r: 3 }, { c: 6, r: 3 }, { c: 8, r: 3 }];
+const posDo = [{ c: 0, r: 9 }, { c: 8, r: 9 }, { c: 1, r: 9 }, { c: 7, r: 9 }, { c: 2, r: 9 }, { c: 6, r: 9 }, { c: 3, r: 9 }, { c: 5, r: 9 }, { c: 1, r: 7 }, { c: 7, r: 7 }, { c: 0, r: 6 }, { c: 2, r: 6 }, { c: 4, r: 6 }, { c: 6, r: 6 }, { c: 8, r: 6 }];
 
-    const khaoTuvung = {
-        'bot_eat': [
-            `Ngon! Mất con ${tenQuan} rồi nha con trai 🤣`,
-            `Đưa con ${tenQuan} đây Lão Tẩu giữ giùm cho.`,
-            `Đi cờ mù mắt vãi lồn, nộp con ${tenQuan} lãng xẹt 🤡`,
-            `Tao nói rồi, đánh với tao mầy chỉ có nát gáo!`
-        ],
-        'bot_lost': [
-            `Đù má màn hình tao bị đơ! Trượt tay thôi con ạ 😡`,
-            `Mày ăn ${tenQuan} tao thì lát tao vặt đầu Tướng mày.`,
-            `Cho mày con ${tenQuan} đó, tí tao lấy lại cả bàn!`,
-            `Láo lếu! Dám vuốt râu hùm à?`
-        ],
-        'bot_checked': [
-            `Á à, định ám sát Lão Tẩu à? Đéo dễ đâu 🤫`,
-            `Chiếu tí làm gì căng? Tao lách nhẹ cái là xong.`,
-            `Mày dồn tao thì tao gài lại mày thôi, chờ đấy.`
-        ],
-        'time_running': [
-            `Gì lâu vậy cha nội? Nhanh tay lên thằng gà! ⏰`,
-            `Rặn ỉa à cháu? Cờ rõ ràng thế mà nghĩ mãi đéo ra.`,
-            `Còn có mấy chục giây kìa, hay là bấm nút Đầu Hàng mẹ đi cho lẹ? 🤣`
-        ]
-    };
+createPiece(4, 0, "將", false);
+createPiece(4, 9, "帥", false);
 
-    const cauChui = khaoTuvung[type][Math.floor(Math.random() * khaoTuvung[type].length)];
+posDen.forEach((p, i) => createPiece(p.c, p.r, den_pieces[i], isCoUp));
+posDo.forEach((p, i) => createPiece(p.c, p.r, do_pieces[i], isCoUp));
 
-    // Chờ 2 giây sau khi xảy ra sự kiện mới nhả chữ (giả vờ như đang gõ phím)
-    setTimeout(() => {
-        db.ref("matches/" + currentRoomId + "/chat").push({
-            uid: "bot_master_100",
-            name: opp.name || "Vô Danh Lão Tẩu",
-            side: oppSide,
-            text: cauChui,
-            at: firebase.database.ServerValue.TIMESTAMP
-        });
-    }, 2000);
+startTimer();
 }
 function getCurrentPlayerProfile() {
     const user = auth.currentUser;
@@ -10599,17 +10477,6 @@ if (!canRenderLiveBoard) {
                              window.__isBotThinking = false;
                              const result = e.data;
                              if (result.action === "done") {
-                                // --- BÙA BOT CHỌC QUÊ KHI ĂN ĐƯỢC QUÂN XỊN CỦA MÀY ---
-                            if (result.move && result.move.to) {
-                                let oldTargetType = null;
-                                const mt = typeof taoMaTran === 'function' ? taoMaTran() : [];
-                                if (mt[result.move.to.r] && mt[result.move.to.r][result.move.to.c]) {
-                                    oldTargetType = mt[result.move.to.r][result.move.to.c].type;
-                                }
-                                if (oldTargetType && ['車','俥','炮','砲','馬','傌'].includes(oldTargetType)) {
-                                    if (typeof botTrashTalk === 'function') botTrashTalk('bot_eat', oldTargetType);
-                                }
-                            }
                                  if (!result.move) {
                                      db.ref("matches/" + currentRoomId).update({
                                          winner: "do", winReason: "checkmate",
@@ -10622,16 +10489,6 @@ if (!canRenderLiveBoard) {
                                      botMoveHistory.push({ hash: result.move.hash, isCheck: result.move.isCheck });
                                      if (botMoveHistory.length > 10) botMoveHistory.shift();
                                  }
-                                 // 🟢 BÙA ÉP BOT LẬT CỜ ÚP 🟢
-                        if (isCoUp && result.move && result.move.to && result.move.newBoard) {
-                            let botMovedPiece = result.move.newBoard.find(p => p.c === result.move.to.c && p.r === result.move.to.r);
-                            if (botMovedPiece && botMovedPiece.isUp) {
-                                botMovedPiece.isUp = false;
-                                const names = {'車': 'xe', '馬': 'ma', '象': 'tuong', '士': 'si', '將': 'tuong_soai', '砲': 'phao', '卒': 'tot', '俥': 'xe', '傌': 'ma', '相': 'tuong', '仕': 'si', '帥': 'tuong_soai', '炮': 'phao', '兵': 'tot'};
-                                botMovedPiece.src = `images/${botMovedPiece.side}_${names[botMovedPiece.type]}.png`;
-                            }
-                        }
-                        // 🟢 KẾT THÚC BÙA 🟢
                                  db.ref("matches/" + currentRoomId).update({
                                      board: result.move.newBoard, turn: "do",
                                      timeDo: timeDo, timeDen: timeDen, turnStartedAt: firebase.database.ServerValue.TIMESTAMP,
@@ -14042,7 +13899,7 @@ async function setReady() {
     // 🔥 TỐI ƯU 3: CHỐNG SPAM CLICK LÀM KẸT ĐƯỜNG TRUYỀN
     const btn = document.getElementById("ready-main-btn");
     if (btn) {
-        if (btn.disabled) return; 
+        if (btn.disabled) return; // Đang ấn rồi thì cấm ấn tiếp
         btn.disabled = true;
         btn.textContent = "ĐANG XỬ LÝ...";
         btn.style.opacity = "0.6";
@@ -14069,60 +13926,8 @@ async function setReady() {
         return;
     }
 
-    // Gửi lệnh SS thành công lên Firebase cho phe mình
+    // Gửi lệnh SS thành công lên Firebase
     await db.ref("matches/" + currentRoomId + "/ready/" + mySide).set(true);
-
-    // ==========================================
-    // 🔥 BÙA ÉP ĐÁNH BOT (BẤT KỂ DÙNG THẺ HAY TIỀN TƯƠI) 🔥
-    // ==========================================
-    const roomSnap = await db.ref("matches/" + currentRoomId).once("value");
-    const room = roomSnap.val() || {};
-    const oppSide = mySide === "do" ? "den" : "do";
-    const opp = room.players?.[oppSide];
-    
-    // Nhận diện xem ghế đối diện có phải Lão Tẩu không
-    const isBot = opp && (opp.uid === "bot_master_100" || opp.isBot || (opp.name && opp.name.includes("Lão Tẩu")));
-
-    if (isBot) {
-        // Đóng vai giang hồ mạng: Mày ấn SS xong là bố ép thằng Bot SS theo luôn!
-        const stake = Math.max(0, Math.floor(Number(room.stakePMC || 0)));
-        
-        await db.ref("matches/" + currentRoomId + "/stakeLocked/" + oppSide).set({
-            done: true,
-            walletKey: "pi_admin_master",
-            stake: stake,
-            at: firebase.database.ServerValue.TIMESTAMP,
-            uid: opp.uid || "bot_master_100"
-        });
-        await db.ref("matches/" + currentRoomId + "/ready/" + oppSide).set(true);
-
-        // BÙA KÍCH NỔ TRẬN ĐẤU (Vì mầy dùng thẻ, server đéo thèm kích nổ, mình phải tự kích)
-        setTimeout(() => {
-            if (currentRoomStatus !== "playing") {
-                
-                // BÙA ĐẢM BẢO CHẾ ĐỘ: ÉP LẤY ĐÚNG CHẾ ĐỘ TỪ PHÒNG VÀ SỬ DỤNG TÚI CỜ CHUẨN
-                  isCoUp = (room.mode === "co-up" || pendingGameMode === "co-up");
-                   resetToStartup();
-
-                // Giả danh thằng Đỏ (chủ phòng) để kick-start ván cờ
-                db.ref("matches/" + currentRoomId).update({
-                    status: "playing",
-                    isCoUp: isCoUp,
-                    board: exportBoardState(), // Bây giờ xuất ra mới có cờ nè!
-                    activeRoundId: currentRoomId + "_r" + (Math.floor(Number(room.roundNo || 0)) + 1) + "_" + Date.now(),
-                    roundNo: Math.floor(Number(room.roundNo || 0)) + 1,
-                    startedAt: firebase.database.ServerValue.TIMESTAMP,
-                    moveCount: 0,
-                    turn: "do",
-                    timeDo: 900,
-                    timeDen: 900,
-                    turnStartedAt: firebase.database.ServerValue.TIMESTAMP, 
-                    updatedAt: firebase.database.ServerValue.TIMESTAMP
-                });
-            }
-        }, 800);
-    }
-    // ==========================================
 }
 
 async function batDauTranDau(loai) {
