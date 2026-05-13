@@ -292,16 +292,22 @@ function boardToFEN(mt, botSide) {
 }
 
 async function fetchCloudMove(fen) {
+    const url = `https://www.chessdb.cn/cdb.php?action=queryall&board=${encodeURIComponent(fen)}`;
     try {
-        const res = await fetch(`https://www.chessdb.cn/cdb.php?action=queryall&board=${encodeURIComponent(fen)}`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1500); // CHỐT 1.5 GIÂY
+        
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        
         const text = await res.text();
         if (text.startsWith("move:")) {
-            const uci = text.split(",")[0].split(":")[1];
-            return { from: {c: uci.charCodeAt(0)-97, r: 9-parseInt(uci[1])}, to: {c: uci.charCodeAt(2)-97, r: 9-parseInt(uci[3])} };
+            const bestMoveUCI = text.split(",")[0].split(":")[1];
+            return { from: {c: bestMoveUCI.charCodeAt(0)-97, r: 9-parseInt(bestMoveUCI[1])}, to: {c: bestMoveUCI.charCodeAt(2)-97, r: 9-parseInt(bestMoveUCI[3])} };
         }
-    } catch(e) {} return null;
+    } catch(e) { return null; }
+    return null;
 }
-
 self.onmessage = async function(e) {
     const data = e.data;
     if (data.action === "think") {
@@ -317,7 +323,10 @@ self.onmessage = async function(e) {
         if (!bestMove) {
             let moves = generateAllMoves(mt, data.botSide, data.isCoUp);
             let bestScore = -Infinity;
-            let depth = data.boardState.length <= 12 ? 5 : 4;
+            // BÙA GIẢM TẢI CPU: Quân đông thì tính nông, quân ít thì tính sâu
+        let depth = 3; // Mặc định tính 3 bước (Cực nhanh)
+        if (data.boardState.length <= 16) depth = 4; // Còn nửa bàn cờ tính 4 bước
+        if (data.boardState.length <= 8) depth = 6;  // Cờ tàn tính 6 bước để dứt điểm
             for (let m of moves) {
                 let target = mt[m.to.r][m.to.c];
                 mt[m.to.r][m.to.c] = m.pieceObj; mt[m.from.r][m.from.c] = null;
