@@ -7609,7 +7609,51 @@ let currentViewerRef = null;
 let currentViewerCountRef = null;
 let currentViewerWalletKey = "";
 let presenceHeartbeatTimer = null;
+// --- BÙA XẾP CỜ VÀO BÀN (DÀNH RIÊNG CHO BOT) ---
+function resetToStartup() {
+    // Xóa sạch cờ rác (nếu có)
+    document.querySelectorAll(".piece").forEach(p => p.remove());
 
+    // Tạo mảng chứa cờ úp nếu là chế độ cờ úp
+    let coUpPieces = [];
+    if (isCoUp) {
+        const types = ['車','車','馬','馬','象','象','士','士','砲','砲','卒','卒','卒','卒','卒',
+                       '俥','俥','傌','傌','相','相','仕','仕','炮','炮','兵','兵','兵','兵','兵'];
+        coUpPieces = shuffle(types); // Đảo lộn xộn lên
+    }
+
+    // --- TẠO CỜ ĐEN (Phe trên) ---
+    createPiece(0, 0, isCoUp ? coUpPieces.pop() : '車', isCoUp);
+    createPiece(1, 0, isCoUp ? coUpPieces.pop() : '馬', isCoUp);
+    createPiece(2, 0, isCoUp ? coUpPieces.pop() : '象', isCoUp);
+    createPiece(3, 0, isCoUp ? coUpPieces.pop() : '士', isCoUp);
+    createPiece(4, 0, '將', false); // Tướng luôn lật ngửa
+    createPiece(5, 0, isCoUp ? coUpPieces.pop() : '士', isCoUp);
+    createPiece(6, 0, isCoUp ? coUpPieces.pop() : '象', isCoUp);
+    createPiece(7, 0, isCoUp ? coUpPieces.pop() : '馬', isCoUp);
+    createPiece(8, 0, isCoUp ? coUpPieces.pop() : '車', isCoUp);
+
+    createPiece(1, 2, isCoUp ? coUpPieces.pop() : '砲', isCoUp);
+    createPiece(7, 2, isCoUp ? coUpPieces.pop() : '砲', isCoUp);
+
+    [0, 2, 4, 6, 8].forEach(c => createPiece(c, 3, isCoUp ? coUpPieces.pop() : '卒', isCoUp));
+
+    // --- TẠO CỜ ĐỎ (Phe dưới) ---
+    createPiece(0, 9, isCoUp ? coUpPieces.pop() : '俥', isCoUp);
+    createPiece(1, 9, isCoUp ? coUpPieces.pop() : '傌', isCoUp);
+    createPiece(2, 9, isCoUp ? coUpPieces.pop() : '相', isCoUp);
+    createPiece(3, 9, isCoUp ? coUpPieces.pop() : '仕', isCoUp);
+    createPiece(4, 9, '帥', false); // Tướng luôn lật ngửa
+    createPiece(5, 9, isCoUp ? coUpPieces.pop() : '仕', isCoUp);
+    createPiece(6, 9, isCoUp ? coUpPieces.pop() : '相', isCoUp);
+    createPiece(7, 9, isCoUp ? coUpPieces.pop() : '傌', isCoUp);
+    createPiece(8, 9, isCoUp ? coUpPieces.pop() : '俥', isCoUp);
+
+    createPiece(1, 7, isCoUp ? coUpPieces.pop() : '炮', isCoUp);
+    createPiece(7, 7, isCoUp ? coUpPieces.pop() : '炮', isCoUp);
+
+    [0, 2, 4, 6, 8].forEach(c => createPiece(c, 6, isCoUp ? coUpPieces.pop() : '兵', isCoUp));
+}
 
 function updateViewerCountBadge(count = 0) {
     const badge = document.getElementById("viewer-count-badge");
