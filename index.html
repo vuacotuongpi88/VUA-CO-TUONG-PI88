@@ -6469,7 +6469,7 @@ margin-bottom: 14px;
     </div>
 </div>
 
-        <div id="timer-den" class="timer-box timer-inline">09:00</div>
+        <div id="timer-den" class="timer-box timer-inline">15:00</div>
     </div>
 
     <div id="board" class="game-container">
@@ -6492,7 +6492,7 @@ margin-bottom: 14px;
     </div>
 
     <div class="player-timer-row bottom-row">
-        <div id="timer-do" class="timer-box active-do timer-inline">09:00</div>
+        <div id="timer-do" class="timer-box active-do timer-inline">15:00</div>
 
        <div class="player-slot">
     <div class="player-chip-row" onclick="openPlayerStats('do')">
@@ -7684,8 +7684,8 @@ function renderSpectatorRoomSnapshot(room = {}, roomId = "") {
         applyBoardStateFromRoom(room.board || []);
         isCoUp = !!room.isCoUp;
         luotDi = room.turn || "do";
-        timeDo = typeof room.timeDo === "number" ? room.timeDo : 540;
-        timeDen = typeof room.timeDen === "number" ? room.timeDen : 540;
+        timeDo = typeof room.timeDo === "number" ? room.timeDo : 900;
+        timeDen = typeof room.timeDen === "number" ? room.timeDen : 900;
         lastMoveFrom = room.lastMoveFrom || null;
         lastMoveTo = room.lastMoveTo || null;
         updateTurnUIOnly();
@@ -7756,7 +7756,7 @@ function startTimer() {
         }
     }, 1000);
 }
-const FULL_TURN_SECONDS = 9 * 60;
+const FULL_TURN_SECONDS = 15 * 60;
 function renderTimerUI() {
     const isBlackView = mySide === "den";
 
@@ -8728,7 +8728,7 @@ refreshTimerRings();
 function resetToStartup() {
 clearInterval(interval);
 playSnd('welcome'); playSnd('bgm');
-isGameOver = false; luotDi = 'do'; timeDo = 540; timeDen = 540;
+isGameOver = false; luotDi = 'do'; timeDo = 900; timeDen = 900;
 document.getElementById("victory-wrap").style.transform = "translate(-50%, -50%) scale(0)";
 document.querySelectorAll(".piece").forEach(p => p.remove());
 clearMoveHints();
@@ -10017,8 +10017,8 @@ await waitingRoomRef.remove().catch(() => {});
         startedAt: firebase.database.ServerValue.TIMESTAMP,
         moveCount: 0,
         turn: "do",
-        timeDo: 540,
-         timeDen: 540,
+        timeDo: 900,
+         timeDen: 900,
          turnStartedAt: firebase.database.ServerValue.TIMESTAMP, // Bùa ghim mốc thời gian bắt đầu
          lastMoveFrom: null,
         lastMoveTo: null,
@@ -10399,8 +10399,8 @@ if (!canRenderLiveBoard) {
         isCoUp = !!room.isCoUp;
          luotDi = room.turn || "do";
          
-         let tDo = typeof room.timeDo === "number" ? room.timeDo : 540;
-         let tDen = typeof room.timeDen === "number" ? room.timeDen : 540;
+         let tDo = typeof room.timeDo === "number" ? room.timeDo : 900;
+         let tDen = typeof room.timeDen === "number" ? room.timeDen : 900;
 
          // --- BÙA TRỪ LÙI THỜI GIAN KHI LOAD LẠI GAME CHỐNG GIAN LẬN ---
          if (room.status === "playing" && room.turnStartedAt && !room.winner) {
@@ -10845,8 +10845,8 @@ async function createAndPublishWaitingRoom(me, mode, stakePMC, bucket) {
         lobbyUpdatedAt: firebase.database.ServerValue.TIMESTAMP,
         turn: "do",
         isCoUp: mode === "co-up",
-        timeDo: 540,
-        timeDen: 540,
+        timeDo: 900,
+        timeDen: 900,
         createdAt: firebase.database.ServerValue.TIMESTAMP,
         players: {
             do: me,
@@ -10912,8 +10912,8 @@ async function joinOrCreateRealtimeMatch(mode, stakePMC = 0) {
     currentRoomStatus = "waiting";
     isGameOver = false;
     luotDi = "do";
-    timeDo = 540;
-    timeDen = 540;
+    timeDo = 900;
+    timeDen = 900;
     timerDoEl.innerText = formatTime(timeDo);
     timerDenEl.innerText = formatTime(timeDen);
 
@@ -14829,8 +14829,8 @@ async function createPrivateTopChallengeRoom(me, mode, stakePMC, target) {
         lobbyUpdatedAt: firebase.database.ServerValue.TIMESTAMP,
         turn: "do",
         isCoUp: mode === "co-up",
-        timeDo: 540,
-        timeDen: 540,
+        timeDo: 900,
+        timeDen: 900,
         createdAt: firebase.database.ServerValue.TIMESTAMP,
         players: { do: me, den: null },
         ready: { do: false, den: false },
@@ -14925,8 +14925,8 @@ async function confirmTopChallengeInvite() {
         currentRoomStatus = "waiting";
         isGameOver = false;
         luotDi = "do";
-        timeDo = 540;
-        timeDen = 540;
+        timeDo = 900;
+        timeDen = 900;
         if (timerDoEl) timerDoEl.innerText = formatTime(timeDo);
         if (timerDenEl) timerDenEl.innerText = formatTime(timeDen);
 
@@ -15253,8 +15253,8 @@ async function joinRoomFromLobby(roomId) {
         currentRoomStatus = "waiting";
         isGameOver = false;
         luotDi = "do";
-        timeDo = 540;
-        timeDen = 540;
+        timeDo = 900;
+        timeDen = 900;
 
         if (timerDoEl) timerDoEl.innerText = formatTime(timeDo);
         if (timerDenEl) timerDenEl.innerText = formatTime(timeDen);
@@ -15352,8 +15352,8 @@ async function joinRoomByInviteCode() {
         currentRoomStatus = "waiting";
         isGameOver = false;
         luotDi = "do";
-        timeDo = 540;
-        timeDen = 540;
+        timeDo = 900;
+        timeDen = 900;
 
         if (timerDoEl) timerDoEl.innerText = formatTime(timeDo);
         if (timerDenEl) timerDenEl.innerText = formatTime(timeDen);
@@ -16810,8 +16810,8 @@ async function acceptRoomInvite() {
         currentRoomStatus = "waiting";
         isGameOver = false;
         luotDi = "do";
-        timeDo = Number(room.timeDo || 540);
-        timeDen = Number(room.timeDen || 540);
+        timeDo = Number(room.timeDo || 900);
+        timeDen = Number(room.timeDen || 900);
 
         saveActiveMatchSnapshot({ roomId: invite.roomId, mode, side: "den" });
         closeArenaTopModal();
