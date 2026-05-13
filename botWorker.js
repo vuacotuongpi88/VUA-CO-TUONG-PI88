@@ -1,6 +1,5 @@
 // ==========================================
-// FILE: botWorker.js (BẢN SIÊU CẤP MA GIÁO V6)
-// CHẾ ĐỘ: HACK NHÌN XUYÊN + DIỄN VIÊN + SÁCH TÀU
+// FILE: botWorker.js (BẢN CHỐT HẠ V6 - VIP)
 // ==========================================
 
 let positionHistory = []; 
@@ -16,10 +15,9 @@ const PIECE_VALUES = {
     '兵': 150,  '卒': 150
 };
 
-// --- HÀM BỔ TRỢ ---
 function buildMatrix(boardArray) {
     let mt = Array(10).fill(null).map(() => Array(9).fill(null));
-    boardArray.forEach(p => { mt[p.r][p.c] = p; });
+    boardArray.forEach(p => { if(p) mt[p.r][p.c] = p; });
     return mt;
 }
 
@@ -43,7 +41,6 @@ function countV(c1, r1, c2, r2, mt) {
     return count;
 }
 
-// --- LUẬT CHƠI & QUÉT AN TOÀN ---
 function checkLuatWorker(type, side, c, r, tc, tr, mt, isCoUp) {
     if (tc < 0 || tc > 8 || tr < 0 || tr > 9) return false;
     if (mt[tr][tc] && mt[tr][tc].side === side) return false; 
@@ -89,10 +86,33 @@ function checkLuatWorker(type, side, c, r, tc, tr, mt, isCoUp) {
     return false;
 }
 
+function laBiChieuWorker(side, mt, isCoUp) {
+    let tPos = null;
+    for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 9; c++) {
+            if (mt[r][c] && mt[r][c].side === side && (mt[r][c].type === '帥' || mt[r][c].type === '將')) {
+                tPos = { c, r }; break;
+            }
+        }
+        if (tPos) break;
+    }
+    if (!tPos) return false;
+    for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 9; c++) {
+            if (mt[r][c] && mt[r][c].side !== side) {
+                if (checkLuatWorker(mt[r][c].type, mt[r][c].side, c, r, tPos.c, tPos.r, mt, isCoUp)) return true;
+            }
+        }
+    }
+    return false;
+}
+
 function isSquareAttacked(tc, tr, enemySide, mt, isCoUp) {
-    for(let r=0; r<10; r++) for(let c=0; c<9; c++) {
-        const p = mt[r][c];
-        if(p && p.side === enemySide && checkLuatWorker(p.type, enemySide, c, r, tc, tr, mt, isCoUp)) return true;
+    for(let r=0; r<10; r++) {
+        for(let c=0; c<9; c++) {
+            const p = mt[r][c];
+            if(p && p.side === enemySide && checkLuatWorker(p.type, enemySide, c, r, tc, tr, mt, isCoUp)) return true;
+        }
     }
     return false;
 }
@@ -100,18 +120,35 @@ function isSquareAttacked(tc, tr, enemySide, mt, isCoUp) {
 function isSquareDefended(tc, tr, mySide, mt, isCoUp) {
     let temp = mt[tr][tc]; mt[tr][tc] = null;
     let def = false;
-    for(let r=0; r<10; r++) for(let c=0; c<9; c++) {
-        const p = mt[r][c];
-        if(p && p.side === mySide && checkLuatWorker(p.type, mySide, c, r, tc, tr, mt, isCoUp)) { def = true; break; }
+    for(let r=0; r<10; r++) {
+        for(let c=0; c<9; c++) {
+            const p = mt[r][c];
+            if(p && p.side === mySide && checkLuatWorker(p.type, mySide, c, r, tc, tr, mt, isCoUp)) { def = true; break; }
+        }
     }
     mt[tr][tc] = temp; return def;
 }
 
-// --- HÀM ĐÁNH GIÁ (DIỄN KỊCH + BẢO VỆ QUÂN) ---
+function haiTuongDoiMat(mt) {
+    let tDo = null, tDen = null;
+    for(let r=0; r<10; r++) {
+        for(let c=0; c<9; c++) {
+            if(mt[r][c] && mt[r][c].type === '帥') tDo = {c, r};
+            if(mt[r][c] && mt[r][c].type === '將') tDen = {c, r};
+        }
+    }
+    if(!tDo || !tDen) return false;
+    if(tDo.c !== tDen.c) return false; 
+    let count = 0;
+    for(let r = Math.min(tDo.r, tDen.r) + 1; r < Math.max(tDo.r, tDen.r); r++) {
+        if(mt[r][tDo.c]) count++;
+    }
+    return count === 0;
+}
+
 function evaluateBoard(mt, botSide, isCoUp) {
     let score = 0;
     let oppSide = botSide === 'do' ? 'den' : 'do';
-    let tBot = null, tOpp = null;
 
     for(let r=0; r<10; r++) {
         for(let c=0; c<9; c++) {
@@ -121,33 +158,27 @@ function evaluateBoard(mt, botSide, isCoUp) {
             let isMyPiece = (p.side === botSide);
 
             if (isCoUp && p.isUp) {
-                // 🔥 HACK NHÌN XUYÊN THẤU: Bot biết quân nào là Xe/Pháo/Mã
+                // 🔥 LOGIC MA GIÁO: BIẾT TRƯỚC QUÂN NHƯNG GIẢ NAI
                 if (currentMatchMoveCount < 6) {
-                    // GIẢ NGU: Ưu tiên lật Sĩ/Tượng/Tốt (điểm cộng cao để lật trước)
-                    if (['兵','卒','仕','士','相','象'].includes(p.type)) val = 500;
-                    else val = 100; // Giấu Xe/Pháo/Mã
+                    if (['兵','卒','仕','士','相','象'].includes(p.type)) val = 600; // Ưu tiên lật cờ bèo
+                    else val = 100; // Giấu Xe/Pháo
                 } else {
-                    // LỘ DIỆN: Ưu tiên lật quân xịn
-                    if (['俥','車','炮','砲','傌','馬'].includes(p.type)) val = 1200;
+                    if (['俥','車','炮','砲','傌','馬'].includes(p.type)) val = 1500; // Nước thứ 6 lật hàng tuyển
                 }
-                // SƠ HỞ: Thấy lật lên mà CHIẾU được Tướng hoặc ĂN được quân xịn là dứt luôn
-                if (isSquareAttacked(c, r, isMyPiece ? oppSide : botSide, mt, false)) val += 2000;
+                // Nếu lật lên mà CHIẾU được Tướng hoặc ĂN được quân xịn là dứt luôn
+                if (isSquareAttacked(c, r, isMyPiece ? oppSide : botSide, mt, false)) val += 3000;
             }
 
             if (!p.isUp) {
                 let attacked = isSquareAttacked(c, r, isMyPiece ? oppSide : botSide, mt, isCoUp);
                 let defended = isSquareDefended(c, r, p.side, mt, isCoUp);
                 if (attacked) {
-                    // BÙA SINH TỒN: Quân bị dọa mà đéo có bảo kê -> Trừ cực nặng (ép chạy)
-                    val -= defended ? (val * 0.2) : (val * 0.95);
-                } else if (defended) { val += 50; } // Thưởng đứng liên hoàn
+                    val -= defended ? (val * 0.3) : (val * 0.9);
+                } else if (defended) { val += 60; } 
             }
 
             if (p.type === '帥' || p.type === '將') {
-                if (isMyPiece) {
-                    tBot = {r, c};
-                    if (isSquareAttacked(c, r, oppSide, mt, isCoUp)) val -= 10000; // Tướng nguy kịch
-                } else tOpp = {r, c};
+                if (isMyPiece && isSquareAttacked(c, r, oppSide, mt, isCoUp)) val -= 20000;
             }
 
             if (isMyPiece) score += val; else score -= val;
@@ -156,20 +187,23 @@ function evaluateBoard(mt, botSide, isCoUp) {
     return score;
 }
 
-// --- MINIMAX & DỊCH FEN ---
 function generateAllMoves(mt, side, isCoUp) {
     let moves = [];
-    for(let r=0; r<10; r++) for(let c=0; c<9; c++) {
-        let p = mt[r][c];
-        if(p && p.side === side) {
-            for(let tr=0; tr<10; tr++) for(let tc=0; tc<9; tc++) {
-                if(checkLuatWorker(p.type, side, c, r, tc, tr, mt, isCoUp)) {
-                    let target = mt[tr][tc];
-                    mt[tr][tc] = p; mt[r][c] = null;
-                    if(!laBiChieuWorker(side, mt, isCoUp) && !haiTuongDoiMat(mt)) {
-                        moves.push({from: {c, r}, to: {c: tc, r: tr}, pieceObj: p});
+    for(let r=0; r<10; r++) {
+        for(let c=0; c<9; c++) {
+            let p = mt[r][c];
+            if(p && p.side === side) {
+                for(let tr=0; tr<10; tr++) {
+                    for(let tc=0; tc<9; tc++) {
+                        if(checkLuatWorker(p.type, side, c, r, tc, tr, mt, isCoUp)) {
+                            let target = mt[tr][tc];
+                            mt[tr][tc] = p; mt[r][c] = null;
+                            if(!laBiChieuWorker(side, mt, isCoUp) && !haiTuongDoiMat(mt)) {
+                                moves.push({from: {c, r}, to: {c: tc, r: tr}, pieceObj: p});
+                            }
+                            mt[r][c] = p; mt[tr][tc] = target;
+                        }
                     }
-                    mt[r][c] = p; mt[tr][tc] = target;
                 }
             }
         }
@@ -181,7 +215,7 @@ function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp) {
     if (depth <= 0) return evaluateBoard(mt, botSide, isCoUp);
     let currentSide = isMaximizing ? botSide : (botSide === 'do' ? 'den' : 'do');
     let moves = generateAllMoves(mt, currentSide, isCoUp);
-    if (moves.length === 0) return isMaximizing ? -1000000 : 1000000;
+    if (moves.length === 0) return isMaximizing ? -2000000 : 2000000;
 
     if (isMaximizing) {
         let maxEval = -Infinity;
@@ -235,7 +269,6 @@ async function fetchCloudMove(fen) {
     } catch(e) {} return null;
 }
 
-// --- TỔNG TRẠM ĐIỀU PHỐI ---
 self.onmessage = async function(e) {
     const data = e.data;
     if (data.action === "think") {
@@ -243,8 +276,7 @@ self.onmessage = async function(e) {
         let mt = buildMatrix(data.boardState);
         let bestMove = null;
 
-        // Nếu là cờ thường, hoặc cờ úp đã lật hơn 10 quân -> Hỏi Sách Tàu (ChessDB)
-        const nguaCount = data.boardState.filter(p => !p.isUp).length;
+        const nguaCount = data.boardState.filter(p => p && !p.isUp).length;
         if (!data.isCoUp || nguaCount > 10) {
             bestMove = await fetchCloudMove(boardToFEN(mt, data.botSide));
         }
@@ -269,7 +301,7 @@ self.onmessage = async function(e) {
                 const names = {'車':'xe','馬':'ma','象':'tuong','士':'si','將':'tuong_soai','砲':'phao','卒':'tot','俥':'xe','傌':'ma','相':'tuong','仕':'si','帥':'tuong_soai','炮':'phao','兵':'tot'};
                 moved.src = `images/${data.botSide}_${names[moved.type]}.png`;
             }
-            let newBoard = data.boardState.filter(p => !(p.c === bestMove.from.c && p.r === bestMove.from.r) && !(p.c === bestMove.to.c && p.r === bestMove.to.r));
+            let newBoard = data.boardState.filter(p => p && !(p.c === bestMove.from.c && p.r === bestMove.from.r) && !(p.c === bestMove.to.c && p.r === bestMove.to.r));
             newBoard.push(moved);
             postMessage({ action: "done", move: { from: bestMove.from, to: bestMove.to, newBoard } });
         }
