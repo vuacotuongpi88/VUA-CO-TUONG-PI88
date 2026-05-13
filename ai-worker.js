@@ -220,10 +220,7 @@ function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp, isNullMo
 
             mt[move.to.r][move.to.c] = movingPiece;
             mt[move.from.r][move.from.c] = null;
-            
-            // 🔥 GIẢ LẬP LẬT CỜ: Bot tính toán dựa trên việc lật con cờ đó ra
-            if (isCoUp && wasUp) movingPiece.isUp = false; 
-
+       
             let ev = minimax(mt, depth - 1, alpha, beta, false, botSide, isCoUp, false);
 
             if (isCoUp && wasUp) movingPiece.isUp = true; 
@@ -244,8 +241,6 @@ function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp, isNullMo
 
             mt[move.to.r][move.to.c] = movingPiece;
             mt[move.from.r][move.from.c] = null;
-            
-            if (isCoUp && wasUp) movingPiece.isUp = false;
 
             let ev = minimax(mt, depth - 1, alpha, beta, true, botSide, isCoUp, false);
 
