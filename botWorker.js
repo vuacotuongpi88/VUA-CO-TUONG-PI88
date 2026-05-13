@@ -419,14 +419,15 @@ function calculateLocalMove(boardArray, botSide, isCoUp) {
     let moves = generateAllMoves(mt, botSide, isCoUp, 10, false);
     if (moves.length === 0) return null;
 
-    let pieceCount = boardArray.length;
+   let pieceCount = boardArray.length;
     let DEPTH = 4; 
 
-    // Bờm Null Move Pruning giúp máy tính nhàn hơn, tao TĂNG DEPTH LÊN 1 BẬC SO VỚI BẢN TRƯỚC
+    // BẢN VÁ CHO ĐT CÙI: Đông quân quá thì nhìn 3 bước thôi cho mượt
     if (pieceCount <= 6) DEPTH = 8; 
     else if (pieceCount <= 12) DEPTH = 6;
     else if (pieceCount <= 20) DEPTH = 5;
-    else DEPTH = 4; // Khai cuộc vẫn giữ mượt mà
+    else if (pieceCount >= 28) DEPTH = 3; // Mới vào trận 32 quân -> Ép Depth 3
+    else DEPTH = 4;
 
     let bestScore = -Infinity;
     let bestMoves = [];
@@ -504,13 +505,20 @@ function parseUCIMove(uci) {
 async function fetchCloudMove(fen) {
     const url = `https://www.chessdb.cn/cdb.php?action=queryall&board=${encodeURIComponent(fen)}`;
     try {
-        const res = await fetch(url);
+        // BÙA ÉP THỜI GIAN: Chỉ chờ thằng Tàu đúng 2.5 giây. Đéo trả lời là cút, bố tự đánh!
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2500);
+        
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId); // Lấy được data thì tắt đồng hồ đếm ngược
+        
         const text = await res.text();
         if (text.startsWith("move:")) {
             const bestMoveUCI = text.split(",")[0].split(":")[1];
             return parseUCIMove(bestMoveUCI);
         }
     } catch(e) {
+        // Lỗi mạng hoặc quá 2.5 giây -> Trả về null cho máy tự tính
         return null;
     }
     return null;
