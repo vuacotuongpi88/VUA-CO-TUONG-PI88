@@ -1,10 +1,23 @@
 // ==========================================
-// FILE: botWorker.js (BẢN SIÊU CẤP V8 - CHỐT HẠ)
-// TỔNG HỢP: HACK NHÌN XUYÊN + SÁCH TÀU + CHỐNG CHIẾU NHÂY + CỨU QUÂN VIP
+// FILE: botWorker.js (BẢN SIÊU CẤP V9 - BÍ KÍP TRUYỀN THỐNG)
+// TÍNH NĂNG: SÁCH KHAI CUỘC + HACK NHÌN XUYÊN + CHỐNG CHIẾU NHÂY
 // ==========================================
 
 let positionHistory = []; 
 let currentMatchMoveCount = 0; 
+
+// --- 📚 QUYỂN SÁCH KHAI CUỘC CỜ ÚP (CỦA CAO THỦ) ---
+// Định dạng: "HashBànCờ": {from:{c,r}, to:{c,r}}
+const UP_OPENING_BOOK = {
+    // Nước 1: Bot cầm Đen, người chơi vừa đi Đỏ nước đầu.
+    // Nếu mày hay mở Pháo/Mã, tao sẽ dạy nó đối phó chuẩn bài.
+    "den_uu_tien": [
+        { from: {c:1, r:0}, to: {c:1, r:2} }, // Lật Pháo trái
+        { from: {c:7, r:0}, to: {c:7, r:2} }, // Lật Pháo phải
+        { from: {c:0, r:0}, to: {c:0, r:1} }, // Lật Xe biên
+        { from: {c:4, r:3}, to: {c:4, r:4} }  // Lật Chốt giữa
+    ]
+};
 
 const PIECE_VALUES = {
     '帥': 1000000, '將': 1000000,
@@ -16,7 +29,7 @@ const PIECE_VALUES = {
     '兵': 150,  '卒': 150
 };
 
-// --- HÀM BỔ TRỢ HỆ THỐNG ---
+// --- HÀM HỆ THỐNG (GIỮ NGUYÊN LOGIC CHUẨN) ---
 function buildMatrix(boardArray) {
     let mt = Array(10).fill(null).map(() => Array(9).fill(null));
     boardArray.forEach(p => { if(p) mt[p.r][p.c] = p; });
@@ -43,48 +56,66 @@ function countV(c1, r1, c2, r2, mt) {
     return count;
 }
 
-// --- LUẬT ĐI QUÂN CHUẨN CỜ ÚP ---
 function checkLuatWorker(type, side, c, r, tc, tr, mt, isCoUp) {
     if (tc < 0 || tc > 8 || tr < 0 || tr > 9) return false;
     if (mt[tr][tc] && mt[tr][tc].side === side) return false; 
+
     const dx = Math.abs(tc - c), dy = Math.abs(tr - r);
+    
+    // Mặc định dùng type truyền vào (quân thật hoặc quân giả lập)
     let luatType = type;
 
+    // --- 🚨 BẢN FIX SIẾT LUẬT CHÂN QUÂN (CẤM SĨ ÚP RA CUNG) 🚨 ---
     if (isCoUp && mt[r][c] && mt[r][c].isUp) {
+        // Nếu quân đang ÚP, đéo cần biết bên trong là con gì, 
+        // nó BUỘC PHẢI đi theo luật của cái ô nó đang đứng.
         if (r === 0 || r === 9) {
-            if (c === 0 || c === 8) luatType = (side === 'do' ? '俥' : '車');
-            else if (c === 1 || c === 7) luatType = (side === 'do' ? '傌' : '馬');
-            else if (c === 2 || c === 6) luatType = (side === 'do' ? '相' : '象');
-            else if (c === 3 || c === 5) luatType = (side === 'do' ? '仕' : '士');
+            if (c === 0 || c === 8) luatType = (side === 'do' ? '俥' : '車'); // Chân Xe
+            else if (c === 1 || c === 7) luatType = (side === 'do' ? '傌' : '馬'); // Chân Mã
+            else if (c === 2 || c === 6) luatType = (side === 'do' ? '相' : '象'); // Chân Tượng
+            else if (c === 3 || c === 5) luatType = (side === 'do' ? '仕' : '士'); // Chân Sĩ
         } else if ((r === 2 && side === 'den') || (r === 7 && side === 'do')) {
-            if (c === 1 || c === 7) luatType = (side === 'do' ? '炮' : '砲');
+            if (c === 1 || c === 7) luatType = (side === 'do' ? '炮' : '砲'); // Chân Pháo
         } else if ((r === 3 && side === 'den') || (r === 6 && side === 'do')) {
-            if (c % 2 === 0) luatType = (side === 'do' ? '兵' : '卒');
+            if (c % 2 === 0) luatType = (side === 'do' ? '兵' : '卒'); // Chân Tốt
         }
     }
 
     switch (luatType) {
-        case '帥': case '將': return dx + dy === 1 && tc >= 3 && tc <= 5 && (side === 'do' ? tr >= 7 : tr <= 2);
+        case '帥': case '將': 
+            return dx + dy === 1 && tc >= 3 && tc <= 5 && (side === 'do' ? tr >= 7 : tr <= 2);
+        
         case '仕': case '士': 
+            // Nếu đã lật (ngửa) -> Đi chéo tự do (đặc quyền cờ úp)
             if (isCoUp && mt[r][c] && !mt[r][c].isUp) return dx === 1 && dy === 1;
+            // Nếu đang ÚP -> BUỘC phải ở trong cung và đi chéo 1 ô
             return dx === 1 && dy === 1 && tc >= 3 && tc <= 5 && (side === 'do' ? tr >= 7 : tr <= 2);
+
         case '相': case '象':
             if (dx !== 2 || dy !== 2) return false;
-            if (mt[(r + tr) / 2][(c + tc) / 2]) return false;
+            if (mt[(r + tr) / 2][(c + tc) / 2]) return false; // Bị cản chân
+            // Nếu đã lật -> Qua sông thoải mái
             if (isCoUp && mt[r][c] && !mt[r][c].isUp) return true;
+            // Nếu đang ÚP -> CẤM qua sông
             return (side === 'do' ? tr >= 5 : tr <= 4);
+
         case '傌': case '馬':
             if (!((dx === 1 && dy === 2) || (dx === 2 && dy === 1))) return false;
             return !mt[r + (dy === 2 ? (tr > r ? 1 : -1) : 0)][c + (dx === 2 ? (tc > c ? 1 : -1) : 0)];
+
         case '俥': case '車':
             if (dx !== 0 && dy !== 0) return false;
             return countV(c, r, tc, tr, mt) === 0;
+
         case '炮': case '砲':
             const v = countV(c, r, tc, tr, mt);
             return (mt[tr][tc] ? v === 1 : v === 0) && (dx === 0 || dy === 0);
+
         case '兵': case '卒':
             const daQuaSong = (side === 'do') ? (r <= 4) : (r >= 5);
+            // Nếu chưa qua sông: Chỉ đi thẳng 1 bước
             if (!daQuaSong) return dx === 0 && dy === 1 && (side === 'do' ? tr < r : tr > r);
+            // Đã qua sông: Đi thẳng hoặc đi ngang 1 bước
             return (dx + dy === 1) && (side === 'do' ? tr <= r : tr >= r);
     }
     return false;
@@ -144,7 +175,7 @@ function haiTuongDoiMat(mt) {
     return count === 0;
 }
 
-// --- HÀM ĐÁNH GIÁ V8: RADAR + BẢO VỆ QUÂN + DIỄN VIÊN ---
+// --- HÀM ĐÁNH GIÁ V9: KẾT HỢP SÁCH & HẬU THUẪN ---
 function evaluateBoard(mt, botSide, isCoUp) {
     let score = 0;
     let oppSide = botSide === 'do' ? 'den' : 'do';
@@ -167,31 +198,29 @@ function evaluateBoard(mt, botSide, isCoUp) {
             let isMyPiece = (p.side === botSide);
             let val = PIECE_VALUES[p.type] || 10;
 
-            // RADAR DÒ NẮP ÚP & DIỄN KỊCH
             if (isCoUp && p.isUp) {
-                if (isMyPiece) {
-                    if (currentMatchMoveCount < 6) val = (['兵','卒','仕','士','相','象'].includes(p.type)) ? 600 : 100;
-                    else val = (['俥','車','炮','砲','傌','馬'].includes(p.type)) ? 1500 : 300;
-                } else {
-                    if (['俥','車','炮','砲','傌','馬'].includes(p.type) && isSquareAttacked(c, r, botSide, mt, false)) {
-                        score += 800; // Thèm khát ăn nắp úp xịn của địch
-                    }
+                // MA GIÁO: Bot biết trước quân
+                if (currentMatchMoveCount < 6) val = (['兵','卒','仕','士','相','象'].includes(p.type)) ? 800 : 100;
+                else val = (['俥','車','炮','砲','傌','馬'].includes(p.type)) ? 1800 : 400;
+                
+                // RADAR ĂN QUÂN MẠNH ĐỊCH
+                if (!isMyPiece && ['俥','車','炮','砲','傌','馬'].includes(p.type)) {
+                    if (isSquareAttacked(c, r, botSide, mt, false)) score += 1000;
                 }
             }
 
-            // BẢO VỆ QUÂN THEO TRỌNG ĐIỂM
-            if (!p.isUp || !isMyPiece) {
-                let attacked = isSquareAttacked(c, r, isMyPiece ? oppSide : botSide, mt, isCoUp);
-                let defended = isSquareDefended(c, r, p.side, mt, isCoUp);
-                if (isMyPiece && attacked) {
-                    val -= defended ? (val * 0.2) : (val * 0.95); // Xe đéo có bảo kê trừ gần hết điểm để nó chạy
-                } else if (!isMyPiece && attacked) {
-                    val += defended ? 50 : (val * 0.5); // Ưu tiên ăn quân hở của địch
-                }
+            // BẢO VỆ QUÂN THEO TRỌNG ĐIỂM (CỨU XE/PHÁO)
+            let attacked = isSquareAttacked(c, r, isMyPiece ? oppSide : botSide, mt, isCoUp);
+            let defended = isSquareDefended(c, r, p.side, mt, isCoUp);
+            
+            if (isMyPiece && attacked) {
+                val -= defended ? (val * 0.25) : (val * 0.98); // ÉP CHẠY BẰNG MỌI GIÁ NẾU KHÔNG CÓ BẢO KÊ
+            } else if (!isMyPiece && attacked) {
+                val += defended ? 60 : (val * 0.6); // ƯU TIÊN ĂN QUÂN ĐỊCH HỞ
             }
 
             if (p.type === '帥' || p.type === '將') {
-                if (isMyPiece && isSquareAttacked(c, r, oppSide, mt, isCoUp)) val -= 20000;
+                if (isMyPiece && isSquareAttacked(c, r, oppSide, mt, isCoUp)) val -= 50000;
             }
 
             if (isMyPiece) score += val; else score -= val;
@@ -273,7 +302,7 @@ async function fetchCloudMove(fen) {
     } catch(e) {} return null;
 }
 
-// --- TỔNG TRẠM ĐIỀU PHỐI (FIX CHIẾU NHÂY) ---
+// --- TRẠM ĐIỀU PHỐI NÃO BỘ ---
 self.onmessage = async function(e) {
     const data = e.data;
     if (data.action === "think") {
@@ -281,11 +310,28 @@ self.onmessage = async function(e) {
         let mt = buildMatrix(data.boardState);
         let bestMove = null;
 
-        const nguaCount = data.boardState.filter(p => p && !p.isUp).length;
-        if (!data.isCoUp || nguaCount > 10) {
-            bestMove = await fetchCloudMove(boardToFEN(mt, data.botSide));
+        // 1. KIỂM TRA SÁCH KHAI CUỘC NỘI BỘ (3 NƯỚC ĐẦU)
+        if (data.isCoUp && currentMatchMoveCount <= 2) {
+            const bookMoves = UP_OPENING_BOOK["den_uu_tien"];
+            const randomMove = bookMoves[Math.floor(Math.random() * bookMoves.length)];
+            const p = mt[randomMove.from.r][randomMove.from.c];
+            if (p && p.side === data.botSide) {
+                bestMove = { from: randomMove.from, to: randomMove.to, pieceObj: p };
+            }
         }
 
+        // 2. NẾU KHÔNG CÓ TRONG SÁCH NỘI BỘ -> GỌI SÁCH TÀU (NẾU CỜ ĐÃ NGỬA NHIỀU)
+        if (!bestMove) {
+            const nguaCount = data.boardState.filter(p => p && !p.isUp).length;
+            if (!data.isCoUp || nguaCount > 8) {
+                bestMove = await fetchCloudMove(boardToFEN(mt, data.botSide));
+                if (bestMove) {
+                    bestMove.pieceObj = mt[bestMove.from.r][bestMove.from.c];
+                }
+            }
+        }
+
+        // 3. NẾU VẪN KHÔNG CÓ -> TỰ TÍNH TOÁN MINIMAX
         if (!bestMove) {
             let moves = generateAllMoves(mt, data.botSide, data.isCoUp);
             let bestScore = -Infinity;
@@ -296,7 +342,6 @@ self.onmessage = async function(e) {
                 let movingPiece = mt[m.from.r][m.from.c];
                 mt[m.to.r][m.to.c] = movingPiece; mt[m.from.r][m.from.c] = null;
                 
-                // CHỐT CHẶN CHIẾU NHÂY
                 let currentHash = getBoardHash(mt);
                 let isChecking = laBiChieuWorker(data.botSide === 'do' ? 'den' : 'do', mt, data.isCoUp);
                 let repeatCount = (data.recentHistory || []).filter(h => h.hash === currentHash && h.isCheck).length;
@@ -320,7 +365,6 @@ self.onmessage = async function(e) {
             let newBoard = data.boardState.filter(p => p && !(p.c === bestMove.from.c && p.r === bestMove.from.r) && !(p.c === bestMove.to.c && p.r === bestMove.to.r));
             newBoard.push(moved);
             
-            // Ghi nhận hash để chống chiếu nhây ván sau
             let finalMt = buildMatrix(newBoard);
             let finalHash = getBoardHash(finalMt);
             let finalIsCheck = laBiChieuWorker(data.botSide === 'do' ? 'den' : 'do', finalMt, data.isCoUp);
