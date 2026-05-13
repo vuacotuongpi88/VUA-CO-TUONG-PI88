@@ -559,8 +559,14 @@ self.onmessage = async function(e) {
             let movedPiece = { ...bestMoveObject.pieceObj, c: bestMoveObject.to.c, r: bestMoveObject.to.r };
             if (data.isCoUp && movedPiece.isUp) {
                 movedPiece.isUp = false;
-                const names = {'車':'xe','馬':'ma','象':'tuong','士':'si','將':'tuong_soai','砲':'phao','卒':'tot'};
-                if (names[movedPiece.type]) movedPiece.src = `images/${data.botSide}_${names[movedPiece.type]}.png`;
+                // BÙA CHỮA MÙ CHỮ: Cấp đủ 14 từ vựng của cả Đỏ lẫn Đen cho Lão Tẩu
+                const names = {
+                    '車': 'xe', '馬': 'ma', '象': 'tuong', '士': 'si', '將': 'tuong_soai', '砲': 'phao', '卒': 'tot',
+                    '俥': 'xe', '傌': 'ma', '相': 'tuong', '仕': 'si', '帥': 'tuong_soai', '炮': 'phao', '兵': 'tot'
+                };
+                if (names[movedPiece.type]) {
+                    movedPiece.src = `images/${data.botSide}_${names[movedPiece.type]}.png`;
+                }
             }
 
             let newBoardArray = data.boardState.filter(p => {
