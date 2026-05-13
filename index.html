@@ -12578,13 +12578,13 @@ async function ensurePiSdkReady() {
     throw new Error("Pi SDK chưa sẵn sàng.");
   }
 
+  // BÙA CHỐNG LỖI INIT: Phải có chữ "await" ở đây để ép hệ thống đợi Pi khởi động xong!
   if (!window.__piSdkInited) {
-   window.piSdkReady = false; 
-Pi.init({ version: "2.0" }).then(() => {
+    window.piSdkReady = false;
+    await window.Pi.init({ version: "2.0" }); 
     window.piSdkReady = true;
-    console.log("Pi SDK đã sẵn sàng!");
-});
     window.__piSdkInited = true;
+    console.log("Pi SDK đã khởi động (Init) thành công!");
   }
 
   return window.Pi;
@@ -17056,20 +17056,22 @@ async function onIncompletePaymentFound(payment) {
 }
 async function loginPi() {
     try {
-        if (!window.Pi) {
-            alert("Nút này chỉ chạy trong Pi Browser.");
-            return null;
-        }
+        // BÙA BẢO VỆ: Gọi hàm này để chắc chắn Pi đã "init" 100% rồi mới đi tiếp
+        const Pi = await ensurePiSdkReady();
 
-       const scopes = ["username", "payments", "wallet_address"];
-        piAuth = await window.Pi.authenticate(scopes, onIncompletePaymentFound);
+        const scopes = ["username", "payments", "wallet_address"];
+        
+        // Dùng cái Pi vừa được đảm bảo ở trên để đăng nhập
+        piAuth = await Pi.authenticate(scopes, onIncompletePaymentFound);
 
         const piName = piAuth?.user?.username || "Pi User";
         savePiUser(piName);
         applyLoggedInUI(piName, "images/do_tuong.png");
-ensureFriendProfileSynced()
-    .then(() => bindFriendSystem())
-    .catch(err => console.error("Lỗi sync bạn bè sau login Pi:", err));
+        
+        ensureFriendProfileSynced()
+            .then(() => bindFriendSystem())
+            .catch(err => console.error("Lỗi sync bạn bè sau login Pi:", err));
+            
         return piAuth;
     } catch (err) {
         console.error("Pi authenticate lỗi:", err);
