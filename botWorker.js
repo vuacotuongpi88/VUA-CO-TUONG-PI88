@@ -44,32 +44,37 @@ function countV(c1, r1, c2, r2, mt) {
 function checkLuatWorker(type, side, c, r, tc, tr, mt, isCoUp) {
     if (tc < 0 || tc > 8 || tr < 0 || tr > 9) return false;
     if (mt[tr][tc] && mt[tr][tc].side === side) return false; 
+
     const dx = Math.abs(tc - c), dy = Math.abs(tr - r);
     let luatType = type;
 
+    // --- 🚨 KHỐI SIẾT LUẬT CỜ ÚP NƯỚC ĐẦU (QUAN TRỌNG) 🚨 ---
     if (isCoUp && mt[r][c] && mt[r][c].isUp) {
+        // Nếu quân đang ÚP, ép nó đi theo luật của cái ô nó đang đứng ban đầu
         if (r === 0 || r === 9) {
-            if (c === 0 || c === 8) luatType = (side === 'do' ? '俥' : '車');
-            else if (c === 1 || c === 7) luatType = (side === 'do' ? '傌' : '馬');
-            else if (c === 2 || c === 6) luatType = (side === 'do' ? '相' : '象');
-            else if (c === 3 || c === 5) luatType = (side === 'do' ? '仕' : '士');
+            if (c === 0 || c === 8) luatType = (side === 'do' ? '俥' : '車'); // Ô Xe
+            else if (c === 1 || c === 7) luatType = (side === 'do' ? '傌' : '馬'); // Ô Mã
+            else if (c === 2 || c === 6) luatType = (side === 'do' ? '相' : '象'); // Ô Tượng
+            else if (c === 3 || c === 5) luatType = (side === 'do' ? '仕' : '士'); // Ô Sĩ
         } else if ((r === 2 && side === 'den') || (r === 7 && side === 'do')) {
-            if (c === 1 || c === 7) luatType = (side === 'do' ? '炮' : '砲');
+            if (c === 1 || c === 7) luatType = (side === 'do' ? '炮' : '砲'); // Ô Pháo
         } else if ((r === 3 && side === 'den') || (r === 6 && side === 'do')) {
-            if (c % 2 === 0) luatType = (side === 'do' ? '兵' : '卒');
+            if (c % 2 === 0) luatType = (side === 'do' ? '兵' : '卒'); // Ô Tốt
         }
     }
 
     switch (luatType) {
         case '帥': case '將': return dx + dy === 1 && tc >= 3 && tc <= 5 && (side === 'do' ? tr >= 7 : tr <= 2);
         case '仕': case '士': 
+            // Nếu đã lật (ngửa) thì đi chéo tự do, nếu đang ÚP thì chỉ được đi trong cung
             if (isCoUp && mt[r][c] && !mt[r][c].isUp) return dx === 1 && dy === 1;
             return dx === 1 && dy === 1 && tc >= 3 && tc <= 5 && (side === 'do' ? tr >= 7 : tr <= 2);
         case '相': case '象':
             if (dx !== 2 || dy !== 2) return false;
-            if (isCoUp && mt[r][c] && !mt[r][c].isUp) return !mt[(r + tr) / 2][(c + tc) / 2];
-            if (side === 'do' ? tr < 5 : tr > 4) return false;
-            return !mt[(r + tr) / 2][(c + tc) / 2];
+            if (mt[(r + tr) / 2][(c + tc) / 2]) return false; // Bị cản chân tượng
+            // Nếu đã lật -> Qua sông thoải mái. Nếu đang ÚP -> Cấm qua sông
+            if (isCoUp && mt[r][c] && !mt[r][c].isUp) return true;
+            return (side === 'do' ? tr >= 5 : tr <= 4);
         case '傌': case '馬':
             if (!((dx === 1 && dy === 2) || (dx === 2 && dy === 1))) return false;
             return !mt[r + (dy === 2 ? (tr > r ? 1 : -1) : 0)][c + (dx === 2 ? (tc > c ? 1 : -1) : 0)];
@@ -81,7 +86,8 @@ function checkLuatWorker(type, side, c, r, tc, tr, mt, isCoUp) {
             return (mt[tr][tc] ? v === 1 : v === 0) && (dx === 0 || dy === 0);
         case '兵': case '卒':
             const daQuaSong = (side === 'do') ? (r <= 4) : (r >= 5);
-            return daQuaSong ? (dx + dy === 1 && (side === 'do' ? tr <= r : tr >= r)) : (dx === 0 && dy === 1 && (side === 'do' ? tr < r : tr > r));
+            if (!daQuaSong) return dx === 0 && dy === 1 && (side === 'do' ? tr < r : tr > r);
+            return (dx + dy === 1) && (side === 'do' ? tr <= r : tr >= r);
     }
     return false;
 }
@@ -211,19 +217,22 @@ function evaluateBoard(mt, botSide, isCoUp) {
     return score;
 }
 
-function generateAllMoves(mt, side, isCoUp) {
+function generateAllMoves(mt, side, isCoUp, depth, onlyCaptures = false) {
     let moves = [];
-    for(let r=0; r<10; r++) {
-        for(let c=0; c<9; c++) {
+    for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 9; c++) {
             let p = mt[r][c];
-            if(p && p.side === side) {
-                for(let tr=0; tr<10; tr++) {
-                    for(let tc=0; tc<9; tc++) {
-                        if(checkLuatWorker(p.type, side, c, r, tc, tr, mt, isCoUp)) {
+            if (p && p.side === side) {
+                for (let tr = 0; tr < 10; tr++) {
+                    for (let tc = 0; tc < 9; tc++) {
+                        if (onlyCaptures && !mt[tr][tc]) continue; 
+                        
+                        // 🔥 ĐÂY: checkLuatWorker bây giờ sẽ ép quân úp đi đúng chân ô đứng
+                        if (checkLuatWorker(p.type, side, c, r, tc, tr, mt, isCoUp)) {
                             let target = mt[tr][tc];
                             mt[tr][tc] = p; mt[r][c] = null;
-                            if(!laBiChieuWorker(side, mt, isCoUp) && !haiTuongDoiMat(mt)) {
-                                moves.push({from: {c, r}, to: {c: tc, r: tr}, pieceObj: p});
+                            if (!laBiChieuWorker(side, mt, isCoUp) && !haiTuongDoiMat(mt)) {
+                                moves.push({from: {c, r}, to: {c: tc, r: tr}, pieceObj: p, captured: target});
                             }
                             mt[r][c] = p; mt[tr][tc] = target;
                         }
