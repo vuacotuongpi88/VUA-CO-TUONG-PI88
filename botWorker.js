@@ -152,14 +152,30 @@ function haiTuongDoiMat(mt) {
     return count === 0;
 }
 
-// --- HÀM ĐÁNH GIÁ V7: RADAR DÒ HÀNG & TRIỆT HẠ QUÂN MẠNH ---
+// --- HÀM ĐÁNH GIÁ V8: BẢN NĂNG SINH TỒN & SĂN NẮP ÚP ---
 function evaluateBoard(mt, botSide, isCoUp) {
     let score = 0;
     let oppSide = botSide === 'do' ? 'den' : 'do';
+    let myMaterial = 0, oppMaterial = 0;
     let tBot = null, tOpp = null;
-    
-    // Não bộ đếm nước để diễn kịch
-    const moveCount = currentMatchMoveCount || 0; 
+
+    // Quét tổng tài sản
+    for(let r=0; r<10; r++) {
+        for(let c=0; c<9; c++) {
+            const p = mt[r][c];
+            if(!p) continue;
+            let val = PIECE_VALUES[p.type] || 0;
+            if(p.side === botSide) {
+                myMaterial += val;
+                if(p.type === '帥' || p.type === '將') tBot = {r, c};
+            } else {
+                oppMaterial += val;
+                if(p.type === '帥' || p.type === '將') tOpp = {r, c};
+            }
+        }
+    }
+
+    const isWinning = (myMaterial - oppMaterial) > 300;
 
     for(let r=0; r<10; r++) {
         for(let c=0; c<9; c++) {
@@ -169,46 +185,37 @@ function evaluateBoard(mt, botSide, isCoUp) {
             let isMyPiece = (p.side === botSide);
             let val = PIECE_VALUES[p.type] || 10;
 
-            // --- 🎯 CHIẾN THUẬT DÒ QUÂN ÚP ĐỊCH (HACK TRÙM) ---
-            if (isCoUp && p.isUp) {
-                if (isMyPiece) {
-                    // Cờ của Bot: Diễn kịch như bản V6
-                    if (moveCount < 6) {
-                        if (['兵','卒','仕','士','相','象'].includes(p.type)) val = 600;
-                        else val = 100;
+            // --- 🚨 LOGIC SINH TỒN & ĐE DỌA (ÁP DỤNG CHO CẢ QUÂN ÚP LẪN NGỬA) 🚨 ---
+            // checkLuatWorker đã có bùa "đi theo chân nắp úp", nên isSquareAttacked sẽ tự hiểu nắp úp có thể ăn quân.
+            let attackedByEnemy = isSquareAttacked(c, r, isMyPiece ? oppSide : botSide, mt, isCoUp);
+            let defendedByMe = isSquareDefended(c, r, p.side, mt, isCoUp);
+
+            if (isMyPiece) {
+                if (attackedByEnemy) {
+                    // 1. CỨU QUÂN CÓ TRỌNG TÂM: Bị dọa ăn -> Trừ điểm theo độ quý hiếm (Xe trừ nặng nhất để nó lo mà chạy)
+                    // Nếu có bảo kê (defendedByMe) thì trừ nhẹ (20%), đéo có bảo kê trừ 95% (buộc phải vọt)
+                    val -= defendedByMe ? (val * 0.2) : (val * 0.95);
+                }
+            } else {
+                // ĐỐI VỚI QUÂN ĐỊCH (MÀY)
+                if (attackedByEnemy) { // Nghĩa là đang bị Bot rình ăn
+                    if (isCoUp && p.isUp) {
+                        // 2. SÁT THỦ DIỆT NẮP: Thấy nắp úp hớ hênh -> Tăng điểm thèm khát để Bot nhào vô cắn
+                        val += 400; 
                     } else {
-                        if (['俥','車','炮','砲','傌','馬'].includes(p.type)) val = 1500;
-                    }
-                } else {
-                    // 🔥 ĐÂY RỒI: Cờ của MÀY (Địch) đang úp nhưng Bot vẫn nhìn thấu!
-                    let enemyActualType = p.type;
-                    
-                    // Nếu Bot thấy nắp úp của mày là Xe, Pháo, Mã...
-                    if (['俥','車','炮','砲','傌','馬'].includes(enemyActualType)) {
-                        // Nó sẽ coi cái nắp úp đó CỰC KỲ NGUY HIỂM (tăng điểm ưu tiên ăn)
-                        let dangerVal = PIECE_VALUES[enemyActualType] || 500;
-                        
-                        // Kiểm tra xem quân này của mày có đang bị Bot rình ăn không
-                        if (isSquareAttacked(c, r, botSide, mt, false)) {
-                            // Nếu ăn được con xịn đang úp của mày -> Cộng điểm cực lớn để nó MÚC LUÔN
-                            score += (dangerVal * 2); 
-                            console.log("🎯 Radar: Phát hiện và chuẩn bị triệt hạ quân mạnh đang giấu tên!");
-                        }
+                        // Thấy quân ngửa hớ hênh -> Múc theo điểm số
+                        val += defendedByMe ? 50 : (val * 0.5);
                     }
                 }
             }
 
-            // --- 🛡️ LOGIC BẢO VỆ TƯỚNG & HẬU THUẪN ---
-            if (!p.isUp) {
-                let attacked = isSquareAttacked(c, r, isMyPiece ? oppSide : botSide, mt, isCoUp);
-                let defended = isSquareDefended(c, r, p.side, mt, isCoUp);
-                if (attacked) {
-                    val -= defended ? (val * 0.3) : (val * 0.9);
-                } else if (defended) { val += 60; } 
-            }
-
-            if (p.type === '帥' || p.type === '將') {
-                if (isMyPiece && isSquareAttacked(c, r, oppSide, mt, isCoUp)) val -= 20000;
+            // --- 🧠 HACK NHÌN XUYÊN THẤU (GIỮ LẠI TỪ V7) ---
+            if (isCoUp && p.isUp && isMyPiece) {
+                if (currentMatchMoveCount < 6) {
+                    val += (['兵','卒','仕','士','相','象'].includes(p.type)) ? 300 : -200;
+                } else {
+                    val += (['俥','車','炮','砲','傌','馬'].includes(p.type)) ? 800 : 0;
+                }
             }
 
             if (isMyPiece) score += val; else score -= val;
@@ -216,7 +223,6 @@ function evaluateBoard(mt, botSide, isCoUp) {
     }
     return score;
 }
-
 function generateAllMoves(mt, side, isCoUp, depth, onlyCaptures = false) {
     let moves = [];
     for (let r = 0; r < 10; r++) {
