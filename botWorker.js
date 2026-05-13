@@ -213,9 +213,6 @@ function evaluateBoard(mt, botSide, isCoUp) {
             const p = mt[r][c];
             if(!p) continue;
             let isMyPiece = (p.side === botSide);
-            let val = PIECE_VALUES[p.type] || 10;
-
-            let isMyPiece = (p.side === botSide);
             let baseVal = PIECE_VALUES[p.type] || 10;
 
             // 1. MA GIÁO: ÉP BOT BIẾT TIẾC QUÂN ÚP XỊN CỦA MÌNH
@@ -274,6 +271,7 @@ function evaluateBoard(mt, botSide, isCoUp) {
                 }
                 score -= pieceScore;
             }
+        }
     }
     return score;
 }
@@ -320,17 +318,36 @@ function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp) {
     let moves = generateAllMoves(mt, currentSide, isCoUp);
     if (moves.length === 0) return isMaximizing ? -2000000 : 2000000;
 
+    // --- BÍ KÍP: SẮP XẾP NƯỚC ĐI (ÉP BOT TÍNH NƯỚC ĂN QUÂN & LẬT CỜ TRƯỚC) ---
+    moves.sort((a, b) => {
+        let scoreA = 0, scoreB = 0;
+        // Nếu nước đi A có ăn quân địch -> Ưu tiên A
+        if (mt[a.to.r][a.to.c]) scoreA += PIECE_VALUES[mt[a.to.r][a.to.c].type] || 100;
+        // Nếu nước đi B có ăn quân địch -> Ưu tiên B
+        if (mt[b.to.r][b.to.c]) scoreB += PIECE_VALUES[mt[b.to.r][b.to.c].type] || 100;
+        
+        // Ưu tiên các nước lật cờ úp
+        if (isCoUp) {
+            if (a.pieceObj.isUp) scoreA += 50;
+            if (b.pieceObj.isUp) scoreB += 50;
+        }
+        return scoreB - scoreA; // Sắp xếp giảm dần để bốc nước ngon nhất ra tính trước
+    });
+
     for (let m of moves) {
         let target = mt[m.to.r][m.to.c];
         let wasUp = m.pieceObj.isUp;
         mt[m.to.r][m.to.c] = m.pieceObj; mt[m.from.r][m.from.c] = null;
         if (isCoUp && wasUp) m.pieceObj.isUp = false; 
+        
         let ev = minimax(mt, depth-1, alpha, beta, !isMaximizing, botSide, isCoUp);
+        
         if (isCoUp && wasUp) m.pieceObj.isUp = true;
         mt[m.from.r][m.from.c] = m.pieceObj; mt[m.to.r][m.to.c] = target;
+        
         if (isMaximizing) {
             alpha = Math.max(alpha, ev);
-            if (beta <= alpha) break;
+            if (beta <= alpha) break; // Cắt tỉa siêu nhanh nhờ sắp xếp ở trên
         } else {
             beta = Math.min(beta, ev);
             if (beta <= alpha) break;
@@ -385,10 +402,10 @@ self.onmessage = async function(e) {
             }
         }
 
-        // 2. NẾU KHÔNG CÓ TRONG SÁCH NỘI BỘ -> GỌI SÁCH TÀU (NẾU CỜ ĐÃ NGỬA NHIỀU)
+       // 2. NẾU KHÔNG CÓ TRONG SÁCH NỘI BỘ -> GỌI SÁCH TÀU 
         if (!bestMove) {
-            const nguaCount = data.boardState.filter(p => p && !p.isUp).length;
-            if (!data.isCoUp || nguaCount > 8) {
+            // CẤM GỌI CHESSDB KHI ĐÁNH CỜ ÚP (Vì nó không hiểu luật lật cờ)
+            if (!data.isCoUp) { 
                 bestMove = await fetchCloudMove(boardToFEN(mt, data.botSide));
                 if (bestMove) {
                     bestMove.pieceObj = mt[bestMove.from.r][bestMove.from.c];
@@ -400,7 +417,8 @@ self.onmessage = async function(e) {
         if (!bestMove) {
             let moves = generateAllMoves(mt, data.botSide, data.isCoUp);
             let bestScore = -Infinity;
-            let depth = data.boardState.length <= 12 ? 5 : 4;
+            // Tính nhanh hơn rồi nên cho nó nhìn xa thêm 1 nước (Cực kỳ khôn)
+let depth = data.boardState.length <= 12 ? 6 : 5;
             
             for (let m of moves) {
                 let target = mt[m.to.r][m.to.c];
