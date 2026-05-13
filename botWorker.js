@@ -226,8 +226,20 @@ function evaluateBoard(mt, botSide, isCoUp) {
             }
 
             // ĐÁNH GIÁ TÌNH TRẠNG BỊ TẤN CÔNG / BẢO KÊ
-            let attacked = isSquareAttacked(c, r, isMyPiece ? oppSide : botSide, mt, isCoUp);
-            let defended = isSquareDefended(c, r, p.side, mt, isCoUp);
+            // 🚨 BÍ KÍP TĂNG TỐC X10: Chỉ quét radar né đòn cho Tướng, Xe, Pháo, Mã và Úp Xịn. 
+            // Bỏ qua lũ Tốt, Sĩ, Tượng cùi bắp để đỡ lag!
+            let attacked = false;
+            let defended = false;
+            
+            // Nếu là Tướng, hoặc quân xịn (điểm >= 600)
+            if (p.type === '帥' || p.type === '將' || baseVal >= 600) {
+                attacked = isSquareAttacked(c, r, isMyPiece ? oppSide : botSide, mt, isCoUp);
+                
+                // CHỈ KHI NÀO BỊ ĐỊCH NGẮM BẮN thật sự thì mới tốn công check xem có đồng đội bảo vệ không
+                if (attacked) {
+                    defended = isSquareDefended(c, r, p.side, mt, isCoUp);
+                }
+            }
 
             // --- XỬ LÝ ĐẶC BIỆT CHO TƯỚNG (Bị chiếu là rén ngang) ---
             if (p.type === '帥' || p.type === '將') {
@@ -417,8 +429,9 @@ self.onmessage = async function(e) {
         if (!bestMove) {
             let moves = generateAllMoves(mt, data.botSide, data.isCoUp);
             let bestScore = -Infinity;
-            // Tính nhanh hơn rồi nên cho nó nhìn xa thêm 1 nước (Cực kỳ khôn)
-let depth = data.boardState.length <= 12 ? 6 : 5;
+          // Ép nghĩ cạn lại để đi nhanh (Chỉ 3 hoặc 4)
+let depth = data.boardState.length <= 12 ? 4 : 3;
+             
             
             for (let m of moves) {
                 let target = mt[m.to.r][m.to.c];
