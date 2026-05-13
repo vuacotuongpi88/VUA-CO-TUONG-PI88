@@ -7485,19 +7485,22 @@ function closeBotInvite() {
     document.getElementById("bot-invite-modal").style.display = "none";
 }
 
-window.isCallingBot = false;
 async function acceptBotMatch() {
     // BÙA CHỐNG NHẤP ĐÚP: Đang gọi Bot rồi thì cấm bấm tiếp!
     if (window.isCallingBot) return;
     window.isCallingBot = true;
 
-    closeBotInvite();
+    if (typeof closeBotInvite === 'function') closeBotInvite();
+
     if (!currentRoomId) {
         window.isCallingBot = false;
+        alert("Lỗi: Không tìm thấy ID phòng!");
         return;
     }
 
     try {
+        console.log("Đang gọi Bot cho phòng:", currentRoomId);
+        
         const res = await fetch("/api/bot", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -7508,18 +7511,32 @@ async function acceptBotMatch() {
                 botData: window.currentInvitingBot
             })
         });
-        
-        const data = await res.json();
+
+        // --- KHỐI KIỂM TRA BỌC THÉP ---
+        const rawText = await res.text(); // Lấy dữ liệu thô trước
+        console.log("Dữ liệu thô từ Server:", rawText);
+
+        if (!res.ok) {
+            throw new Error(`Server báo lỗi ${res.status}: ${rawText.slice(0, 100)}`);
+        }
+
+        let data;
+        try {
+            data = JSON.parse(rawText); // Tự dịch JSON bằng tay
+        } catch (parseErr) {
+            throw new Error("Server đéo trả về JSON chuẩn! Nội dung: " + rawText.slice(0, 100));
+        }
+        // ------------------------------
+
         if (!data.ok) {
             alert(data.error || "Lão tẩu đang bận đánh bàn khác rồi!");
         } else {
             console.log("Bot đã nhập tiệc thành công!");
         }
     } catch(e) {
-        console.error("Gọi bot lỗi:", e);
-        alert("Không kết nối được với Server Bot!");
+        console.error("LỖI GỌI BOT CHI TIẾT:", e);
+        alert("Lỗi kết nối Server Bot: " + e.message);
     } finally {
-        // Mở khóa để ván sau còn gọi được
         window.isCallingBot = false; 
     }
 }
