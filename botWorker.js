@@ -226,16 +226,14 @@ function evaluateBoard(mt, botSide, isCoUp) {
                 }
 
                 // 🔥 BÙA SINH TỒN & BẢO KÊ TỐI THƯỢNG 🔥
-                // Cấm áp dụng cho Tướng để triệt tiêu bệnh "Nghiện Chiếu Tướng nộp mạng"
                 if (!p.isUp && p.type !== '帥' && p.type !== '將') { 
                     let isAttacked = isSquareAttackedWorker(c, r, isMyPiece ? oppSide : botSide, mt, isCoUp);
                     if (isAttacked) {
                         let isDefended = isSquareDefendedWorker(c, r, p.side, mt, isCoUp);
                         if (isMyPiece) {
-                            // Quân mình bị đánh: Đéo có bảo kê -> Trừ nặng (50%) ép phải chạy! Có bảo kê -> Trừ nhẹ (10%) dám hiên ngang đổi quân.
+                            // Bị ngắm: Đéo có bảo kê -> Trừ cực nặng ép chạy! Có bảo kê -> Trừ nhẹ để dám đứng lại đổi quân
                             val -= isDefended ? (val * 0.1) : (val * 0.5); 
                         } else {
-                            // Quân địch bị ngắm bắn: Đéo có bảo kê -> Trừ nặng (50%) xúi Bot nhào vô xơi tái! Có bảo kê -> Trừ nhẹ (10%) để nó tính toán cẩn thận.
                             val -= isDefended ? (val * 0.1) : (val * 0.5); 
                         }
                     }
@@ -243,7 +241,7 @@ function evaluateBoard(mt, botSide, isCoUp) {
 
                 if (isMyPiece && tOpp && (p.type === '俥' || p.type === '車' || p.type === '炮' || p.type === '砲' || p.type === '傌' || p.type === '馬')) {
                     let distToEnemyKing = Math.abs(r - tOpp.r) + Math.abs(c - tOpp.c);
-                    val += Math.max(0, (14 - distToEnemyKing) * 10); // Hãm bớt độ háu chiến lại
+                    val += Math.max(0, (14 - distToEnemyKing) * 10);
                 }
 
                 if (isLosing && isMyPiece) {
@@ -257,7 +255,7 @@ function evaluateBoard(mt, botSide, isCoUp) {
                     val = Math.floor(val * 0.95);
                 }
 
-                if (p.isUp) val += 200; 
+                // Đã xóa cái lệnh val += 200 xui dại hôm trước để nó hết sợ lật cờ!
 
                 if (isMyPiece) score += val;
                 else score -= val;
@@ -266,6 +264,7 @@ function evaluateBoard(mt, botSide, isCoUp) {
     }
     return score;
 }
+
 // SINH NƯỚC ĐI VÀ SẮP XẾP MVV-LVA + KILLER MOVES
 function generateAllMoves(mt, side, isCoUp, depth, onlyCaptures = false) {
     let moves = [];
@@ -293,15 +292,12 @@ function generateAllMoves(mt, side, isCoUp, depth, onlyCaptures = false) {
         }
     }
     
-    // Tối ưu hóa thứ tự nhánh (Move Ordering)
     let kMoves = killerMoves[depth] || [];
     moves.forEach(m => {
         if (m.captured) {
-            // Đòn MVV-LVA (Quân bèo ăn quân xịn)
             m.score = (PIECE_VALUES[m.captured.type] * 10) - PIECE_VALUES[m.pieceObj.type] + 100000;
         } else {
             m.score = 0;
-            // Khen thưởng đòn sát thủ (Killer Moves)
             if (kMoves.some(k => k.from.r === m.from.r && k.from.c === m.from.c && k.to.r === m.to.r && k.to.c === m.to.c)) {
                 m.score = 50000; 
             }
@@ -312,7 +308,7 @@ function generateAllMoves(mt, side, isCoUp, depth, onlyCaptures = false) {
     return moves;
 }
 
-// BÙA TĨNH TÂM (Chống chết ngu do tầm nhìn ngắn)
+// BÙA TĨNH TÂM 
 function quiesce(mt, alpha, beta, isMaximizing, botSide, isCoUp, qDepth) {
     let stand_pat = evaluateBoard(mt, botSide, isCoUp);
     if (qDepth > 5) return stand_pat; 
@@ -331,10 +327,17 @@ function quiesce(mt, alpha, beta, isMaximizing, botSide, isCoUp, qDepth) {
     if (isMaximizing) {
         for (let move of moves) {
             let target = mt[move.to.r][move.to.c];
-            mt[move.to.r][move.to.c] = mt[move.from.r][move.from.c];
+            let movingPiece = mt[move.from.r][move.from.c];
+            
+            mt[move.to.r][move.to.c] = movingPiece;
             mt[move.from.r][move.from.c] = null;
+            let wasUp = movingPiece.isUp;
+            if (isCoUp && wasUp) movingPiece.isUp = false; // 🔥 LẬT CỜ TRONG NÃO
+
             let score = quiesce(mt, alpha, beta, false, botSide, isCoUp, qDepth + 1);
-            mt[move.from.r][move.from.c] = mt[move.to.r][move.to.c];
+
+            if (isCoUp && wasUp) movingPiece.isUp = true; // Úp lại như cũ
+            mt[move.from.r][move.from.c] = movingPiece;
             mt[move.to.r][move.to.c] = target;
 
             if (score >= beta) return beta;
@@ -344,10 +347,17 @@ function quiesce(mt, alpha, beta, isMaximizing, botSide, isCoUp, qDepth) {
     } else {
         for (let move of moves) {
             let target = mt[move.to.r][move.to.c];
-            mt[move.to.r][move.to.c] = mt[move.from.r][move.from.c];
+            let movingPiece = mt[move.from.r][move.from.c];
+            
+            mt[move.to.r][move.to.c] = movingPiece;
             mt[move.from.r][move.from.c] = null;
+            let wasUp = movingPiece.isUp;
+            if (isCoUp && wasUp) movingPiece.isUp = false; // 🔥 LẬT CỜ TRONG NÃO
+
             let score = quiesce(mt, alpha, beta, true, botSide, isCoUp, qDepth + 1);
-            mt[move.from.r][move.from.c] = mt[move.to.r][move.to.c];
+
+            if (isCoUp && wasUp) movingPiece.isUp = true; // Úp lại như cũ
+            mt[move.from.r][move.from.c] = movingPiece;
             mt[move.to.r][move.to.c] = target;
 
             if (score <= alpha) return alpha;
@@ -362,15 +372,12 @@ function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp, isNullMo
 
     let currentSide = isMaximizing ? botSide : (botSide === 'do' ? 'den' : 'do');
     
-    // --- LĂNG BA VI BỘ (NULL MOVE PRUNING) ---
-    // Giả vờ nhường đối thủ đi 1 nước, nếu thế cờ vẫn tốt -> Cắt nhánh đéo cần tính thêm!
-    let R = 2; // Giảm độ sâu 2 bậc
+    let R = 2; 
     if (depth >= 3 && !isNullMove && !laBiChieuWorker(currentSide, mt, isCoUp)) {
         let nmpScore = minimax(mt, depth - 1 - R, alpha, beta, !isMaximizing, botSide, isCoUp, true);
         if (isMaximizing && nmpScore >= beta) return beta;
         if (!isMaximizing && nmpScore <= alpha) return alpha;
     }
-    // ----------------------------------------
 
     let moves = generateAllMoves(mt, currentSide, isCoUp, depth, false);
     if (moves.length === 0) return isMaximizing ? -99999 + depth : 99999 - depth;
@@ -379,18 +386,22 @@ function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp, isNullMo
         let maxEval = -Infinity;
         for (let move of moves) {
             let target = mt[move.to.r][move.to.c];
-            mt[move.to.r][move.to.c] = mt[move.from.r][move.from.c];
+            let movingPiece = mt[move.from.r][move.from.c];
+            
+            mt[move.to.r][move.to.c] = movingPiece;
             mt[move.from.r][move.from.c] = null;
+            let wasUp = movingPiece.isUp;
+            if (isCoUp && wasUp) movingPiece.isUp = false; // 🔥 LẬT CỜ TRONG NÃO
 
             let ev = minimax(mt, depth - 1, alpha, beta, false, botSide, isCoUp, false);
 
-            mt[move.from.r][move.from.c] = mt[move.to.r][move.to.c];
+            if (isCoUp && wasUp) movingPiece.isUp = true; // Úp lại như cũ
+            mt[move.from.r][move.from.c] = movingPiece;
             mt[move.to.r][move.to.c] = target;
 
             if (ev > maxEval) maxEval = ev;
             if (ev > alpha) alpha = ev;
             if (beta <= alpha) {
-                // Đòn này hiểm quá tạo ra cắt tỉa -> Lưu vào Sổ tay sát thủ
                 if (!target) {
                     if (!killerMoves[depth]) killerMoves[depth] = [];
                     killerMoves[depth].unshift(move);
@@ -404,12 +415,17 @@ function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp, isNullMo
         let minEval = Infinity;
         for (let move of moves) {
             let target = mt[move.to.r][move.to.c];
-            mt[move.to.r][move.to.c] = mt[move.from.r][move.from.c];
+            let movingPiece = mt[move.from.r][move.from.c];
+            
+            mt[move.to.r][move.to.c] = movingPiece;
             mt[move.from.r][move.from.c] = null;
+            let wasUp = movingPiece.isUp;
+            if (isCoUp && wasUp) movingPiece.isUp = false; // 🔥 LẬT CỜ TRONG NÃO
 
             let ev = minimax(mt, depth - 1, alpha, beta, true, botSide, isCoUp, false);
 
-            mt[move.from.r][move.from.c] = mt[move.to.r][move.to.c];
+            if (isCoUp && wasUp) movingPiece.isUp = true; // Úp lại như cũ
+            mt[move.from.r][move.from.c] = movingPiece;
             mt[move.to.r][move.to.c] = target;
 
             if (ev < minEval) minEval = ev;
@@ -427,21 +443,18 @@ function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp, isNullMo
     }
 }
 
-// BỘ MÁY FALLBACK: CHẠY BẰNG RAM CỦA KHÁCH
 function calculateLocalMove(boardArray, botSide, isCoUp) {
-    killerMoves = Array(100).fill(null).map(() => []); // Reset sổ tay
+    killerMoves = Array(100).fill(null).map(() => []); 
     let mt = buildMatrix(boardArray);
     let moves = generateAllMoves(mt, botSide, isCoUp, 10, false);
     if (moves.length === 0) return null;
 
-   let pieceCount = boardArray.length;
+    let pieceCount = boardArray.length;
     let DEPTH = 4; 
-
-    // BẢN VÁ CHO ĐT CÙI: Đông quân quá thì nhìn 3 bước thôi cho mượt
     if (pieceCount <= 6) DEPTH = 8; 
     else if (pieceCount <= 12) DEPTH = 6;
     else if (pieceCount <= 20) DEPTH = 5;
-    else if (pieceCount >= 28) DEPTH = 3; // Mới vào trận 32 quân -> Ép Depth 3
+    else if (pieceCount >= 28) DEPTH = 3; 
     else DEPTH = 4;
 
     let bestScore = -Infinity;
@@ -449,8 +462,12 @@ function calculateLocalMove(boardArray, botSide, isCoUp) {
 
     for (let move of moves) {
         let target = mt[move.to.r][move.to.c];
-        mt[move.to.r][move.to.c] = mt[move.from.r][move.from.c];
+        let movingPiece = mt[move.from.r][move.from.c];
+        
+        mt[move.to.r][move.to.c] = movingPiece;
         mt[move.from.r][move.from.c] = null;
+        let wasUp = movingPiece.isUp;
+        if (isCoUp && wasUp) movingPiece.isUp = false; // 🔥 LẬT CỜ TRONG NÃO
 
         let currentHash = getBoardHash(mt);
         let oppSide = botSide === 'do' ? 'den' : 'do';
@@ -464,7 +481,8 @@ function calculateLocalMove(boardArray, botSide, isCoUp) {
             score = minimax(mt, DEPTH - 1, -Infinity, Infinity, false, botSide, isCoUp, false);
         }
 
-        mt[move.from.r][move.from.c] = mt[move.to.r][move.to.c];
+        if (isCoUp && wasUp) movingPiece.isUp = true; // Úp lại như cũ
+        mt[move.from.r][move.from.c] = movingPiece;
         mt[move.to.r][move.to.c] = target;
 
         if (score > bestScore) {
@@ -476,7 +494,6 @@ function calculateLocalMove(boardArray, botSide, isCoUp) {
     }
     return bestMoves[Math.floor(Math.random() * bestMoves.length)];
 }
-
 // ==========================================
 // KHO ĐỘNG CƠ CƯỚP BIỂN: DỊCH FEN VÀ GỌI CHESSDB
 // ==========================================
