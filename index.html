@@ -20364,23 +20364,34 @@ async function verifyAndPayMMO() {
         const invRef = db.ref(`mmo_inventory/${currentSelectedMmoId}`);
         let boughtAccs = [];
         
-        // 🔥 BÙA FIX LỖI FIREBASE TRANSACTION Ở ĐÂY 🔥
+        // 🔥 BÙA RÚT ACC NGẪU NHIÊN TỪ KHO 🔥
         const txResult = await new Promise((resolve) => {
             invRef.transaction((data) => {
-                // Nếu Firebase chưa kịp lấy data từ Server về, nó sẽ đưa data = null. 
-                // Phải return null để bắt nó hỏi lại Server, không được abort (undefined)!
+                // Đợi Server trả data thật
                 if (data === null) return null; 
                 
                 if (data.accounts && data.accounts.length >= qty) {
-                    boughtAccs = data.accounts.slice(0, qty);
-                    data.accounts = data.accounts.slice(qty);
+                    boughtAccs = [];
+                    // Vòng lặp thò tay bốc ngẫu nhiên đúng số lượng (qty)
+                    for (let i = 0; i < qty; i++) {
+                        // random từ 0 đến số lượng acc đang có
+                        let randIdx = Math.floor(Math.random() * data.accounts.length);
+                        
+                        // Nhét acc vừa bốc vào túi khách
+                        boughtAccs.push(data.accounts[randIdx]);
+                        
+                        // Cắt vứt cái acc đó khỏi kho
+                        data.accounts.splice(randIdx, 1); 
+                    }
+                    
+                    // Cập nhật lại số dư kho
                     data.stock = data.accounts.length;
-                    return data; // Lưu lên Firebase
+                    return data; // Lưu mảng mới lên Firebase
                 }
-                return undefined; // Không đủ hàng thì Hủy giao dịch
+                return undefined; // Hết hàng thì Hủy
             }, (error, committed, snapshot) => {
                 resolve({ error, committed, snapshot });
-            }, false); // false = đéo thèm chạy nháp ở local, chờ server chốt luôn
+            }, false); 
         });
 
         if (!txResult.committed || boughtAccs.length === 0) {
