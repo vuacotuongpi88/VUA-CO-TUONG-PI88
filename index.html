@@ -20190,17 +20190,15 @@ window.resolveCustomConfirm = function(result) {
 // ==========================================
 
 let MMO_CATALOG = {
-    "gmail_trust": { name: "Gmail Ngâm > 6 Tháng", price: 5, stock: 125, icon: "📧", warranty: "- Bảo hành 7 ngày sai pass, sai mail khôi phục.\n- Định dạng: TK|MK|MailKhoiPhuc" },
-    "chatgpt_1m": { name: "ChatGPT 1 Tháng", price: 200, stock: 15, icon: "🤖", warranty: "- Bảo hành 1 đổi 1 trọn 1 tháng nếu bị back acc.\n- Lỗi báo qua kênh Support CSKH." },
-    "netflix_pro": { name: "Netflix Premium", price: 800, stock: 5, icon: "🍿", warranty: "- Profile xem phim riêng tư, mã PIN tự đặt.\n- Bảo hành 1 tháng." }
+    "gmail_trust": { name: "Gmail Ngâm > 6 Tháng", price: 5, stock: 0, icon: "📧", warranty: "- Bảo hành 7 ngày sai pass, sai mail khôi phục.\n- Định dạng: TK|MK|MailKhoiPhuc" },
+    "chatgpt_1m": { name: "ChatGPT 1 Tháng", price: 200, stock: 0, icon: "🤖", warranty: "- Bảo hành 1 đổi 1 trọn 1 tháng nếu bị back acc.\n- Lỗi báo qua kênh Support CSKH." },
+    "netflix_pro": { name: "Netflix Premium", price: 800, stock: 0, icon: "🍿", warranty: "- Profile xem phim riêng tư, mã PIN tự đặt.\n- Bảo hành 1 tháng." }
 };
 
 let currentSelectedMmoId = null;
 
 function openMMOShop() {
-    // Đóng menu 3 gạch
     document.querySelectorAll(".profile-menu").forEach(m => m.classList.remove("show"));
-    
     document.getElementById("mmo-shop-modal").style.display = "flex";
     document.getElementById("mmo-header-balance").innerText = typeof formatPMC === 'function' ? formatPMC(getPmcBalance()) : getPmcBalance() + " PMC";
     backToMMOCategories();
@@ -20210,24 +20208,39 @@ function closeMMOShop() {
     document.getElementById("mmo-shop-modal").style.display = "none";
 }
 
-function backToMMOCategories() {
+// 1. TẢI DANH MỤC VÀ ĐỌC SỐ LƯỢNG KHO TỪ FIREBASE
+async function backToMMOCategories() {
     document.getElementById("mmo-view-categories").style.display = "block";
     document.getElementById("mmo-view-detail").style.display = "none";
     document.getElementById("mmo-view-history").style.display = "none";
     document.getElementById("mmo-header-title").innerText = "🛒 CỬA HÀNG MMO";
     
     const listEl = document.getElementById("mmo-category-list");
-    listEl.innerHTML = Object.keys(MMO_CATALOG).map(id => {
-        let item = MMO_CATALOG[id];
-        return `
-            <div onclick="openMMODetail('${id}')" style="background: rgba(0,0,0,0.6); border: 1px solid #55efc4; border-radius: 12px; padding: 15px; text-align: center; cursor: pointer; transition: 0.2s;" onmouseover="this.style.background='rgba(85,239,196,0.1)'" onmouseout="this.style.background='rgba(0,0,0,0.6)'">
-                <div style="font-size: 30px; margin-bottom: 8px;">${item.icon}</div>
-                <div style="color: #fff; font-size: 13px; font-weight: bold; margin-bottom: 5px;">${item.name}</div>
-                <div style="color: #f1c40f; font-size: 12px; font-weight: bold;">Giá: ${item.price} PMC</div>
-                <div style="color: #b2bec3; font-size: 10px; margin-top: 5px;">Kho còn: ${item.stock}</div>
-            </div>
-        `;
-    }).join("");
+    listEl.innerHTML = `<div style="grid-column: 1/-1; text-align:center; color:#55efc4; font-weight:bold; padding: 20px;">⏳ Đang kiểm tra kho hàng...</div>`;
+
+    try {
+        // Rút data kho từ Firebase về
+        const snap = await db.ref("mmo_inventory").once("value");
+        const inventory = snap.val() || {};
+
+        listEl.innerHTML = Object.keys(MMO_CATALOG).map(id => {
+            let item = MMO_CATALOG[id];
+            // Lấy số lượng thật trong Firebase
+            let realStock = inventory[id] ? (inventory[id].stock || 0) : 0;
+            item.stock = realStock; // Lưu đè lại để tý tính tiền
+
+            return `
+                <div onclick="openMMODetail('${id}')" style="background: rgba(0,0,0,0.6); border: 1px solid #55efc4; border-radius: 12px; padding: 15px; text-align: center; cursor: pointer; transition: 0.2s;" onmouseover="this.style.background='rgba(85,239,196,0.1)'" onmouseout="this.style.background='rgba(0,0,0,0.6)'">
+                    <div style="font-size: 30px; margin-bottom: 8px;">${item.icon}</div>
+                    <div style="color: #fff; font-size: 13px; font-weight: bold; margin-bottom: 5px;">${item.name}</div>
+                    <div style="color: #f1c40f; font-size: 12px; font-weight: bold;">Giá: ${item.price} PMC</div>
+                    <div style="color: #b2bec3; font-size: 10px; margin-top: 5px;">Kho còn: ${realStock}</div>
+                </div>
+            `;
+        }).join("");
+    } catch (e) {
+        listEl.innerHTML = `<div style="grid-column: 1/-1; text-align:center; color:#ff7675;">Lỗi kết nối Kho Hàng!</div>`;
+    }
 }
 
 function openMMODetail(id) {
@@ -20278,7 +20291,7 @@ function calcMMOTotal() {
     document.getElementById("mmo-total-pmc").innerText = total + " PMC";
 }
 
-// Hàm Xử Lý Mua (Bảo mật bằng mã PIN 2 lớp + Auto Reset 30 ngày)
+// 2. HÀM THANH TOÁN (CẮT TIỀN, RÚT ACC TỪ FIREBASE)
 async function verifyAndPayMMO() {
     let item = MMO_CATALOG[currentSelectedMmoId];
     let qty = parseInt(document.getElementById("mmo-qty-input").value);
@@ -20296,127 +20309,158 @@ async function verifyAndPayMMO() {
         return;
     }
 
-    // Bật hiệu ứng loading để chống bấm 2 lần
     const payBtn = document.getElementById("mmo-btn-pay");
     const originalText = payBtn.innerHTML;
     payBtn.innerHTML = "⏳ ĐANG KIỂM TRA BẢO MẬT...";
     payBtn.disabled = true;
 
     try {
-        // Rút hồ sơ bảo mật từ Firebase về kiểm tra
+        // --- CHECK BẢO MẬT MÃ BÍ MẬT 30 NGÀY ---
         const snap = await db.ref("wallets/" + walletKey).once("value");
         const walletData = snap.val() || {};
         
         const savedPin = walletData.mmoPin || null;
         const pinUpdatedAt = walletData.mmoPinUpdatedAt || 0;
-        
-        // Thời gian chờ 30 ngày = 30 * 24 * 60 * 60 * 1000 mili-giây
         const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000; 
         const canReset = Date.now() - pinUpdatedAt >= thirtyDaysMs;
 
-        let finalPinToUse = savedPin;
-
-        // TRƯỜNG HỢP 1: NGƯỜI MỚI MUA LẦN ĐẦU TẠO MÃ PIN
         if (!savedPin) {
             let newPin1 = prompt(`BẢO MẬT TÀI KHOẢN (TẠO MỚI)\n\nPhát hiện mầy mua Acc lần đầu. Hãy tạo một MÃ BÍ MẬT (PIN) để dùng cho mọi giao dịch mua bán sau này.\n\nNhập MÃ BÍ MẬT mầy muốn tạo:`);
-            if (newPin1 === null) return; // Bấm Hủy
-            if (newPin1.trim() === "") { alert("Mã PIN không được để trống!"); return; }
-
+            if (!newPin1 || newPin1.trim() === "") { alert("Hủy giao dịch!"); payBtn.innerHTML = originalText; payBtn.disabled = false; return; }
             let newPin2 = prompt(`XÁC NHẬN MÃ BÍ MẬT\n\nNhập lại mã mầy vừa gõ lúc nãy một lần nữa để xác nhận:`);
-            if (newPin2 === null) return;
-            if (newPin1 !== newPin2) { alert("❌ Hai lần nhập đéo giống nhau! Giao dịch bị hủy."); return; }
+            if (newPin1 !== newPin2) { alert("❌ Hai lần nhập đéo giống nhau! Giao dịch bị hủy."); payBtn.innerHTML = originalText; payBtn.disabled = false; return; }
 
-            // Lưu lên Firebase
-            finalPinToUse = newPin1;
-            await db.ref("wallets/" + walletKey).update({
-                mmoPin: finalPinToUse,
-                mmoPinUpdatedAt: firebase.database.ServerValue.TIMESTAMP
-            });
-            alert("✅ Đã tạo Mã Bí Mật thành công! Nhớ cho kỹ, quên là 30 ngày sau mới được đổi đó nha.");
-        } 
-        // TRƯỜNG HỢP 2: KHÁCH CŨ, HỎI MÃ PIN
-        else {
-            let promptMsg = `XÁC NHẬN MUA HÀNG\n\nSản phẩm: ${item.name} (x${qty})\nTổng thanh toán: ${formatPMC(totalCost)}\n\nNhập MÃ BÍ MẬT của mầy để xác nhận thanh toán:`;
-            
-            // Gợi ý cho phép Reset nếu đã qua 30 ngày
-            if (canReset) {
-                promptMsg += `\n\n(Hệ thống thấy mầy đã dùng mã này hơn 30 ngày. Nếu mầy QUÊN MÃ, hãy gõ chữ: QUENPIN vào ô dưới đây để tạo mã mới).`;
-            }
+            await db.ref("wallets/" + walletKey).update({ mmoPin: newPin1, mmoPinUpdatedAt: firebase.database.ServerValue.TIMESTAMP });
+            alert("✅ Đã tạo Mã Bí Mật thành công! Tiến hành mua hàng...");
+        } else {
+            let promptMsg = `XÁC NHẬN MUA HÀNG\n\nSản phẩm: ${item.name} (x${qty})\nTổng thanh toán: ${totalCost} PMC\n\nNhập MÃ BÍ MẬT của mầy để xác nhận:`;
+            if (canReset) promptMsg += `\n\n(Nếu QUÊN MÃ, hãy gõ chữ: QUENPIN để tạo mã mới).`;
 
             let enteredPin = prompt(promptMsg);
-            if (enteredPin === null) return; // Bấm Hủy
+            if (!enteredPin) { payBtn.innerHTML = originalText; payBtn.disabled = false; return; }
 
-            // Xử lý luồng: Khách gõ chữ QUENPIN
             if (enteredPin.trim().toUpperCase() === "QUENPIN") {
                 if (!canReset) {
                     const nextDate = new Date(pinUpdatedAt + thirtyDaysMs).toLocaleDateString('vi-VN');
-                    alert(`❌ Lỗi: Mã PIN của mầy mới tạo/đổi gần đây. Phải chờ đến ngày ${nextDate} mới được phép đổi mã mới!`);
-                    return;
+                    alert(`❌ Lỗi: Phải chờ đến ngày ${nextDate} mới được đổi mã mới!`);
+                    payBtn.innerHTML = originalText; payBtn.disabled = false; return;
                 }
-
-                // Chạy luồng Tạo lại pass
                 let rPin1 = prompt("TẠO MÃ BÍ MẬT MỚI\n\nNhập MÃ BÍ MẬT MỚI mầy muốn dùng:");
-                if (!rPin1) return;
-                let rPin2 = prompt("XÁC NHẬN LẠI MÃ BÍ MẬT MỚI\n\nNhập lại mã vừa tạo một lần nữa:");
-                if (rPin1 !== rPin2) { alert("❌ Hai lần nhập đéo giống nhau! Đổi mã thất bại."); return; }
-
-                // Cập nhật lại Firebase
-                finalPinToUse = rPin1;
-                await db.ref("wallets/" + walletKey).update({
-                    mmoPin: finalPinToUse,
-                    mmoPinUpdatedAt: firebase.database.ServerValue.TIMESTAMP
-                });
-                alert("✅ Đã đổi Mã Bí Mật MỚI thành công! Tiến hành thanh toán...");
-            } 
-            // Xử lý luồng: Nhập pass sai
-            else if (enteredPin !== savedPin) {
+                if (!rPin1) { payBtn.innerHTML = originalText; payBtn.disabled = false; return; }
+                let rPin2 = prompt("XÁC NHẬN LẠI MÃ BÍ MẬT MỚI:");
+                if (rPin1 !== rPin2) { alert("❌ Lỗi nhập lệch! Hủy giao dịch."); payBtn.innerHTML = originalText; payBtn.disabled = false; return; }
+                
+                await db.ref("wallets/" + walletKey).update({ mmoPin: rPin1, mmoPinUpdatedAt: firebase.database.ServerValue.TIMESTAMP });
+                alert("✅ Đã đổi mã thành công! Đang tiến hành thanh toán...");
+            } else if (enteredPin !== savedPin) {
                 alert("❌ SAI MÃ BÍ MẬT! Giao dịch bị hủy.");
-                return;
+                payBtn.innerHTML = originalText; payBtn.disabled = false; return;
             }
         }
 
-        // ===============================================
-        // NẾU VƯỢT QUA ĐƯỢC ẢI BẢO MẬT (ĐÚNG PASS) THÌ CHẠY XUỐNG ĐÂY
-        // ===============================================
+        // --- BẮT ĐẦU RÚT ACC TỪ KHO BẰNG TRANSACTION ---
+        payBtn.innerHTML = "⏳ ĐANG XUẤT KHO...";
         
-        alert(`✅ Mật khẩu chính xác!\nĐang tiến hành trừ ${formatPMC(totalCost)} và lấy ${qty} tài khoản từ kho...`);
+        const invRef = db.ref(`mmo_inventory/${currentSelectedMmoId}`);
+        let boughtAccs = [];
         
-        // TODO: Giai đoạn 2: Gọi Transaction Firebase rút Acc. Tạm thời giả lập thành công nhảy sang lịch sử
-        openMMOHistory();
+        const txResult = await invRef.transaction((data) => {
+            if (data) {
+                if (!data.accounts) data.accounts = [];
+                // Nếu kho đủ hàng
+                if (data.accounts.length >= qty) {
+                    boughtAccs = data.accounts.slice(0, qty); // Lấy Acc
+                    data.accounts = data.accounts.slice(qty); // Cắt khỏi kho
+                    data.stock = data.accounts.length; // Cập nhật số liệu
+                    return data; // Lưu lên Firebase
+                }
+            }
+            return; // Nếu trả về return rỗng -> Transaction sẽ thất bại (committed = false)
+        });
+
+        if (!txResult.committed || boughtAccs.length === 0) {
+            alert("❌ Lỗi: Kho không đủ hàng hoặc có thằng khác vừa mua tranh mất!");
+            return;
+        }
+
+        // --- TRỪ TIỀN PMC ---
+        payBtn.innerHTML = "⏳ ĐANG TRỪ TIỀN...";
+        await adjustPmcWalletByKey(walletKey, -totalCost);
+        await adjustPmcWalletByKey("pi_admin_master", totalCost, { name: "Doanh Thu MMO" }); // Đẩy tiền về ví Admin
+
+        // --- LƯU LỊCH SỬ ĐƠN HÀNG VÀO VÍ ---
+        const orderId = "ORD_" + Date.now();
+        const orderData = {
+            id: orderId,
+            itemId: currentSelectedMmoId,
+            itemName: item.name,
+            qty: qty,
+            totalCost: totalCost,
+            accounts: boughtAccs,
+            createdAt: Date.now()
+        };
+        await db.ref(`wallets/${walletKey}/mmo_orders/${orderId}`).set(orderData);
+
+        // --- HOÀN THÀNH ---
+        alert(`✅ Mua thành công ${qty} Tài khoản!\nĐã trừ ${totalCost} PMC.`);
+        document.getElementById("mmo-header-balance").innerText = typeof formatPMC === 'function' ? formatPMC(getPmcBalance()) : getPmcBalance() + " PMC";
+        openMMOHistory(); // Nhảy sang màn hình Lịch sử xem Acc
 
     } catch (e) {
-        console.error("Lỗi xác thực PIN:", e);
-        alert("Lỗi hệ thống khi kiểm tra bảo mật!");
+        console.error("Lỗi giao dịch MMO:", e);
+        alert("Lỗi hệ thống trong quá trình giao dịch!");
     } finally {
-        // Nhả nút ra lại trạng thái cũ
         payBtn.innerHTML = originalText;
         payBtn.disabled = false;
     }
 }
 
-function openMMOHistory() {
+// 3. TẢI LỊCH SỬ TỪ FIREBASE ĐỂ HIỂN THỊ
+async function openMMOHistory() {
     document.getElementById("mmo-view-categories").style.display = "none";
     document.getElementById("mmo-view-detail").style.display = "none";
     document.getElementById("mmo-view-history").style.display = "block";
     document.getElementById("mmo-header-title").innerText = "📦 TÀI KHOẢN ĐÃ MUA";
     
     const listEl = document.getElementById("mmo-history-list");
+    listEl.innerHTML = `<div style="text-align:center; color:#55efc4; padding:20px;">⏳ Đang tải đơn hàng từ Firebase...</div>`;
     
-    listEl.innerHTML = `
-        <div style="background: rgba(0,0,0,0.6); border: 1px solid #00c38a; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                <span style="color: #00c38a; font-size: 13px; font-weight: bold;">[Hôm nay] - ${document.getElementById("mmo-qty-input").value} ${MMO_CATALOG[currentSelectedMmoId]?.name || "Tài khoản"}</span>
-                <span style="color: #f1c40f; font-size: 12px; font-weight: bold;">ĐÃ NHẬN</span>
-            </div>
+    const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "";
+    if(!walletKey) { listEl.innerHTML = "Lỗi ví"; return; }
+
+    try {
+        const snap = await db.ref(`wallets/${walletKey}/mmo_orders`).once("value");
+        const orders = snap.val() || {};
+        
+        // Sắp xếp đơn mới mua lên trên đầu
+        const orderArray = Object.values(orders).sort((a,b) => b.createdAt - a.createdAt);
+        
+        if (orderArray.length === 0) {
+            listEl.innerHTML = `<div style="text-align:center; color:#b2bec3; padding:20px;">Mầy chưa mua tài khoản nào.</div>`;
+            return;
+        }
+
+        listEl.innerHTML = orderArray.map((ord, idx) => {
+            let dateStr = new Date(ord.createdAt).toLocaleString('vi-VN');
+            let accHtml = ord.accounts.join('<br>'); // Các acc nằm xuống dòng
+            let accDataId = "acc-data-" + idx;
             
-            <div id="acc-data-1" style="background: #000; padding: 10px; border: 1px solid #333; border-radius: 6px; font-family: monospace; color: #55efc4; font-size: 12px; line-height: 1.6; margin-bottom: 8px; word-break: break-all;">
-                nammctayninh1@gmail.com|MatKhau123|mailkhoiphuc@g.com<br>
-                nammctayninh2@gmail.com|MatKhau456|mailkhoiphuc@g.com
+            return `
+            <div style="background: rgba(0,0,0,0.6); border: 1px solid #00c38a; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <span style="color: #00c38a; font-size: 13px; font-weight: bold;">[${dateStr}] - x${ord.qty} ${ord.itemName}</span>
+                    <span style="color: #f1c40f; font-size: 12px; font-weight: bold;">-${ord.totalCost} PMC</span>
+                </div>
+                <div id="${accDataId}" style="background: #000; padding: 10px; border: 1px solid #333; border-radius: 6px; font-family: monospace; color: #55efc4; font-size: 12px; line-height: 1.6; margin-bottom: 8px; word-break: break-all;">
+                    ${accHtml}
+                </div>
+                <button onclick="copyAccData('${accDataId}')" style="background: linear-gradient(180deg, #6c5ce7, #a29bfe); color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer;">📋 COPY TOÀN BỘ</button>
             </div>
-            
-            <button onclick="copyAccData('acc-data-1')" style="background: linear-gradient(180deg, #6c5ce7, #a29bfe); color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer;">📋 COPY TOÀN BỘ TÀI KHOẢN</button>
-        </div>
-    `;
+            `;
+        }).join("");
+    } catch(e) {
+        listEl.innerHTML = `<div style="text-align:center; color:#ff7675; padding:20px;">Lỗi tải lịch sử!</div>`;
+    }
 }
 
 function copyAccData(elementId) {
