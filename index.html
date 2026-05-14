@@ -20315,151 +20315,135 @@ function calcMMOTotal() {
     document.getElementById("mmo-total-pmc").innerText = (typeof formatPMC === 'function' ? formatPMC(total) : total + " PMC");
 }
 
-// 2. HÀM THANH TOÁN (CẮT TIỀN, RÚT ACC TỪ FIREBASE)
-async function verifyAndPayMMO() {
-    let item = MMO_CATALOG[currentSelectedMmoId];
-    let qty = parseInt(document.getElementById("mmo-qty-input").value) || 0;
-    
-    // --- CHÈN DÒNG NÀY VÀO CHỐNG BẤM MUA KHI Ô TRỐNG ---
-    if (qty < 1 || isNaN(qty)) {
-        alert("Lỗi: Số lượng mua ít nhất phải là 1!");
-        document.getElementById("mmo-qty-input").value = 1;
-        calcMMOTotal();
-        return;
-    }
-    // ---------------------------------------------------
-    let totalCost = qty * item.price;
-    let currentPmc = typeof getPmcBalance === 'function' ? getPmcBalance() : 0;
+// Biến tạm lưu dữ liệu khai báo trong phiên làm việc
+let currentKycData = null;
 
-    if (currentPmc < totalCost) {
-        alert("Lỗi: Nghèo quá đéo đủ PMC để thanh toán lô hàng này!");
-        return;
-    }
+// Hàm mở bảng khai báo trước khi mua
+async function verifyAndPayMMO() {
+    let qty = parseInt(document.getElementById("mmo-qty-input").value) || 0;
+    if (qty < 1) { alert("Nhập số lượng trước mầy!"); return; }
 
     const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "";
-    if (!walletKey) {
-        alert("Lỗi: Không tìm thấy ví của mầy!");
+    
+    // Tự động load lại thông tin cũ nếu có (cho khách đỡ lười)
+    try {
+        const snap = await db.ref("wallets/" + walletKey + "/lastKyc").once("value");
+        if (snap.exists()) {
+            const old = snap.val();
+            document.getElementById("kyc-name").value = old.name || "";
+            document.getElementById("kyc-phone").value = old.phone || "";
+            document.getElementById("kyc-address").value = old.address || "";
+            document.getElementById("kyc-email").value = old.email || "";
+        }
+    } catch(e) {}
+
+    document.getElementById("mmo-kyc-modal").style.display = "flex";
+}
+
+function closeKYC() {
+    document.getElementById("mmo-kyc-modal").style.display = "none";
+}
+
+// Hàm xử lý sau khi khách bấm "XÁC NHẬN & THANH TOÁN"
+async function submitKYCAndProceed() {
+    const name = document.getElementById("kyc-name").value.trim();
+    const phone = document.getElementById("kyc-phone").value.trim();
+    const address = document.getElementById("kyc-address").value.trim();
+    const email = document.getElementById("kyc-email").value.trim();
+
+    if (!name || !phone || !address) {
+        alert("Lỗi: Mầy phải nhập đầy đủ Tên, SĐT và Địa chỉ để khai báo thuế/công an!");
         return;
     }
 
+    // Lưu thông tin vào biến tạm để tý ghi vào đơn hàng
+    currentKycData = { name, phone, address, email, at: Date.now() };
+
+    // Đóng bảng khai báo, mở luồng thanh toán PIN cũ của mầy
+    closeKYC();
+    
+    // Gọi hàm thực hiện trừ tiền (Đây chính là logic cũ của mầy)
+    await executeFinalPayment();
+}
+
+// HÀM THANH TOÁN THẬT (Logic rút kho, trừ tiền nằm đây)
+async function executeFinalPayment() {
+    let item = MMO_CATALOG[currentSelectedMmoId];
+    let qty = parseInt(document.getElementById("mmo-qty-input").value);
+    let totalCost = qty * item.price;
+    const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "";
+
+    // Bật bảng hỏi PIN (Mượn lại logic prompt cũ của mầy hoặc code PIN mầy đang có)
+    const snap = await db.ref("wallets/" + walletKey).once("value");
+    const savedPin = snap.val()?.mmoPin;
+
+    let enteredPin = prompt(`XÁC NHẬN GIAO DỊCH\nTổng tiền: ${totalCost} PMC\n\nNhập Mã Bí Mật để chốt đơn:`);
+    if (enteredPin !== savedPin) { alert("Sai mã PIN!"); return; }
+
     const payBtn = document.getElementById("mmo-btn-pay");
-    const originalText = payBtn.innerHTML;
-    payBtn.innerHTML = "⏳ ĐANG KIỂM TRA BẢO MẬT...";
+    payBtn.innerHTML = "⏳ ĐANG XỬ LÝ...";
     payBtn.disabled = true;
 
     try {
-        // --- CHECK BẢO MẬT MÃ BÍ MẬT 30 NGÀY ---
-        const snap = await db.ref("wallets/" + walletKey).once("value");
-        const walletData = snap.val() || {};
-        
-        const savedPin = walletData.mmoPin || null;
-        const pinUpdatedAt = walletData.mmoPinUpdatedAt || 0;
-        const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000; 
-        const canReset = Date.now() - pinUpdatedAt >= thirtyDaysMs;
-
-        if (!savedPin) {
-            let newPin1 = prompt(`BẢO MẬT TÀI KHOẢN (TẠO MỚI)\n\nPhát hiện mầy mua Acc lần đầu. Hãy tạo một MÃ BÍ MẬT (PIN) để dùng cho mọi giao dịch mua bán sau này.\n\nNhập MÃ BÍ MẬT mầy muốn tạo:`);
-            if (!newPin1 || newPin1.trim() === "") { alert("Hủy giao dịch!"); payBtn.innerHTML = originalText; payBtn.disabled = false; return; }
-            let newPin2 = prompt(`XÁC NHẬN MÃ BÍ MẬT\n\nNhập lại mã mầy vừa gõ lúc nãy một lần nữa để xác nhận:`);
-            if (newPin1 !== newPin2) { alert("❌ Hai lần nhập đéo giống nhau! Giao dịch bị hủy."); payBtn.innerHTML = originalText; payBtn.disabled = false; return; }
-
-            await db.ref("wallets/" + walletKey).update({ mmoPin: newPin1, mmoPinUpdatedAt: firebase.database.ServerValue.TIMESTAMP });
-            alert("✅ Đã tạo Mã Bí Mật thành công! Tiến hành mua hàng...");
-        } else {
-            let promptMsg = `XÁC NHẬN MUA HÀNG\n\nSản phẩm: ${item.name} (x${qty})\nTổng thanh toán: ${totalCost} PMC\n\nNhập MÃ BÍ MẬT của mầy để xác nhận:`;
-            if (canReset) promptMsg += `\n\n(Nếu QUÊN MÃ, hãy gõ chữ: QUENPIN để tạo mã mới).`;
-
-            let enteredPin = prompt(promptMsg);
-            if (!enteredPin) { payBtn.innerHTML = originalText; payBtn.disabled = false; return; }
-
-            if (enteredPin.trim().toUpperCase() === "QUENPIN") {
-                if (!canReset) {
-                    const nextDate = new Date(pinUpdatedAt + thirtyDaysMs).toLocaleDateString('vi-VN');
-                    alert(`❌ Lỗi: Phải chờ đến ngày ${nextDate} mới được đổi mã mới!`);
-                    payBtn.innerHTML = originalText; payBtn.disabled = false; return;
-                }
-                let rPin1 = prompt("TẠO MÃ BÍ MẬT MỚI\n\nNhập MÃ BÍ MẬT MỚI mầy muốn dùng:");
-                if (!rPin1) { payBtn.innerHTML = originalText; payBtn.disabled = false; return; }
-                let rPin2 = prompt("XÁC NHẬN LẠI MÃ BÍ MẬT MỚI:");
-                if (rPin1 !== rPin2) { alert("❌ Lỗi nhập lệch! Hủy giao dịch."); payBtn.innerHTML = originalText; payBtn.disabled = false; return; }
-                
-                await db.ref("wallets/" + walletKey).update({ mmoPin: rPin1, mmoPinUpdatedAt: firebase.database.ServerValue.TIMESTAMP });
-                alert("✅ Đã đổi mã thành công! Đang tiến hành thanh toán...");
-            } else if (enteredPin !== savedPin) {
-                alert("❌ SAI MÃ BÍ MẬT! Giao dịch bị hủy.");
-                payBtn.innerHTML = originalText; payBtn.disabled = false; return;
-            }
-        }
-
-        // --- BẮT ĐẦU RÚT ACC TỪ KHO BẰNG TRANSACTION ---
-        payBtn.innerHTML = "⏳ ĐANG XUẤT KHO...";
-        
+        // --- 1. RÚT ACC NGẪU NHIÊN (Transaction) ---
         const invRef = db.ref(`mmo_inventory/${currentSelectedMmoId}`);
         let boughtAccs = [];
-        
-        // 🔥 BÙA RÚT ACC NGẪU NHIÊN TỪ KHO 🔥
         const txResult = await new Promise((resolve) => {
             invRef.transaction((data) => {
-                // Đợi Server trả data thật
                 if (data === null) return null; 
-                
                 if (data.accounts && data.accounts.length >= qty) {
                     boughtAccs = [];
-                    // Vòng lặp thò tay bốc ngẫu nhiên đúng số lượng (qty)
                     for (let i = 0; i < qty; i++) {
-                        // random từ 0 đến số lượng acc đang có
                         let randIdx = Math.floor(Math.random() * data.accounts.length);
-                        
-                        // Nhét acc vừa bốc vào túi khách
                         boughtAccs.push(data.accounts[randIdx]);
-                        
-                        // Cắt vứt cái acc đó khỏi kho
                         data.accounts.splice(randIdx, 1); 
                     }
-                    
-                    // Cập nhật lại số dư kho
                     data.stock = data.accounts.length;
-                    return data; // Lưu mảng mới lên Firebase
+                    return data;
                 }
-                return undefined; // Hết hàng thì Hủy
-            }, (error, committed, snapshot) => {
-                resolve({ error, committed, snapshot });
-            }, false); 
+                return undefined;
+            }, (error, committed, snapshot) => resolve({ error, committed, snapshot }), false);
         });
 
-        if (!txResult.committed || boughtAccs.length === 0) {
-            alert("❌ Lỗi: Kho không đủ hàng hoặc có thằng khác vừa mua tranh mất rồi!");
-            return;
-        }
+        if (!txResult.committed) { alert("Kho hết hàng!"); return; }
 
-        // --- TRỪ TIỀN PMC ---
-        payBtn.innerHTML = "⏳ ĐANG TRỪ TIỀN...";
+        // --- 2. TRỪ TIỀN ---
         await adjustPmcWalletByKey(walletKey, -totalCost);
-        await adjustPmcWalletByKey("pi_admin_master", totalCost, { name: "Doanh Thu MMO" }); 
+        await adjustPmcWalletByKey("pi_admin_master", totalCost, { name: "MMO KYC Order" });
 
-        // --- LƯU LỊCH SỬ ĐƠN HÀNG VÀO VÍ ---
+        // --- 3. GHI ĐƠN HÀNG KÈM THÔNG TIN KHAI BÁO (Ghi 2 nơi) ---
         const orderId = "ORD_" + Date.now();
-        const orderData = {
+        const fullOrderData = {
             id: orderId,
             itemId: currentSelectedMmoId,
             itemName: item.name,
             qty: qty,
             totalCost: totalCost,
             accounts: boughtAccs,
+            kyc: currentKycData, // Găm thông tin công an vào đơn hàng
             createdAt: Date.now()
         };
-        await db.ref(`wallets/${walletKey}/mmo_orders/${orderId}`).set(orderData);
 
-        // --- HOÀN THÀNH ---
-        alert(`✅ Mua thành công ${qty} Tài khoản!\nĐã trừ ${totalCost} PMC.`);
-        document.getElementById("mmo-header-balance").innerText = typeof formatPMC === 'function' ? formatPMC(getPmcBalance()) : getPmcBalance() + " PMC";
-        openMMOHistory(); // Nhảy sang màn hình Lịch sử xem Acc
+        // Ghi vào ví khách
+        await db.ref(`wallets/${walletKey}/mmo_orders/${orderId}`).set(fullOrderData);
+        // Lưu mốc để lần sau tự điền
+        await db.ref(`wallets/${walletKey}/lastKyc`).set(currentKycData);
+        
+        // Ghi vào nhánh riêng cho Admin/Công an (Dễ tìm kiếm)
+        await db.ref(`mmo_kyc_logs/${orderId}`).set({
+            walletKey: walletKey,
+            orderId: orderId,
+            ...currentKycData,
+            itemName: item.name,
+            qty: qty
+        });
 
+        alert("✅ Giao dịch thành công! Thông tin định danh đã được lưu.");
+        openMMOHistory();
     } catch (e) {
-        console.error("Lỗi giao dịch MMO:", e);
-        alert("Lỗi hệ thống trong quá trình giao dịch!");
+        alert("Lỗi hệ thống!");
     } finally {
-        payBtn.innerHTML = originalText;
+        payBtn.innerHTML = "💳 THANH TOÁN BẰNG PMC";
         payBtn.disabled = false;
     }
 }
@@ -20582,6 +20566,7 @@ function ensureMMOButton() {
 // Lệnh chạy ngầm: Cứ 1 giây nó lại chớp mắt canh gác cho mầy 1 lần, đéo bao giờ rớt nút được!
 document.addEventListener("DOMContentLoaded", ensureMMOButton);
 setInterval(ensureMMOButton, 1000);
+
 </script>
 <button id="btn-bom-test" onclick="bomDataTest()" style="position:fixed; top:150px; left:10px; z-index:999999; background: linear-gradient(90deg, #ff0000, #c0392b); color:white; padding:15px; border-radius:12px; font-weight:900; box-shadow: 0 0 20px red; border: 2px solid #fff;">
     🔥 BƠM 100 ACC TEST
@@ -20614,5 +20599,30 @@ window.bomDataTest = async function() {
     }
 };
 </script>
+<div id="mmo-kyc-modal" class="modal" style="display:none; z-index: 31000; background:rgba(0,0,0,0.95);">
+    <div class="modal-content" style="width: min(92vw, 400px); border: 2px solid #ff7675; background: #1a1a1a;">
+        <h3 style="color:#ff7675; margin-top:0;">📜 KHAI BÁO NGƯỜI MUA</h3>
+        <p style="color:#b2bec3; font-size: 11px; line-height: 1.4;">Theo quy định pháp luật 2026, quý khách vui lòng cung cấp thông tin thật để định danh giao dịch tài sản số. Thông tin này được bảo mật và chỉ dùng để khai báo khi có yêu cầu từ cơ quan chức năng.</p>
+        
+        <div style="text-align: left; margin-top: 15px;">
+            <label style="color:#55efc4; font-size: 12px; font-weight: bold;">HỌ VÀ TÊN THẬT:</label>
+            <input type="text" id="kyc-name" class="modal-input-dark" placeholder="Nguyễn Văn A" style="margin-bottom: 12px;">
+
+            <label style="color:#55efc4; font-size: 12px; font-weight: bold;">SỐ ĐIỆN THOẠI (Zalo):</label>
+            <input type="tel" id="kyc-phone" class="modal-input-dark" placeholder="09xxxxxxx" style="margin-bottom: 12px;">
+
+            <label style="color:#55efc4; font-size: 12px; font-weight: bold;">ĐỊA CHỈ THƯỜNG TRÚ:</label>
+            <textarea id="kyc-address" class="modal-input-dark" placeholder="Số nhà, đường, phường/xã, tỉnh thành..." style="height: 60px; resize: none; margin-bottom: 12px;"></textarea>
+
+            <label style="color:#b2bec3; font-size: 12px;">GMAIL (Không bắt buộc):</label>
+            <input type="email" id="kyc-email" class="modal-input-dark" placeholder="aname@gmail.com">
+        </div>
+
+        <div class="stake-actions" style="margin-top: 20px;">
+            <button class="stake-cancel-btn" onclick="closeKYC()">HỦY</button>
+            <button class="stake-ok-btn" style="background: linear-gradient(180deg, #ff7675, #d63031);" onclick="submitKYCAndProceed()">XÁC NHẬN & THANH TOÁN</button>
+        </div>
+    </div>
+</div>
 </body>
 </html>
