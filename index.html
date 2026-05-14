@@ -20464,7 +20464,7 @@ async function verifyAndPayMMO() {
     }
 }
 
-// 3. TẢI LỊCH SỬ TỪ FIREBASE ĐỂ HIỂN THỊ
+// 3. TẢI LỊCH SỬ TỪ FIREBASE ĐỂ HIỂN THỊ (BẢN FIX MÀU SẮC 3 PHẦN)
 async function openMMOHistory() {
     document.getElementById("mmo-view-categories").style.display = "none";
     document.getElementById("mmo-view-detail").style.display = "none";
@@ -20491,7 +20491,21 @@ async function openMMOHistory() {
 
         listEl.innerHTML = orderArray.map((ord, idx) => {
             let dateStr = new Date(ord.createdAt).toLocaleString('vi-VN');
-            let accHtml = ord.accounts.join('<br>'); // Các acc nằm xuống dòng
+            
+            // 🎨 BÙA TÔ MÀU 3 PHẦN: TRẮNG - XANH - ĐỎ
+            let accHtml = ord.accounts.map(accStr => {
+                let parts = accStr.split('|');
+                let tk = parts[0] || "";
+                let mk = parts[1] || "";
+                let kp = parts.slice(2).join('|') || ""; // Gom hết phần đuôi lỡ có nhiều dấu |
+                
+                let html = `<span style="color:#ffffff;">${tk}</span>`;
+                if (mk) html += `|<span style="color:#55efc4;">${mk}</span>`;
+                if (kp) html += `|<span style="color:#ff7675;">${kp}</span>`;
+                
+                return html;
+            }).join('<br>'); 
+
             let accDataId = "acc-data-" + idx;
             
             return `
@@ -20500,7 +20514,7 @@ async function openMMOHistory() {
                     <span style="color: #00c38a; font-size: 13px; font-weight: bold;">[${dateStr}] - x${ord.qty} ${ord.itemName}</span>
                     <span style="color: #f1c40f; font-size: 12px; font-weight: bold;">-${ord.totalCost} PMC</span>
                 </div>
-                <div id="${accDataId}" style="background: #000; padding: 10px; border: 1px solid #333; border-radius: 6px; font-family: monospace; color: #55efc4; font-size: 12px; line-height: 1.6; margin-bottom: 8px; word-break: break-all;">
+                <div id="${accDataId}" style="background: #000; padding: 10px; border: 1px solid #333; border-radius: 6px; font-family: monospace; font-size: 12px; line-height: 1.6; margin-bottom: 8px; word-break: break-all;">
                     ${accHtml}
                 </div>
                 <button onclick="copyAccData('${accDataId}')" style="background: linear-gradient(180deg, #6c5ce7, #a29bfe); color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer;">📋 COPY TOÀN BỘ</button>
@@ -20512,11 +20526,13 @@ async function openMMOHistory() {
     }
 }
 
+// BẢN FIX: Copy chữ thuần, vứt bỏ thẻ màu HTML rác
 function copyAccData(elementId) {
     const el = document.getElementById(elementId);
     if (!el) return;
     
-    let textToCopy = el.innerHTML.replace(/<br\s*[\/]?>/gi, "\n").trim();
+    // Dùng innerText nó sẽ tự lột sạch thẻ span HTML và giữ lại đúng dấu xuống dòng
+    let textToCopy = el.innerText.trim();
     
     const tempTextArea = document.createElement("textarea");
     tempTextArea.value = textToCopy;
