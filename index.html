@@ -5986,6 +5986,34 @@ margin-bottom: 14px;
     0% { box-shadow: 0 0 8px rgba(255, 71, 87, 0.4); }
     100% { box-shadow: 0 0 25px rgba(255, 71, 87, 1); border-color: #55efc4; }
 }
+/* Tìm cái đoạn style của modal-input-dark và sửa lại */
+.modal-input-dark {
+    width: 100%;
+    padding: 10px;
+    background: #000;
+    color: #55efc4;
+    border: 1px solid #333;
+    border-radius: 8px; /* Thêm bo góc cho mượt */
+    margin-bottom: 12px;
+    outline: none;
+    box-sizing: border-box; /* Đảm bảo padding không làm tràn khung */
+}
+
+/* Tìm đoạn stake-actions để chỉnh khoảng cách nút */
+.stake-actions {
+    display: flex;
+    justify-content: space-between; /* Đẩy 2 nút ra 2 bên */
+    gap: 10px; /* Tạo khoảng trống ở giữa */
+    margin-top: 20px;
+}
+
+.stake-cancel-btn, .stake-ok-btn {
+    flex: 1; /* Cho 2 nút dài bằng nhau nhìn cho cân đối */
+    border-radius: 8px;
+    padding: 10px;
+    font-weight: bold;
+    cursor: pointer;
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
