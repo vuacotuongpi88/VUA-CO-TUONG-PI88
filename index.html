@@ -5930,6 +5930,68 @@ margin-bottom: 14px;
     overflow: visible !important; /* Có bao nhiêu tiền hiện ra hết */
     padding: 0 6px !important; /* Chừa tí viền cho thoáng */
 }
+/* ==========================================
+   NÚT CỬA HÀNG MMO NGOÀI SẢNH (NẰM TRÊN 5 ICON)
+   ========================================== */
+#arena-mmo-btn {
+    position: fixed;
+    display: none; /* Mặc định ẩn, ra sảnh mới hiện */
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(90deg, #ff4757, #e84118);
+    border: 2px solid #ffeaa7;
+    color: #fff;
+    font-weight: 900;
+    cursor: pointer;
+    z-index: 13050;
+    box-shadow: 0 0 15px rgba(255, 71, 87, 0.6);
+    border-radius: 12px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    transition: 0.2s;
+}
+
+/* Chỉ hiện khi không ở trong trận đấu */
+body:not(.in-match) #arena-mmo-btn {
+    display: flex !important;
+}
+
+#arena-mmo-btn:active {
+    transform: scale(0.95);
+}
+
+/* TRÊN ĐIỆN THOẠI: Dài bằng đúng 5 nút, nằm chễm chệ bên trên */
+@media (max-width: 600px) {
+    #arena-mmo-btn {
+        top: 16px !important;
+        right: 10px !important;
+        margin-top: 2px !important; 
+        width: 232px !important; /* Dài vừa y xì đúc 5 nút cũ bên dưới */
+        height: 38px !important;
+        font-size: 13px !important;
+        border-radius: 10px !important;
+        letter-spacing: 0.5px;
+        animation: mmoPulse 1.5s infinite alternate;
+    }
+}
+
+/* TRÊN MÁY TÍNH (PC): Nằm bên trái hộp quà */
+@media (min-width: 601px) {
+    #arena-mmo-btn {
+        top: 16px !important;
+        right: 325px !important; /* Đẩy ra xa né mấy nút tròn */
+        height: 52px !important;
+        padding: 0 20px !important;
+        font-size: 16px !important;
+        border-radius: 26px !important;
+        animation: mmoPulse 1.5s infinite alternate;
+    }
+}
+
+/* Bùa chớp tắt thu hút ánh nhìn */
+@keyframes mmoPulse {
+    0% { box-shadow: 0 0 8px rgba(255, 71, 87, 0.4); }
+    100% { box-shadow: 0 0 25px rgba(255, 71, 87, 1); border-color: #55efc4; }
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -6154,10 +6216,7 @@ margin-bottom: 14px;
     <span class="menu-icon">⚙️</span>
     <span>HỒ SƠ</span>
 </div>
-<div class="menu-item" onclick="openMMOShop()">
-    <span class="menu-icon">🛒</span>
-    <span style="color:#f1c40f; font-weight:bold;">SHOP MMO (MUA ACC)</span>
-</div>
+
 <div class="menu-item" onclick="openWallet('nap')">
     <span class="menu-icon">🪙</span>
     <span>NẠP PI</span>
@@ -6660,7 +6719,7 @@ margin-bottom: 14px;
 </div>
 <div id="arena-skin-btn" onclick="openAvatarSkinShop()">🛒</div>
 <div id="arena-top-btn" onclick="openArenaTopModal(event)">🏆</div>
-
+<div id="arena-mmo-btn" onclick="openMMOShop()">🛒 CỬA HÀNG ACC MMO</div>
 <div id="arena-friend-box">
     <div class="arena-friend-header">
         <span>MỜI BẠN VÀO PHÒNG</span>
