@@ -5935,7 +5935,7 @@ margin-bottom: 14px;
    ========================================== */
 #arena-mmo-btn {
     position: fixed;
-    display: none; /* Mặc định ẩn, ra sảnh mới hiện */
+    display: none; /* Mặc định ẩn, bùa JS sẽ tự bật */
     align-items: center;
     justify-content: center;
     background: linear-gradient(90deg, #ff4757, #e84118);
@@ -5950,22 +5950,17 @@ margin-bottom: 14px;
     transition: 0.2s;
 }
 
-/* Chỉ hiện khi không ở trong trận đấu */
-body:not(.in-match) #arena-mmo-btn {
-    display: flex !important;
-}
-
 #arena-mmo-btn:active {
     transform: scale(0.95);
 }
 
-/* TRÊN ĐIỆN THOẠI: Dài bằng đúng 5 nút, nằm chễm chệ bên trên */
+/* TRÊN ĐIỆN THOẠI: Nằm ngay khoảng trống phía trên 5 nút */
 @media (max-width: 600px) {
     #arena-mmo-btn {
         top: 16px !important;
         right: 10px !important;
         margin-top: 2px !important; 
-        width: 232px !important; /* Dài vừa y xì đúc 5 nút cũ bên dưới */
+        width: 232px !important; /* Dài vừa y 5 nút cũ cộng lại */
         height: 38px !important;
         font-size: 13px !important;
         border-radius: 10px !important;
@@ -5978,7 +5973,7 @@ body:not(.in-match) #arena-mmo-btn {
 @media (min-width: 601px) {
     #arena-mmo-btn {
         top: 16px !important;
-        right: 325px !important; /* Đẩy ra xa né mấy nút tròn */
+        right: 325px !important; 
         height: 52px !important;
         padding: 0 20px !important;
         font-size: 16px !important;
@@ -5987,7 +5982,6 @@ body:not(.in-match) #arena-mmo-btn {
     }
 }
 
-/* Bùa chớp tắt thu hút ánh nhìn */
 @keyframes mmoPulse {
     0% { box-shadow: 0 0 8px rgba(255, 71, 87, 0.4); }
     100% { box-shadow: 0 0 25px rgba(255, 71, 87, 1); border-color: #55efc4; }
@@ -6719,7 +6713,7 @@ body:not(.in-match) #arena-mmo-btn {
 </div>
 <div id="arena-skin-btn" onclick="openAvatarSkinShop()">🛒</div>
 <div id="arena-top-btn" onclick="openArenaTopModal(event)">🏆</div>
-<div id="arena-mmo-btn" onclick="openMMOShop()">🛒 CỬA HÀNG ACC MMO</div>
+
 <div id="arena-friend-box">
     <div class="arena-friend-header">
         <span>MỜI BẠN VÀO PHÒNG</span>
@@ -20350,6 +20344,42 @@ function copyAccData(elementId) {
     }
     document.body.removeChild(tempTextArea);
 }
+// ==========================================
+// BÙA TỰ ĐỘNG CANH GÁC NÚT MMO (CHỐNG TÀNG HÌNH)
+// ==========================================
+function ensureMMOButton() {
+    let btn = document.getElementById("arena-mmo-btn");
+    
+    // 1. Nếu nút chưa tồn tại trên trang thì hệ thống tự đẻ ra
+    if (!btn) {
+        btn = document.createElement("div");
+        btn.id = "arena-mmo-btn";
+        btn.innerHTML = "🛒 CỬA HÀNG ACC MMO";
+        btn.onclick = openMMOShop;
+    }
+
+    // 2. Nếu nút đang bị nhốt trong thẻ game-arena thì móc cổ nó ném ra thẻ body
+    if (btn.parentElement !== document.body) {
+        document.body.appendChild(btn);
+    }
+
+    // 3. Tự động kiểm tra xem có đang mở game hay màn hình đăng nhập không
+    const loginScreen = document.getElementById("login-screen");
+    const homeMenu = document.getElementById("home-menu");
+    const isLoginOpen = !!loginScreen && loginScreen.style.display !== "none";
+    const isHomeOpen = !!homeMenu && homeMenu.style.display !== "none";
+    
+    // 4. CHỈ BẬT LÊN KHI MẦY ĐANG ĐỨNG THẢNH THƠI Ở SẢNH CHỜ
+    if (!document.body.classList.contains("in-match") && isHomeOpen && !isLoginOpen) {
+        btn.style.display = "flex";
+    } else {
+        btn.style.display = "none";
+    }
+}
+
+// Lệnh chạy ngầm: Cứ 1 giây nó lại chớp mắt canh gác cho mầy 1 lần, đéo bao giờ rớt nút được!
+document.addEventListener("DOMContentLoaded", ensureMMOButton);
+setInterval(ensureMMOButton, 1000);
 </script>
 </body>
 </html>
