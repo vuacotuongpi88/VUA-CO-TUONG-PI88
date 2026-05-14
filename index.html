@@ -6026,6 +6026,35 @@ margin-bottom: 14px;
     font-weight: 900 !important;
     cursor: pointer;
 }
+/* Style cho bảng nạp hàng Admin 406 */
+#admin-mmo-tool {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 100000; 
+    background: #1a1a1a;
+    border: 2px solid #f1c40f;
+    padding: 20px;
+    border-radius: 20px;
+    width: min(90vw, 320px);
+    box-shadow: 0 0 30px #000;
+}
+
+#add-mmo-list {
+    width: 100%;
+    height: 120px;
+    background: #000;
+    color: #55efc4;
+    border: 1px solid #444;
+    border-radius: 10px;
+    padding: 10px;
+    font-family: monospace;
+    font-size: 11px;
+    margin: 10px 0;
+    box-sizing: border-box;
+    outline: none;
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -20607,18 +20636,87 @@ function ensureMMOButton() {
 document.addEventListener("DOMContentLoaded", ensureMMOButton);
 setInterval(ensureMMOButton, 1000);
 </script>
-<div id="admin-mmo-tool" style="display:none; position:fixed; bottom:20px; left:10px; z-index:999999; background:#1a1a1a; border:2px solid #f1c40f; padding:15px; border-radius:15px; width:280px; box-shadow:0 0 20px #000;">
-    <h4 style="color:#f1c40f; margin:0 0 10px 0;">📦 KHO HÀNG ADMIN</h4>
-    <select id="add-mmo-id" style="width:100%; padding:8px; margin-bottom:10px; background:#000; color:#fff; border:1px solid #55efc4;">
-        <option value="gmail_trust">Gmail Ngâm</option>
-        <option value="chatgpt_1m">ChatGPT</option>
-        <option value="netflix_pro">Netflix</option>
+<div id="admin-mmo-tool" style="display:none;">
+    <h3 style="color:#f1c40f; margin-top:0; text-align:center;">📦 QUẢN LÝ KHO HÀNG</h3>
+    
+    <label style="color:#dfe6e9; font-size:12px; font-weight:bold;">CHỌN LOẠI ACC:</label>
+    <select id="add-mmo-id" style="width:100%; padding:10px; margin:8px 0 15px; background:#000; color:#fff; border:1px solid #55efc4; border-radius:8px;">
+        <option value="gmail_trust">Gmail Ngâm > 6 Tháng</option>
+        <option value="chatgpt_1m">ChatGPT 1 Tháng</option>
+        <option value="netflix_pro">Netflix Premium</option>
     </select>
-    <textarea id="add-mmo-list" placeholder="Dán list acc vào đây... (Định dạng: tk|mk|kp)" style="width:100%; height:100px; background:#000; color:#55efc4; border:1px solid #444; font-size:10px; margin-bottom:10px; box-sizing:border-box;"></textarea>
-    <button onclick="submitMmoStock()" style="width:100%; background:#00c38a; color:white; padding:10px; border:none; border-radius:8px; font-weight:bold;">BƠM HÀNG VÀO KHO</button>
-    <button onclick="document.getElementById('admin-mmo-tool').style.display='none'" style="margin-top:5px; width:100%; background:none; color:#ff7675; border:none; font-size:11px;">Đóng bảng</button>
+
+    <label style="color:#dfe6e9; font-size:12px; font-weight:bold;">DÁN DANH SÁCH (tk|mk|kp):</label>
+    <textarea id="add-mmo-list" placeholder="acc1@gmail.com|pass1|kp1&#10;acc2@gmail.com|pass2|kp2"></textarea>
+    
+    <button onclick="submitMmoStock()" style="width:100%; background: linear-gradient(180deg, #00c38a, #008f67); color:white; padding:12px; border:none; border-radius:10px; font-weight:900; cursor:pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5);">🚀 BƠM HÀNG VÀO KHO</button>
+    
+    <button onclick="document.getElementById('admin-mmo-tool').style.display='none'" style="margin-top:10px; width:100%; background:none; color:#ff7675; border:none; font-size:12px; cursor:pointer; font-weight:bold;">[ ĐÓNG BẢNG ]</button>
 </div>
 
+<script>
+// Hàm tự động hiện nút trong Menu 3 gạch cho Admin 406
+function initAdminMMOMenu() {
+    const menu = document.getElementById("profile-dropdown");
+    // Kiểm tra nếu là admin 406 và chưa có nút quản lý thì mới thêm vào
+    if (window.isCurrentPiAdminKey() && !document.getElementById("menu-admin-mmo")) {
+        const adminBtn = document.createElement("div");
+        adminBtn.id = "menu-admin-mmo";
+        adminBtn.className = "menu-item";
+        adminBtn.style.color = "#f1c40f"; // Cho nút màu vàng nổi bật
+        adminBtn.innerHTML = `
+            <span class="menu-icon">📦</span>
+            <span style="font-weight:900;">QUẢN LÝ KHO MMO</span>
+        `;
+        adminBtn.onclick = function() {
+            if (typeof closeProfileMenu === 'function') closeProfileMenu();
+            else document.getElementById("profile-dropdown").classList.remove("show");
+            
+            document.getElementById("admin-mmo-tool").style.display = "block";
+        };
+        
+        // Chèn vào trên nút Đăng Xuất cho dễ thấy
+        const logoutBtn = document.querySelector(".menu-item-danger");
+        if (logoutBtn) menu.insertBefore(adminBtn, logoutBtn);
+        else menu.appendChild(adminBtn);
+    }
+}
+
+// Chạy lệnh quét menu mỗi khi mở menu 3 gạch
+document.querySelector(".hamburger-icon").addEventListener("click", () => {
+    setTimeout(initAdminMMOMenu, 150);
+});
+
+async function submitMmoStock() {
+    let id = document.getElementById("add-mmo-id").value;
+    let rawData = document.getElementById("add-mmo-list").value.trim();
+    if(!rawData) return alert("Mày chưa dán danh sách acc kìa!");
+
+    let newAccs = rawData.split('\n').filter(line => line.trim() !== "");
+    
+    try {
+        const invRef = db.ref(`mmo_inventory/${id}`);
+        await invRef.transaction((current) => {
+            if (!current) {
+                let defaultPrice = 5;
+                if (id === "chatgpt_1m") defaultPrice = 200;
+                if (id === "netflix_pro") defaultPrice = 800;
+                current = { price: defaultPrice, stock: 0, accounts: [] };
+            }
+            if (!current.accounts) current.accounts = [];
+            current.accounts = current.accounts.concat(newAccs);
+            current.stock = current.accounts.length;
+            return current;
+        });
+        alert(`✅ THÀNH CÔNG! Đã nạp thêm ${newAccs.length} Acc vào kho.`);
+        document.getElementById("add-mmo-list").value = "";
+        document.getElementById("admin-mmo-tool").style.display = 'none';
+        if (typeof backToMMOCategories === 'function') backToMMOCategories(); 
+    } catch(e) {
+        alert("Lỗi nạp hàng: " + e.message);
+    }
+}
+</script>
 <script>
 // window.showAdminTool = function() { ... } <-- Tạm khóa hàm lại
 document.getElementById("admin-mmo-tool").style.display = "none"; // Hiện luôn bảng nạp
