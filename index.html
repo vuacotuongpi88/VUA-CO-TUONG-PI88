@@ -20278,6 +20278,7 @@ function calcMMOTotal() {
     document.getElementById("mmo-total-pmc").innerText = total + " PMC";
 }
 
+// Hàm Xử Lý Mua (Bảo mật bằng mã PIN 2 lớp + Auto Reset 30 ngày)
 async function verifyAndPayMMO() {
     let item = MMO_CATALOG[currentSelectedMmoId];
     let qty = parseInt(document.getElementById("mmo-qty-input").value);
@@ -20285,20 +20286,112 @@ async function verifyAndPayMMO() {
     let currentPmc = typeof getPmcBalance === 'function' ? getPmcBalance() : 0;
 
     if (currentPmc < totalCost) {
-        alert("Lỗi: Không đủ PMC để thanh toán lô hàng này!");
+        alert("Lỗi: Nghèo quá đéo đủ PMC để thanh toán lô hàng này!");
         return;
     }
 
-    let userPass = prompt(`XÁC NHẬN MUA HÀNG\n\nSản phẩm: ${item.name} (x${qty})\nTổng thanh toán: ${totalCost} PMC\n\nNhập Mã Bí Mật / Pass của mầy để xác nhận:`);
-    if (userPass === null) return;
-    if (userPass.trim() === "") {
-        alert("Vui lòng nhập mật khẩu!");
+    const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "";
+    if (!walletKey) {
+        alert("Lỗi: Không tìm thấy ví của mầy!");
         return;
     }
 
-    // TODO: Sẽ nhét API chém Firebase vào đây ở giai đoạn sau
-    alert(`✅ Mật khẩu chính xác!\nHệ thống đang trừ ${totalCost} PMC và rút ${qty} Acc từ kho...`);
-    openMMOHistory();
+    // Bật hiệu ứng loading để chống bấm 2 lần
+    const payBtn = document.getElementById("mmo-btn-pay");
+    const originalText = payBtn.innerHTML;
+    payBtn.innerHTML = "⏳ ĐANG KIỂM TRA BẢO MẬT...";
+    payBtn.disabled = true;
+
+    try {
+        // Rút hồ sơ bảo mật từ Firebase về kiểm tra
+        const snap = await db.ref("wallets/" + walletKey).once("value");
+        const walletData = snap.val() || {};
+        
+        const savedPin = walletData.mmoPin || null;
+        const pinUpdatedAt = walletData.mmoPinUpdatedAt || 0;
+        
+        // Thời gian chờ 30 ngày = 30 * 24 * 60 * 60 * 1000 mili-giây
+        const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000; 
+        const canReset = Date.now() - pinUpdatedAt >= thirtyDaysMs;
+
+        let finalPinToUse = savedPin;
+
+        // TRƯỜNG HỢP 1: NGƯỜI MỚI MUA LẦN ĐẦU TẠO MÃ PIN
+        if (!savedPin) {
+            let newPin1 = prompt(`BẢO MẬT TÀI KHOẢN (TẠO MỚI)\n\nPhát hiện mầy mua Acc lần đầu. Hãy tạo một MÃ BÍ MẬT (PIN) để dùng cho mọi giao dịch mua bán sau này.\n\nNhập MÃ BÍ MẬT mầy muốn tạo:`);
+            if (newPin1 === null) return; // Bấm Hủy
+            if (newPin1.trim() === "") { alert("Mã PIN không được để trống!"); return; }
+
+            let newPin2 = prompt(`XÁC NHẬN MÃ BÍ MẬT\n\nNhập lại mã mầy vừa gõ lúc nãy một lần nữa để xác nhận:`);
+            if (newPin2 === null) return;
+            if (newPin1 !== newPin2) { alert("❌ Hai lần nhập đéo giống nhau! Giao dịch bị hủy."); return; }
+
+            // Lưu lên Firebase
+            finalPinToUse = newPin1;
+            await db.ref("wallets/" + walletKey).update({
+                mmoPin: finalPinToUse,
+                mmoPinUpdatedAt: firebase.database.ServerValue.TIMESTAMP
+            });
+            alert("✅ Đã tạo Mã Bí Mật thành công! Nhớ cho kỹ, quên là 30 ngày sau mới được đổi đó nha.");
+        } 
+        // TRƯỜNG HỢP 2: KHÁCH CŨ, HỎI MÃ PIN
+        else {
+            let promptMsg = `XÁC NHẬN MUA HÀNG\n\nSản phẩm: ${item.name} (x${qty})\nTổng thanh toán: ${formatPMC(totalCost)}\n\nNhập MÃ BÍ MẬT của mầy để xác nhận thanh toán:`;
+            
+            // Gợi ý cho phép Reset nếu đã qua 30 ngày
+            if (canReset) {
+                promptMsg += `\n\n(Hệ thống thấy mầy đã dùng mã này hơn 30 ngày. Nếu mầy QUÊN MÃ, hãy gõ chữ: QUENPIN vào ô dưới đây để tạo mã mới).`;
+            }
+
+            let enteredPin = prompt(promptMsg);
+            if (enteredPin === null) return; // Bấm Hủy
+
+            // Xử lý luồng: Khách gõ chữ QUENPIN
+            if (enteredPin.trim().toUpperCase() === "QUENPIN") {
+                if (!canReset) {
+                    const nextDate = new Date(pinUpdatedAt + thirtyDaysMs).toLocaleDateString('vi-VN');
+                    alert(`❌ Lỗi: Mã PIN của mầy mới tạo/đổi gần đây. Phải chờ đến ngày ${nextDate} mới được phép đổi mã mới!`);
+                    return;
+                }
+
+                // Chạy luồng Tạo lại pass
+                let rPin1 = prompt("TẠO MÃ BÍ MẬT MỚI\n\nNhập MÃ BÍ MẬT MỚI mầy muốn dùng:");
+                if (!rPin1) return;
+                let rPin2 = prompt("XÁC NHẬN LẠI MÃ BÍ MẬT MỚI\n\nNhập lại mã vừa tạo một lần nữa:");
+                if (rPin1 !== rPin2) { alert("❌ Hai lần nhập đéo giống nhau! Đổi mã thất bại."); return; }
+
+                // Cập nhật lại Firebase
+                finalPinToUse = rPin1;
+                await db.ref("wallets/" + walletKey).update({
+                    mmoPin: finalPinToUse,
+                    mmoPinUpdatedAt: firebase.database.ServerValue.TIMESTAMP
+                });
+                alert("✅ Đã đổi Mã Bí Mật MỚI thành công! Tiến hành thanh toán...");
+            } 
+            // Xử lý luồng: Nhập pass sai
+            else if (enteredPin !== savedPin) {
+                alert("❌ SAI MÃ BÍ MẬT! Giao dịch bị hủy.");
+                return;
+            }
+        }
+
+        // ===============================================
+        // NẾU VƯỢT QUA ĐƯỢC ẢI BẢO MẬT (ĐÚNG PASS) THÌ CHẠY XUỐNG ĐÂY
+        // ===============================================
+        
+        alert(`✅ Mật khẩu chính xác!\nĐang tiến hành trừ ${formatPMC(totalCost)} và lấy ${qty} tài khoản từ kho...`);
+        
+        // TODO: Giai đoạn 2: Gọi Transaction Firebase rút Acc. Tạm thời giả lập thành công nhảy sang lịch sử
+        openMMOHistory();
+
+    } catch (e) {
+        console.error("Lỗi xác thực PIN:", e);
+        alert("Lỗi hệ thống khi kiểm tra bảo mật!");
+    } finally {
+        // Nhả nút ra lại trạng thái cũ
+        payBtn.innerHTML = originalText;
+        payBtn.disabled = false;
+    }
 }
 
 function openMMOHistory() {
