@@ -17913,60 +17913,66 @@ switchMissionTab(MISSION_UI_STATE.activeTab || 'day');
     }
 };
 
-  document.addEventListener('DOMContentLoaded', function () {
-  ensureMissionHubMounted();
-  refreshMissionLobbyBadgeSilently();
+  function updateMissionLobbyBadge(board) {
+    const badge = document.getElementById('arena-mission-badge');
+    const btn = document.getElementById('arena-mission-btn');
+    if (!badge || !btn) return;
 
-  setInterval(function () {
-    const homeMenu = document.getElementById('home-menu');
-    if (homeMenu && homeMenu.style.display !== 'none') {
-      refreshMissionLobbyBadgeSilently();
+    const count = Math.max(0, Number(board?.claimableCount || 0));
+
+    if (count > 0) {
+      badge.textContent = count > 99 ? '99+' : String(count);
+      badge.classList.add('show');
+      btn.classList.add('has-ready-mission');
+    } else {
+      badge.textContent = '0';
+      badge.classList.remove('show');
+      btn.classList.remove('has-ready-mission');
     }
-  }, 15000);
-});
-})();
-function updateMissionLobbyBadge(board) {
-  const badge = document.getElementById('arena-mission-badge');
-  const btn = document.getElementById('arena-mission-btn');
-  if (!badge || !btn) return;
-
-  const count = Math.max(0, Number(board?.claimableCount || 0));
-
-  if (count > 0) {
-    badge.textContent = count > 99 ? '99+' : String(count);
-    badge.classList.add('show');
-    btn.classList.add('has-ready-mission');
-  } else {
-    badge.textContent = '0';
-    badge.classList.remove('show');
-    btn.classList.remove('has-ready-mission');
   }
-}
 
-async function refreshMissionLobbyBadgeSilently() {
-  try {
-    const walletKey = missionWalletKey();
-    if (!walletKey) {
-      updateMissionLobbyBadge({ claimableCount: 0 });
-      return;
-    }
+  // Bùa: Gắn thẳng vào window để hàm showHomeUI() ở bên ngoài có thể gọi được
+  window.refreshMissionLobbyBadgeSilently = async function() {
+    try {
+      const walletKey = missionWalletKey();
+      if (!walletKey) {
+        updateMissionLobbyBadge({ claimableCount: 0 });
+        return;
+      }
 
-    const res = await fetch('/api/missions-v1?v=' + Date.now(), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-wallet-key': walletKey
-      },
-      body: JSON.stringify({ action: 'board', walletKey })
-    });
+      const res = await fetch('/api/missions-v1?v=' + Date.now(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-wallet-key': walletKey
+        },
+        body: JSON.stringify({ action: 'board', walletKey })
+      });
 
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.ok) return;
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) return;
 
-    MISSION_UI_STATE.board = data;
-    updateMissionLobbyBadge(data);
-  } catch (_) {}
-}
+      MISSION_UI_STATE.board = data;
+      updateMissionLobbyBadge(data);
+    } catch (e) { console.error("Lỗi ngầm khi tải nhiệm vụ:", e); }
+  };
+
+  document.addEventListener('DOMContentLoaded', function () {
+    ensureMissionHubMounted();
+    
+    // Đã XÓA dòng gọi lúc DOM mới load (vì lúc đó Firebase chưa đăng nhập, gọi cũng đéo có ví mà check)
+    // Hệ thống sẽ tự động gọi khi Firebase Auth chạy xong!
+
+    // Quét ngầm mỗi 15 giây khi đang đứng ở sảnh chờ
+    setInterval(function () {
+      const homeMenu = document.getElementById('home-menu');
+      if (homeMenu && homeMenu.style.display !== 'none') {
+        window.refreshMissionLobbyBadgeSilently();
+      }
+    }, 15000);
+  });
+
+})(); // <--- Đem cái lồng đóng lại ở TẬN CÙNG NÀY thì đéo bao giờ lỗi nữa!
 function ensureArenaSkinButton() {
     let btn = document.getElementById("arena-skin-btn");
 
