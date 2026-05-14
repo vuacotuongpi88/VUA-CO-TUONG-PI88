@@ -20267,12 +20267,18 @@ let MMO_CATALOG = {
 let currentSelectedMmoId = null;
 
 function openMMOShop() {
+    // LỆNH CHẶN BẢO TRÌ TẠM THỜI
+    alert("📢 THÔNG BÁO BẢO TRÌ\n\nCửa hàng MMO hiện đang trong quá trình đồng bộ hóa kho hàng và nâng cấp bảo mật định danh 2026.\n\nDự kiến sẽ mở lại trong thời gian sớm nhất. Chúc anh em chơi cờ vui vẻ!");
+    
+    // Ngắt hàm tại đây, không cho chạy xuống lệnh mở modal bên dưới
+    return;
+
+    // Đoạn code cũ bên dưới sẽ bị vô hiệu hóa
     document.querySelectorAll(".profile-menu").forEach(m => m.classList.remove("show"));
     document.getElementById("mmo-shop-modal").style.display = "flex";
     document.getElementById("mmo-header-balance").innerText = typeof formatPMC === 'function' ? formatPMC(getPmcBalance()) : getPmcBalance() + " PMC";
     backToMMOCategories();
 }
-
 function closeMMOShop() {
     document.getElementById("mmo-shop-modal").style.display = "none";
 }
