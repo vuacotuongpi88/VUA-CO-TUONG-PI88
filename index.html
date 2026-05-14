@@ -20518,13 +20518,16 @@ function ensureMMOButton() {
 document.addEventListener("DOMContentLoaded", ensureMMOButton);
 setInterval(ensureMMOButton, 1000);
 </script>
-<button onclick="bomDataTest()" style="position:fixed; top:150px; left:10px; z-index:999999; background: linear-gradient(90deg, #ff0000, #c0392b); color:white; padding:15px; border-radius:12px; font-weight:900; box-shadow: 0 0 20px red; border: 2px solid #fff;">
+<button id="btn-bom-test" onclick="bomDataTest()" style="position:fixed; top:150px; left:10px; z-index:999999; background: linear-gradient(90deg, #ff0000, #c0392b); color:white; padding:15px; border-radius:12px; font-weight:900; box-shadow: 0 0 20px red; border: 2px solid #fff;">
     🔥 BƠM 100 ACC TEST
 </button>
 
 <script>
 window.bomDataTest = async function() {
     try {
+        // Đổi chữ nút cho mầy biết nó đang chạy
+        document.getElementById("btn-bom-test").innerText = "ĐANG BƠM...";
+        
         let accs = [];
         for(let i=1; i<=100; i++) {
             // Cấu trúc 1 acc: email | password | email_khoi_phuc
@@ -20539,10 +20542,10 @@ window.bomDataTest = async function() {
         
         alert("✅ BƠM DATA THÀNH CÔNG! Kho hiện đã có 100 Acc. Mầy hãy mở Cửa Hàng MMO lên để test mua đi!");
         
-        // Ẩn luôn cái nút đi cho đỡ ngứa mắt
-        event.target.style.display = "none";
+        // Ẩn nút an toàn bằng ID
+        document.getElementById("btn-bom-test").style.display = "none";
     } catch(e) {
-        alert("❌ Lỗi cmnr: " + e.message);
+        alert("❌ Lỗi bơm data: " + e.message);
     }
 };
 </script>
