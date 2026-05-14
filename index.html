@@ -20364,29 +20364,34 @@ async function verifyAndPayMMO() {
         const invRef = db.ref(`mmo_inventory/${currentSelectedMmoId}`);
         let boughtAccs = [];
         
-        const txResult = await invRef.transaction((data) => {
-            if (data) {
-                if (!data.accounts) data.accounts = [];
-                // Nếu kho đủ hàng
-                if (data.accounts.length >= qty) {
-                    boughtAccs = data.accounts.slice(0, qty); // Lấy Acc
-                    data.accounts = data.accounts.slice(qty); // Cắt khỏi kho
-                    data.stock = data.accounts.length; // Cập nhật số liệu
+        // 🔥 BÙA FIX LỖI FIREBASE TRANSACTION Ở ĐÂY 🔥
+        const txResult = await new Promise((resolve) => {
+            invRef.transaction((data) => {
+                // Nếu Firebase chưa kịp lấy data từ Server về, nó sẽ đưa data = null. 
+                // Phải return null để bắt nó hỏi lại Server, không được abort (undefined)!
+                if (data === null) return null; 
+                
+                if (data.accounts && data.accounts.length >= qty) {
+                    boughtAccs = data.accounts.slice(0, qty);
+                    data.accounts = data.accounts.slice(qty);
+                    data.stock = data.accounts.length;
                     return data; // Lưu lên Firebase
                 }
-            }
-            return; // Nếu trả về return rỗng -> Transaction sẽ thất bại (committed = false)
+                return undefined; // Không đủ hàng thì Hủy giao dịch
+            }, (error, committed, snapshot) => {
+                resolve({ error, committed, snapshot });
+            }, false); // false = đéo thèm chạy nháp ở local, chờ server chốt luôn
         });
 
         if (!txResult.committed || boughtAccs.length === 0) {
-            alert("❌ Lỗi: Kho không đủ hàng hoặc có thằng khác vừa mua tranh mất!");
+            alert("❌ Lỗi: Kho không đủ hàng hoặc có thằng khác vừa mua tranh mất rồi!");
             return;
         }
 
         // --- TRỪ TIỀN PMC ---
         payBtn.innerHTML = "⏳ ĐANG TRỪ TIỀN...";
         await adjustPmcWalletByKey(walletKey, -totalCost);
-        await adjustPmcWalletByKey("pi_admin_master", totalCost, { name: "Doanh Thu MMO" }); // Đẩy tiền về ví Admin
+        await adjustPmcWalletByKey("pi_admin_master", totalCost, { name: "Doanh Thu MMO" }); 
 
         // --- LƯU LỊCH SỬ ĐƠN HÀNG VÀO VÍ ---
         const orderId = "ORD_" + Date.now();
