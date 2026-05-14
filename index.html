@@ -9291,9 +9291,9 @@ const myPmc = getPmcBalance();
 const myPi = getPiBalance();
 
 if (topPiBox) topPiBox.innerText = oppPi.toFixed(2) + " π";
-if (topPmcBox) topPmcBox.innerText = formatPMC(oppPmc) + " PMC";
+if (topPmcBox) topPmcBox.innerText = formatPMC(oppPmc);
 if (bottomPiBox) bottomPiBox.innerText = myPi.toFixed(2) + " π";
-if (bottomPmcBox) bottomPmcBox.innerText = formatPMC(myPmc) + " PMC";
+if (bottomPmcBox) bottomPmcBox.innerText = formatPMC(myPmc);
     if (topRank) {
         topRank.classList.remove("player-ready-on", "player-ready-off");
 
@@ -11114,15 +11114,19 @@ function updateBalanceUI(amount) {
 }
 
 function updatePmcUI(amount) {
-    const safeAmount = Math.max(0, Math.floor(Number(amount) || 0));
+    const safeAmount = Math.max(0, Number(amount) || 0); // Xóa Math.floor
     const pmcEl = document.getElementById("user-pmc-balance");
     if (pmcEl) {
-        pmcEl.innerText = safeAmount.toLocaleString("vi-VN") + " PMC";
+        pmcEl.innerText = formatPMC(safeAmount);
     }
 }
 
 function formatPMC(amount) {
-    return Math.max(0, Math.floor(Number(amount) || 0)).toLocaleString("vi-VN");
+    // Hiện ít nhất 1 số lẻ, tối đa 2 số lẻ để dễ nhìn
+    return Math.max(0, Number(amount) || 0).toLocaleString("vi-VN", { 
+        minimumFractionDigits: 1, 
+        maximumFractionDigits: 2 
+    }) + " PMC";
 }
 
 function makeStakeBucket(mode, stakePMC) {
@@ -11300,7 +11304,7 @@ window.syncMyMatchBalanceToRoomNow = async function() {
     }).catch(err => console.error("Lỗi sync số dư vào phòng:", err));
 };
 function setPmcBalance(amount) {
-    const safeAmount = Math.max(0, Math.floor(Number(amount) || 0));
+    const safeAmount = Math.max(0, Number(amount) || 0); // Xóa Math.floor
     currentPmcBalance = safeAmount;
 
     localStorage.setItem(getPmcCacheKey(), String(safeAmount));
@@ -11309,9 +11313,7 @@ function setPmcBalance(amount) {
     walletRef().update({
         balance: getPiBalance(),
         pmcBalance: safeAmount,
-        updatedAt: firebase.database.ServerValue.TIMESTAMP,
-        name: localStorage.getItem("user-name-display") || "Người chơi",
-        photo: localStorage.getItem("user-photo") || "images/do_tuong.png"
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
     }).catch(err => {
         console.error("Lỗi sync số dư PMC:", err);
     });
@@ -12041,26 +12043,23 @@ function runRefTransaction(ref, updater) {
 
 async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
     const ref = walletRefByKey(walletKey);
-
     const snap = await ref.once("value");
     const safeCurrent = snap.val() && typeof snap.val() === "object" ? snap.val() : {};
 
     const currentPi = Number(safeCurrent.balance ?? 0) || 0;
-    const currentPmc = Math.floor(Number(safeCurrent.pmcBalance ?? 0) || 0);
-    const nextPmc = currentPmc + Math.floor(Number(delta || 0));
+    const currentPmc = Number(safeCurrent.pmcBalance ?? 0) || 0; // Xóa Math.floor
+    const nextPmc = currentPmc + Number(delta || 0); // Xóa Math.floor
 
-    // Cho phép riêng ví hệ thống được mượn nợ, các ví khác vẫn cấm âm
     if (nextPmc < 0 && walletKey !== "pi_admin_master") return null;
 
-    // 🔥 ĐÃ XÓA DÒNG TỘI ĐỒ ...safeCurrent
-    // Giờ nó chỉ update đúng PMC, KHÔNG BAO GIỜ chạm vào hay ghi đè StatsV2 nữa
     await ref.update({
         balance: currentPi,
-        pmcBalance: nextPmc,
+        pmcBalance: nextPmc, // Lưu số lẻ trực tiếp lên Firebase
         updatedAt: Date.now(),
         name: profile.name || safeCurrent.name || localStorage.getItem("user-name-display") || "Người chơi",
         photo: profile.photo || safeCurrent.photo || localStorage.getItem("user-photo") || "images/do_tuong.png"
     });
+    // ... phần còn lại giữ nguyên
 
     console.log("PMC DIRECT UPDATE OK", {
         walletKey,
@@ -12427,14 +12426,23 @@ async function maybeSettleStakeRoom(room, roomId) {
 
     // TÍNH TOÁN CẮT PHẾ 20% TRÊN TIỀN LỜI (Đúng luật giang hồ)
     const totalPot = stake * 2;
-    const feePMC = Math.max(0, Math.floor(stake * 0.2)); 
+    const feePMC = Math.max(0, Number(stake * 0.2)); // Xóa Math.floor để phế là 0.2, 0.4...
     const winnerReceivePMC = totalPot - feePMC;
     const adminWalletKey = "pi_admin_master";
 
     try {
-        // 1. Nộp phế cho Admin
         if (feePMC > 0) {
-            await adjustPmcWalletByKey(adminWalletKey, feePMC, { name: "Ví phí hệ thống" }).catch(e => console.warn(e));
+            const missionFund = Number(feePMC * 0.2); // Trích quỹ lẻ
+            const adminNetFee = feePMC - missionFund;
+
+            if (adminNetFee > 0) {
+                await adjustPmcWalletByKey(adminWalletKey, adminNetFee, { name: "Ví phí hệ thống" });
+            }
+            
+            if (missionFund > 0) {
+                // Dùng increment với số lẻ (Firebase hỗ trợ tốt)
+                await db.ref("treasury/missionPoolPmc").set(firebase.database.ServerValue.increment(missionFund));
+            }
         }
 
         // 2. Chuyển tiền thưởng cho người thắng
@@ -17547,7 +17555,10 @@ document.addEventListener("click", function(e) {
   };
 
   function formatPmc(value) {
-    return Math.max(0, Math.floor(Number(value) || 0)).toLocaleString('vi-VN') + ' PMC';
+    return Math.max(0, Number(value) || 0).toLocaleString('vi-VN', { 
+        minimumFractionDigits: 1, 
+        maximumFractionDigits: 2 
+    }) + ' PMC';
   }
 
   function missionWalletKey() {
