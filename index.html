@@ -7608,21 +7608,18 @@ let botWaitSeconds = 15; // <-- Đổi thành 15
 let isBotTimerRunning = false;
 
 function startBotWaitingTimer() {
-    // 🛑 CHỐT CHẶN TỬ THẦN: Nếu là Cờ Úp mà cược > 3 PMC là nghỉ khỏe!
-    if (isCoUp && currentRoomStakePMC > 3) {
-        console.log("Phòng cược quá lớn (>3 PMC), Lão Tẩu đéo dám đánh cờ úp đâu!");
+    // 🛑 CHỐT CHẶN MỚI: Cả cờ tướng lẫn cờ úp, hễ cược > 3 PMC là Lão Tẩu nghỉ khỏe, chỉ chờ người thật!
+    if (currentRoomStakePMC > 3) {
+        console.log("Phòng cược > 3 PMC, Lão Tẩu không dám vào, chỉ chờ người thật!");
         cancelBotWaiting();
         return;
     }
 
     // Nếu đang đếm rồi thì thôi
     if (isBotTimerRunning) return;
-    
-    // Bảo vệ két sắt cho cờ thường (giữ mức 500 như cũ hoặc tùy mày)
-    if (!isCoUp && currentRoomStakePMC > 500) return; 
 
     isBotTimerRunning = true;
-    botWaitSeconds = 15; // <-- Đổi thành 15
+    botWaitSeconds = 15; 
     
     const botTimerEl = document.getElementById("bot-waiting-timer");
     const botSecEl = document.getElementById("bot-sec");
@@ -7673,7 +7670,6 @@ function startBotWaitingTimer() {
         }
     }, 1000);
 }
-
 function cancelBotWaiting() {
     clearInterval(botWaitInterval);
     isBotTimerRunning = false;
