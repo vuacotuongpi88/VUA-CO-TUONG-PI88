@@ -20158,18 +20158,10 @@ window.resolveCustomConfirm = function(result) {
                 </div>
             </div>
 
-            <div style="background: #111; border: 1px solid #f1c40f; border-radius: 10px; padding: 15px; margin-bottom: 15px;">
+            <<div style="background: #111; border: 1px solid #f1c40f; border-radius: 10px; padding: 15px; margin-bottom: 15px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                     <span style="color:#fff; font-size: 14px; font-weight: bold;">SỐ LƯỢNG MUA:</span>
-                    
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <button onclick="changeMmoQty(-1)" style="width:34px; height:34px; background:#333; color:#fff; border:1px solid #55efc4; border-radius:6px; font-weight:900; font-size:18px; cursor:pointer;">-</button>
-                        
-                        <input type="number" id="mmo-qty-input" min="1" value="1" oninput="calcMMOTotal()" style="width: 50px; padding: 6px; text-align: center; border-radius: 5px; background: #000; color: #55efc4; border: 1px solid #55efc4; font-weight: bold; font-size: 16px; outline: none;">
-                        
-                        <button onclick="changeMmoQty(1)" style="width:34px; height:34px; background:#333; color:#fff; border:1px solid #55efc4; border-radius:6px; font-weight:900; font-size:18px; cursor:pointer;">+</button>
-                    </div>
-
+                    <input type="number" id="mmo-qty-input" min="1" max="100" value="1" oninput="calcMMOTotal()" style="width: 80px; padding: 8px; text-align: center; border-radius: 5px; background: #000; color: #55efc4; border: 1px solid #55efc4; font-weight: bold; font-size: 16px; outline: none;">
                 </div>
                 <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed #333; padding-top: 10px;">
                     <span style="color:#fff; font-size: 14px; font-weight: bold;">TỔNG THANH TOÁN:</span>
