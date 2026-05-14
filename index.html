@@ -6415,7 +6415,7 @@ margin-bottom: 14px;
 <div id="game-arena" style="display: none; padding: 10px;">
 <div class="game-wrapper">
     <div id="bot-waiting-timer" style="display:none; position:absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.8); border: 1px solid #ff7675; color: #ff7675; padding: 4px 8px; border-radius: 8px; font-size: 10px; font-weight: bold; z-index: 25000;">
-    Lão Tẩu đang tới: <span id="bot-sec">30</span>s
+    Lão Tẩu đang tới: <span id="bot-sec">15</span>s
 </div>
 
 <div id="bot-invite-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:99999; align-items:center; justify-content:center; backdrop-filter: blur(4px);">
@@ -7409,18 +7409,25 @@ function selectGame(mode) {
 // HỆ THỐNG VÔ DANH LÃO TẨU (BOT AI)
 // ==========================================
 let botWaitInterval = null;
-let botWaitSeconds = 30;
+let botWaitSeconds = 15; // <-- Đổi thành 15
 let isBotTimerRunning = false;
 
 function startBotWaitingTimer() {
-    // Không chạy lại nếu đang đếm, chặn chạy nhiều lần
+    // 🛑 CHỐT CHẶN TỬ THẦN: Nếu là Cờ Úp mà cược > 3 PMC là nghỉ khỏe!
+    if (isCoUp && currentRoomStakePMC > 3) {
+        console.log("Phòng cược quá lớn (>3 PMC), Lão Tẩu đéo dám đánh cờ úp đâu!");
+        cancelBotWaiting();
+        return;
+    }
+
+    // Nếu đang đếm rồi thì thôi
     if (isBotTimerRunning) return;
     
-    // BẢO VỆ KÉT SẮT: Chặn không cho Bot đánh nếu cược lớn hơn 500 PMC
-    if (currentRoomStakePMC > 500) return; 
+    // Bảo vệ két sắt cho cờ thường (giữ mức 500 như cũ hoặc tùy mày)
+    if (!isCoUp && currentRoomStakePMC > 500) return; 
 
     isBotTimerRunning = true;
-    botWaitSeconds = 30;
+    botWaitSeconds = 15; // <-- Đổi thành 15
     
     const botTimerEl = document.getElementById("bot-waiting-timer");
     const botSecEl = document.getElementById("bot-sec");
