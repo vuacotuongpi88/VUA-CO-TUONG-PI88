@@ -7911,35 +7911,58 @@ async function preloadNextMatchData() {
         const room2 = snap2.val() || {};
 
         if (room2.winner || room2.status === "finished") {
-            const updates = {
-                status: "waiting",
-                turn: "do",
-                board: null,
-                winner: null,
-                winReason: null,
-                drawRequest: null,
-                settlement: null,
-                refunds: null,
-                readyDeadlineAt: null,
-                lastMoveFrom: null,
-                lastMoveTo: null,
-                "ready/do": false,
-                "ready/den": false,
-                "stakeLocked/do": false,
-                "stakeLocked/den": false,
-                updatedAt: firebase.database.ServerValue.TIMESTAMP
-            };
+            const rootUpdates = {};
+            
+            rootUpdates[`matches/${roomId}/status`] = "waiting";
+            rootUpdates[`matches/${roomId}/turn`] = "do";
+            rootUpdates[`matches/${roomId}/board`] = null;
+            rootUpdates[`matches/${roomId}/winner`] = null;
+            rootUpdates[`matches/${roomId}/winReason`] = null;
+            rootUpdates[`matches/${roomId}/drawRequest`] = null;
+            rootUpdates[`matches/${roomId}/settlement`] = null;
+            rootUpdates[`matches/${roomId}/refunds`] = null;
+            rootUpdates[`matches/${roomId}/readyDeadlineAt`] = null;
+            rootUpdates[`matches/${roomId}/lastMoveFrom`] = null;
+            rootUpdates[`matches/${roomId}/lastMoveTo`] = null;
+            rootUpdates[`matches/${roomId}/ready/do`] = false;
+            rootUpdates[`matches/${roomId}/ready/den`] = false;
+            rootUpdates[`matches/${roomId}/stakeLocked/do`] = false;
+            rootUpdates[`matches/${roomId}/stakeLocked/den`] = false;
+            rootUpdates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
 
             // --- BÙA ĐUỔI BOT NGẦM: ĐÁ ĐÍT LÃO TẨU NGAY TRONG LÚC DỌN BÀN ---
             const oppP = room2.players?.den;
             if (oppP && (oppP.uid === "bot_master_100" || oppP.isBot)) {
-                updates["players/den"] = null;
-                updates["lobbyOpen"] = true; // Mở lại cửa phòng cho người khác thấy
+                rootUpdates[`matches/${roomId}/players/den`] = null;
+                rootUpdates[`matches/${roomId}/lobbyOpen`] = true; // Mở lại cửa phòng cho người khác thấy
+                
+                // 🔥 KÍCH TIM & GẮN LẠI BẢNG LÊN SẢNH CHỐNG BỊ XÓA NHẦM PHÒNG ẢO
+                rootUpdates[`matches/${roomId}/lobbyHeartbeatAt`] = firebase.database.ServerValue.TIMESTAMP;
+                rootUpdates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+                
+                const cleanMode = room2.mode || currentRoomMode || "co-tuong";
+                const cleanStake = Math.max(0, Math.floor(Number(room2.stakePMC || currentRoomStakePMC || 0) || 0));
+                const cleanBucket = room2.roomBucket || currentRoomBucket || makeStakeBucket(cleanMode, cleanStake);
+                const host = room2.players?.do || getCurrentPlayerProfile();
+                
+                rootUpdates[`waitingRooms/${cleanBucket}/${roomId}`] = {
+                    roomId: roomId,
+                    uid: host.uid || "",
+                    walletKey: host.walletKey || "",
+                    name: host.name || "Chủ phòng",
+                    mode: cleanMode,
+                    stakePMC: cleanStake,
+                    inviteCode: room2.inviteCode || makeInviteCodeFromRoomId(roomId),
+                    createdAt: Date.now(),
+                    claimedBy: null,
+                    claimedAt: null
+                };
+                
                 if (typeof botMoveHistory !== 'undefined') botMoveHistory = [];
             }
             // ---------------------------------------------------------------
 
-            await db.ref("matches/" + roomId).update(updates);
+            await db.ref().update(rootUpdates);
         }
 
         // 3. Tải lại ví ngầm để chuẩn bị cho trận sau
@@ -7948,7 +7971,6 @@ async function preloadNextMatchData() {
         console.error("Lỗi đồng bộ ngầm Firebase:", err);
     }
 }
-
 // HÀM 2: Dọn dẹp ngầm nếu bấm Thoát Trận
 async function preloadExitData() {
     if (isSpectatorMode) return;
@@ -10222,40 +10244,6 @@ if (room.winner) {
             if (room.winReason === "bochay" && room.winner === mySide) {
                 scheduleResetWinnerRoomAfterPaid(room, listeningRoomId);
             }
-            // --- BÙA ĐUỔI BOT NGAY KHI XONG TRẬN (ĐÃ FIX LỖI HOÀN TIỀN OAN) ---
-             const oppSide = mySide === "do" ? "den" : "do";
-             const opp = room.players?.[oppSide];
-             const isOppBot = opp && (opp.uid === "bot_master_100" || opp.isBot);
-
-             // Nếu trận đấu đã kết thúc và đối thủ là Bot
-             if (room.winner && isOppBot) {
-                 // Đợi chia tiền xong (paid === true) thì mới đá nó ra
-                 if (room.settlement && room.settlement.paid === true) {
-                     console.log("Đã chia tiền xong, mời Lão Tẩu rời bàn và dọn dẹp...");
-                     db.ref(`matches/${listeningRoomId}`).update({
-                         "players/den": null,
-                         "ready/do": false,
-                         "ready/den": false,
-                         "stakeLocked/do": false, // QUAN TRỌNG: Mở khóa cọc của mày để hệ thống KHÔNG hoàn tiền nữa!
-                         "stakeLocked/den": false,
-                         "board": null,
-                         "lastMoveFrom": null,
-                         "lastMoveTo": null,
-                         "drawRequest": null,
-                         "settlement": null,
-                         "refunds": null,
-                         "turn": "do",
-                         "status": "waiting",
-                         "winner": null,
-                         "winReason": null,
-                         "lobbyOpen": true,
-                         "updatedAt": firebase.database.ServerValue.TIMESTAMP
-                     });
-                     // Sau khi đá Bot, reset lịch sử chiếu nhây để ván sau không bị kẹt
-                     botMoveHistory = []; 
-                 }
-             }
-             // ----------------------------------------
              
 // 🔥 BỎ CHỮ AWAIT: Gọi chia tiền chạy ngầm, luồng UI chạy tiếp bật bảng SS luôn!
         maybeSettleStakeRoom(room, listeningRoomId).catch(err => console.error("Settle lỗi:", err));
