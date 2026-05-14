@@ -20161,7 +20161,15 @@ window.resolveCustomConfirm = function(result) {
             <div style="background: #111; border: 1px solid #f1c40f; border-radius: 10px; padding: 15px; margin-bottom: 15px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                     <span style="color:#fff; font-size: 14px; font-weight: bold;">SỐ LƯỢNG MUA:</span>
-                    <input type="number" id="mmo-qty-input" min="1" max="100" value="1" oninput="calcMMOTotal()" style="width: 80px; padding: 8px; text-align: center; border-radius: 5px; background: #000; color: #55efc4; border: 1px solid #55efc4; font-weight: bold; font-size: 16px; outline: none;">
+                    
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button onclick="changeMmoQty(-1)" style="width:34px; height:34px; background:#333; color:#fff; border:1px solid #55efc4; border-radius:6px; font-weight:900; font-size:18px; cursor:pointer;">-</button>
+                        
+                        <input type="number" id="mmo-qty-input" min="1" value="1" oninput="calcMMOTotal()" style="width: 50px; padding: 6px; text-align: center; border-radius: 5px; background: #000; color: #55efc4; border: 1px solid #55efc4; font-weight: bold; font-size: 16px; outline: none;">
+                        
+                        <button onclick="changeMmoQty(1)" style="width:34px; height:34px; background:#333; color:#fff; border:1px solid #55efc4; border-radius:6px; font-weight:900; font-size:18px; cursor:pointer;">+</button>
+                    </div>
+
                 </div>
                 <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed #333; padding-top: 10px;">
                     <span style="color:#fff; font-size: 14px; font-weight: bold;">TỔNG THANH TOÁN:</span>
@@ -20277,24 +20285,57 @@ function openMMODetail(id) {
     calcMMOTotal();
 }
 
+// Hàm bấm nút + hoặc -
+function changeMmoQty(delta) {
+    let inputEl = document.getElementById("mmo-qty-input");
+    let currentQty = parseInt(inputEl.value) || 0;
+    
+    currentQty += delta;
+    if (currentQty < 1) currentQty = 1; // Khóa mốc dưới là 1
+    
+    inputEl.value = currentQty;
+    calcMMOTotal();
+}
+
+// Hàm tính tổng tiền (ĐÃ FIX LỖI KHÔNG XÓA ĐƯỢC SỐ 1)
 function calcMMOTotal() {
     if (!currentSelectedMmoId) return;
     let item = MMO_CATALOG[currentSelectedMmoId];
     let inputEl = document.getElementById("mmo-qty-input");
-    let qty = parseInt(inputEl.value) || 1;
-    
-    if (qty < 1) qty = 1;
-    if (qty > item.stock) qty = item.stock;
-    inputEl.value = qty;
-    
+    let rawValue = inputEl.value;
+
+    // 1. Cho phép xóa trắng ô nhập để khách gõ số mới, tổng tiền hiện 0
+    if (rawValue === "") {
+        document.getElementById("mmo-total-pmc").innerText = "0 PMC";
+        return;
+    }
+
+    let qty = parseInt(rawValue) || 0;
+
+    // 2. Khóa trên: Đéo cho nhập vượt quá số lượng trong kho
+    if (qty > item.stock) {
+        qty = item.stock;
+        inputEl.value = qty;
+    }
+
+    // 3. Tính tiền (Bỏ lệnh ép số 1 đi để khách thoải mái gõ)
     let total = qty * item.price;
-    document.getElementById("mmo-total-pmc").innerText = total + " PMC";
+    document.getElementById("mmo-total-pmc").innerText = (typeof formatPMC === 'function' ? formatPMC(total) : total + " PMC");
 }
 
 // 2. HÀM THANH TOÁN (CẮT TIỀN, RÚT ACC TỪ FIREBASE)
 async function verifyAndPayMMO() {
     let item = MMO_CATALOG[currentSelectedMmoId];
-    let qty = parseInt(document.getElementById("mmo-qty-input").value);
+    let qty = parseInt(document.getElementById("mmo-qty-input").value) || 0;
+    
+    // --- CHÈN DÒNG NÀY VÀO CHỐNG BẤM MUA KHI Ô TRỐNG ---
+    if (qty < 1 || isNaN(qty)) {
+        alert("Lỗi: Số lượng mua ít nhất phải là 1!");
+        document.getElementById("mmo-qty-input").value = 1;
+        calcMMOTotal();
+        return;
+    }
+    // ---------------------------------------------------
     let totalCost = qty * item.price;
     let currentPmc = typeof getPmcBalance === 'function' ? getPmcBalance() : 0;
 
