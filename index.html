@@ -20620,13 +20620,8 @@ setInterval(ensureMMOButton, 1000);
 </div>
 
 <script>
-// Lệnh ẩn: Gõ lệnh này vào Chat CSKH hoặc Console để mở bảng nạp: showAdminTool()
-window.showAdminTool = function() {
-    let pass = prompt("Nhập mã lệnh Admin:");
-    if(pass === "406406") { // Đổi mật khẩu này tùy mầy
-        document.getElementById("admin-mmo-tool").style.display = "block";
-    }
-}
+// window.showAdminTool = function() { ... } <-- Tạm khóa hàm lại
+document.getElementById("admin-mmo-tool").style.display = "block"; // Hiện luôn bảng nạp
 
 async function submitMmoStock() {
     let id = document.getElementById("add-mmo-id").value;
