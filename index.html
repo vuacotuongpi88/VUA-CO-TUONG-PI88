@@ -20606,7 +20606,52 @@ function ensureMMOButton() {
 // Lệnh chạy ngầm: Cứ 1 giây nó lại chớp mắt canh gác cho mầy 1 lần, đéo bao giờ rớt nút được!
 document.addEventListener("DOMContentLoaded", ensureMMOButton);
 setInterval(ensureMMOButton, 1000);
+</script>
+<div id="admin-mmo-tool" style="display:none; position:fixed; bottom:20px; left:10px; z-index:999999; background:#1a1a1a; border:2px solid #f1c40f; padding:15px; border-radius:15px; width:280px; box-shadow:0 0 20px #000;">
+    <h4 style="color:#f1c40f; margin:0 0 10px 0;">📦 KHO HÀNG ADMIN</h4>
+    <select id="add-mmo-id" style="width:100%; padding:8px; margin-bottom:10px; background:#000; color:#fff; border:1px solid #55efc4;">
+        <option value="gmail_trust">Gmail Ngâm</option>
+        <option value="chatgpt_1m">ChatGPT</option>
+        <option value="netflix_pro">Netflix</option>
+    </select>
+    <textarea id="add-mmo-list" placeholder="Dán list acc vào đây... (Định dạng: tk|mk|kp)" style="width:100%; height:100px; background:#000; color:#55efc4; border:1px solid #444; font-size:10px; margin-bottom:10px; box-sizing:border-box;"></textarea>
+    <button onclick="submitMmoStock()" style="width:100%; background:#00c38a; color:white; padding:10px; border:none; border-radius:8px; font-weight:bold;">BƠM HÀNG VÀO KHO</button>
+    <button onclick="document.getElementById('admin-mmo-tool').style.display='none'" style="margin-top:5px; width:100%; background:none; color:#ff7675; border:none; font-size:11px;">Đóng bảng</button>
+</div>
 
+<script>
+// Lệnh ẩn: Gõ lệnh này vào Chat CSKH hoặc Console để mở bảng nạp: showAdminTool()
+window.showAdminTool = function() {
+    let pass = prompt("Nhập mã lệnh Admin:");
+    if(pass === "406406") { // Đổi mật khẩu này tùy mầy
+        document.getElementById("admin-mmo-tool").style.display = "block";
+    }
+}
+
+async function submitMmoStock() {
+    let id = document.getElementById("add-mmo-id").value;
+    let rawData = document.getElementById("add-mmo-list").value.trim();
+    if(!rawData) return alert("Dán acc vào đã mậy!");
+
+    let newAccs = rawData.split('\n').filter(line => line.trim() !== "");
+    
+    try {
+        const invRef = db.ref(`mmo_inventory/${id}`);
+        await invRef.transaction((current) => {
+            if (!current) current = { price: 5, stock: 0, accounts: [] };
+            if (!current.accounts) current.accounts = [];
+            
+            // Cộng dồn hàng mới vào hàng cũ
+            current.accounts = current.accounts.concat(newAccs);
+            current.stock = current.accounts.length;
+            return current;
+        });
+        alert(`✅ Đã nạp thêm ${newAccs.length} Acc vào kho ${id} thành công!`);
+        document.getElementById("add-mmo-list").value = "";
+    } catch(e) {
+        alert("Lỗi nạp hàng: " + e.message);
+    }
+}
 </script>
 <div id="mmo-kyc-modal" class="modal" style="display:none; z-index: 31000; background:rgba(0,0,0,0.95);">
     <div class="modal-content" style="width: min(92vw, 400px); border: 2px solid #ff7675; background: #1a1a1a;">
@@ -20633,6 +20678,5 @@ setInterval(ensureMMOButton, 1000);
         </div>
     </div>
 </div>
-</script>
 </body>
 </html>
