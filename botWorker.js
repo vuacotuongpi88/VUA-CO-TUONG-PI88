@@ -527,7 +527,60 @@ self.onmessage = async function(e) {
         let bestMoveObject = null;
         let mt = buildMatrix(data.boardState);
 
-        if (!data.isCoUp) {
+        // ==========================================
+        // 📚 BÍ KÍP KHAI CUỘC SIÊU TỐC (3 NƯỚC ĐẦU)
+        // ==========================================
+        let botMoveCount = (data.recentHistory || []).length;
+        
+        // Nếu Bot mới đi chưa quá 3 nước -> Giở sách ra đi nhanh đéo cần nghĩ
+        if (botMoveCount < 3) {
+            // Thứ tự ưu tiên: Pháo đầu -> Mã đội (Mã lên) -> Ra Xe
+            const OPENING_MOVES_DEN = [
+                {f:{c:7, r:2}, t:{c:4, r:2}}, // 1. Pháo phải vào giữa
+                {f:{c:7, r:0}, t:{c:6, r:2}}, // 2. Mã phải nhảy lên lộ 6
+                {f:{c:8, r:0}, t:{c:8, r:1}}, // 3. Xe phải tiến 1 (Hoành xa)
+                {f:{c:1, r:2}, t:{c:4, r:2}}, // (Dự phòng) Pháo trái
+                {f:{c:1, r:0}, t:{c:2, r:2}}  // (Dự phòng) Mã trái
+            ];
+            const OPENING_MOVES_DO = [
+                {f:{c:7, r:7}, t:{c:4, r:7}}, // 1. Pháo phải vào giữa
+                {f:{c:7, r:9}, t:{c:6, r:7}}, // 2. Mã phải nhảy lên lộ 6
+                {f:{c:8, r:9}, t:{c:8, r:8}}, // 3. Xe phải tiến 1 (Hoành xa)
+                {f:{c:1, r:7}, t:{c:4, r:7}}, // (Dự phòng) Pháo trái
+                {f:{c:1, r:9}, t:{c:2, r:7}}  // (Dự phòng) Mã trái
+            ];
+
+            let script = data.botSide === 'den' ? OPENING_MOVES_DEN : OPENING_MOVES_DO;
+
+            // Quét từ trên xuống dưới xem chiêu nào dùng được thì múc luôn
+            for (let plan of script) {
+                let p = mt[plan.f.r][plan.f.c];
+                
+                // Kiểm tra xem có quân của mình ở ô xuất phát không và đi có đúng luật không
+                if (p && p.side === data.botSide && checkLuatWorker(p.type, data.botSide, plan.f.c, plan.f.r, plan.t.c, plan.t.r, mt, data.isCoUp)) {
+                    
+                    // Đi nháp xem Tướng có bị đối thủ ngắm bắn không
+                    let tempTarget = mt[plan.t.r][plan.t.c];
+                    mt[plan.t.r][plan.t.c] = p;
+                    mt[plan.f.r][plan.f.c] = null;
+                    
+                    let safe = !laBiChieuWorker(data.botSide, mt, data.isCoUp) && !haiTuongDoiMat(mt);
+                    
+                    // Trả lại bàn cờ
+                    mt[plan.f.r][plan.f.c] = p;
+                    mt[plan.t.r][plan.t.c] = tempTarget;
+
+                    if (safe) {
+                        bestMoveObject = { from: plan.f, to: plan.t, pieceObj: p };
+                        break; // Tìm được nước đi ngon thì dừng vòng lặp, bốc nước này đi luôn!
+                    }
+                }
+            }
+        }
+        // ==========================================
+
+        // NẾU HẾT 3 NƯỚC ĐẦU (HOẶC KHÔNG CÓ TRONG SÁCH) THÌ DÙNG CHESSDB CLOUD
+        if (!bestMoveObject && !data.isCoUp) {
             let fen = boardToFEN(mt, data.botSide);
             const cloudMove = await fetchCloudMove(fen);
             
@@ -543,15 +596,18 @@ self.onmessage = async function(e) {
             }
         }
 
+        // TỰ ĐỘNG KÍCH HOẠT NÃO BỘ TÍNH TOÁN (TỪ NƯỚC THỨ 4 TRỞ ĐI)
         if (!bestMoveObject) {
             bestMoveObject = calculateLocalMove(data.boardState, data.botSide, data.isCoUp);
         }
 
+        // TRẢ KẾT QUẢ VỀ CHO MÀN HÌNH CHÍNH
         if (bestMoveObject) {
             let movedPiece = { ...bestMoveObject.pieceObj, c: bestMoveObject.to.c, r: bestMoveObject.to.r };
             if (data.isCoUp && movedPiece.isUp) {
                 movedPiece.isUp = false;
-                const names = {'車':'xe','馬':'ma','象':'tuong','士':'si','將':'tuong_soai','砲':'phao','卒':'tot'};
+                // Có fix lại đoạn này cho đủ bộ từ điển cả Đỏ lẫn Đen
+                const names = {'車':'xe','馬':'ma','象':'tuong','士':'si','將':'tuong_soai','砲':'phao','卒':'tot', '俥':'xe','傌':'ma','相':'tuong','仕':'si','帥':'tuong_soai','炮':'phao','兵':'tot'};
                 if (names[movedPiece.type]) movedPiece.src = `images/${data.botSide}_${names[movedPiece.type]}.png`;
             }
 
