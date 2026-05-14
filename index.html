@@ -5986,32 +5986,44 @@ margin-bottom: 14px;
     0% { box-shadow: 0 0 8px rgba(255, 71, 87, 0.4); }
     100% { box-shadow: 0 0 25px rgba(255, 71, 87, 1); border-color: #55efc4; }
 }
-/* Tìm cái đoạn style của modal-input-dark và sửa lại */
-.modal-input-dark {
-    width: 100%;
-    padding: 10px;
-    background: #000;
-    color: #55efc4;
-    border: 1px solid #333;
-    border-radius: 8px; /* Thêm bo góc cho mượt */
-    margin-bottom: 12px;
+/* ==========================================
+   BÙA FIX GIAO DIỆN KHAI BÁO NGƯỜI MUA
+   ========================================== */
+#mmo-kyc-modal .modal-content {
+    padding: 20px !important;
+}
+
+#mmo-kyc-modal label {
+    display: block; /* Ép cái chữ tiêu đề nằm riêng một dòng */
+    margin-bottom: 6px;
+    margin-top: 10px;
+}
+
+#mmo-kyc-modal .modal-input-dark {
+    width: 100% !important;
+    padding: 12px !important; /* Cho ô nhập nó cao to, dễ bấm */
+    background: #000 !important;
+    color: #55efc4 !important;
+    border: 1px solid #444 !important;
+    border-radius: 10px !important; /* Bo góc mượt mà */
+    margin-bottom: 5px !important;
     outline: none;
-    box-sizing: border-box; /* Đảm bảo padding không làm tràn khung */
+    box-sizing: border-box; /* Chống tràn khung */
 }
 
-/* Tìm đoạn stake-actions để chỉnh khoảng cách nút */
-.stake-actions {
-    display: flex;
-    justify-content: space-between; /* Đẩy 2 nút ra 2 bên */
-    gap: 10px; /* Tạo khoảng trống ở giữa */
-    margin-top: 20px;
+/* Fix cụm nút bấm bên dưới */
+#mmo-kyc-modal .stake-actions {
+    display: flex !important;
+    justify-content: space-between !important;
+    gap: 12px !important; /* Tạo khoảng hở giữa 2 nút */
+    margin-top: 25px !important;
 }
 
-.stake-cancel-btn, .stake-ok-btn {
-    flex: 1; /* Cho 2 nút dài bằng nhau nhìn cho cân đối */
-    border-radius: 8px;
-    padding: 10px;
-    font-weight: bold;
+#mmo-kyc-modal .stake-actions button {
+    flex: 1 !important; /* Ép 2 nút dài bằng nhau */
+    height: 48px !important;
+    border-radius: 12px !important;
+    font-weight: 900 !important;
     cursor: pointer;
 }
 </style>
