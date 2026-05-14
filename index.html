@@ -8340,10 +8340,16 @@ if (c % 2 === 0) luatType = (side === 'do' ? '兵' : '卒');
 switch (luatType) {
 case '帥': case '將': return dx + dy === 1 && tc >= 3 && tc <= 5 && (side === 'do' ? tr >= 7 : tr <= 2);
 case '仕': case '士':
-    return dx === 1
-        && dy === 1
-        && tc >= 3 && tc <= 5
-        && (side === 'do' ? tr >= 7 : tr <= 2);
+    // 1. Cờ tướng thường: Sĩ bắt buộc nằm trong cung
+    if (!isCoUp) {
+        return dx === 1 && dy === 1 && tc >= 3 && tc <= 5 && (side === 'do' ? tr >= 7 : tr <= 2);
+    }
+    // 2. Cờ úp: Nếu quân Sĩ chưa lật ngửa (vẫn đang nằm ở chân Sĩ) -> Bắt buộc đi trong cung
+    if (pieceAtPos && pieceAtPos.dataset.isUp === "true") {
+        return dx === 1 && dy === 1 && tc >= 3 && tc <= 5 && (side === 'do' ? tr >= 7 : tr <= 2);
+    }
+    // 3. Cờ úp đặc quyền: Nếu Sĩ ĐÃ LẬT NGỬA -> Cho phép đi chéo tự do qua sông luôn
+    return dx === 1 && dy === 1;
 case '相': case '象':
 if (!isCoUp && (side === 'do' ? tr < 5 : tr > 4)) return false;
 if (dx !== 2 || dy !== 2) return false;
