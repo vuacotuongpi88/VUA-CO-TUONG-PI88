@@ -5908,6 +5908,28 @@ margin-bottom: 14px;
         line-height: 20px !important; /* Canh giữa chữ trên mobile */
     }
 }
+/* ==========================================
+   BÙA CỞI TRÓI Ô TIỀN CHỐNG DẤU 3 CHẤM (...)
+   ========================================== */
+
+/* Nới khung bự chứa tên và tiền để nó được phép phình to */
+.player-chip-stack {
+    min-width: max-content !important; 
+}
+
+/* Tháo gông ép kích thước hàng ngang */
+.player-balance-row {
+    width: max-content !important; 
+}
+
+/* Ép từng ô tiền ôm sát theo chữ: Chữ dài khung dài, chữ ngắn khung ngắn */
+.player-balance-box {
+    flex: 0 0 auto !important; /* Hủy lệnh chia đều 3 phần bằng nhau */
+    width: max-content !important; /* Chữ dài tới đâu, khung giãn tới đó */
+    text-overflow: clip !important; /* Cấm tuyệt đối hiện dấu ... */
+    overflow: visible !important; /* Có bao nhiêu tiền hiện ra hết */
+    padding: 0 6px !important; /* Chừa tí viền cho thoáng */
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
