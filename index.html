@@ -5860,6 +5860,54 @@ margin-bottom: 14px;
     0% { transform: scale(0.5); opacity: 0; }
     100% { transform: scale(1); opacity: 1; }
 }
+/* ==========================================
+   BÙA TRỊ LỖI LÒI TÊN VÀ MÓP VÍ PMC
+   ========================================== */
+
+/* 1. Ép tên trong menu 3 gạch không được lòi ra ngoài */
+#user-name {
+    white-space: nowrap !important;      /* Cấm xuống dòng */
+    overflow: hidden !important;         /* Giấu đi khúc dư thừa */
+    text-overflow: ellipsis !important;  /* Khúc dư biến thành dấu ... */
+    max-width: 105px !important;         /* Khóa cứng độ dài */
+    display: inline-block !important;
+    vertical-align: middle !important;
+}
+
+/* 2. Ép tên ngoài sảnh chờ cũng gọn gàng lại (chống lòi) */
+#user-name-display {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 120px !important;
+    display: inline-block !important;
+}
+
+/* 3. Nới rộng khung ví trong trận ra cho đại gia dễ nhìn số tiền */
+.player-chip-stack {
+    min-width: 135px !important; /* Rộng ra tí cho PC */
+}
+.player-chip-inline {
+    min-width: 135px !important; 
+}
+.player-balance-box {
+    display: block !important;   /* Fix lỗi flex làm móp chữ */
+    text-align: center !important;
+    line-height: 22px !important; /* Canh giữa chữ */
+}
+
+/* 4. Tương tự cho Mobile, nới nhẹ ra */
+@media (max-width: 600px) {
+    .player-chip-stack {
+        min-width: 118px !important; /* Rộng ra tí cho Mobile */
+    }
+    .player-chip-inline {
+        min-width: 118px !important;
+    }
+    .player-balance-box {
+        line-height: 20px !important; /* Canh giữa chữ trên mobile */
+    }
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
