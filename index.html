@@ -13075,7 +13075,7 @@ if (!walletKey) {
     return;
 }
 
-const withdrawUrl = "/api/pi/withdraw-auto-v2?v=" + Date.now();
+const withdrawUrl = "/api/pi/withdraw-auto-v2?v=" + Date.now() + "&network=" + currentNetwork;
 
 try {
     const res = await fetch(withdrawUrl, {
@@ -17323,7 +17323,7 @@ async function loginPi() {
       },
       {
         onReadyForServerApproval: async function (paymentId) {
-          const res = await fetch("/api/pi/approve", {
+          const res = await fetch("/api/pi/approve?network=" + currentNetwork, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ paymentId })
@@ -17336,7 +17336,7 @@ async function loginPi() {
         },
 
         onReadyForServerCompletion: async function (paymentId, txid) {
-          const res = await fetch("/api/pi/complete", {
+          const res = await fetch("/api/pi/complete?network=" + currentNetwork, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ paymentId, txid })
