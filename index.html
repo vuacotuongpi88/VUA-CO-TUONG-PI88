@@ -14386,21 +14386,20 @@ async function refreshAdminFeeTreasury() {
   setNote("Đang kết nối Ví Admin Master...", "#7fffd4");
 
   try {
-    // 🔥 ĐỌC TRỰC TIẾP TỪ VÍ MASTER (Nơi chứa 56.770 PMC)
+    // 🔥 ĐỌC TRỰC TIẾP TỪ VÍ MASTER
     const snap = await db.ref("wallets/pi_admin_master").once("value");
     const masterData = snap.val() || {};
-    const pmcMaster = Math.floor(Number(masterData.pmcBalance || 0));
+    const pmcMaster = Number(masterData.pmcBalance || 0); // Đã lột bỏ Math.floor
 
     // Lấy số Pi trong ví cá nhân của ông để hiển thị điểm đến
     const myPi = typeof getPiBalance === 'function' ? getPiBalance() : 0;
 
     if (balanceEl) {
         balanceEl.innerHTML = `
-            <b style="color:#f4c542; font-size:16px;">SỐ DƯ QUỸ: ${pmcMaster.toLocaleString('vi-VN')} PMC</b><br>
+            <b style="color:#f4c542; font-size:16px;">SỐ DƯ QUỸ: ${pmcMaster.toLocaleString('vi-VN', {minimumFractionDigits: 1, maximumFractionDigits: 2})} PMC</b><br>
             <span style="font-size:11px; color:#7dffb3;">Pi đổi được sẽ chuyển vào ví cá nhân: ${myPi.toFixed(2)} Pi</span>
         `;
     }
-
     setNote("Đã tải dữ liệu từ Ví Master thành công.", "#8fffaa");
 
     if (inputEl) inputEl.value = "";

@@ -109,7 +109,7 @@ try {
     currentAdminWalletKey,
     pmcBalance: Math.max(
       0,
-      Math.floor(Number(systemWallet.pmcBalance || 0) || 0)
+      Number(systemWallet.pmcBalance || 0) || 0
     ),
     piBalance: Number(
       adminWallet.balance != null
@@ -166,7 +166,7 @@ try {
       const baseCurrent =
         current && typeof current === "object" ? current : treasuryPreRead;
 
-      const currentPmc = Math.floor(Number(baseCurrent.pmcBalance ?? 0) || 0);
+      const currentPmc = Number(baseCurrent.pmcBalance ?? 0) || 0;
       if (currentPmc < safePmc) {
         return;
       }
@@ -230,7 +230,7 @@ try {
         const baseCurrent =
           current && typeof current === "object" ? current : treasuryPreRead;
 
-        const currentPmc = Math.floor(Number(baseCurrent.pmcBalance ?? 0) || 0);
+        const currentPmc = Number(baseCurrent.pmcBalance ?? 0) || 0;
 
         return {
           ...baseCurrent,
