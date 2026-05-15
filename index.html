@@ -9472,7 +9472,7 @@ if (bottomChipRow) {
 const roomStake = Number(room?.stakePMC || 0);
 
 const readPlayerPmc = (p) =>
-    Math.max(0, Math.floor(Number(p?.pmcBalance ?? 0) || 0));
+    Math.max(0, Number(p?.pmcBalance ?? 0) || 0);
 
 const readPlayerPi = (p) =>
     Math.max(0, Number(p?.piBalance ?? p?.balance ?? 0) || 0);
@@ -11368,9 +11368,9 @@ async function loadWalletBalance() {
 
         let pmcAmount = 0;
         if (data.pmcBalance != null) {
-            pmcAmount = Math.floor(Number(data.pmcBalance) || 0);
+            pmcAmount = Number(data.pmcBalance) || 0;
         } else {
-            pmcAmount = Math.floor(Number(localStorage.getItem(getPmcCacheKey()) || 0) || 0);
+            pmcAmount = Number(localStorage.getItem(getPmcCacheKey()) || 0) || 0;
         }
 
         currentWalletBalance = Math.max(0, piAmount);
@@ -11442,7 +11442,7 @@ function getPiBalance() {
 }
 
 function getPmcBalance() {
-    const cached = Math.floor(Number(localStorage.getItem(getPmcCacheKey()) || currentPmcBalance || 0) || 0);
+    const cached = Number(localStorage.getItem(getPmcCacheKey()) || currentPmcBalance || 0) || 0;
     return Math.max(0, cached);
 }
 
@@ -12701,7 +12701,7 @@ async function chargeStakeForReady(roomId, side) {
         const safeWalletKey = String(targetWalletKey || "").replace(/[.#$\[\]\/]/g, "_");
         const targetWalletSnap = await db.ref("wallets/" + safeWalletKey).once("value");
         const targetWallet = targetWalletSnap.val() || {};
-        const targetPmc = Math.max(0, Math.floor(Number(targetWallet.pmcBalance || 0) || 0));
+        const targetPmc = Math.max(0, Number(targetWallet.pmcBalance || 0) || 0);
         
         // KIỂM TRA XEM CÓ VÉ MIỄN PHÍ KHÔNG
         const freeTickets = Math.max(0, Math.floor(Number(targetWallet.freeTickets || 0)));
@@ -14594,7 +14594,7 @@ async function confirmStakeSelection() {
 
         const snap = await walletRefByKey(walletKey).once("value");
         const liveData = snap.val() && typeof snap.val() === "object" ? snap.val() : {};
-        livePmc = Math.floor(Number(liveData.pmcBalance ?? 0) || 0);
+        livePmc = Number(liveData.pmcBalance ?? 0) || 0;
     } catch (e) {
         console.error("❌ Không đọc được PMC realtime:", e);
         isJoiningStakeRoom = false;
