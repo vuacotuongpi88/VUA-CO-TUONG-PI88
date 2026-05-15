@@ -6058,7 +6058,13 @@ margin-bottom: 14px;
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
-  Pi.init({ version: "2.0" });
+    // Tự động đọc thanh địa chỉ xem đang ở môi trường nào
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentNetwork = urlParams.get('network') || 'mainnet'; // Nếu không ghi gì thì ngầm hiểu là mainnet
+    const isSandbox = (currentNetwork === 'testnet');
+
+    // Khởi tạo Pi SDK linh hoạt
+    Pi.init({ version: "2.0", sandbox: isSandbox });
 </script>
 </head>
 <body>

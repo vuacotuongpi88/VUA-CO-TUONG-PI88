@@ -1,33 +1,29 @@
-function loadDeps() {
+function loadDeps(network) {
   const { getDatabase } = require("firebase-admin/database");
   const adminBundle = require("../_firebaseAdmin.js");
   const core = require("./_withdraw-auto-core.js");
 
-  const SOURCE_WALLET_PUBLIC = String(
-    process.env.DEV_PUBLIC ||
-      process.env.PI_DEVELOPER_WALLET_PUBLIC_KEY ||
-      process.env.PI_WALLET_PUBLIC_KEY ||
-      process.env.PI_PUBLIC_KEY ||
-      ""
-  ).trim();
+  let SOURCE_WALLET_PUBLIC = "";
+  let SOURCE_WALLET_SECRET = "";
 
-  const SOURCE_WALLET_SECRET = String(
-    process.env.DEV_SECRET ||
-      process.env.PI_DEVELOPER_WALLET_SECRET_SEED ||
-      process.env.PI_WALLET_PRIVATE_KEY ||
-      process.env.PI_SECRET_KEY ||
-      ""
-  ).trim();
+  // Tự động rẽ nhánh lấy Khóa Ví theo môi trường
+  if (network === "mainnet") {
+    SOURCE_WALLET_PUBLIC = String(process.env.PI_PUBLIC_KEY_MAINNET || "").trim();
+    SOURCE_WALLET_SECRET = String(process.env.PI_SECRET_KEY_MAINNET || "").trim();
+  } else {
+    SOURCE_WALLET_PUBLIC = String(process.env.PI_PUBLIC_KEY_TESTNET || "").trim();
+    SOURCE_WALLET_SECRET = String(process.env.PI_SECRET_KEY_TESTNET || "").trim();
+  }
 
   return {
     getDatabase,
     adminBundle,
     SOURCE_WALLET_PUBLIC,
     SOURCE_WALLET_SECRET,
+    network, // truyền thêm network để các file core biết đường mà chạy
     ...core
   };
 }
-
 function pickString(...values) {
   for (const value of values) {
     const s = String(value ?? "").trim();
@@ -158,7 +154,8 @@ module.exports = async function handler(req, res) {
 
   let deps;
   try {
-    deps = loadDeps();
+    const network = req.query.network || "mainnet"; // Bắt tín hiệu network
+    deps = loadDeps(network); // Truyền xuống cho loadDeps
   } catch (e) {
     return res.status(500).json({
       ok: false,
