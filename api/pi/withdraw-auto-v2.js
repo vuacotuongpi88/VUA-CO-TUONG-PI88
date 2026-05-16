@@ -3,24 +3,25 @@ function loadDeps(network) {
   const adminBundle = require("../_firebaseAdmin.js");
   const core = require("./_withdraw-auto-core.js");
 
-  let SOURCE_WALLET_PUBLIC = "";
-  let SOURCE_WALLET_SECRET = "";
+  // 🔥 ĐÃ GỠ BÙA IF-ELSE. TỰ BỐC KEY TRÊN VERCEL HIỆN TẠI
+  const SOURCE_WALLET_PUBLIC = String(
+    process.env.DEV_PUBLIC || 
+    process.env.PI_PUBLIC_KEY_TESTNET || 
+    process.env.PI_PUBLIC_KEY_MAINNET || ""
+  ).trim();
 
-  // Tự động rẽ nhánh lấy Khóa Ví theo môi trường
-  if (network === "mainnet") {
-    SOURCE_WALLET_PUBLIC = String(process.env.PI_PUBLIC_KEY_MAINNET || "").trim();
-    SOURCE_WALLET_SECRET = String(process.env.PI_SECRET_KEY_MAINNET || "").trim();
-  } else {
-    SOURCE_WALLET_PUBLIC = String(process.env.PI_PUBLIC_KEY_TESTNET || "").trim();
-    SOURCE_WALLET_SECRET = String(process.env.PI_SECRET_KEY_TESTNET || "").trim();
-  }
+  const SOURCE_WALLET_SECRET = String(
+    process.env.DEV_SECRET || 
+    process.env.PI_SECRET_KEY_TESTNET || 
+    process.env.PI_SECRET_KEY_MAINNET || ""
+  ).trim();
 
   return {
     getDatabase,
     adminBundle,
     SOURCE_WALLET_PUBLIC,
     SOURCE_WALLET_SECRET,
-    network, // truyền thêm network để các file core biết đường mà chạy
+    network,
     ...core
   };
 }
