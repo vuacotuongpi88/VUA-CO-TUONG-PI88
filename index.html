@@ -11980,44 +11980,25 @@ window.buyExpDirectly = async function(pkgId, expAmount, pmcCost, bonusTickets) 
     window.isBuyingExp = true;
     try {
         const walletKey = makeWalletDbKey();
-        const adminWallet = "pi_admin_master"; 
-        
-        // 1. Trừ tiền
-        const paid = await adjustPmcWalletByKey(walletKey, -pmcCost);
-        if (paid == null) throw new Error("Thanh toán lỗi");
-
-        try {
-            await adjustPmcWalletByKey(adminWallet, pmcCost);
-            await db.ref("walletTransactions").push({
-                type: "buy_exp_package", walletKey: walletKey, adminWalletKey: adminWallet, pkgId: pkgId,
-                feePMC: pmcCost, expGained: expAmount, createdAt: Date.now(), status: "done"
-            });
-        } catch(e) {} 
-
-        // 2. Ép cộng EXP siêu tốc, đéo dùng transaction nữa để chống văng game
-        const userRef = db.ref("wallets/" + walletKey);
-        const snap = await userRef.once("value");
-        let currentData = snap.val() || {};
-        
-        let newExp = (Number(currentData.exp) || 0) + expAmount;
-        let newLevel = window.getLevelFromExp(newExp);
-        let newTickets = (Number(currentData.freeTickets) || 0) + (bonusTickets || 0);
-        
-        let pkgs = currentData.boughtExpPackages || {};
-        pkgs[pkgId] = true;
-
-        await userRef.update({
-            exp: newExp,
-            level: newLevel,
-            freeTickets: newTickets,
-            boughtExpPackages: pkgs
+        const res = await fetch("/api/level-system?v=" + Date.now(), {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-wallet-key": walletKey },
+            body: JSON.stringify({ action: "buy_exp_direct", walletKey, pkgId })
         });
 
-        // 3. Cập nhật giao diện mượt mà
-        localStorage.setItem('exp_cache', newExp); 
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || "Giao dịch thất bại");
+
+        // Nhận được data an toàn từ Vercel thì mới cập nhật giao diện
+        if (typeof setPmcBalance === 'function') setPmcBalance(data.newPmc);
+        localStorage.setItem('exp_cache', data.newExp); 
+        
+        let pkgs = JSON.parse(localStorage.getItem('bought_exp_pkgs') || '{}');
+        pkgs[pkgId] = true;
         localStorage.setItem('bought_exp_pkgs', JSON.stringify(pkgs)); 
+
         if (typeof window.updateExpBarUI === 'function') {
-            window.updateExpBarUI(newExp);
+            window.updateExpBarUI(data.newExp);
         }
 
         await loadWalletBalance();
@@ -12028,8 +12009,7 @@ window.buyExpDirectly = async function(pkgId, expAmount, pmcCost, bonusTickets) 
         alert(`Chúc mừng! Đã bơm thành công ${expAmount.toLocaleString('vi-VN')} EXP vào người!`);
         window.renderAvatarSkinShop(); 
     } catch(err) {
-        console.error("Lỗi mua EXP:", err);
-        alert("Có lỗi xảy ra khi giao dịch.");
+        alert("Lỗi mua EXP: " + err.message);
     } finally {
         window.isBuyingExp = false;
     }
@@ -18417,114 +18397,90 @@ async function claimLevelChest(targetLevel, btnElement) {
     const milestone = LEVEL_MILESTONES.find(m => m.level === targetLevel);
     if (!milestone) return;
 
-    // Logic tính thưởng ngẫu nhiên (Tỉ lệ 80% ra số nhỏ, 20% ra số lớn)
-    let min = 0, max = 0;
-    if (targetLevel === 10) { min = 2; max = 20; }
-    else if (targetLevel === 20) { min = 4; max = 40; }
-    else { min = targetLevel; max = targetLevel * 3; } // Công thức chung cho cấp cao
+    try {
+        const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "";
+        const res = await fetch("/api/level-system?v=" + Date.now(), {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-wallet-key": walletKey },
+            body: JSON.stringify({ action: "claim_chest", walletKey, targetLevel })
+        });
 
-    let isLucky = Math.random() < 0.2; // 20% xui rủi
-    let rewardPMC = 0;
-    
-    if (isLucky) {
-        rewardPMC = Math.floor(Math.random() * (max - (max/2) + 1)) + Math.floor(max/2); // Nửa trên
-    } else {
-        rewardPMC = Math.floor(Math.random() * ((max/2) - min + 1)) + min; // Nửa dưới
-    }
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || "Mở rương thất bại");
 
-    const walletKey = makeWalletDbKey();
-    const userRef = db.ref("wallets/" + walletKey);
+        // Nhận được data an toàn từ Vercel thì mới cập nhật giao diện
+        if (typeof setPmcBalance === 'function') setPmcBalance(data.newPmc);
+        if (typeof updateTicketUI === 'function') updateTicketUI(data.newTickets);
 
-    await userRef.transaction((current) => {
-        if (!current) return current;
-        current.claimedLevels = current.claimedLevels || {};
-        
-        // Block mầy bấm 2 lần
-        if (current.claimedLevels[targetLevel]) return; 
+        // Chiếu phim mở rương
+        playChestOpeningAnimation(milestone.chestPrefix, milestone.frameCount, () => {
+             if (typeof playSnd === 'function') playSnd('win');
+             
+             let overlay = document.getElementById("chest-reward-overlay");
+             if (!overlay) {
+                 overlay = document.createElement("div");
+                 overlay.id = "chest-reward-overlay";
+                 document.body.appendChild(overlay);
+             }
 
-        // Ghi nhận đã mở rương này
-        current.claimedLevels[targetLevel] = true;
-        
-        // Cộng PMC
-        current.pmcBalance = (current.pmcBalance || 0) + rewardPMC;
-        // Cộng Vé miễn phí từ rương mốc
-        if (milestone.tickets) {
-            current.freeTickets = (Number(current.freeTickets) || 0) + milestone.tickets;
-        }
-
-        // Nếu mốc đó có tặng kèm skin thì bỏ vô túi skin luôn
-        if (milestone.skinId) {
-            current.ownedAvatarSkins = current.ownedAvatarSkins || { none: true };
-            current.ownedAvatarSkins[milestone.skinId] = true;
-        }
-        return current;
-    });
-
-    // 🔥 CHIẾU PHIM MỞ RƯƠNG DỰA VÀO PREFIX VÀ SỐ LƯỢNG ẢNH 🔥
-     playChestOpeningAnimation(milestone.chestPrefix, milestone.frameCount, () => {
-         
-         // 1. Phim chiếu xong, rương mở toang -> Nổ tiếng Win
-         if (typeof playSnd === 'function') playSnd('win');
-         
-         // 2. Tạo bảng Popup VIP văng quà ra
-         let overlay = document.getElementById("chest-reward-overlay");
-         if (!overlay) {
-             overlay = document.createElement("div");
-             overlay.id = "chest-reward-overlay";
-             document.body.appendChild(overlay);
-         }
-
-         let skinHtml = "";
-         if (milestone.skinId) {
-             skinHtml = `
-                 <div class="chest-item-row" style="border-color: #ff3bd4; box-shadow: inset 0 0 10px rgba(255, 59, 212, 0.2);">
-                     <div style="width: 42px; height: 42px; position: relative; flex-shrink: 0; display: flex; align-items: center; justify-content: center; margin-right: 4px;">
-                         <img src="images/do_tuong.png" style="width: 26px; height: 26px; border-radius: 50%; object-fit: cover; border: 1px solid #ffb7f0;">
-                         <img src="${milestone.icon}" style="position: absolute; width: 145%; height: 145%; top: 50%; left: 50%; transform: translate(-50%, -50%); object-fit: contain; filter: drop-shadow(0 0 5px rgba(255, 183, 240, 0.8));">
+             let skinHtml = "";
+             if (milestone.skinId) {
+                 skinHtml = `
+                     <div class="chest-item-row" style="border-color: #ff3bd4; box-shadow: inset 0 0 10px rgba(255, 59, 212, 0.2);">
+                         <div style="width: 42px; height: 42px; position: relative; flex-shrink: 0; display: flex; align-items: center; justify-content: center; margin-right: 4px;">
+                             <img src="images/do_tuong.png" style="width: 26px; height: 26px; border-radius: 50%; object-fit: cover; border: 1px solid #ffb7f0;">
+                             <img src="${milestone.icon}" style="position: absolute; width: 145%; height: 145%; top: 50%; left: 50%; transform: translate(-50%, -50%); object-fit: contain; filter: drop-shadow(0 0 5px rgba(255, 183, 240, 0.8));">
+                         </div>
+                         <div class="chest-item-val" style="color: #ffb7f0;">
+                             <span style="font-size: 11px; color: #dfe6e9;">Đã mở khóa Skin:</span><br>
+                             ${milestone.name.replace(' + Skin', '')} 
+                         </div>
                      </div>
-                     <div class="chest-item-val" style="color: #ffb7f0;">
-                         <span style="font-size: 11px; color: #dfe6e9;">Đã mở khóa Skin:</span><br>
-                         ${milestone.name.replace(' + Skin', '')} 
+                 `;
+             }
+
+             overlay.innerHTML = `
+                 <div class="chest-reward-box">
+                     <img src="${milestone.chestImage}" style="width: 120px; height: 120px; object-fit: contain; filter: drop-shadow(0 0 25px ${milestone.shadow || '#f4c542'}); margin-bottom: -15px; animation: chestReadyPulse 1s infinite alternate;">
+                     <div class="chest-reward-title">MỞ RƯƠNG THÀNH CÔNG!</div>
+                     <div class="chest-item-row" style="border-color: #55efc4;">
+                         <div style="font-size: 28px;">💎</div>
+                         <div class="chest-item-val">
+                             <span style="font-size: 11px; color: #dfe6e9;">Nhận được:</span><br>
+                             +${data.rewardPMC.toLocaleString('vi-VN')} PMC
+                         </div>
                      </div>
+                     ${milestone.tickets ? `
+                     <div class="chest-item-row" style="border-color: #ff9f43;">
+                         <div style="font-size: 28px;">🎫</div>
+                         <div class="chest-item-val" style="color: #ff9f43;">
+                             <span style="font-size: 11px; color: #dfe6e9;">Tặng kèm:</span><br>
+                             +${milestone.tickets} Lượt Miễn Phí
+                         </div>
+                     </div>
+                     ` : ''}
+                     ${skinHtml}
+                     <button onclick="document.getElementById('chest-reward-overlay').style.display='none'" style="margin-top: 15px; width: 100%; padding: 12px; border-radius: 12px; background: linear-gradient(180deg, #f1c40f, #e67e22); color: #000; font-size: 16px; font-weight: 900; border: none; cursor: pointer; box-shadow: 0 4px 15px rgba(241, 196, 15, 0.4);">TUYỆT VỜI</button>
                  </div>
              `;
-         }
+             
+             document.body.style.animation = "shakeScreen 0.4s ease-in-out";
+             setTimeout(() => document.body.style.animation = "", 400);
 
-         overlay.innerHTML = `
-             <div class="chest-reward-box">
-                 <img src="${milestone.chestImage}" style="width: 120px; height: 120px; object-fit: contain; filter: drop-shadow(0 0 25px ${milestone.shadow || '#f4c542'}); margin-bottom: -15px; animation: chestReadyPulse 1s infinite alternate;">
-                 <div class="chest-reward-title">MỞ RƯƠNG THÀNH CÔNG!</div>
-                 <div class="chest-item-row" style="border-color: #55efc4;">
-                     <div style="font-size: 28px;">💎</div>
-                     <div class="chest-item-val">
-                         <span style="font-size: 11px; color: #dfe6e9;">Nhận được:</span><br>
-                         +${rewardPMC.toLocaleString('vi-VN')} PMC
-                     </div>
-                 </div>
-                 ${milestone.tickets ? `
-                 <div class="chest-item-row" style="border-color: #ff9f43;">
-                     <div style="font-size: 28px;">🎫</div>
-                     <div class="chest-item-val" style="color: #ff9f43;">
-                         <span style="font-size: 11px; color: #dfe6e9;">Tặng kèm:</span><br>
-                         +${milestone.tickets} Lượt Miễn Phí
-                     </div>
-                 </div>
-                 ` : ''}
-                 ${skinHtml}
-                 <button onclick="document.getElementById('chest-reward-overlay').style.display='none'" style="margin-top: 15px; width: 100%; padding: 12px; border-radius: 12px; background: linear-gradient(180deg, #f1c40f, #e67e22); color: #000; font-size: 16px; font-weight: 900; border: none; cursor: pointer; box-shadow: 0 4px 15px rgba(241, 196, 15, 0.4);">TUYỆT VỜI</button>
-             </div>
-         `;
-         
-         // Rung màn hình
-         document.body.style.animation = "shakeScreen 0.4s ease-in-out";
-         setTimeout(() => document.body.style.animation = "", 400);
+             overlay.style.display = "flex";
+             loadWalletBalance();
+             renderLevelRewards();
+         });
 
-         overlay.style.display = "flex";
-         loadWalletBalance();
-         renderLevelRewards();
-     });
+    } catch (err) {
+        console.error("Lỗi mở rương:", err);
+        alert(err.message || "Lỗi khi mở rương!");
+        if (btnElement) {
+            btnElement.disabled = false;
+            btnElement.innerText = "MỞ RƯƠNG";
+        }
+    }
 }
-// --- BỘ NÃO LOGIC LUYỆN CẤP LŨY TIẾN V3 (CÓ BÁO CÁO) ---
 window.pendingSessionEXP = 0; 
 window.sessionWins = 0;
 window.sessionLosses = 0;
@@ -18713,7 +18669,7 @@ window.showExpSummary = function(currentLevel) {
 };
 
 window.buyBackExp = async function() {
-    clearInterval(window.expSummaryTimerInt); // Dừng đếm ngược ngay
+    clearInterval(window.expSummaryTimerInt); 
     const costPMC = Math.abs(window.pendingSessionEXP);
     
     if (costPMC <= 0) return;
@@ -18721,7 +18677,7 @@ window.buyBackExp = async function() {
     const currentPmc = getPmcBalance();
     if (currentPmc < costPMC) {
         alert("Mầy không đủ PMC để mua lại EXP!");
-        window.closeExpSummary(); // Nghèo thì chịu khó bị trừ EXP
+        window.closeExpSummary(); 
         return;
     }
 
@@ -18733,54 +18689,32 @@ window.buyBackExp = async function() {
 
     try {
         const walletKey = makeWalletDbKey();
-        const adminWallet = "pi_admin_master"; // Ví hệ thống
-
-        // Trừ tiền thằng chơi
-        const paid = await adjustPmcWalletByKey(walletKey, -costPMC);
-        if (paid == null) throw new Error("Trừ PMC lỗi");
-
-        // Chuyển cho Admin (Lỗi cũng kệ, tiền ra khỏi túi người chơi là đc)
-        try {
-            await adjustPmcWalletByKey(adminWallet, costPMC);
-            await db.ref("walletTransactions").push({
-                type: "buy_back_exp_after_loss", 
-                walletKey: walletKey, 
-                adminWalletKey: adminWallet,
-                feePMC: costPMC, 
-                createdAt: Date.now(), 
-                status: "done"
-            });
-        } catch(e) {}
-
-        // 👇👇 ĐÂY LÀ KHÚC CHỮA BỆNH TỤT EXP 👇👇
-        // Trả lại EXP vào Database vì lúc nãy nó lỡ trừ mất trên máy chủ rồi
-        const userRef = db.ref("wallets/" + walletKey);
-        await userRef.update({
-            exp: firebase.database.ServerValue.increment(costPMC),
-            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        const res = await fetch("/api/level-system?v=" + Date.now(), {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-wallet-key": walletKey },
+            body: JSON.stringify({ action: "buy_back_exp", walletKey, costPMC })
         });
 
-        // Cộng trả lại biến hiển thị UI ở Local để thanh EXP đứng im đéo nhúc nhích
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || "Lỗi mua lại");
+
+        // Nhận được data an toàn từ Vercel thì mới cập nhật giao diện
+        if (typeof setPmcBalance === 'function') setPmcBalance(data.newPmc);
+        
         if (window.finalNewExpToAnimate !== undefined) {
             window.finalNewExpToAnimate += costPMC;
             localStorage.setItem('exp_cache', window.finalNewExpToAnimate);
         }
-        // 👆👆 KẾT THÚC CHỮA BỆNH 👆👆
 
         alert(`Mua lại thành công! Đã trừ ${costPMC} PMC. EXP của mày được bảo toàn nguyên vẹn.`);
-        
-        // Gán EXP chờ về 0 để hàm closeExpSummary ĐÉO làm trò ruồi nữa
         window.pendingSessionEXP = 0; 
-        
         window.closeExpSummary();
 
     } catch (err) {
-        console.error("Lỗi mua lại EXP:", err);
-        alert("Lỗi khi mua lại EXP. Mạng yếu.");
-        window.closeExpSummary(); // Lỗi thì đành trừ EXP
+        alert("Lỗi khi mua lại EXP: " + err.message);
+        window.closeExpSummary(); 
     }
 };
-
 window.closeExpSummary = function() {
     clearInterval(window.expSummaryTimerInt); // Dọn dẹp timer
     const modal = document.getElementById('exp-summary-modal');
