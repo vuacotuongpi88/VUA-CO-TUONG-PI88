@@ -3,25 +3,16 @@ function loadDeps(network) {
   const adminBundle = require("../_firebaseAdmin.js");
   const core = require("./_withdraw-auto-core.js");
 
-  // 🔥 ĐÃ GỠ BÙA IF-ELSE. TỰ BỐC KEY TRÊN VERCEL HIỆN TẠI
-  const SOURCE_WALLET_PUBLIC = String(
-    process.env.DEV_PUBLIC || 
-    process.env.PI_PUBLIC_KEY_TESTNET || 
-    process.env.PI_PUBLIC_KEY_MAINNET || ""
-  ).trim();
-
-  const SOURCE_WALLET_SECRET = String(
-    process.env.DEV_SECRET || 
-    process.env.PI_SECRET_KEY_TESTNET || 
-    process.env.PI_SECRET_KEY_MAINNET || ""
-  ).trim();
+  // 🔥 ÉP CHẾT CỨNG 100% LẤY KEY TESTNET, ĐÉO QUAN TÂM MAINNET HAY DEV_PUBLIC NỮA
+  const SOURCE_WALLET_PUBLIC = String(process.env.PI_PUBLIC_KEY_TESTNET || "").trim();
+  const SOURCE_WALLET_SECRET = String(process.env.PI_SECRET_KEY_TESTNET || "").trim();
 
   return {
     getDatabase,
     adminBundle,
     SOURCE_WALLET_PUBLIC,
     SOURCE_WALLET_SECRET,
-    network,
+    network: "testnet", // 🔥 Ép luôn mạng là testnet cho an toàn tuyệt đối
     ...core
   };
 }
