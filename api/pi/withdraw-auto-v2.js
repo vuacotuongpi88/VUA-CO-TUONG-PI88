@@ -31,7 +31,13 @@ function pickString(...values) {
   }
   return "";
 }
-
+function readWalletPiBalanceSafe(obj) {
+  return Number(
+    obj && obj.balance != null
+      ? obj.balance
+      : (obj && obj.piBalance != null ? obj.piBalance : 0)
+  ) || 0;
+}
 function wrapRefTransaction(ref, updateFn) {
   return new Promise((resolve, reject) => {
     ref.transaction(
@@ -102,7 +108,7 @@ async function deductWalletBalance(walletRef, amount, deps) {
           ? current
           : { piBalance: 0, balance: 0 };
 
-      const currentPi = readPiBalance(safeCurrent);
+      const currentPi = readWalletPiBalanceSafe(safeCurrent);
       if (currentPi < amount) return;
 
       const nextPi = Number((currentPi - amount).toFixed(7));
@@ -118,7 +124,7 @@ async function deductWalletBalance(walletRef, amount, deps) {
     if (deductTx.committed) {
       deductOk = true;
       const after = deductTx.snap.val() || {};
-      newInternalBalance = readPiBalance(after);
+      newInternalBalance = readWalletPiBalanceSafe(after);
     }
   } catch (_) {}
 
@@ -126,8 +132,7 @@ async function deductWalletBalance(walletRef, amount, deps) {
     try {
       const latestSnap = await walletRef.once("value");
       const latestVal = latestSnap.val() || {};
-      const latestPi = readPiBalance(latestVal);
-
+      const latestPi = readWalletPiBalanceSafe(latestVal);
       if (latestPi >= amount) {
         const nextPi = Number((latestPi - amount).toFixed(7));
         await walletRef.update({
@@ -283,7 +288,16 @@ deps = loadDeps(network);
       });
     }
 
-    const currentInternalBalance = readPiBalance(walletVal);
+    const currentInternalBalance = readWalletPiBalanceSafe(walletVal);
+
+console.log("WITHDRAW BALANCE CHECK", {
+  safeWalletKey,
+  walletKeyRaw,
+  balance: walletVal.balance,
+  piBalance: walletVal.piBalance,
+  currentInternalBalance,
+  amount
+});
 
     if (amount > currentInternalBalance) {
       return res.status(400).json({
