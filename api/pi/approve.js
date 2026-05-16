@@ -15,18 +15,16 @@ module.exports = async function handler(req, res) {
       process.env.PI_API_BASE_URL || "https://api.minepi.com"
     ).trim();
 
-    // Chọn môi trường Pi: mặc định là TESTNET để pass bước testnet 10 người
-const network = String(
-  body.network || req.query.network || process.env.PI_NETWORK || "testnet"
-).trim().toLowerCase();
-
-let PI_API_KEY = "";
-
-if (network === "mainnet") {
-  PI_API_KEY = String(process.env.PI_API_KEY_MAINNET || "").trim();
-} else {
-  PI_API_KEY = String(process.env.PI_API_KEY_TESTNET || "").trim();
-}
+    // Bắt đầu: Logic tự chọn môi trường Text/Mainnet
+    const network = req.query.network || "mainnet"; 
+    
+    let PI_API_KEY = "";
+    if (network === "mainnet") {
+      PI_API_KEY = String(process.env.PI_API_KEY_MAINNET || "").trim();
+    } else {
+      PI_API_KEY = String(process.env.PI_API_KEY_TESTNET || "").trim();
+    }
+    // Kết thúc: Logic tự chọn môi trường
 
     console.log("APPROVE HIT", {
       paymentId,

@@ -31,13 +31,7 @@ function pickString(...values) {
   }
   return "";
 }
-function readWalletPiBalanceSafe(obj) {
-  return Number(
-    obj && obj.balance != null
-      ? obj.balance
-      : (obj && obj.piBalance != null ? obj.piBalance : 0)
-  ) || 0;
-}
+
 function wrapRefTransaction(ref, updateFn) {
   return new Promise((resolve, reject) => {
     ref.transaction(
@@ -108,7 +102,7 @@ async function deductWalletBalance(walletRef, amount, deps) {
           ? current
           : { piBalance: 0, balance: 0 };
 
-      const currentPi = readWalletPiBalanceSafe(safeCurrent);
+      const currentPi = readPiBalance(safeCurrent);
       if (currentPi < amount) return;
 
       const nextPi = Number((currentPi - amount).toFixed(7));
@@ -124,7 +118,7 @@ async function deductWalletBalance(walletRef, amount, deps) {
     if (deductTx.committed) {
       deductOk = true;
       const after = deductTx.snap.val() || {};
-      newInternalBalance = readWalletPiBalanceSafe(after);
+      newInternalBalance = readPiBalance(after);
     }
   } catch (_) {}
 
@@ -132,7 +126,8 @@ async function deductWalletBalance(walletRef, amount, deps) {
     try {
       const latestSnap = await walletRef.once("value");
       const latestVal = latestSnap.val() || {};
-      const latestPi = readWalletPiBalanceSafe(latestVal);
+      const latestPi = readPiBalance(latestVal);
+
       if (latestPi >= amount) {
         const nextPi = Number((latestPi - amount).toFixed(7));
         await walletRef.update({
@@ -159,13 +154,8 @@ module.exports = async function handler(req, res) {
 
   let deps;
   try {
-    const network = String(
-  req.query.network || process.env.PI_NETWORK || "testnet"
-).trim().toLowerCase();
-
-console.log("WITHDRAW NETWORK", { network });
-
-deps = loadDeps(network);
+    const network = req.query.network || "mainnet"; // Bắt tín hiệu network
+    deps = loadDeps(network); // Truyền xuống cho loadDeps
   } catch (e) {
     return res.status(500).json({
       ok: false,
@@ -288,16 +278,7 @@ deps = loadDeps(network);
       });
     }
 
-    const currentInternalBalance = readWalletPiBalanceSafe(walletVal);
-
-console.log("WITHDRAW BALANCE CHECK", {
-  safeWalletKey,
-  walletKeyRaw,
-  balance: walletVal.balance,
-  piBalance: walletVal.piBalance,
-  currentInternalBalance,
-  amount
-});
+    const currentInternalBalance = readPiBalance(walletVal);
 
     if (amount > currentInternalBalance) {
       return res.status(400).json({
@@ -405,13 +386,10 @@ console.log("WITHDRAW BALANCE CHECK", {
 
     stage = "submit-chain";
     const chainResult = await submitOnChain({
-  recipientAddress,
-  amount,
-  memo,
-  network,
-  sourceWalletPublic: SOURCE_WALLET_PUBLIC,
-  sourceWalletSecret: SOURCE_WALLET_SECRET
-});
+      recipientAddress,
+      amount,
+      memo
+    });
 
     txid = pickString(chainResult?.txid, chainResult?.data?.hash, chainResult?.data?.id);
 
