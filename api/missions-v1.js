@@ -349,17 +349,19 @@ function rewardAmountPmc(def, missionPoolPmc) {
 
 async function buildBoard(db, walletKey, now = Date.now()) {
   const defs = missionDefinitions();
-  const [walletSnap, treasurySnap, metrics] = await Promise.all([
+  const [walletSnap, treasurySnap, missionPoolSnap, metrics] = await Promise.all([
     db.ref(`wallets/${walletKey}`).once('value'),
     db.ref(`wallets/${safeKey(ADMIN_TREASURY_WALLET_KEY)}`).once('value'),
+    db.ref('treasury/missionPoolPmc').once('value'), // 🔥 ÉP ĐỌC TỪ FIREBASE ĐÂY NÀY
     buildMetrics(db, walletKey, now)
   ]);
 
   const walletVal = walletSnap.val() || {};
   const treasuryVal = treasurySnap.val() || {};
   const treasuryPmc = readPmcBalance(treasuryVal);
-  const missionPoolPmc = Math.max(0, Math.floor(treasuryPmc * TREASURY_SHARE_RATIO));
-
+  
+  // 🔥 LẤY ĐÚNG SỐ TRÊN FIREBASE, KHÔNG NHÂN CHIA GÌ NỮA
+  const missionPoolPmc = Math.max(0, Math.floor(Number(missionPoolSnap.val()) || 0));
   const tabs = { day: [], week: [], month: [], referral: [] };
   let claimableTotalPmc = 0;
   let claimableCount = 0;
@@ -551,6 +553,9 @@ async function claimMission(db, walletKey, missionId, now = Date.now()) {
       await claimRef.remove().catch(() => {});
       throw new Error('Không cộng được thưởng vào ví người chơi.');
     }
+
+    // 🔥 THÊM DÒNG NÀY: Trừ tiền trong Quỹ Nhiệm Vụ hiển thị
+    await db.ref('treasury/missionPoolPmc').set(firebase.database.ServerValue.increment(-mission.rewardPmc)).catch(() => {});
 
     const txPayload = {
       type: 'mission_reward_pmc',
