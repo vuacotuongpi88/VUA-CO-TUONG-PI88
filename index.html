@@ -18122,6 +18122,9 @@ switchMissionTab(MISSION_UI_STATE.activeTab || 'day');
 };
 
   function updateMissionLobbyBadge(board) {
+    // 1. Phải chắc chắn là cái icon Nhiệm vụ đã được đẻ ra trên màn hình thì mới gắn chấm đỏ
+    ensureMissionHubMounted(); 
+
     const badge = document.getElementById('arena-mission-badge');
     const btn = document.getElementById('arena-mission-btn');
     if (!badge || !btn) return;
@@ -18139,13 +18142,19 @@ switchMissionTab(MISSION_UI_STATE.activeTab || 'day');
     }
   }
 
-  // Bùa: Gắn thẳng vào window để hàm showHomeUI() ở bên ngoài có thể gọi được
-  window.refreshMissionLobbyBadgeSilently = async function() {
+  // Bùa: Gọi ngầm để vớt data. Có chức năng chờ đăng nhập xong mới kéo.
+  window.refreshMissionLobbyBadgeSilently = async function(retryCount = 0) {
     try {
       const walletKey = missionWalletKey();
-      if (!walletKey) {
-        updateMissionLobbyBadge({ claimableCount: 0 });
-        return;
+      
+      // 🔥 BÙA TRỊ BỆNH NGỦ GẬT: 
+      // Nếu ví chưa có, hoặc đang là "guest" (tức là Pi SDK chưa load xong danh tính),
+      // Nó sẽ tự động rình 2 giây rồi hỏi lại (Rình tối đa 10 lần = 20 giây).
+      if (!walletKey || walletKey.includes("guest")) {
+          if (retryCount < 10) {
+              setTimeout(() => window.refreshMissionLobbyBadgeSilently(retryCount + 1), 2000);
+          }
+          return;
       }
 
       const res = await fetch('/api/missions-v1?v=' + Date.now(), {
@@ -18161,23 +18170,23 @@ switchMissionTab(MISSION_UI_STATE.activeTab || 'day');
       if (!res.ok || !data.ok) return;
 
       MISSION_UI_STATE.board = data;
-      updateMissionLobbyBadge(data);
+      updateMissionLobbyBadge(data); // Cập nhật chấm đỏ
+
+      // Bùa cập nhật UI nếu khách đang mở bảng Nhiệm Vụ ngồi ngó
+      const modal = document.getElementById('mission-hub-modal');
+      if (modal && modal.classList.contains('show') && !MISSION_UI_STATE.claiming) {
+           renderMissionBoard();
+      }
     } catch (e) { console.error("Lỗi ngầm khi tải nhiệm vụ:", e); }
   };
 
   document.addEventListener('DOMContentLoaded', function () {
     ensureMissionHubMounted();
     
-    // Đã XÓA dòng gọi lúc DOM mới load (vì lúc đó Firebase chưa đăng nhập, gọi cũng đéo có ví mà check)
-    // Hệ thống sẽ tự động gọi khi Firebase Auth chạy xong!
-
-    // Quét ngầm mỗi 15 giây khi đang đứng ở sảnh chờ
+    // Quét ngầm mỗi 30 giây (Chuẩn game online, đéo tốn tài nguyên server, đảm bảo chấm đỏ báo cực nhạy)
     setInterval(function () {
-      const homeMenu = document.getElementById('home-menu');
-      if (homeMenu && homeMenu.style.display !== 'none') {
         window.refreshMissionLobbyBadgeSilently();
-      }
-    }, 15000);
+    }, 30000); 
   });
 
 })(); // <--- Đem cái lồng đóng lại ở TẬN CÙNG NÀY thì đéo bao giờ lỗi nữa!
