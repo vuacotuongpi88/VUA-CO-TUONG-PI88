@@ -154,8 +154,13 @@ module.exports = async function handler(req, res) {
 
   let deps;
   try {
-    const network = req.query.network || "mainnet"; // Bắt tín hiệu network
-    deps = loadDeps(network); // Truyền xuống cho loadDeps
+    const network = String(
+  req.query.network || process.env.PI_NETWORK || "testnet"
+).trim().toLowerCase();
+
+console.log("WITHDRAW NETWORK", { network });
+
+deps = loadDeps(network);
   } catch (e) {
     return res.status(500).json({
       ok: false,
@@ -386,10 +391,13 @@ module.exports = async function handler(req, res) {
 
     stage = "submit-chain";
     const chainResult = await submitOnChain({
-      recipientAddress,
-      amount,
-      memo
-    });
+  recipientAddress,
+  amount,
+  memo,
+  network,
+  sourceWalletPublic: SOURCE_WALLET_PUBLIC,
+  sourceWalletSecret: SOURCE_WALLET_SECRET
+});
 
     txid = pickString(chainResult?.txid, chainResult?.data?.hash, chainResult?.data?.id);
 

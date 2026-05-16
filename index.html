@@ -6060,11 +6060,16 @@ margin-bottom: 14px;
 <script>
     // Tự động đọc thanh địa chỉ xem đang ở môi trường nào
     const urlParams = new URLSearchParams(window.location.search);
-    const currentNetwork = urlParams.get('network') || 'mainnet'; // Nếu không ghi gì thì ngầm hiểu là mainnet
-    const isSandbox = (currentNetwork === 'testnet');
 
-    // Khởi tạo Pi SDK linh hoạt
-    Pi.init({ version: "2.0", sandbox: isSandbox });
+// Mặc định dùng TESTNET để pass bước test 10 người
+const currentNetwork = String(
+  urlParams.get("network") || "testnet"
+).trim().toLowerCase();
+
+const isSandbox = currentNetwork !== "mainnet";
+
+// Khởi tạo Pi SDK
+Pi.init({ version: "2.0", sandbox: isSandbox });
 </script>
 </head>
 <body>
@@ -13085,11 +13090,12 @@ try {
             "x-wallet-key": walletKey
         },
         body: JSON.stringify({
-            amount,
-            piUid,
-            piUsername,
-            walletKey
-        })
+    amount,
+    piUid,
+    piUsername,
+    walletKey,
+    network: currentNetwork
+})
     });
 
     const raw = await res.text();
@@ -17210,11 +17216,18 @@ async function onIncompletePaymentFound(payment) {
       return true;
     }
 
-    const res = await fetch("/api/pi/complete?v=" + Date.now(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ paymentId, txid })
-    });
+    const res = await fetch(
+  "/api/pi/complete?v=" + Date.now() + "&network=" + currentNetwork,
+  {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      paymentId,
+      txid,
+      network: currentNetwork
+    })
+  }
+);
 
     const raw = await res.text();
     let data = {};
@@ -17325,7 +17338,10 @@ async function loginPi() {
           const res = await fetch("/api/pi/approve?network=" + currentNetwork, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ paymentId })
+            body: JSON.stringify({
+  paymentId,
+  network: currentNetwork
+})
           });
 
           const data = await res.json();
@@ -17338,7 +17354,11 @@ async function loginPi() {
           const res = await fetch("/api/pi/complete?network=" + currentNetwork, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ paymentId, txid })
+            body: JSON.stringify({
+  paymentId,
+  txid,
+  network: currentNetwork
+})
           });
 
           const data = await res.json();
