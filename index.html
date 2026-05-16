@@ -14259,18 +14259,18 @@ async function confirmPmcToPiExchange() {
             return;
         }
 
-        const res = await fetch("/api/exchange-pmc-to-pi?v=" + Date.now(), {
+        const res = await fetch("/api/finance?v=" + Date.now(), { // ĐỔI ĐƯỜNG DẪN MỚI
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
                 "x-wallet-key": walletKey
             },
             body: JSON.stringify({
+                action: "user_exchange", // THÊM BIẾN NÀY VÀO
                 pmcAmount,
                 walletKey
             })
         });
-
         const rawText = await res.text();
         let data = {};
 
@@ -14454,14 +14454,14 @@ async function confirmAdminFeePmcToPi() {
         const btns = document.querySelectorAll("#admin-fee-wallet-modal button");
         btns.forEach(btn => btn.disabled = true);
 
-        const res = await fetch("/api/convert-fee-pmc-to-pi?v=" + Date.now(), {
+        const res = await fetch("/api/finance?v=" + Date.now(), { // ĐỔI ĐƯỜNG DẪN MỚI
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                // Trình thẻ căn cước VIP qua ải Vercel
                 "x-wallet-key": walletKey 
             },
             body: JSON.stringify({
+                action: "admin_convert", // THÊM BIẾN NÀY VÀO
                 pmcAmount,
                 adminSecret
             }) 
@@ -17312,13 +17312,14 @@ async function loginPi() {
       },
       {
         onReadyForServerApproval: async function (paymentId) {
-          const res = await fetch("/api/pi/approve?network=" + currentNetwork, {
+          const res = await fetch("/api/pi-deposit?v=" + Date.now(), { // ĐỔI ĐƯỜNG DẪN MỚI NÈ
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-  paymentId,
-  network: currentNetwork
-})
+              action: "approve", // BÙA CHIA LUỒNG ĐÂY NÈ
+              paymentId,
+              network: currentNetwork
+            })
           });
 
           const data = await res.json();
@@ -17328,14 +17329,15 @@ async function loginPi() {
         },
 
         onReadyForServerCompletion: async function (paymentId, txid) {
-          const res = await fetch("/api/pi/complete?network=" + currentNetwork, {
+          const res = await fetch("/api/pi-deposit?v=" + Date.now(), { // ĐỔI ĐƯỜNG DẪN MỚI NÈ
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-  paymentId,
-  txid,
-  network: currentNetwork
-})
+              action: "complete", // BÙA CHIA LUỒNG ĐÂY NÈ
+              paymentId,
+              txid,
+              network: currentNetwork
+            })
           });
 
           const data = await res.json();
@@ -17348,7 +17350,6 @@ async function loginPi() {
 
           alert(`Nạp thành công ${napSo} Pi test.`);
         },
-
         onCancel: function () {
           alert("Người chơi đã hủy nạp Pi.");
         },
