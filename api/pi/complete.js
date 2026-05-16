@@ -4,100 +4,49 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const body =
-      typeof req.body === "string"
-        ? JSON.parse(req.body || "{}")
-        : (req.body || {});
-
+    const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
     const paymentId = String(body.paymentId || "").trim();
     const txid = String(body.txid || "").trim();
 
-    const PI_API_BASE = String(
-      process.env.PI_API_BASE_URL || "https://api.minepi.com"
-    ).trim();
+    const PI_API_BASE = String(process.env.PI_API_BASE_URL || "https://api.minepi.com").trim();
 
-    // Bắt đầu: Logic tự chọn môi trường Text/Mainnet
-    const network = String(
-  body.network || req.query.network || process.env.PI_NETWORK || "testnet"
-).trim().toLowerCase();
-    
-    let PI_API_KEY = "";
-    if (network === "mainnet") {
-      PI_API_KEY = String(process.env.PI_API_KEY_MAINNET || "").trim();
-    } else {
-      PI_API_KEY = String(process.env.PI_API_KEY_TESTNET || "").trim();
-    }
-    // Kết thúc: Logic tự chọn môi trường
-
-    console.log("COMPLETE HIT", {
-      paymentId,
-      txid,
-      network: network, // In ra xem nó đang chạy môi trường nào
-      hasKey: !!PI_API_KEY,
-      keyPrefix: PI_API_KEY.slice(0, 6)
-    });
+    // 🔥 BẢN FIX BỌC THÉP CHO 2 VERCEL RIÊNG BIỆT:
+    // Cứ bốc bừa 1 trong 3 biến này, có cái nào xài cái đó! Khỏi check môi trường!
+    const PI_API_KEY = String(process.env.PI_API_KEY || process.env.PI_API_KEY_TESTNET || process.env.PI_API_KEY_MAINNET || "").trim();
 
     if (!PI_API_KEY) {
-      return res.status(500).json({
-        ok: false,
-        error: "Thiếu PI_API_KEY / PI_SERVER_API_KEY trên Vercel."
-      });
+      return res.status(500).json({ ok: false, error: "Chưa cài PI_API_KEY trên Vercel này!" });
     }
 
     if (!paymentId || !txid) {
-      return res.status(400).json({
-        ok: false,
-        error: "Thiếu paymentId hoặc txid"
-      });
+      return res.status(400).json({ ok: false, error: "Thiếu paymentId hoặc txid" });
     }
 
-    const piRes = await fetch(
-      `${PI_API_BASE}/v2/payments/${encodeURIComponent(paymentId)}/complete`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Key ${PI_API_KEY}`,
-          "Pi-Api-Key": PI_API_KEY
-        },
-        body: JSON.stringify({ txid })
-      }
-    );
+    const piRes = await fetch(`${PI_API_BASE}/v2/payments/${encodeURIComponent(paymentId)}/complete`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Key ${PI_API_KEY}`,
+        "Pi-Api-Key": PI_API_KEY
+      },
+      body: JSON.stringify({ txid })
+    });
 
     const raw = await piRes.text();
     let data = {};
-    try {
-      data = raw ? JSON.parse(raw) : {};
-    } catch (_) {
-      data = { raw };
-    }
+    try { data = raw ? JSON.parse(raw) : {}; } catch (_) { data = { raw }; }
 
-    const verifyErr = String(
-      data?.verification_error ||
-      data?.error ||
-      data?.message ||
-      ""
-    ).trim();
-
-    console.log("COMPLETE STATUS:", piRes.status);
-    console.log("COMPLETE DATA:", data);
-
-    const treatAsOk =
-      piRes.ok || verifyErr === "payment_already_linked_with_a_tx";
+    const verifyErr = String(data?.verification_error || data?.error || data?.message || "").trim();
+    const treatAsOk = piRes.ok || verifyErr === "payment_already_linked_with_a_tx";
 
     return res.status(treatAsOk ? 200 : piRes.status).json({
       ok: treatAsOk,
       status: piRes.status,
       data,
-      note: !piRes.ok && verifyErr === "payment_already_linked_with_a_tx"
-        ? "Pi báo payment đã linked với tx cũ, tạm coi là đã complete."
-        : ""
+      note: !piRes.ok && verifyErr === "payment_already_linked_with_a_tx" ? "Đã complete từ trước." : ""
     });
   } catch (err) {
     console.error("COMPLETE ERROR:", err);
-    return res.status(500).json({
-      ok: false,
-      error: err?.message || "complete error"
-    });
+    return res.status(500).json({ ok: false, error: err?.message || "complete error" });
   }
 };
