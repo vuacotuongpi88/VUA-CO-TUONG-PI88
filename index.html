@@ -6058,15 +6058,12 @@ margin-bottom: 14px;
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
-    // Tự soi tên miền Vercel đang chạy
-const currentDomain = window.location.hostname;
+    // 🔥 ÉP CHẾT CỨNG VÀO TESTNET LUÔN, KHÔNG DÒ TÊN MIỀN NỮA!
+    const currentNetwork = "testnet";
+    const isSandbox = true;
 
-// NẾU TÊN MIỀN CÓ CHỮ "test" (VD: vua-co-tuong-test.vercel.app) THÌ TỰ ĐỘNG CHẠY TESTNET
-const isSandbox = currentDomain.includes("test"); 
-const currentNetwork = isSandbox ? "testnet" : "mainnet";
-
-Pi.init({ version: "2.0", sandbox: isSandbox });
-console.log("Đang chạy trên môi trường:", currentNetwork.toUpperCase());
+    Pi.init({ version: "2.0", sandbox: isSandbox });
+    console.log("Đang chạy ép cứng trên môi trường:", currentNetwork.toUpperCase());
 </script>
 </head>
 <body>
