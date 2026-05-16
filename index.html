@@ -17286,40 +17286,75 @@ async function startPiDeposit(amount = 1) {
       },
       {
         onReadyForServerApproval: async function (paymentId) {
-          // GỌI ĐÚNG ĐƯỜNG DẪN MỚI
-          const res = await fetch("/api/pi-deposit?v=" + Date.now(), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "approve", // LUỒNG APPROVE
-              paymentId
-            })
-          });
+          try {
+              const res = await fetch("/api/pi-deposit?v=" + Date.now(), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "approve", paymentId })
+              });
 
-          const data = await res.json();
-          if (!res.ok || !data.ok) throw new Error(data?.error || "Approve payment thất bại");
+              if (res.status === 404) {
+                  alert("LỖI 404: Đéo tìm thấy file api/pi-deposit.js trên Vercel. Mày kiểm tra xem đã kéo file đó vào đúng thư mục api chưa?");
+                  throw new Error("404 Not Found");
+              }
+
+              const raw = await res.text();
+              let data;
+              try {
+                  data = JSON.parse(raw);
+              } catch (e) {
+                  alert("LỖI SERVER KHÔNG PHẢI JSON: File API bị sập. Vercel trả về HTML tào lao: " + raw.slice(0, 100));
+                  throw e;
+              }
+
+              if (!res.ok || !data.ok) {
+                  alert("LỖI TỪ VERCEL TRẢ VỀ: " + (data.error || "Không rõ lỗi"));
+                  throw new Error(data?.error || "Approve payment thất bại");
+              }
+          } catch(err) {
+              if (!err.message.includes("404 Not Found") && !(err instanceof SyntaxError)) {
+                  alert("LỖI MẠNG HOẶC API (APPROVE): " + err.message);
+              }
+              throw err; 
+          }
         },
 
         onReadyForServerCompletion: async function (paymentId, txid) {
-          // GỌI ĐÚNG ĐƯỜNG DẪN MỚI VÀ TRUYỀN WALLETKEY ĐỂ CỘNG TIỀN
-          const res = await fetch("/api/pi-deposit?v=" + Date.now(), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "complete", // LUỒNG COMPLETE
-              paymentId,
-              txid,
-              walletKey,
-              amount: napSo
-            })
-          });
+          try {
+              const res = await fetch("/api/pi-deposit?v=" + Date.now(), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  action: "complete",
+                  paymentId,
+                  txid,
+                  walletKey,
+                  amount: napSo
+                })
+              });
 
-          const data = await res.json();
-          if (!res.ok || !data.ok) throw new Error(data?.error || "Complete payment thất bại");
+              const raw = await res.text();
+              let data;
+              try {
+                  data = JSON.parse(raw);
+              } catch (e) {
+                  alert("LỖI SERVER (COMPLETE): Vercel sập. " + raw.slice(0, 100));
+                  throw e;
+              }
 
-          // Nạp xong ép client kéo số dư từ server về
-          await loadWalletBalance();
-          alert(`Nạp thành công ${napSo} Pi test.`);
+              if (!res.ok || !data.ok) {
+                  alert("LỖI TỪ VERCEL (COMPLETE): " + (data.error || "Unknown"));
+                  throw new Error(data?.error || "Complete payment thất bại");
+              }
+
+              await loadWalletBalance();
+              alert(`Nạp thành công ${napSo} Pi test.`);
+          } catch(err) {
+              if (!(err instanceof SyntaxError)) {
+                  alert("LỖI COMPLETE: " + err.message);
+              }
+              throw err;
+          }
         },
 
         onCancel: function () {
@@ -17338,7 +17373,7 @@ async function startPiDeposit(amount = 1) {
             alert("Đang có payment Pi cũ chưa xử lý xong.");
             return;
           }
-          alert("Nạp Pi lỗi: " + (msg || "Không rõ lỗi"));
+          alert("Nạp Pi bị lỗi do App Pi Network: " + (msg || "Không rõ lỗi"));
         }
       }
     );
