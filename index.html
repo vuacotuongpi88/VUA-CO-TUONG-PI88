@@ -17172,78 +17172,7 @@ function hoaTran() {
 }
 let piAuth = null;
 
-async function onIncompletePaymentFound(payment) {
-  try {
-    const paymentId = String(payment?.identifier || "").trim();
-    const txid = String(payment?.transaction?.txid || "").trim();
 
-    if (!paymentId) return false;
-
-    alert(
-      "Phát hiện payment Pi đang treo.\n" +
-      "paymentId: " + paymentId + "\n" +
-      "txid: " + (txid || "chưa có")
-    );
-
-    if (!txid) {
-      window.__PI_PENDING_PAYMENT_BLOCKED__ = true;
-      window.__PI_PENDING_PAYMENT_MSG__ =
-        "Đang có payment Pi treo chưa có txid. Dev cần xử lý phía server trước.";
-      alert(window.__PI_PENDING_PAYMENT_MSG__);
-      return true;
-    }
-
-    const res = await fetch(
-  "/api/pi/complete?v=" + Date.now() + "&network=" + currentNetwork,
-  {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      paymentId,
-      txid,
-      network: currentNetwork
-    })
-  }
-);
-
-    const raw = await res.text();
-    let data = {};
-    try {
-      data = raw ? JSON.parse(raw) : {};
-    } catch (_) {
-      data = { raw };
-    }
-
-    console.log("HTML_INCOMPLETE_PAYMENT_COMPLETE", {
-      paymentId,
-      txid,
-      status: res.status,
-      data
-    });
-
-    if (!res.ok || !data?.ok || data?.note) {
-      window.__PI_PENDING_PAYMENT_BLOCKED__ = true;
-      window.__PI_PENDING_PAYMENT_MSG__ =
-        data?.note ||
-        data?.error ||
-        "Payment Pi cũ chưa được xử lý sạch ở server.";
-      alert(window.__PI_PENDING_PAYMENT_MSG__);
-      return true;
-    }
-
-    window.__PI_PENDING_PAYMENT_BLOCKED__ = false;
-    window.__PI_PENDING_PAYMENT_MSG__ = "";
-    alert("Payment cũ đã complete thật. Giờ mới thử nạp lại.");
-    return true;
-  } catch (e) {
-    console.error("Xử lý incomplete payment lỗi:", e);
-    window.__PI_PENDING_PAYMENT_BLOCKED__ = true;
-    window.__PI_PENDING_PAYMENT_MSG__ =
-      e?.message || "Không xử lý được payment Pi đang treo.";
-    alert(window.__PI_PENDING_PAYMENT_MSG__);
-    return true;
-  }
-}
 async function loginPi() {
     try {
         // BÙA BẢO VỆ: Gọi hàm này để chắc chắn Pi đã "init" 100% rồi mới đi tiếp
@@ -17270,8 +17199,59 @@ async function loginPi() {
     }
 }
 
+async function onIncompletePaymentFound(payment) {
+  try {
+    const paymentId = String(payment?.identifier || "").trim();
+    const txid = String(payment?.transaction?.txid || "").trim();
+    const amount = Number(payment?.amount || 0);
+    const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "";
 
- async function startPiDeposit(amount = 1) {
+    if (!paymentId) return false;
+
+    if (!txid) {
+      window.__PI_PENDING_PAYMENT_BLOCKED__ = true;
+      window.__PI_PENDING_PAYMENT_MSG__ = "Đang có payment Pi treo chưa có txid. Dev cần xử lý phía server trước.";
+      alert(window.__PI_PENDING_PAYMENT_MSG__);
+      return true;
+    }
+
+    // GỌI ĐÚNG ĐƯỜNG DẪN MỚI
+    const res = await fetch("/api/pi-deposit?v=" + Date.now(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "complete", // GỌI LUỒNG COMPLETE
+        paymentId,
+        txid,
+        walletKey,
+        amount
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data?.ok) {
+      window.__PI_PENDING_PAYMENT_BLOCKED__ = true;
+      window.__PI_PENDING_PAYMENT_MSG__ = data?.error || "Payment Pi cũ chưa được xử lý sạch ở server.";
+      alert(window.__PI_PENDING_PAYMENT_MSG__);
+      return true;
+    }
+
+    window.__PI_PENDING_PAYMENT_BLOCKED__ = false;
+    window.__PI_PENDING_PAYMENT_MSG__ = "";
+    alert("Đã gỡ kẹt giao dịch cũ thành công! Giờ có thể nạp lại.");
+    await loadWalletBalance(); // Load lại tiền vì nó vừa được cứu
+    return true;
+  } catch (e) {
+    console.error("Xử lý incomplete payment lỗi:", e);
+    window.__PI_PENDING_PAYMENT_BLOCKED__ = true;
+    window.__PI_PENDING_PAYMENT_MSG__ = e?.message || "Không xử lý được payment Pi đang treo.";
+    alert(window.__PI_PENDING_PAYMENT_MSG__);
+    return true;
+  }
+}
+
+async function startPiDeposit(amount = 1) {
   try {
     window.__PI_PENDING_PAYMENT_BLOCKED__ = false;
     window.__PI_PENDING_PAYMENT_MSG__ = "";
@@ -17281,20 +17261,18 @@ async function loginPi() {
       return;
     }
 
-    // Ép re-auth bằng payments scope trước khi createPayment
     piAuth = null;
     const auth = await loginPi();
     if (!auth) return;
 
     if (window.__PI_PENDING_PAYMENT_BLOCKED__) {
-      alert(
-        window.__PI_PENDING_PAYMENT_MSG__ ||
-        "Đang có payment Pi cũ chưa xử lý xong. Chờ dev complete xong rồi thử lại."
-      );
+      alert(window.__PI_PENDING_PAYMENT_MSG__ || "Đang có payment Pi cũ chưa xử lý xong.");
       return;
     }
 
     const napSo = Number(amount);
+    const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "";
+
     if (!Number.isFinite(napSo) || napSo <= 0) {
       alert("Số Pi nạp không hợp lệ.");
       return;
@@ -17304,52 +17282,46 @@ async function loginPi() {
       {
         amount: napSo,
         memo: `Nạp ${napSo} Pi vào game`,
-        metadata: {
-          type: "deposit",
-          amount: napSo,
-          time: Date.now()
-        }
+        metadata: { type: "deposit", amount: napSo, time: Date.now() }
       },
       {
         onReadyForServerApproval: async function (paymentId) {
-          const res = await fetch("/api/pi-deposit?v=" + Date.now(), { // ĐỔI ĐƯỜNG DẪN MỚI NÈ
+          // GỌI ĐÚNG ĐƯỜNG DẪN MỚI
+          const res = await fetch("/api/pi-deposit?v=" + Date.now(), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              action: "approve", // BÙA CHIA LUỒNG ĐÂY NÈ
-              paymentId,
-              network: currentNetwork
+              action: "approve", // LUỒNG APPROVE
+              paymentId
             })
           });
 
           const data = await res.json();
-          if (!res.ok || !data.ok) {
-            throw new Error(data?.error || "Approve payment thất bại");
-          }
+          if (!res.ok || !data.ok) throw new Error(data?.error || "Approve payment thất bại");
         },
 
         onReadyForServerCompletion: async function (paymentId, txid) {
-          const res = await fetch("/api/pi-deposit?v=" + Date.now(), { // ĐỔI ĐƯỜNG DẪN MỚI NÈ
+          // GỌI ĐÚNG ĐƯỜNG DẪN MỚI VÀ TRUYỀN WALLETKEY ĐỂ CỘNG TIỀN
+          const res = await fetch("/api/pi-deposit?v=" + Date.now(), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              action: "complete", // BÙA CHIA LUỒNG ĐÂY NÈ
+              action: "complete", // LUỒNG COMPLETE
               paymentId,
               txid,
-              network: currentNetwork
+              walletKey,
+              amount: napSo
             })
           });
 
           const data = await res.json();
-          if (!res.ok || !data.ok) {
-            throw new Error(data?.error || "Complete payment thất bại");
-          }
+          if (!res.ok || !data.ok) throw new Error(data?.error || "Complete payment thất bại");
 
-          const currentBalance = getPiBalance();
-          setPiBalance(currentBalance + napSo);
-
+          // Nạp xong ép client kéo số dư từ server về
+          await loadWalletBalance();
           alert(`Nạp thành công ${napSo} Pi test.`);
         },
+
         onCancel: function () {
           alert("Người chơi đã hủy nạp Pi.");
         },
@@ -17359,15 +17331,13 @@ async function loginPi() {
           const msg = String(error?.message || error || "");
 
           if (/payments scope/i.test(msg)) {
-            alert("Phiên Pi hiện tại chưa có quyền payments. Tao sẽ yêu cầu đăng nhập lại khi bấm nạp.");
+            alert("Phiên Pi hiện tại chưa có quyền payments. Vui lòng thử lại.");
             return;
           }
-
           if (/pending payment|incomplete payment/i.test(msg)) {
-            alert("Đang có payment Pi cũ chưa xử lý xong. Không tạo payment mới nữa.");
+            alert("Đang có payment Pi cũ chưa xử lý xong.");
             return;
           }
-
           alert("Nạp Pi lỗi: " + (msg || "Không rõ lỗi"));
         }
       }
