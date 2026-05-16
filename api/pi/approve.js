@@ -16,7 +16,9 @@ module.exports = async function handler(req, res) {
     ).trim();
 
     // Bắt đầu: Logic tự chọn môi trường Text/Mainnet
-    const network = req.query.network || "mainnet"; 
+    const network = String(
+  body.network || req.query.network || process.env.PI_NETWORK || "testnet"
+).trim().toLowerCase();
     
     let PI_API_KEY = "";
     if (network === "mainnet") {
