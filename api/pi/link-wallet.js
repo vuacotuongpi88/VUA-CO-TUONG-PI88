@@ -1,11 +1,5 @@
 const { getDatabase } = require("firebase-admin/database");
-
-let adminBundle;
-try {
-  adminBundle = require("./_firebaseAdmin.js");
-} catch (e1) {
-  adminBundle = require("../_firebaseAdmin.js");
-}
+const adminBundle = require("../firebaseAdmin.js");
 
 function safeKey(value = "") {
   return String(value || "").trim().replace(/[.#$\[\]\/]/g, "_");
