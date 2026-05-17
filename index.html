@@ -14154,11 +14154,35 @@ async function submitExchangeToPMC() {
         return;
     }
 
-    setPiBalance(piBalance - piAmount);
-    setPmcBalance(getPmcBalance() + pmcAdd);
+    // 1. Tính toán trước số tiền mới
+    const newPi = piBalance - piAmount;
+    const newPmc = getPmcBalance() + pmcAdd;
 
-    alert("Đổi thành công " + piAmount.toFixed(2) + " π → " + formatPMC(pmcAdd) + " PMC");
-    closeExchangeModal();
+    try {
+        // 2. 🔥 ÉP FIREBASE GHI CÙNG LÚC 2 SỐ VÀO 1 LỆNH DUY NHẤT 🔥
+        await walletRef().update({
+            balance: newPi,
+            piBalance: newPi, // Đề phòng code mày gọi nhầm biến
+            pmcBalance: newPmc,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+
+        // 3. CHỈ KHI FIREBASE BÁO "OK", TAO MỚI CẬP NHẬT GIAO DIỆN VÀ CACHE
+        currentWalletBalance = newPi;
+        currentPmcBalance = newPmc;
+        localStorage.setItem(getBalanceCacheKey(), String(newPi));
+        localStorage.setItem(getPmcCacheKey(), String(newPmc));
+        
+        updateBalanceUI(newPi);
+        updatePmcUI(newPmc);
+
+        alert("✅ Đổi thành công " + piAmount.toFixed(2) + " π → " + formatPMC(pmcAdd));
+        closeExchangeModal();
+        
+    } catch (error) {
+        console.error("Lỗi đồng bộ Firebase khi đổi tiền:", error);
+        alert("🚨 Lỗi mạng! Chưa đổi được tiền, số dư vẫn giữ nguyên.");
+    }
 }
 const PMC_PER_PI = 500;
 const MIN_PMC_TO_PI = 0;
