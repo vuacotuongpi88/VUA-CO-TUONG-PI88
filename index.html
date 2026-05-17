@@ -11304,10 +11304,10 @@ function updatePmcUI(amount) {
 }
 
 function formatPMC(amount) {
-    // Hiện ít nhất 1 số lẻ, tối đa 2 số lẻ để dễ nhìn
-    return Math.max(0, Number(amount) || 0).toLocaleString("vi-VN", { 
-        minimumFractionDigits: 1, 
-        maximumFractionDigits: 2 
+    // Hiện nhiều số lẻ để soi quỹ / phí PMC nhỏ không bị mất dấu.
+    return Math.max(0, Number(amount) || 0).toLocaleString("vi-VN", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 6
     }) + " PMC";
 }
 
@@ -14336,7 +14336,7 @@ async function refreshAdminFeeTreasury() {
 
     if (balanceEl) {
         balanceEl.innerHTML = `
-            <b style="color:#f4c542; font-size:16px;">SỐ DƯ QUỸ: ${pmcMaster.toLocaleString('vi-VN', {minimumFractionDigits: 1, maximumFractionDigits: 2})} PMC</b><br>
+            <b style="color:#f4c542; font-size:16px;">SỐ DƯ QUỸ: ${pmcMaster.toLocaleString('vi-VN', {minimumFractionDigits: 6, maximumFractionDigits: 6})} PMC</b><br>
             <span style="font-size:11px; color:#7dffb3;">Pi đổi được sẽ chuyển vào ví cá nhân: ${myPi.toFixed(2)} Pi</span>
         `;
     }
@@ -17666,9 +17666,10 @@ document.addEventListener("click", function(e) {
   };
 
   function formatPmc(value) {
-    return Math.max(0, Number(value) || 0).toLocaleString('vi-VN', { 
-        minimumFractionDigits: 1, 
-        maximumFractionDigits: 2 
+    // Riêng bảng nhiệm vụ: cố định 6 số lẻ để thấy cả quỹ rất nhỏ.
+    return Math.max(0, Number(value) || 0).toLocaleString('vi-VN', {
+        minimumFractionDigits: 6,
+        maximumFractionDigits: 6
     }) + ' PMC';
   }
 
@@ -17717,12 +17718,12 @@ document.addEventListener("click", function(e) {
         <div class="mission-summary-grid">
           <div class="mission-summary-card">
   <strong>Quỹ nhiệm vụ hiện tại</strong>
-  <div class="mission-summary-value" id="mission-pool-value">0 PMC</div>
+  <div class="mission-summary-value" id="mission-pool-value">0,000000 PMC</div>
   <div class="mission-summary-note">Hoàn thành nhiệm vụ để mở khóa thưởng ngay.</div>
 </div>
           <div class="mission-summary-card">
             <strong>Có thể nhận ngay</strong>
-            <div class="mission-summary-value" id="mission-claimable-value">0 PMC</div>
+            <div class="mission-summary-value" id="mission-claimable-value">0,000000 PMC</div>
             <div class="mission-summary-note" id="mission-claimable-note">Cày thêm chút nữa là nút nhận sáng lên.</div>
           </div>
           <div class="mission-summary-card">

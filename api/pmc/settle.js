@@ -1,30 +1,45 @@
 const { getDatabase } = require("firebase-admin/database");
-const { getAuth } = require("firebase-admin/auth");
 
 let adminBundle;
 try {
-  // Nếu _firebaseAdmin.js nằm cùng thư mục api/pmc
+  // settle.js đang nằm trong api/pmc nên ưu tiên lấy _firebaseAdmin cùng thư mục
   adminBundle = require("./_firebaseAdmin.js");
 } catch (e1) {
-  // Nếu _firebaseAdmin.js nằm ở api/
+  // fallback nếu sau này mày dời _firebaseAdmin ra api/
   adminBundle = require("../_firebaseAdmin.js");
 }
 
-const adminApp = adminBundle.app || adminBundle;
-
 const LEVEL_MAX = 160;
-const MATCH_FEE_RATE = 0.02; // 2% phí hệ thống. Muốn không lấy phí thì đổi thành 0.
+
+// LUẬT CHIA PHÍ VÁN PMC
+// Ví dụ stake 50 PMC mỗi bên => grossPot = 100
+// feePmc = 20% tiền lời/stake = 50 * 0.20 = 10
+// winnerReceivePmc = 100 - 10 = 90
+// adminMasterSharePmc = 10 * 80% = 8
+// missionPoolSharePmc = 10 * 20% = 2
+const MATCH_FEE_RATE_ON_STAKE = 0.20;
+const MATCH_FEE_ADMIN_SHARE_RATE = 0.80;
+const MATCH_FEE_MISSION_SHARE_RATE = 0.20;
+const ADMIN_WALLET_KEY = "pi_admin_master";
+const PMC_DECIMALS = 6;
 
 function safeWalletKey(walletKey) {
-  return String(walletKey || "").trim().replace(/[.#$\[\]\/]/g, "_");
+  return String(walletKey || "").replace(/[.#$\[\]\/]/g, "_");
 }
 
-function safeRoomKey(value) {
-  return String(value || "").trim().replace(/[.#$\[\]\/]/g, "_");
+function normalizePmc(value) {
+  const n = Number(value || 0) || 0;
+  const pow = Math.pow(10, PMC_DECIMALS);
+  return Math.round(n * pow) / pow;
 }
 
 function getLevelXpNeedFromLevel(level) {
   const lv = Math.max(1, Math.min(LEVEL_MAX - 1, Math.floor(Number(level || 1))));
+
+  /*
+    Lv.1 -> Lv.2 cần 100 EXP.
+    Càng lên cao càng khó theo cấp số nhân.
+  */
   return Math.floor(100 * Math.pow(1.075, lv - 1));
 }
 
@@ -124,6 +139,8 @@ function getTodayKeyVN() {
 function getRepeatAdjustedXpAbs(pairCount) {
   const n = Math.max(1, Number(pairCount || 1) || 1);
 
+  // Thắng/thua người mới: ±30 EXP.
+  // Gặp lại cùng người trong cùng ngày thì giảm dần để chống farm.
   if (n === 1) return 30;
   if (n === 2) return 24;
   if (n === 3) return 20;
@@ -136,33 +153,6 @@ function getRepeatAdjustedXpAbs(pairCount) {
   return 1;
 }
 
-function runTx(ref, updater) {
-  return new Promise((resolve, reject) => {
-    ref.transaction(
-      updater,
-      (error, committed, snapshot) => {
-        if (error) return reject(error);
-        resolve({ committed, snapshot });
-      },
-      false
-    );
-  });
-}
-
-async function verifyFirebaseUser(req) {
-  const token = String(req.headers.authorization || "")
-    .replace(/^Bearer\s+/i, "")
-    .trim();
-
-  if (!token) {
-    const err = new Error("Thiếu Firebase token");
-    err.statusCode = 401;
-    throw err;
-  }
-
-  return await getAuth(adminApp).verifyIdToken(token);
-}
-
 async function reserveServerLevelPairCount(db, walletKey, opponentKey, matchKey) {
   const todayKey = getTodayKeyVN();
   const safeMe = safeWalletKey(walletKey);
@@ -173,7 +163,7 @@ async function reserveServerLevelPairCount(db, walletKey, opponentKey, matchKey)
     `levelPairRoomClaimsV3/${safeMe}/${todayKey}/${safeOpp}/${safeMatch}`
   );
 
-  const roomClaimTx = await runTx(roomClaimRef, (current) => {
+  const roomClaimTx = await roomClaimRef.transaction(current => {
     if (current && current.done) return;
 
     return {
@@ -200,7 +190,7 @@ async function reserveServerLevelPairCount(db, walletKey, opponentKey, matchKey)
     `levelPairDailyCountsV3/${safeMe}/${todayKey}/${safeOpp}`
   );
 
-  await runTx(countRef, (current) => {
+  await countRef.transaction(current => {
     const val = current && typeof current === "object" ? current : {};
     const count = Math.max(0, Number(val.count || 0) || 0);
 
@@ -225,7 +215,7 @@ async function awardOnePlayerExp(db, roomId, matchKey, walletKey, opponentKey, r
 
   const claimRef = db.ref(`levelMatchClaimsV3/${safeKey}/${safeRoom}`);
 
-  const claimTx = await runTx(claimRef, (current) => {
+  const claimTx = await claimRef.transaction(current => {
     if (current && current.done) return;
 
     return {
@@ -238,7 +228,6 @@ async function awardOnePlayerExp(db, roomId, matchKey, walletKey, opponentKey, r
 
   if (!claimTx.committed) {
     const snap = await db.ref(`wallets/${safeKey}/levelMeta`).once("value");
-
     return {
       ok: true,
       skipped: true,
@@ -248,13 +237,7 @@ async function awardOnePlayerExp(db, roomId, matchKey, walletKey, opponentKey, r
     };
   }
 
-  const pair = await reserveServerLevelPairCount(
-    db,
-    walletKey,
-    opponentKey,
-    matchKey || roomId
-  );
-
+  const pair = await reserveServerLevelPairCount(db, walletKey, opponentKey, matchKey || roomId);
   const absXp = getRepeatAdjustedXpAbs(pair.count);
   const xpDelta = resultType === "win" ? absXp : -absXp;
 
@@ -262,7 +245,7 @@ async function awardOnePlayerExp(db, roomId, matchKey, walletKey, opponentKey, r
 
   const levelRef = db.ref(`wallets/${safeKey}/levelMeta`);
 
-  await runTx(levelRef, (current) => {
+  await levelRef.transaction(current => {
     const before = buildLevelMeta(current || {});
     const maxXp = SERVER_LEVEL_TABLE[SERVER_LEVEL_TABLE.length - 1].xp;
     const nextXp = Math.max(0, Math.min(maxXp, before.xp + xpDelta));
@@ -330,8 +313,13 @@ async function awardMatchExpServer(db, roomId, room) {
 
   let winnerSide = "";
 
-  if (winnerRaw === "do" || winnerRaw === "red") winnerSide = "do";
-  if (winnerRaw === "den" || winnerRaw === "black") winnerSide = "den";
+  if (winnerRaw === "do" || winnerRaw === "red") {
+    winnerSide = "do";
+  }
+
+  if (winnerRaw === "den" || winnerRaw === "black") {
+    winnerSide = "den";
+  }
 
   if (!winnerSide) {
     return {
@@ -348,6 +336,7 @@ async function awardMatchExpServer(db, roomId, room) {
     awardOnePlayerExp(db, roomId, matchKey, denWalletKey, doWalletKey, denResult)
   ]);
 
+  // Ghi luôn vào room để UI trong trận thấy levelMeta mới khi renderPlayersFromRoom chạy lại.
   const roomUpdate = {};
 
   if (doExp?.levelMeta) {
@@ -370,134 +359,67 @@ async function awardMatchExpServer(db, roomId, room) {
 }
 
 async function adjustPmcWalletByKey(db, walletKey, delta, profile = {}) {
-  const safeKey = safeWalletKey(walletKey);
-  const ref = db.ref("wallets/" + safeKey);
+  const ref = db.ref("wallets/" + safeWalletKey(walletKey));
 
-  const preSnap = await ref.once("value");
-  const preWallet = preSnap.val() || {};
+  const result = await ref.transaction(current => {
+    const safeCurrent = current && typeof current === "object" ? current : {};
 
-  let nextWallet = null;
+    const currentPi = Number(safeCurrent.balance ?? 0) || 0;
+    const currentPmc = Number(safeCurrent.pmcBalance ?? 0) || 0;
+    const nextPmc = normalizePmc(currentPmc + (Number(delta || 0) || 0));
 
-  const result = await runTx(ref, (current) => {
-    const safeCurrent =
-      current && typeof current === "object"
-        ? current
-        : preWallet && typeof preWallet === "object"
-          ? { ...preWallet }
-          : {};
+    if (nextPmc < -0.000001) return;
 
-    const currentPi = Number(safeCurrent.balance ?? safeCurrent.piBalance ?? 0) || 0;
-    const currentPmc = Math.floor(Number(safeCurrent.pmcBalance ?? 0) || 0);
-    const nextPmc = currentPmc + Math.floor(Number(delta || 0));
-
-    if (nextPmc < 0) return;
-
-    nextWallet = {
+    return {
       ...safeCurrent,
       balance: currentPi,
-      piBalance: Number(safeCurrent.piBalance ?? currentPi) || 0,
-      pmcBalance: nextPmc,
+      pmcBalance: Math.max(0, nextPmc),
       updatedAt: Date.now(),
       name: profile.name || safeCurrent.name || "Người chơi",
       photo: profile.photo || safeCurrent.photo || "images/do_tuong.png"
     };
-
-    return nextWallet;
   });
 
   if (!result.committed) return null;
-
-  return result.snapshot?.val() || nextWallet || null;
+  return result.snapshot?.val() || null;
 }
 
-function getStakeContribution(lock, stake, fallbackToStake) {
-  if (!lock && fallbackToStake) return stake;
-  if (!lock || typeof lock !== "object") return 0;
-  if (!lock.done && !lock.walletKey) return 0;
-  if (lock.isTicketUsed) return 0;
-
-  const lockedStake = Math.max(0, Math.floor(Number(lock.stake || stake || 0) || 0));
-  return lockedStake;
-}
-
-function getPlayerProfile(player, fallbackName) {
-  return {
-    name:
-      player.name ||
-      player.usernameNorm ||
-      player.username ||
-      player.walletKey ||
-      fallbackName,
-    photo: player.photo || "images/do_tuong.png"
-  };
-}
-
-async function writeRoomBalances(db, roomId, doWalletKey, denWalletKey) {
-  const [doWalletAfterSnap, denWalletAfterSnap] = await Promise.all([
-    db.ref("wallets/" + safeWalletKey(doWalletKey)).once("value"),
-    db.ref("wallets/" + safeWalletKey(denWalletKey)).once("value")
-  ]);
-
-  const doWalletAfter = doWalletAfterSnap.val() || {};
-  const denWalletAfter = denWalletAfterSnap.val() || {};
-
-  const doPmcBalanceAfter = Math.floor(Number(doWalletAfter.pmcBalance || 0) || 0);
-  const denPmcBalanceAfter = Math.floor(Number(denWalletAfter.pmcBalance || 0) || 0);
-
-  await db.ref().update({
-    [`matches/${roomId}/players/do/pmcBalance`]: doPmcBalanceAfter,
-    [`matches/${roomId}/players/den/pmcBalance`]: denPmcBalanceAfter,
-    [`matches/${roomId}/players/do/balance`]: Number(doWalletAfter.balance || 0) || 0,
-    [`matches/${roomId}/players/den/balance`]: Number(denWalletAfter.balance || 0) || 0
-  });
-
-  return {
-    doPmcBalanceAfter,
-    denPmcBalanceAfter,
-    doWalletAfter,
-    denWalletAfter
-  };
-}
-
-async function repairOldSettledRoomIfNeeded(db, roomId, room, existedSettlement) {
-  const winnerRaw = String(room.winner || "").trim().toLowerCase();
-
-  let expResult = existedSettlement.expResult || null;
-
-  if (!expResult && winnerRaw && winnerRaw !== "hoa" && winnerRaw !== "draw") {
-    try {
-      expResult = await awardMatchExpServer(db, roomId, room);
-    } catch (expErr) {
-      expResult = {
-        ok: false,
-        error: expErr?.message || "exp_error"
-      };
-    }
+async function incrementMissionPool(db, amount, roomId) {
+  const n = normalizePmc(amount);
+  if (n <= 0) {
+    return {
+      missionPoolPmc: null,
+      added: 0
+    };
   }
 
-  const patch = {
-    paid: true,
-    done: true,
-    expResult,
-    repairedPaidAt: Date.now(),
-    route: existedSettlement.route || "repair-old-settlement-paid-flag"
-  };
+  const ref = db.ref("treasury/missionPoolPmc");
+  let nextValue = null;
 
-  if (!existedSettlement.paidAt) patch.paidAt = Date.now();
+  const tx = await ref.transaction(current => {
+    nextValue = normalizePmc((Number(current || 0) || 0) + n);
+    return nextValue;
+  });
 
-  await db.ref(`matches/${roomId}/settlement`).update(patch);
+  await db.ref("treasury/updatedAt").set(Date.now()).catch(() => {});
+
+  await db.ref("missionPoolTransactions").push({
+    roomId,
+    type: "match_fee_mission_share",
+    amountPmc: n,
+    missionPoolPmc: tx.snapshot?.val() ?? nextValue,
+    source: "pmc_settle_fee20",
+    createdAt: Date.now(),
+    status: "done"
+  }).catch(() => {});
 
   return {
-    ok: true,
-    alreadySettled: true,
-    repaired: true,
-    expResult
+    missionPoolPmc: tx.snapshot?.val() ?? nextValue,
+    added: n
   };
 }
 
 module.exports = async function handler(req, res) {
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
-
   if (req.method !== "POST") {
     return res.status(405).json({
       ok: false,
@@ -511,10 +433,10 @@ module.exports = async function handler(req, res) {
         ? JSON.parse(req.body || "{}")
         : (req.body || {});
 
-    // Giữ route mua skin cũ của mày.
     if (body.action === "avatar-skin-buy") {
       try {
         const { handleAvatarSkinBuy } = require("../../lib/avatar-skin-buy");
+
         const result = await handleAvatarSkinBuy(body, req);
         return res.status(result.status || 200).json(result.json);
       } catch (err) {
@@ -529,10 +451,7 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    const decoded = await verifyFirebaseUser(req);
-    const uid = decoded.uid;
-
-    const roomId = safeRoomKey(body.roomId);
+    const roomId = String(body.roomId || "").trim();
 
     if (!roomId) {
       return res.status(400).json({
@@ -541,36 +460,18 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const db = getDatabase(adminApp);
+    const db = getDatabase(adminBundle.app || adminBundle);
     const roomRef = db.ref(`matches/${roomId}`);
     const settlementRef = db.ref(`matches/${roomId}/settlement`);
 
     const roomSnap = await roomRef.once("value");
     const room = roomSnap.val() || {};
 
-    if (!room || !room.players) {
-      return res.status(404).json({
-        ok: false,
-        error: "room_not_found"
-      });
-    }
-
     const winnerRaw = String(room.winner || "").trim().toLowerCase();
     const stake = Math.max(0, Math.floor(Number(room.stakePMC || 0) || 0));
 
     const doPlayer = room.players?.do || {};
     const denPlayer = room.players?.den || {};
-
-    const isPlayer =
-      String(doPlayer.uid || "") === String(uid) ||
-      String(denPlayer.uid || "") === String(uid);
-
-    if (!isPlayer) {
-      return res.status(403).json({
-        ok: false,
-        error: "not_room_player"
-      });
-    }
 
     const doWalletKey = String(doPlayer.walletKey || doPlayer.uid || "").trim();
     const denWalletKey = String(denPlayer.walletKey || denPlayer.uid || "").trim();
@@ -589,25 +490,16 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const doLock = room?.stakeLocked?.do || null;
-    const denLock = room?.stakeLocked?.den || null;
-
-    // Nếu phòng cũ chưa có stakeLocked thì fallback stake*2 để không chết phòng cũ.
-    const fallbackOldRoom = !doLock && !denLock && stake > 0;
-
-    const doContribution = getStakeContribution(doLock, stake, fallbackOldRoom);
-    const denContribution = getStakeContribution(denLock, stake, fallbackOldRoom);
-    const grossPot = Math.max(0, doContribution + denContribution);
-
-    // Nếu không có tiền cược, vẫn cộng/trừ EXP rồi đánh dấu paid để client dọn phòng.
-    if (!grossPot || !stake) {
+    // CHỐT LỖI: EXP không được phụ thuộc stakePMC.
+    // Nếu stake bị thiếu / 0 / lỗi thì vẫn cộng-trừ EXP, chỉ bỏ qua chia PMC.
+    if (!stake) {
       let expResult = null;
 
       try {
         expResult = await awardMatchExpServer(db, roomId, room);
-        console.log("MATCH_EXP_ONLY_OK", expResult);
+        console.log("MATCH EXP ONLY OK =", expResult);
       } catch (expErr) {
-        console.error("MATCH_EXP_ONLY_ERROR", expErr);
+        console.error("MATCH EXP ONLY ERROR =", expErr);
         expResult = {
           ok: false,
           error: expErr?.message || "exp_error"
@@ -617,36 +509,30 @@ module.exports = async function handler(req, res) {
       await settlementRef.update({
         done: true,
         paid: true,
-        route: "exp-only-no-pot",
+        paidAt: Date.now(),
+        route: "exp-only-invalid-stake",
         type: "exp_only",
         stakePMC: stake,
-        grossPot,
-        doContribution,
-        denContribution,
         expResult,
-        paidAt: Date.now(),
         at: Date.now()
       });
 
       return res.status(200).json({
         ok: true,
         type: "exp_only",
-        warning: "no_pot_but_exp_awarded",
+        warning: "invalid_stakePMC_but_exp_awarded",
         expResult
       });
     }
 
     // Khóa settle để không chia tiền / cộng EXP 2 lần.
-    const lockResult = await runTx(settlementRef, (current) => {
-      if (current?.done === true || current?.paid === true) return;
-      if (current?.locking === true && current?.lockingAt && Date.now() - Number(current.lockingAt) < 30000) return;
+    const lockResult = await settlementRef.transaction(current => {
+      if (current?.done || current?.paid || current?.locking) return;
 
       return {
         locking: true,
         done: false,
         paid: false,
-        lockingBy: uid,
-        lockingAt: Date.now(),
         at: Date.now()
       };
     });
@@ -654,14 +540,9 @@ module.exports = async function handler(req, res) {
     if (!lockResult.committed) {
       const existedSnap = await settlementRef.once("value");
       const existed = existedSnap.val() || {};
-
-      if (existed.done === true && existed.paid !== true) {
-        const repaired = await repairOldSettledRoomIfNeeded(db, roomId, room, existed);
-        return res.status(200).json(repaired);
-      }
-
       let expResult = existed.expResult || null;
 
+      // Nếu trước đó PMC đã chốt nhưng thiếu EXP, bù EXP lại.
       if (!expResult && winnerRaw !== "hoa" && winnerRaw !== "draw") {
         try {
           expResult = await awardMatchExpServer(db, roomId, room);
@@ -682,98 +563,79 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({
         ok: true,
         alreadySettled: true,
-        settlement: existed,
         expResult
       });
     }
 
-    // HÒA: hoàn đúng phần ai đã nộp PMC. Vé miễn phí thì không hoàn PMC.
+    // HÒA => hoàn đủ, không ăn phí, không cộng/trừ EXP.
     if (winnerRaw === "hoa" || winnerRaw === "draw") {
-      const doAfter =
-        doContribution > 0
-          ? await adjustPmcWalletByKey(db, doWalletKey, doContribution, getPlayerProfile(doPlayer, "Người chơi đỏ"))
-          : null;
+      const doAfter = await adjustPmcWalletByKey(db, doWalletKey, stake, {
+        name: doPlayer.name || doPlayer.usernameNorm || doPlayer.username || "Người chơi đỏ",
+        photo: doPlayer.photo || "images/do_tuong.png"
+      });
 
-      const denAfter =
-        denContribution > 0
-          ? await adjustPmcWalletByKey(db, denWalletKey, denContribution, getPlayerProfile(denPlayer, "Người chơi đen"))
-          : null;
+      const denAfter = await adjustPmcWalletByKey(db, denWalletKey, stake, {
+        name: denPlayer.name || denPlayer.usernameNorm || denPlayer.username || "Người chơi đen",
+        photo: denPlayer.photo || "images/do_tuong.png"
+      });
 
-      const balances = await writeRoomBalances(db, roomId, doWalletKey, denWalletKey);
+      await db.ref().update({
+        [`matches/${roomId}/players/do/pmcBalance`]: normalizePmc(Number(doAfter?.pmcBalance || 0) || 0),
+        [`matches/${roomId}/players/den/pmcBalance`]: normalizePmc(Number(denAfter?.pmcBalance || 0) || 0),
+        [`matches/${roomId}/players/do/balance`]: Number(doAfter?.balance || 0) || 0,
+        [`matches/${roomId}/players/den/balance`]: Number(denAfter?.balance || 0) || 0
+      });
 
-      const settlementData = {
+      await settlementRef.set({
         done: true,
         paid: true,
+        paidAt: Date.now(),
         type: "draw_refund",
         refundedEach: stake,
-        doRefund: doContribution,
-        denRefund: denContribution,
-        grossPot,
         feePmc: 0,
+        adminMasterSharePmc: 0,
+        missionPoolSharePmc: 0,
         expResult: null,
-        winner: "hoa",
-        paidAt: Date.now(),
         at: Date.now()
-      };
-
-      await settlementRef.set(settlementData);
+      });
 
       await db.ref("walletTransactions").push({
         type: "match_draw_refund",
         roomId,
         refundedEach: stake,
-        doRefund: doContribution,
-        denRefund: denContribution,
         doWalletKey: safeWalletKey(doWalletKey),
         denWalletKey: safeWalletKey(denWalletKey),
         createdAt: Date.now(),
         status: "done"
       });
 
-      console.log("MATCH_DRAW_REFUND_OK", {
-        roomId,
-        doWalletKey,
-        denWalletKey,
-        doContribution,
-        denContribution,
-        grossPot
-      });
-
       return res.status(200).json({
         ok: true,
         type: "draw_refund",
         refundedEach: stake,
-        doRefund: doContribution,
-        denRefund: denContribution,
-        doPmcBalance: doAfter?.pmcBalance ?? balances.doPmcBalanceAfter,
-        denPmcBalance: denAfter?.pmcBalance ?? balances.denPmcBalanceAfter,
+        doPmcBalance: doAfter?.pmcBalance ?? null,
+        denPmcBalance: denAfter?.pmcBalance ?? null,
         expResult: null
       });
     }
 
-    let winnerSide = "";
     let winnerWalletKey = "";
-    let loserWalletKey = "";
     let winnerProfile = {};
 
     if (winnerRaw === "do" || winnerRaw === "red") {
-      winnerSide = "do";
       winnerWalletKey = doWalletKey;
-      loserWalletKey = denWalletKey;
-      winnerProfile = getPlayerProfile(doPlayer, "Người chơi đỏ");
+      winnerProfile = {
+        name: doPlayer.name || doPlayer.usernameNorm || doPlayer.username || "Người chơi đỏ",
+        photo: doPlayer.photo || "images/do_tuong.png"
+      };
     } else if (winnerRaw === "den" || winnerRaw === "black") {
-      winnerSide = "den";
       winnerWalletKey = denWalletKey;
-      loserWalletKey = doWalletKey;
-      winnerProfile = getPlayerProfile(denPlayer, "Người chơi đen");
+      winnerProfile = {
+        name: denPlayer.name || denPlayer.usernameNorm || denPlayer.username || "Người chơi đen",
+        photo: denPlayer.photo || "images/do_tuong.png"
+      };
     } else {
-      await settlementRef.update({
-        locking: false,
-        done: false,
-        paid: false,
-        error: "invalid_winner_value",
-        errorAt: Date.now()
-      });
+      await settlementRef.remove();
 
       return res.status(400).json({
         ok: false,
@@ -781,8 +643,12 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const feePmc = Math.max(0, Math.floor(grossPot * MATCH_FEE_RATE));
-    const winnerReceivePmc = Math.max(0, grossPot - feePmc);
+    // THẮNG => cắt phế 20% trên tiền lời/stake, không phải 2% trên tổng pot.
+    const grossPot = normalizePmc(stake * 2);
+    const feePmc = normalizePmc(stake * MATCH_FEE_RATE_ON_STAKE);
+    const adminMasterSharePmc = normalizePmc(feePmc * MATCH_FEE_ADMIN_SHARE_RATE);
+    const missionPoolSharePmc = normalizePmc(feePmc * MATCH_FEE_MISSION_SHARE_RATE);
+    const winnerReceivePmc = normalizePmc(grossPot - feePmc);
 
     const winnerAfter = await adjustPmcWalletByKey(
       db,
@@ -792,81 +658,101 @@ module.exports = async function handler(req, res) {
     );
 
     if (!winnerAfter) {
+      await settlementRef.remove().catch(() => {});
+      return res.status(500).json({
+        ok: false,
+        error: "winner_wallet_credit_failed"
+      });
+    }
+
+    const adminAfter = await adjustPmcWalletByKey(
+      db,
+      ADMIN_WALLET_KEY,
+      adminMasterSharePmc,
+      {
+        name: "Ví phí hệ thống",
+        photo: "images/do_tuong.png"
+      }
+    );
+
+    if (!adminAfter) {
       await settlementRef.update({
-        locking: false,
         done: false,
         paid: false,
-        error: "winner_wallet_update_failed",
-        errorAt: Date.now()
-      });
+        error: "admin_wallet_credit_failed_after_winner_credit",
+        at: Date.now()
+      }).catch(() => {});
 
       return res.status(500).json({
         ok: false,
-        error: "winner_wallet_update_failed"
+        error: "admin_wallet_credit_failed_after_winner_credit"
       });
     }
 
-    let adminAfter = null;
+    const missionPoolResult = await incrementMissionPool(db, missionPoolSharePmc, roomId);
 
-    if (feePmc > 0) {
-      adminAfter = await adjustPmcWalletByKey(
-        db,
-        "pi_admin_master",
-        feePmc,
-        {
-          name: "Ví phí hệ thống",
-          photo: "images/do_tuong.png"
-        }
-      );
-    }
+    const doWalletAfterSnap = await db.ref("wallets/" + safeWalletKey(doWalletKey)).once("value");
+    const denWalletAfterSnap = await db.ref("wallets/" + safeWalletKey(denWalletKey)).once("value");
 
-    const balances = await writeRoomBalances(db, roomId, doWalletKey, denWalletKey);
+    const doWalletAfter = doWalletAfterSnap.val() || {};
+    const denWalletAfter = denWalletAfterSnap.val() || {};
+
+    const doPmcBalanceAfter = normalizePmc(Number(doWalletAfter.pmcBalance || 0) || 0);
+    const denPmcBalanceAfter = normalizePmc(Number(denWalletAfter.pmcBalance || 0) || 0);
+
+    await db.ref().update({
+      [`matches/${roomId}/players/do/pmcBalance`]: doPmcBalanceAfter,
+      [`matches/${roomId}/players/den/pmcBalance`]: denPmcBalanceAfter,
+      [`matches/${roomId}/players/do/balance`]: Number(doWalletAfter.balance || 0) || 0,
+      [`matches/${roomId}/players/den/balance`]: Number(denWalletAfter.balance || 0) || 0
+    });
 
     let expResult = null;
 
     try {
       expResult = await awardMatchExpServer(db, roomId, room);
-      console.log("MATCH_EXP_SERVER_OK", expResult);
+      console.log("MATCH EXP SERVER OK =", expResult);
     } catch (expErr) {
-      console.error("MATCH_EXP_SERVER_ERROR", expErr);
+      console.error("MATCH EXP SERVER ERROR =", expErr);
       expResult = {
         ok: false,
         error: expErr?.message || "exp_error"
       };
     }
 
-    const settlementData = {
+    await settlementRef.set({
       done: true,
       paid: true,
-      route: "backend-settle-v4-paid-flag",
+      paidAt: Date.now(),
+      route: "settle-fee20-admin80-mission20-v4",
       type: "winner_settle",
-      winner: winnerSide,
+      stakePMC: stake,
       grossPot,
-      feeRate: MATCH_FEE_RATE,
+      feeRateOnStake: MATCH_FEE_RATE_ON_STAKE,
       feePmc,
+      adminMasterSharePmc,
+      missionPoolSharePmc,
+      missionPoolPmc: missionPoolResult.missionPoolPmc,
       winnerReceivePmc,
       winnerWalletKey: safeWalletKey(winnerWalletKey),
-      loserWalletKey: safeWalletKey(loserWalletKey),
-      adminWalletKey: "pi_admin_master",
-      doContribution,
-      denContribution,
+      adminWalletKey: ADMIN_WALLET_KEY,
       expResult,
-      paidAt: Date.now(),
       at: Date.now()
-    };
-
-    await settlementRef.set(settlementData);
+    });
 
     await db.ref("matchFeeTransactions").push({
       roomId,
       type: "match_fee_pmc",
+      stakePMC: stake,
       grossPot,
-      feeRate: MATCH_FEE_RATE,
+      feeRateOnStake: MATCH_FEE_RATE_ON_STAKE,
       feePmc,
+      adminMasterSharePmc,
+      missionPoolSharePmc,
+      missionPoolPmc: missionPoolResult.missionPoolPmc,
       winnerReceivePmc,
       winnerWalletKey: safeWalletKey(winnerWalletKey),
-      loserWalletKey: safeWalletKey(loserWalletKey),
-      adminWalletKey: "pi_admin_master",
+      adminWalletKey: ADMIN_WALLET_KEY,
       createdAt: Date.now(),
       status: "done"
     });
@@ -874,51 +760,41 @@ module.exports = async function handler(req, res) {
     await db.ref("walletTransactions").push({
       type: "match_winner_settle",
       roomId,
-      winner: winnerSide,
+      stakePMC: stake,
       grossPot,
       feePmc,
+      adminMasterSharePmc,
+      missionPoolSharePmc,
+      missionPoolPmc: missionPoolResult.missionPoolPmc,
       winnerReceivePmc,
       winnerWalletKey: safeWalletKey(winnerWalletKey),
-      loserWalletKey: safeWalletKey(loserWalletKey),
-      adminWalletKey: "pi_admin_master",
-      doContribution,
-      denContribution,
+      adminWalletKey: ADMIN_WALLET_KEY,
       createdAt: Date.now(),
       status: "done"
-    });
-
-    console.log("MATCH_SETTLE_OK", {
-      roomId,
-      winnerSide,
-      grossPot,
-      feePmc,
-      winnerReceivePmc,
-      winnerWalletKey: safeWalletKey(winnerWalletKey),
-      loserWalletKey: safeWalletKey(loserWalletKey),
-      doPmcBalance: balances.doPmcBalanceAfter,
-      denPmcBalance: balances.denPmcBalanceAfter
     });
 
     return res.status(200).json({
       ok: true,
       type: "winner_settle",
-      winner: winnerSide,
+      stakePMC: stake,
       grossPot,
       feePmc,
+      adminMasterSharePmc,
+      missionPoolSharePmc,
+      missionPoolPmc: missionPoolResult.missionPoolPmc,
       winnerReceivePmc,
       winnerWalletKey: safeWalletKey(winnerWalletKey),
-      loserWalletKey: safeWalletKey(loserWalletKey),
-      adminWalletKey: "pi_admin_master",
+      adminWalletKey: ADMIN_WALLET_KEY,
       winnerPmcBalance: winnerAfter?.pmcBalance ?? null,
       adminPmcBalance: adminAfter?.pmcBalance ?? null,
-      doPmcBalance: balances.doPmcBalanceAfter,
-      denPmcBalance: balances.denPmcBalanceAfter,
+      doPmcBalance: doPmcBalanceAfter,
+      denPmcBalance: denPmcBalanceAfter,
       expResult
     });
   } catch (err) {
-    console.error("PMC_SETTLE_ERROR", err);
+    console.error("pmc settle error =", err);
 
-    return res.status(err.statusCode || 500).json({
+    return res.status(500).json({
       ok: false,
       error: err?.message || "server_error"
     });
