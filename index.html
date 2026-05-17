@@ -17215,20 +17215,34 @@ async function onIncompletePaymentFound(payment) {
       return true;
     }
 
-    // GỌI ĐÚNG ĐƯỜNG DẪN MỚI
-    const res = await fetch("/api/pi-deposit?v=" + Date.now(), {
+    // Tự động nhận diện mạng
+    const isSandbox = window.location.hostname.includes("test");
+    const currentNet = isSandbox ? "testnet" : "mainnet";
+
+    console.log("Đang gỡ kẹt đơn hàng:", paymentId);
+
+    // 🔥 FIX ĐƯỜNG DẪN Ở ĐÂY: Thêm /pi/ vào giữa
+    const res = await fetch("/api/pi/pi-deposit?v=" + Date.now(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        action: "complete", // GỌI LUỒNG COMPLETE
-        paymentId,
-        txid,
-        walletKey,
-        amount
+        action: "complete", // GỌI LUỒNG COMPLETE ĐỂ GỠ KẸT
+        paymentId: paymentId,
+        txid: txid,
+        walletKey: walletKey,
+        amount: amount,
+        network: currentNet // Gửi network để Vercel lấy đúng API KEY
       })
     });
 
-    const data = await res.json();
+    const raw = await res.text();
+    let data = {};
+    try {
+        data = JSON.parse(raw);
+    } catch (e) {
+        console.error("Lỗi parse JSON khi gỡ kẹt:", raw);
+        throw new Error("Server trả về lỗi không hợp lệ (404 hoặc 500).");
+    }
 
     if (!res.ok || !data?.ok) {
       window.__PI_PENDING_PAYMENT_BLOCKED__ = true;
@@ -17239,18 +17253,17 @@ async function onIncompletePaymentFound(payment) {
 
     window.__PI_PENDING_PAYMENT_BLOCKED__ = false;
     window.__PI_PENDING_PAYMENT_MSG__ = "";
-    alert("Đã gỡ kẹt giao dịch cũ thành công! Giờ có thể nạp lại.");
+    alert("✅ Đã gỡ kẹt giao dịch cũ thành công! Tiền đã vào ví, giờ có thể nạp tiếp.");
     await loadWalletBalance(); // Load lại tiền vì nó vừa được cứu
     return true;
   } catch (e) {
     console.error("Xử lý incomplete payment lỗi:", e);
     window.__PI_PENDING_PAYMENT_BLOCKED__ = true;
     window.__PI_PENDING_PAYMENT_MSG__ = e?.message || "Không xử lý được payment Pi đang treo.";
-    alert(window.__PI_PENDING_PAYMENT_MSG__);
+    alert("LỖI GỠ KẸT: " + window.__PI_PENDING_PAYMENT_MSG__);
     return true;
   }
 }
-
 async function startPiDeposit(amount = 1) {
   try {
     console.log("0. Bắt đầu nạp Pi...");
