@@ -12233,12 +12233,16 @@ async function chargeStakeForReady(roomId, side) {
 
 const sidePlayer = room?.players?.[side] || {};
 
-const targetWalletKey = String(
-    sidePlayer.walletKey ||
-    localProfile.walletKey ||
-    makeWalletDbKey()
-).trim();
+const realMyWalletKey = typeof makeWalletDbKey === "function"
+    ? String(makeWalletDbKey() || "").trim()
+    : "";
 
+const targetWalletKey = String(
+    realMyWalletKey ||
+    localProfile.walletKey ||
+    sidePlayer.walletKey ||
+    ""
+).trim();
 console.log("READY_WALLET_DEBUG", {
     roomId,
     side,
@@ -12252,7 +12256,14 @@ console.log("READY_WALLET_DEBUG", {
         if (!targetWalletKey) {
             return { ok: false, error: "Không tìm thấy mã ví để trừ tiền." };
         }
-
+        try {
+    await db.ref(`matches/${roomId}/players/${side}`).update({
+        walletKey: targetWalletKey,
+        name: localProfile.name || localProfile.username || targetWalletKey,
+        photo: localProfile.photo || "images/do_tuong.png",
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+    });
+} catch (_) {}
         let useTicket = false;
 
         if (stake > 0 && stake <= 10000) {
