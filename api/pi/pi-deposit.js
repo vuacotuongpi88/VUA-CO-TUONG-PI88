@@ -89,22 +89,45 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      // 🔥 BỌC THÉP: SERVER TỰ ĐỘNG CỘNG TIỀN VÀO FIREBASE
+      // 🔥 BỌC THÉP CHỐNG HACK VÔ HẠN TIỀN (INFINITE MONEY GLITCH) 🔥
       if (walletKey && amount > 0 && db) {
-         const userRef = db.ref("wallets/" + walletKey);
-
-         await userRef.transaction((current) => {
-             if (!current) return current;
-             const currentPi = Number(current.balance || current.piBalance || 0);
-             current.balance = currentPi + Number(amount);
-             current.piBalance = currentPi + Number(amount);
-             current.updatedAt = Date.now();
-             return current;
+         // Tạo 1 quyển sổ riêng ghi chép các đơn đã xử lý
+         const paymentRef = db.ref("processed_payments/" + paymentId);
+         
+         // Dùng transaction để chốt sổ: 1 mã paymentId CHỈ ĐƯỢC CỘNG TIỀN ĐÚNG 1 LẦN DUY NHẤT
+         const txResult = await paymentRef.transaction((currentData) => {
+             if (currentData) {
+                 return; // Nếu đã có chữ trong sổ -> Đã cộng tiền rồi -> Hủy lệnh, đéo làm gì cả (trả về undefined)
+             }
+             // Nếu sổ trắng -> Đóng mộc xác nhận đã xử lý
+             return {
+                 processedAt: Date.now(),
+                 txid: txid,
+                 amount: Number(amount),
+                 walletKey: walletKey
+             };
          });
 
-         await db.ref("walletTransactions").push({
-             type: "deposit_pi", walletKey, amount: Number(amount), paymentId, txid, createdAt: Date.now(), status: "done"
-         });
+         if (txResult.committed) {
+             // CHỈ KHI ĐÓNG MỘC THÀNH CÔNG MỚI ĐƯỢC BƠM TIỀN VÀO VÍ
+             const userRef = db.ref("wallets/" + walletKey);
+             await userRef.transaction((current) => {
+                 if (!current) return current;
+                 const currentPi = Number(current.balance || current.piBalance || 0);
+                 current.balance = currentPi + Number(amount);
+                 current.piBalance = currentPi + Number(amount);
+                 current.updatedAt = Date.now();
+                 return current;
+             });
+
+             await db.ref("walletTransactions").push({
+                 type: "deposit_pi", walletKey, amount: Number(amount), paymentId, txid, createdAt: Date.now(), status: "done"
+             });
+             console.log(`✅ [CHỐNG HACK] Đã bơm ${amount} Pi cho đơn ${paymentId}`);
+         } else {
+             // Đơn này đã được cộng tiền từ trước, đéo cộng nữa nhưng vẫn báo OK về cho Pi SDK để nó tắt cái popup đi
+             console.log(`🚨 [CHỐNG HACK] Bắt quả tang spam payment ${paymentId}, từ chối cộng tiền!`);
+         }
       }
 
       return res.status(200).json({ ok: true, data });
