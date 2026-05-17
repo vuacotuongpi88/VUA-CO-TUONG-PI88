@@ -167,7 +167,48 @@ module.exports = async function handler(req, res) {
             newTreasuryPmcBalance: treasuryResult.newTreasuryPmcBalance, newPlayerPiBalance: playerResult.newPlayerPiBalance
         });
     }
+    // ==========================================
+    // LUỒNG 3: NGƯỜI CHƠI ĐỔI PI SANG PMC
+    // ==========================================
+    if (action === "pi_to_pmc") {
+        const safePi = Number(body.piAmount || 0);
+        if (safePi <= 0) return res.status(400).json({ ok: false, error: "Số Pi muốn đổi không hợp lệ." });
 
+        const pmcAdd = Math.floor(safePi * PMC_PER_PI);
+        const walletRef = db.ref("wallets/" + safeWalletKey);
+        let exchangeResult = null;
+
+        const txResult = await walletRef.transaction(current => {
+            // Nếu chưa có ví thì khởi tạo ảo để tránh lỗi null
+            if (!current) current = { balance: 0, piBalance: 0, pmcBalance: 0 };
+            
+            const currentPi = readPiBalance(current);
+            const currentPmc = Math.floor(Number(current.pmcBalance ?? 0) || 0);
+
+            if (currentPi < safePi) return; // Không đủ Pi thì hủy lệnh không đổi
+
+            exchangeResult = { newPiBalance: currentPi - safePi, newPmcBalance: currentPmc + pmcAdd };
+
+            current.balance = exchangeResult.newPiBalance;
+            current.piBalance = exchangeResult.newPiBalance;
+            current.pmcBalance = exchangeResult.newPmcBalance;
+            current.updatedAt = Date.now();
+            return current;
+        });
+
+        if (!exchangeResult || !txResult?.committed) {
+            return res.status(400).json({ ok: false, error: "Pi không đủ hoặc giao dịch bị kẹt." });
+        }
+
+        await db.ref("walletTransactions").push({
+            type: "pi_to_pmc", walletKey: safeWalletKey, piAmount: safePi, pmcAmount: pmcAdd, rate: PMC_PER_PI, createdAt: Date.now(), status: "done"
+        });
+
+        return res.status(200).json({ 
+            ok: true, piAmount: safePi, pmcAmount: pmcAdd, 
+            newPiBalance: exchangeResult.newPiBalance, newPmcBalance: exchangeResult.newPmcBalance 
+        });
+    }
     return res.status(400).json({ ok: false, error: "Hành động không hợp lệ." });
 
   } catch (err) {
