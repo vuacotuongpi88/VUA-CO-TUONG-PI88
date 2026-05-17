@@ -158,20 +158,71 @@ module.exports = async function handler(req, res) {
     }
 
     let nextPmc = null;
+let beforePmc = null;
 
-    const pmcTx = await runTx(walletRef.child("pmcBalance"), (current) => {
-      const currentPmc = Math.max(0, Math.floor(Number(current || 0) || 0));
-      if (currentPmc < stake) return;
-      nextPmc = currentPmc - stake;
-      return nextPmc;
-    });
+console.log("CHARGE_STAKE_DEBUG_BEFORE", {
+  roomId,
+  side,
+  uid,
+  walletKey,
+  playerUid,
+  stake,
+  walletUid: wallet.uid,
+  walletName: wallet.name,
+  walletPmcBalance: wallet.pmcBalance,
+  walletBalance: wallet.balance,
+  walletFreeTickets: wallet.freeTickets
+});
 
-    if (!pmcTx.committed || nextPmc == null) {
-      return res.status(400).json({
-        ok: false,
-        error: `Số dư PMC không đủ để trừ ${stake} PMC`
-      });
+const pmcTx = await runTx(walletRef.child("pmcBalance"), (current) => {
+  beforePmc = Math.max(0, Math.floor(Number(current || 0) || 0));
+
+  console.log("CHARGE_STAKE_TX", {
+    walletKey,
+    currentRaw: current,
+    beforePmc,
+    stake
+  });
+
+  if (beforePmc < stake) return;
+
+  nextPmc = beforePmc - stake;
+  return nextPmc;
+});
+
+if (!pmcTx.committed || nextPmc == null) {
+  const liveSnap = await walletRef.once("value");
+  const liveWallet = liveSnap.val() || {};
+
+  console.log("CHARGE_STAKE_NOT_ENOUGH_DEBUG", {
+    roomId,
+    side,
+    uid,
+    walletKey,
+    stake,
+    beforePmc,
+    livePmcBalance: liveWallet.pmcBalance,
+    liveBalance: liveWallet.balance,
+    liveUid: liveWallet.uid,
+    liveName: liveWallet.name
+  });
+
+  return res.status(400).json({
+    ok: false,
+    error: `Số dư PMC không đủ để trừ ${stake} PMC`,
+    debug: {
+      roomId,
+      side,
+      walletKey,
+      stake,
+      beforePmc,
+      livePmcBalance: liveWallet.pmcBalance,
+      liveBalance: liveWallet.balance,
+      liveUid: liveWallet.uid,
+      liveName: liveWallet.name
     }
+  });
+}
 
     await walletRef.child("updatedAt").set(Date.now());
 
