@@ -1,6 +1,6 @@
 const admin = require('firebase-admin');
 
-// 1. KHỞI TẠO FIREBASE ADMIN (Giữ nguyên của mày)
+// 1. KHỞI TẠO FIREBASE ADMIN
 if (!admin.apps.length) {
   try {
     admin.initializeApp({
@@ -13,7 +13,7 @@ if (!admin.apps.length) {
     });
     console.log("Firebase Admin inited successfully!");
   } catch (e) {
-    console.warn("Lỗi khởi tạo Admin (Có thể thiếu biến môi trường):", e);
+    console.warn("Lỗi khởi tạo Admin:", e);
   }
 }
 
@@ -26,18 +26,14 @@ module.exports = async function handler(req, res) {
 
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
-    // CHÚ Ý: Bắt thêm chữ network từ Frontend gửi lên
     const { action, paymentId, txid, walletKey, amount, network } = body;
 
     const PI_API_BASE = String(process.env.PI_API_BASE_URL || "https://api.minepi.com").trim();
     
-    // 🔥 BÙA PHÂN LUỒNG API KEY 🔥
-    let PI_API_KEY = "";
-    if (network === "testnet") {
-        PI_API_KEY = String(process.env.PI_API_KEY_TESTNET || "").trim();
-    } else {
-        PI_API_KEY = String(process.env.PI_API_KEY || "").trim();
-    }
+    // 🔥 Lấy API KEY tự động theo biến network
+    let PI_API_KEY = network === "testnet" 
+        ? String(process.env.PI_API_KEY_TESTNET || "").trim()
+        : String(process.env.PI_API_KEY || "").trim();
 
     if (!PI_API_KEY) {
       return res.status(500).json({ ok: false, error: `Chưa cài API KEY cho mạng ${network} trên Vercel!` });
@@ -54,16 +50,15 @@ module.exports = async function handler(req, res) {
         method: "POST",
         headers: { 
             "Content-Type": "application/json", 
-            "Authorization": `Key ${PI_API_KEY}`,
-            "Pi-Api-Key": PI_API_KEY // Gắn lại bùa chống kẹt Pi Server
-        }
+            "Authorization": `Key ${PI_API_KEY}`
+        },
+        body: JSON.stringify({}) // Bùa: Pi API nhiều khi bắt buộc phải có body cho lệnh POST
       });
 
       const raw = await piRes.text();
       let data = {}; try { data = JSON.parse(raw); } catch (_) { data = { raw }; }
-      
-      if (!piRes.ok) console.error("PI APPROVE TỪ CHỐI:", data);
 
+      if (!piRes.ok) console.error("PI APPROVE FAIL:", data);
       return res.status(piRes.status).json({ ok: piRes.ok, status: piRes.status, data });
     }
 
@@ -77,8 +72,7 @@ module.exports = async function handler(req, res) {
         method: "POST",
         headers: { 
             "Content-Type": "application/json", 
-            "Authorization": `Key ${PI_API_KEY}`,
-            "Pi-Api-Key": PI_API_KEY
+            "Authorization": `Key ${PI_API_KEY}`
         },
         body: JSON.stringify({ txid })
       });
@@ -95,7 +89,7 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      // 🔥 BỌC THÉP: SERVER TỰ ĐỘNG CỘNG TIỀN VÀO FIREBASE 🔥
+      // 🔥 BỌC THÉP: SERVER TỰ ĐỘNG CỘNG TIỀN VÀO FIREBASE
       if (walletKey && amount > 0 && db) {
          const userRef = db.ref("wallets/" + walletKey);
 
@@ -108,7 +102,6 @@ module.exports = async function handler(req, res) {
              return current;
          });
 
-         // Ghi lại biên lai giao dịch lịch sử
          await db.ref("walletTransactions").push({
              type: "deposit_pi", walletKey, amount: Number(amount), paymentId, txid, createdAt: Date.now(), status: "done"
          });

@@ -17253,75 +17253,78 @@ async function onIncompletePaymentFound(payment) {
 
 async function startPiDeposit(amount = 1) {
   try {
-    console.log("0. Bấm nạp Pi! Đang kiểm tra kết nối...");
-    if (!window.Pi) { alert("Lỗi: Không tìm thấy window.Pi. Mày có đang mở bằng Pi Browser không?"); return; }
+    console.log("0. Bắt đầu nạp Pi...");
+    if (!window.Pi) { 
+        alert("Lỗi: Không tìm thấy window.Pi. Nhớ mở bằng Pi Browser!"); 
+        return; 
+    }
     
     const napSo = Number(amount);
     const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "";
     
-    console.log("0.1 Đang gọi Pi.authenticate để đăng nhập ngầm...");
     const auth = await loginPi();
-    if (!auth) { alert("Lỗi: Không đăng nhập được Pi"); return; }
+    if (!auth) { 
+        alert("Lỗi: Không đăng nhập được Pi"); 
+        return; 
+    }
 
     console.log(`0.2 Đã lấy được info Pi. Chuẩn bị tạo đơn nạp ${napSo} Pi...`);
+    
+    // Tự động nhận diện mạng
+    const isSandbox = window.location.hostname.includes("test");
+    const currentNet = isSandbox ? "testnet" : "mainnet";
+
     window.Pi.createPayment({
       amount: napSo,
       memo: `Nạp ${napSo} Pi vào game`,
       metadata: { type: "deposit", amount: napSo, time: Date.now() }
     }, {
-      onReadyForServerApproval: async function (paymentId) {
-        console.log("1. Đã có PaymentID: " + paymentId + " - Xin Approve từ Vercel...");
-        try {
-          const res = await fetch("/api/pi-deposit?v=" + Date.now(), {
+      // BỎ CHỮ ASYNC Ở ĐÂY, VÀ TUYỆT ĐỐI CẤM DÙNG ALERT DƯỚI MỌI HÌNH THỨC
+      onReadyForServerApproval: function (paymentId) {
+        console.log("1. Đã có PaymentID: " + paymentId + ". Đang gọi Vercel Approve...");
+        
+        fetch("/api/pi-deposit?v=" + Date.now(), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            // THÊM BIẾN network VÀO ĐỂ VERCEL CHỌN ĐÚNG API KEY
-            body: JSON.stringify({ action: "approve", paymentId, network: currentNetwork })
-          });
-          
-          const raw = await res.text();
-          const data = JSON.parse(raw);
-          
-          if (!res.ok || !data.ok) {
-             alert("🚨 VERCEL TỪ CHỐI DUYỆT: " + (data.error || "Lỗi bí ẩn"));
-             throw new Error(data.error || "API Approve failed");
-          }
-          console.log("Approve Vercel Thành công!");
-        } catch (err) {
-          alert("🚨 CRASH TẠI BƯỚC APPROVE: " + err.message);
-          throw err; // Phải throw thì Pi SDK mới biết lỗi
-        }
+            body: JSON.stringify({ action: "approve", paymentId: paymentId, network: currentNet })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (!data.ok) console.error("🚨 VERCEL TỪ CHỐI DUYỆT:", data);
+            else console.log("2. Vercel Approve Thành công!");
+        })
+        .catch(err => console.error("🚨 CRASH APPROVE:", err));
       },
-      onReadyForServerCompletion: async function (paymentId, txid) {
-        console.log("5. Pi đã duyệt! TXID: " + txid + " - Xin Complete...");
-        try {
-          const res = await fetch("/api/pi-deposit?v=" + Date.now(), {
+      
+      onReadyForServerCompletion: function (paymentId, txid) {
+        console.log("5. Pi duyệt! TXID: " + txid + ". Xin Complete...");
+        
+        fetch("/api/pi-deposit?v=" + Date.now(), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            // THÊM BIẾN network LUÔN CHO CHẮC
-            body: JSON.stringify({ action: "complete", paymentId, txid, walletKey, amount: napSo, network: currentNetwork })
-          });
-          
-          const raw = await res.text();
-          const data = JSON.parse(raw);
-          
-          if (!res.ok || !data.ok) {
-             alert("🚨 VERCEL TỪ CHỐI CỘNG TIỀN: " + (data.error || "Lỗi bí ẩn"));
-             throw new Error(data.error || "API Complete failed");
-          }
-          
-          alert("✅ NẠP PI THÀNH CÔNG RỰC RỠ!");
-          await loadWalletBalance();
-        } catch (err) {
-          alert("🚨 CRASH TẠI BƯỚC COMPLETE: " + err.message);
-          throw err;
-        }
+            body: JSON.stringify({ action: "complete", paymentId: paymentId, txid: txid, walletKey: walletKey, amount: napSo, network: currentNet })
+        })
+        .then(res => res.json())
+        .then(async data => {
+            if(data.ok) {
+                // Lúc này Pi Wallet đã tự đóng, mầy alert thoải mái
+                alert("✅ NẠP PI THÀNH CÔNG RỰC RỠ!"); 
+                await loadWalletBalance();
+            } else {
+                alert("🚨 LỖI COMPLETE: " + (data.error || ""));
+            }
+        })
+        .catch(err => {
+            alert("🚨 CRASH COMPLETE: " + err.message);
+        });
       },
-      onCancel: function () { 
-          alert("Mày vừa bấm hủy nạp!"); 
+      
+      onCancel: function (paymentId) { 
+          console.log("Mày vừa bấm hủy nạp!", paymentId); 
       },
-      onError: function (err) { 
-          alert("🚨 LỖI TỪ BẢN THÂN APP PI: " + err.message); 
+      onError: function (err, payment) { 
+          console.error("🚨 LỖI TỪ BẢN THÂN APP PI:", err); 
+          alert("Lỗi từ Pi Wallet: " + err.message);
       }
     });
   } catch (err) {
