@@ -12766,13 +12766,17 @@ async function getPiLinkState() {
     };
   }
 
-  // Ưu tiên đọc qua API Admin, tránh rules Firebase làm lỗi
   try {
-    const res = await fetch("/api/pi/link-wallet?v=" + Date.now(), {
-      method: "GET",
+    const res = await fetch("/api/finance?v=" + Date.now(), {
+      method: "POST",
       headers: {
+        "Content-Type": "application/json",
         "x-wallet-key": walletKey
-      }
+      },
+      body: JSON.stringify({
+        action: "pi_link_status",
+        walletKey
+      })
     });
 
     const raw = await res.text();
@@ -12796,7 +12800,6 @@ async function getPiLinkState() {
     }
   } catch (_) {}
 
-  // Fallback đọc Firebase client nếu API chưa deploy kịp
   if (!window.firebase || !firebase.database) {
     return {
       ok: false,
@@ -12818,6 +12821,7 @@ async function getPiLinkState() {
       val.linkedWalletAddress ||
       val.piBrowserWalletAddress ||
       val.withdrawWalletAddress ||
+      val.withdrawAddress ||
       ""
     ).trim()
   };
@@ -12904,18 +12908,19 @@ async function linkPiBrowser() {
     throw new Error("Địa chỉ ví Pi không hợp lệ. Địa chỉ phải bắt đầu bằng G và dài 56 ký tự.");
   }
 
-  const res = await fetch("/api/pi/link-wallet?v=" + Date.now(), {
+  const res = await fetch("/api/finance?v=" + Date.now(), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "x-wallet-key": walletKey
     },
     body: JSON.stringify({
-      walletKey,
-      piUid: linkedPiUid,
-      piUsername: linkedPiUsername,
-      piWalletAddress: linkedWalletAddress
-    })
+  action: "pi_link_wallet",
+  walletKey,
+  piUid: linkedPiUid,
+  piUsername: linkedPiUsername,
+  piWalletAddress: linkedWalletAddress
+})
   });
 
   const raw = await res.text();
@@ -13041,6 +13046,13 @@ const walletKey = String(
 ).trim();
 
 const piWalletAddress = String(linkState?.piWalletAddress || "").trim();
+const piUid = String(linkState?.piUid || "").trim();
+const piUsername = String(linkState?.piUsername || "").trim();
+
+if (!piUid || !piUsername) {
+    alert("Thiếu thông tin Pi UID hoặc username. Hãy liên kết Pi Browser lại.");
+    return;
+}
 
 if (!piWalletAddress) {
     alert("Chưa có địa chỉ ví Pi nhận tiền. Hãy liên kết Pi Browser trước.");

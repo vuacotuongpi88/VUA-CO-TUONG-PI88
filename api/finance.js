@@ -12,7 +12,17 @@ function safeKey(value = "") {
 function readPiBalance(obj = {}) {
   return Number(obj.balance != null ? obj.balance : (obj.piBalance != null ? obj.piBalance : 0)) || 0;
 }
+function cleanText(value = "") {
+  return String(value || "").trim();
+}
 
+function normalizePiAddress(value = "") {
+  return String(value || "").trim().toUpperCase();
+}
+
+function isValidPiAddress(address = "") {
+  return /^G[A-Z2-7]{55}$/.test(String(address || "").trim().toUpperCase());
+}
 module.exports = async function handler(req, res) {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
 
@@ -57,7 +67,152 @@ module.exports = async function handler(req, res) {
     if (!safeWalletKey) {
         return res.status(401).json({ ok: false, error: "Thiếu định danh ví." });
     }
+    // ==========================================
+    // LUỒNG 0A: ĐỌC TRẠNG THÁI LIÊN KẾT VÍ PI
+    // Không tạo thêm API route để né giới hạn 12 function của Vercel Hobby
+    // ==========================================
+    if (action === "pi_link_status") {
+        const walletSnap = await db.ref("wallets/" + safeWalletKey).once("value");
+        const wallet = walletSnap.val() || {};
 
+        return res.status(200).json({
+            ok: true,
+            walletKey: safeWalletKey,
+            piVerified: wallet.piVerified === true,
+            piUid: cleanText(wallet.piUid || ""),
+            piUsername: cleanText(wallet.piUsername || ""),
+            piWalletAddress: cleanText(
+                wallet.piWalletAddress ||
+                wallet.linkedWalletAddress ||
+                wallet.piBrowserWalletAddress ||
+                wallet.withdrawWalletAddress ||
+                wallet.withdrawAddress ||
+                ""
+            )
+        });
+    }
+
+    // ==========================================
+    // LUỒNG 0B: LƯU ĐỊA CHỈ VÍ PI RÚT TIỀN
+    // Ghi bằng Firebase Admin trong finance.js, không ghi client để tránh PERMISSION_DENIED
+    // ==========================================
+    if (action === "pi_link_wallet") {
+        const piUid = cleanText(body.piUid || body.uid || "");
+        const piUsername = cleanText(body.piUsername || body.username || "");
+        const piWalletAddress = normalizePiAddress(
+            body.piWalletAddress ||
+            body.walletAddress ||
+            body.linkedWalletAddress ||
+            body.withdrawWalletAddress ||
+            ""
+        );
+
+        if (!piUid) {
+            return res.status(400).json({ ok: false, error: "Thiếu Pi UID." });
+        }
+
+        if (!piUsername) {
+            return res.status(400).json({ ok: false, error: "Thiếu username Pi." });
+        }
+
+        if (!piWalletAddress) {
+            return res.status(400).json({ ok: false, error: "Thiếu địa chỉ ví Pi nhận tiền." });
+        }
+
+        if (!isValidPiAddress(piWalletAddress)) {
+            return res.status(400).json({
+                ok: false,
+                error: "Địa chỉ ví Pi không hợp lệ. Địa chỉ phải bắt đầu bằng G và dài 56 ký tự."
+            });
+        }
+
+        const walletRef = db.ref("wallets/" + safeWalletKey);
+        const existsSnap = await walletRef.once("value");
+
+        if (!existsSnap.exists()) {
+            return res.status(404).json({
+                ok: false,
+                error: "Không tìm thấy ví game để liên kết Pi."
+            });
+        }
+
+        const now = Date.now();
+        let finalWallet = null;
+
+        const tx = await walletRef.transaction(current => {
+            if (!current || typeof current !== "object") return;
+
+            const oldPiUid = cleanText(current.piUid || "");
+
+            // Chặn lấy ví game đã liên kết Pi UID khác
+            if (oldPiUid && oldPiUid !== piUid) {
+                return;
+            }
+
+            finalWallet = {
+                ...current,
+
+                walletKey: safeWalletKey,
+                piUid,
+                piUsername,
+                piVerified: true,
+                verifiedAt: current.verifiedAt || now,
+                piLinkSource: "api_finance_pi_link",
+
+                piWalletAddress,
+                linkedWalletAddress: piWalletAddress,
+                piBrowserWalletAddress: piWalletAddress,
+                withdrawWalletAddress: piWalletAddress,
+                withdrawAddress: piWalletAddress,
+
+                linkedWallet: {
+                    ...(current.linkedWallet || {}),
+                    address: piWalletAddress,
+                    linkedAt: now,
+                    source: "api_finance_pi_link"
+                },
+
+                piLink: {
+                    ...(current.piLink || {}),
+                    piUid,
+                    piUsername,
+                    walletAddress: piWalletAddress,
+                    linkedAt: now,
+                    source: "api_finance_pi_link"
+                },
+
+                updatedAt: now
+            };
+
+            return finalWallet;
+        });
+
+        if (!tx.committed || !finalWallet) {
+            return res.status(409).json({
+                ok: false,
+                error: "Ví này đã liên kết với Pi UID khác, không cho ghi đè."
+            });
+        }
+
+        await db.ref("piWalletLinkLogs").push({
+            walletKey: safeWalletKey,
+            piUid,
+            piUsername,
+            piWalletAddress,
+            source: "api_finance_pi_link",
+            createdAt: now,
+            status: "done"
+        }).catch(() => {});
+
+        return res.status(200).json({
+            ok: true,
+            walletKey: safeWalletKey,
+            piVerified: true,
+            piUid,
+            piUsername,
+            piWalletAddress
+        });
+    }
     // ==========================================
     // LUỒNG 1: NGƯỜI CHƠI ĐỔI PMC SANG PI
     // ==========================================
