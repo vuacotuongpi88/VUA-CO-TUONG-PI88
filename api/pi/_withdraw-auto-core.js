@@ -1,110 +1,62 @@
-const StellarSdk = require("stellar-sdk");
-
-function envNumber(...values) {
-  for (const value of values) {
-    const n = Number(value);
-    if (Number.isFinite(n)) return n;
+function loadStellarSdk() {
+  try {
+    return require("@stellar/stellar-sdk");
+  } catch (_) {
+    return require("stellar-sdk");
   }
-  return 0;
 }
 
 const CONFIG = {
-  // Bỏ giới hạn số Pi rút mỗi lần
-  MAX_WITHDRAW_PER_TX: envNumber(
-    process.env.MAX_WITHDRAW_PER_TX,
-    process.env.PI_MAX_WITHDRAW_PER_TX,
-    999999999
-  ),
-
-  // Bỏ giới hạn số lượt rút trong ngày
-  MAX_WITHDRAW_PER_DAY_COUNT: envNumber(
-    process.env.MAX_WITHDRAW_PER_DAY_COUNT,
-    process.env.PI_MAX_WITHDRAW_PER_DAY_COUNT,
-    999999
-  ),
-
-  // 0 = không đưa lệnh rút Pi cao vào duyệt thủ công
-  AUTO_WITHDRAW_MAX: envNumber(
-    process.env.AUTO_WITHDRAW_MAX,
-    process.env.PI_AUTO_WITHDRAW_MAX,
-    0
-  ),
-  BURST_WINDOW_MS: envNumber(
-    process.env.WITHDRAW_BURST_WINDOW_MS,
-    3 * 60 * 1000
-  ),
-  BURST_REQUEST_LIMIT: envNumber(
-    process.env.WITHDRAW_BURST_REQUEST_LIMIT,
-    3
-  ),
-  PI_BLOCKCHAIN_API_URL: String(
-    process.env.PI_BLOCKCHAIN_API_URL ||
-      process.env.PI_HORIZON_URL ||
-      "https://api.testnet.minepi.com"
-  ).trim(),
-  PI_NETWORK_PASSPHRASE: String(
-    process.env.PI_NETWORK_PASSPHRASE || "Pi Testnet"
-  ).trim()
+  AUTO_WITHDRAW_MAX: Number(process.env.AUTO_WITHDRAW_MAX || 1000),
+  MAX_WITHDRAW_PER_DAY_COUNT: Number(process.env.MAX_WITHDRAW_PER_DAY_COUNT || 50),
+  LOCK_TTL_MS: Number(process.env.WITHDRAW_LOCK_TTL_MS || 2 * 60 * 1000),
+  BURST_WINDOW_MS: Number(process.env.WITHDRAW_BURST_WINDOW_MS || 60 * 1000),
+  BURST_MAX_COUNT: Number(process.env.WITHDRAW_BURST_MAX_COUNT || 3)
 };
 
 function nowMs() {
   return Date.now();
 }
 
-function safeKey(value) {
-  return String(value || "").replace(/[.#$/\[\]]/g, "_");
+function safeKey(value = "") {
+  return String(value || "").trim().replace(/[.#$\[\]\/]/g, "_");
 }
 
-function cleanForFirebase(input) {
-  if (input === undefined) return null;
-  if (input === null) return null;
+function readPiBalance(obj = {}) {
+  const n = Number(obj.balance != null ? obj.balance : (obj.piBalance != null ? obj.piBalance : 0));
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, n);
+}
 
-  if (typeof input === "number" && !Number.isFinite(input)) {
-    return null;
+function cleanForFirebase(value) {
+  if (value === undefined) return null;
+  if (typeof value === "number" && !Number.isFinite(value)) return null;
+  if (value === null) return null;
+
+  if (Array.isArray(value)) {
+    return value.map(cleanForFirebase);
   }
 
-  if (Array.isArray(input)) {
-    return input.map((item) => cleanForFirebase(item));
-  }
-
-  if (typeof input === "object") {
+  if (typeof value === "object") {
     const out = {};
-    for (const [key, value] of Object.entries(input)) {
-      if (value === undefined) continue;
-      out[key] = cleanForFirebase(value);
+    for (const [k, v] of Object.entries(value)) {
+      const cleaned = cleanForFirebase(v);
+      if (cleaned !== undefined) out[k] = cleaned;
     }
     return out;
   }
 
-  return input;
+  return value;
 }
 
-function readPiBalance(walletVal) {
-  if (!walletVal || typeof walletVal !== "object") return 0;
-
-  const candidates = [
-    walletVal.piBalance,
-    walletVal.balance,
-    walletVal.pi_balance,
-    walletVal.pi,
-    walletVal.currentBalance
-  ];
-
-  for (const value of candidates) {
-    const n = Number(value);
-    if (Number.isFinite(n)) return n;
-  }
-
-  return 0;
+function dayStartMsVN(ts = Date.now()) {
+  const offset = 7 * 60 * 60 * 1000;
+  const d = new Date(ts + offset);
+  d.setUTCHours(0, 0, 0, 0);
+  return d.getTime() - offset;
 }
 
-function startOfTodayMs(ts = Date.now()) {
-  const d = new Date(ts);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-}
-
-function refTransaction(ref, updateFn) {
+function wrapTransaction(ref, updateFn) {
   return new Promise((resolve, reject) => {
     ref.transaction(
       updateFn,
@@ -118,94 +70,93 @@ function refTransaction(ref, updateFn) {
 }
 
 async function acquireWithdrawLock(lockRef) {
-  const result = await refTransaction(lockRef, (current) => {
-    if (current && current.active === true) return;
-    return cleanForFirebase({
-      active: true,
-      lockedAt: nowMs()
-    });
+  const now = nowMs();
+  const tx = await wrapTransaction(lockRef, current => {
+    const cur = current && typeof current === "object" ? current : {};
+    const lockedAt = Number(cur.lockedAt || 0) || 0;
+    const expired = !lockedAt || now - lockedAt > CONFIG.LOCK_TTL_MS;
+
+    if (cur.locked === true && !expired) return;
+
+    return {
+      locked: true,
+      lockedAt: now,
+      updatedAt: now
+    };
   });
 
-  return !!result.committed;
+  return !!tx.committed;
 }
 
 async function releaseWithdrawLock(lockRef, reason = "") {
-  try {
-    await lockRef.set(
-      cleanForFirebase({
-        active: false,
-        reason: String(reason || ""),
-        releasedAt: nowMs()
-      })
-    );
-  } catch (_) {}
+  await lockRef.update({
+    locked: false,
+    releasedAt: nowMs(),
+    releaseReason: String(reason || ""),
+    updatedAt: nowMs()
+  }).catch(() => {});
 }
 
 async function countTodayWithdraws(db, walletKey) {
-  const snap = await db.ref("piWithdrawRequests").once("value");
-  const start = startOfTodayMs();
+  const start = dayStartMsVN();
+  const snap = await db
+    .ref("piWithdrawRequests")
+    .orderByChild("walletKey")
+    .equalTo(walletKey)
+    .limitToLast(200)
+    .once("value");
+
   let count = 0;
 
-  snap.forEach((child) => {
-    const value = child.val() || {};
-    if (String(value.walletKey || "") !== String(walletKey || "")) return;
+  snap.forEach(child => {
+    const item = child.val() || {};
+    const createdAt = Number(item.createdAt || 0) || 0;
+    const status = String(item.status || "");
 
-    const status = String(value.status || "");
-    if (status !== "done") return;
+    if (createdAt < start) return;
+    if (["failed", "cancelled", "rejected"].includes(status)) return;
 
-    const t = Number(
-      value.doneAt || value.updatedAt || value.createdAt || 0
-    );
-
-    if (Number.isFinite(t) && t >= start) {
-      count += 1;
-    }
+    count += 1;
   });
 
   return count;
 }
 
 async function inspectWithdrawQueue(db, walletKey) {
-  const snap = await db.ref("piWithdrawRequests").once("value");
-  const recentStart = nowMs() - CONFIG.BURST_WINDOW_MS;
+  const snap = await db
+    .ref("piWithdrawRequests")
+    .orderByChild("walletKey")
+    .equalTo(walletKey)
+    .limitToLast(50)
+    .once("value");
 
-  const ACTIVE_STATUSES = new Set([
+  const activeStatuses = new Set([
     "initiated",
     "auto_processing",
     "chain_submitted",
-    "processing",
-    "created"
+    "chain_submit_missing_txid"
   ]);
 
   let activeRequest = null;
   let pendingAdminRequest = null;
   let recentCount = 0;
+  const now = nowMs();
 
-  snap.forEach((child) => {
-    const value = child.val() || {};
-    if (String(value.walletKey || "") !== String(walletKey || "")) return;
+  snap.forEach(child => {
+    const item = child.val() || {};
+    const status = String(item.status || "");
+    const createdAt = Number(item.createdAt || 0) || 0;
 
-    const status = String(value.status || "");
-    const createdAt = Number(value.createdAt || value.updatedAt || 0);
+    if (activeStatuses.has(status)) {
+      activeRequest = { key: child.key, ...item };
+    }
 
-    if (Number.isFinite(createdAt) && createdAt >= recentStart) {
+    if (status === "pending_admin") {
+      pendingAdminRequest = { key: child.key, ...item };
+    }
+
+    if (createdAt && now - createdAt <= CONFIG.BURST_WINDOW_MS) {
       recentCount += 1;
-    }
-
-    if (!activeRequest && ACTIVE_STATUSES.has(status)) {
-      activeRequest = {
-        key: child.key,
-        status,
-        data: value
-      };
-    }
-
-    if (!pendingAdminRequest && status === "pending_admin") {
-      pendingAdminRequest = {
-        key: child.key,
-        status,
-        data: value
-      };
     }
   });
 
@@ -218,122 +169,100 @@ async function inspectWithdrawQueue(db, walletKey) {
 
 function buildRiskFlags({ amount, queueInfo }) {
   return {
-    // Không còn luật: rút Pi cao phải đưa vào duyệt
-    overAutoMax: false,
-
-    // Không đưa spam nhanh vào hàng duyệt nữa
-    // Chỉ để log nếu sau này cần xem, không dùng để queue admin.
-    burstRequests: Number(queueInfo?.recentCount || 0) >= Number(CONFIG.BURST_REQUEST_LIMIT || 999999),
-
-    // Hai cái này vẫn giữ để tránh 1 ví tạo nhiều lệnh rút đang chạy cùng lúc
+    overAutoMax: Number(amount || 0) > CONFIG.AUTO_WITHDRAW_MAX,
+    burstRequests: Number(queueInfo?.recentCount || 0) >= CONFIG.BURST_MAX_COUNT,
     hasPendingAdmin: !!queueInfo?.pendingAdminRequest,
-    hasActiveRequest: !!queueInfo?.activeRequest,
-
-    // Chỉ để hiển thị/debug, không dùng để queue
-    oldPendingOtherWallet: String(queueInfo?.lastOtherWalletHint || "").trim()
+    hasActiveRequest: !!queueInfo?.activeRequest
   };
 }
 
-function shouldQueueForAdmin(riskFlags) {
-  // Không đưa vào hàng duyệt vì số Pi cao.
-  // Không đưa vào hàng duyệt vì bấm nhanh.
-  // Chỉ chặn nếu ví đang có lệnh pending/active để tránh rút trùng.
+function shouldQueueForAdmin(riskFlags = {}) {
   return !!(
-    riskFlags?.hasPendingAdmin ||
-    riskFlags?.hasActiveRequest
+    riskFlags.overAutoMax ||
+    riskFlags.burstRequests ||
+    riskFlags.hasPendingAdmin ||
+    riskFlags.hasActiveRequest
   );
 }
 
-function normalizeMemo(text) {
-  const raw = String(text || "").replace(/\s+/g, " ").trim();
-  if (!raw) return "";
-  return raw.slice(0, 28);
+function normalizeAmount(amount) {
+  const n = Number(amount || 0);
+  if (!Number.isFinite(n) || n <= 0) {
+    throw new Error("Số Pi rút không hợp lệ.");
+  }
+  return n.toFixed(7);
 }
 
-function getStellarServer() {
-  const ServerCtor =
-    StellarSdk.Server || (StellarSdk.Horizon && StellarSdk.Horizon.Server);
+function trimMemoText(text = "") {
+  let s = String(text || "Rut Pi").replace(/[^\x20-\x7E]/g, " ").trim();
+  if (!s) s = "Rut Pi";
 
-  if (!ServerCtor) {
-    throw new Error("Không khởi tạo được Stellar Server.");
+  while (Buffer.byteLength(s, "utf8") > 28) {
+    s = s.slice(0, -1);
   }
 
-  return new ServerCtor(CONFIG.PI_BLOCKCHAIN_API_URL);
+  return s;
 }
 
 async function submitOnChain({ recipientAddress, amount, memo }) {
-  const sourcePublic = String(
-    process.env.DEV_PUBLIC ||
-      process.env.PI_DEVELOPER_WALLET_PUBLIC_KEY ||
-      process.env.PI_WALLET_PUBLIC_KEY ||
-      process.env.PI_PUBLIC_KEY ||
-      ""
+  const StellarSdk = loadStellarSdk();
+
+  const SOURCE_WALLET_PUBLIC = String(process.env.PI_PUBLIC_KEY_TESTNET || "").trim();
+  const SOURCE_WALLET_SECRET = String(process.env.PI_SECRET_KEY_TESTNET || "").trim();
+
+  if (!SOURCE_WALLET_PUBLIC || !SOURCE_WALLET_SECRET) {
+    throw new Error("Thiếu PI_PUBLIC_KEY_TESTNET hoặc PI_SECRET_KEY_TESTNET.");
+  }
+
+  const HORIZON_URL = String(
+    process.env.PI_HORIZON_TESTNET_URL || "https://api.testnet.minepi.com"
   ).trim();
 
-  const sourceSecret = String(
-    process.env.DEV_SECRET ||
-      process.env.PI_DEVELOPER_WALLET_SECRET_SEED ||
-      process.env.PI_WALLET_PRIVATE_KEY ||
-      process.env.PI_SECRET_KEY ||
-      ""
+  const NETWORK_PASSPHRASE = String(
+    process.env.PI_NETWORK_PASSPHRASE_TESTNET || "Pi Testnet"
   ).trim();
 
-  if (!sourcePublic || !sourceSecret) {
-    throw new Error("Thiếu DEV_PUBLIC/DEV_SECRET.");
+  const ServerCtor = StellarSdk.Horizon?.Server || StellarSdk.Server;
+  const server = new ServerCtor(HORIZON_URL);
+
+  const sourceKeypair = StellarSdk.Keypair.fromSecret(SOURCE_WALLET_SECRET);
+  const realPublic = sourceKeypair.publicKey();
+
+  if (SOURCE_WALLET_PUBLIC && SOURCE_WALLET_PUBLIC !== realPublic) {
+    throw new Error("PI_PUBLIC_KEY_TESTNET không khớp với PI_SECRET_KEY_TESTNET.");
   }
 
-  if (!recipientAddress) {
-    throw new Error("Thiếu recipientAddress.");
+  const destination = String(recipientAddress || "").trim().toUpperCase();
+  if (!/^G[A-Z2-7]{55}$/.test(destination)) {
+    throw new Error("Địa chỉ ví nhận không hợp lệ.");
   }
 
-  if (!StellarSdk.StrKey.isValidEd25519PublicKey(sourcePublic)) {
-    throw new Error("DEV_PUBLIC không hợp lệ.");
-  }
-
-  if (!StellarSdk.StrKey.isValidEd25519PublicKey(recipientAddress)) {
-    throw new Error("Ví Pi nhận tiền không hợp lệ.");
-  }
-
-  const numericAmount = Number(amount);
-  if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-    throw new Error("Số Pi rút không hợp lệ.");
-  }
-
-  const amountStr = numericAmount.toFixed(7);
-  const sourceKeypair = StellarSdk.Keypair.fromSecret(sourceSecret);
-
-  if (sourceKeypair.publicKey() !== sourcePublic) {
-    throw new Error("DEV_PUBLIC không khớp DEV_SECRET.");
-  }
-
-  const server = getStellarServer();
-  const sourceAccount = await server.loadAccount(sourcePublic);
+  const sourceAccount = await server.loadAccount(realPublic);
   const baseFee = await server.fetchBaseFee();
 
-  const txBuilder = new StellarSdk.TransactionBuilder(sourceAccount, {
+  const tx = new StellarSdk.TransactionBuilder(sourceAccount, {
     fee: String(baseFee),
-    networkPassphrase: CONFIG.PI_NETWORK_PASSPHRASE
-  }).addOperation(
-    StellarSdk.Operation.payment({
-      destination: recipientAddress,
-      asset: StellarSdk.Asset.native(),
-      amount: amountStr
-    })
-  );
+    networkPassphrase: NETWORK_PASSPHRASE
+  })
+    .addOperation(
+      StellarSdk.Operation.payment({
+        destination,
+        asset: StellarSdk.Asset.native(),
+        amount: normalizeAmount(amount)
+      })
+    )
+    .addMemo(StellarSdk.Memo.text(trimMemoText(memo)))
+    .setTimeout(90)
+    .build();
 
-  const safeMemo = normalizeMemo(memo);
-  if (safeMemo) {
-    txBuilder.addMemo(StellarSdk.Memo.text(safeMemo));
-  }
-
-  const tx = txBuilder.setTimeout(30).build();
   tx.sign(sourceKeypair);
 
-  const submitResp = await server.submitTransaction(tx);
+  const result = await server.submitTransaction(tx);
 
   return {
-    txid: String(submitResp?.hash || ""),
-    data: submitResp
+    ok: true,
+    txid: result?.hash || result?.id || "",
+    data: result
   };
 }
 
