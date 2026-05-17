@@ -12208,38 +12208,59 @@ function runRefTransaction(ref, updater) {
 
 async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
     const ref = walletRefByKey(walletKey);
-    const snap = await ref.once("value");
-    const safeCurrent = snap.val() && typeof snap.val() === "object" ? snap.val() : {};
 
-    const currentPi = Number(safeCurrent.balance ?? 0) || 0;
-    const currentPmc = Number(safeCurrent.pmcBalance ?? 0) || 0; // Xóa Math.floor
-    const nextPmc = currentPmc + Number(delta || 0); // Xóa Math.floor
+    try {
+        // Dùng tuyệt kỹ Transaction + Bùa _dummy để ép Firebase lên Server lấy số dư thật
+        const txResult = await runRefTransaction(ref, (current) => {
+            // Lần 1: Ép Firebase lấy số liệu thật từ máy chủ, đéo xài cache
+            if (current === null) return { _dummy: true };
+            if (current._dummy) return;
 
-    if (nextPmc < 0 && walletKey !== "pi_admin_master") return null;
+            const currentPi = Number(current.balance || current.piBalance || 0);
+            const currentPmc = Number(current.pmcBalance || 0);
+            const nextPmc = currentPmc + Number(delta || 0);
 
-    await ref.update({
-        balance: currentPi,
-        pmcBalance: nextPmc, // Lưu số lẻ trực tiếp lên Firebase
-        updatedAt: Date.now(),
-        name: profile.name || safeCurrent.name || localStorage.getItem("user-name-display") || "Người chơi",
-        photo: profile.photo || safeCurrent.photo || localStorage.getItem("user-photo") || "images/do_tuong.png"
-    });
-    // ... phần còn lại giữ nguyên
+            // Nếu trừ tiền mà bị âm (đéo đủ tiền) và đéo phải quỹ Admin thì HỦY GIAO DỊCH
+            if (nextPmc < 0 && walletKey !== "pi_admin_master") return;
 
-    console.log("PMC DIRECT UPDATE OK", {
-        walletKey,
-        delta,
-        before: currentPmc,
-        after: nextPmc
-    });
+            // Ghi đè số liệu mới
+            current.balance = currentPi;
+            current.piBalance = currentPi;
+            current.pmcBalance = nextPmc;
+            current.updatedAt = Date.now();
+            current.name = profile.name || current.name || localStorage.getItem("user-name-display") || "Người chơi";
+            current.photo = profile.photo || current.photo || localStorage.getItem("user-photo") || "images/do_tuong.png";
 
-    if (walletKey === makeWalletDbKey()) {
-        currentPmcBalance = nextPmc;
-        localStorage.setItem(getPmcCacheKey(), String(nextPmc));
-        updatePmcUI(nextPmc);
+            return current;
+        });
+
+        // Nếu giao dịch bị hủy do đéo đủ tiền hoặc lỗi
+        if (!txResult || !txResult.committed) {
+            console.error("Giao dịch PMC bị từ chối. Có thể do đéo đủ tiền.");
+            return null; 
+        }
+
+        // Lấy số dư PMC mới nhất vừa được Server duyệt
+        const nextPmc = txResult.snapshot.val().pmcBalance;
+
+        console.log("PMC TRANSACTION OK", {
+            walletKey,
+            delta,
+            after: nextPmc
+        });
+
+        // Nếu là ví của chính mình thì cập nhật lại giao diện ngay cho nóng
+        if (walletKey === makeWalletDbKey()) {
+            currentPmcBalance = nextPmc;
+            localStorage.setItem(getPmcCacheKey(), String(nextPmc));
+            updatePmcUI(nextPmc);
+        }
+
+        return nextPmc;
+    } catch (err) {
+        console.error("Lỗi sập nguồn khi trừ PMC:", err);
+        return null;
     }
-
-    return nextPmc;
 }
 async function settlePmcViaApi(roomId) {
     try {
