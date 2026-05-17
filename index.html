@@ -12210,52 +12210,36 @@ async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
     const ref = walletRefByKey(walletKey);
 
     try {
-        // 🔥 BÙA CHÍNH TÔNG DIỆT LỖI NGHẼN MẠNG 🔥
-        // Ép trình duyệt kết nối Server lấy số dư thật (488 PMC) về nhét vào Cache trước.
-        // Nhờ vậy, lệnh transaction bên dưới sẽ ĐÉO BAO GIỜ bị mù (null) nữa!
-        await ref.once("value");
+        console.log(`[KHOANH VÙNG] Bắt đầu trừ tiền ví: ${walletKey}, biến động: ${delta}`);
+        
+        // 1. TẢI TRỰC TIẾP SỐ DƯ TỪ MÁY CHỦ XUỐNG (Bỏ qua cache)
+        const snap = await ref.once("value");
+        const currentData = snap.val() || {};
+        
+        const currentPi = Number(currentData.balance || currentData.piBalance || 0);
+        const currentPmc = Number(currentData.pmcBalance || 0);
+        const nextPmc = currentPmc + Number(delta || 0);
 
-        const txResult = await runRefTransaction(ref, (current) => {
-            // Lúc này 'current' chắc chắn đã chứa dữ liệu thật từ Server
-            // Nếu nó vẫn null nghĩa là cái ví này đéo tồn tại trên đời -> Hủy cmnl
-            if (!current) return; 
+        console.log(`[KHOANH VÙNG] PMC hiện có: ${currentPmc}. Sau khi trừ: ${nextPmc}`);
 
-            const currentPi = Number(current.balance || current.piBalance || 0);
-            const currentPmc = Number(current.pmcBalance || 0);
-            const nextPmc = currentPmc + Number(delta || 0);
-
-            // Nếu trừ tiền mà bị âm thật sự thì HỦY GIAO DỊCH
-            if (nextPmc < 0 && walletKey !== "pi_admin_master") {
-                return; // Trả về undefined để từ chối giao dịch
-            }
-
-            // Ghi đè số liệu mới
-            current.balance = currentPi;
-            current.piBalance = currentPi;
-            current.pmcBalance = nextPmc;
-            current.updatedAt = Date.now();
-            current.name = profile.name || current.name || localStorage.getItem("user-name-display") || "Người chơi";
-            current.photo = profile.photo || current.photo || localStorage.getItem("user-photo") || "images/do_tuong.png";
-
-            return current;
-        });
-
-        // Nếu giao dịch bị hủy do đéo đủ tiền hoặc tường lửa chặn
-        if (!txResult || !txResult.committed) {
-            console.error("Giao dịch PMC bị từ chối. Có thể do đéo đủ tiền.");
+        // 2. Chốt chặn âm tiền
+        if (nextPmc < 0 && walletKey !== "pi_admin_master") {
+            console.error("[KHOANH VÙNG] Lỗi bị âm tiền thật sự!");
             return null; 
         }
 
-        // Lấy số dư PMC mới nhất vừa được Server duyệt
-        const nextPmc = txResult.snapshot.val().pmcBalance;
+        // 3. GHI ĐÈ TRỰC TIẾP BẰNG UPDATE (Nhanh, gọn, lẹ, đéo sợ kẹt cache)
+        const updates = {
+            pmcBalance: nextPmc,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        };
+        if (profile.name) updates.name = profile.name;
+        if (profile.photo) updates.photo = profile.photo;
 
-        console.log("PMC TRANSACTION OK", {
-            walletKey,
-            delta,
-            after: nextPmc
-        });
+        await ref.update(updates);
+        console.log("[KHOANH VÙNG] Trừ tiền PMC thành công!");
 
-        // Nếu là ví của chính mình thì cập nhật lại giao diện ngay cho nóng
+        // 4. Nảy số trên màn hình
         if (walletKey === makeWalletDbKey()) {
             currentPmcBalance = nextPmc;
             localStorage.setItem(getPmcCacheKey(), String(nextPmc));
@@ -12264,7 +12248,9 @@ async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
 
         return nextPmc;
     } catch (err) {
-        console.error("Lỗi sập nguồn khi trừ PMC:", err);
+        console.error("LỖI SẬP NGUỒN:", err);
+        // 🔥 BẪY BẮT LỖI TƯỜNG LỬA FIREBASE: Nếu nghẽn, nó sẽ hiện lý do ở đây!
+        alert("LỖI GHI DATABASE: " + err.message); 
         return null;
     }
 }
