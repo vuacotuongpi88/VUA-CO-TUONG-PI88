@@ -12027,7 +12027,7 @@ function refreshRoomAvatarSkinUI() {
         return;
     }
 
-    
+
     // Fallback nếu bản UI nào đó không có id do/den
     document.querySelectorAll(".player-avatar-outside").forEach(img => {
         if (img.classList.contains("avatar-frame-overlay")) return;
@@ -12235,7 +12235,24 @@ async function chargeStakeForReady(roomId, side) {
         const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
 
         const localProfile = getCurrentPlayerProfile();
-        const targetWalletKey = localProfile.walletKey;
+
+const sidePlayer = room?.players?.[side] || {};
+
+const targetWalletKey = String(
+    sidePlayer.walletKey ||
+    localProfile.walletKey ||
+    makeWalletDbKey()
+).trim();
+
+console.log("READY_WALLET_DEBUG", {
+    roomId,
+    side,
+    stake,
+    sidePlayerWalletKey: sidePlayer.walletKey,
+    localProfileWalletKey: localProfile.walletKey,
+    makeWalletDbKey: typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "",
+    targetWalletKey
+});
 
         if (!targetWalletKey) {
             return { ok: false, error: "Không tìm thấy mã ví để trừ tiền." };
