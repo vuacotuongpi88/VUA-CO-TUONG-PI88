@@ -383,7 +383,255 @@ async function adjustPmcWalletByKey(db, walletKey, delta, profile = {}) {
   if (!result.committed) return null;
   return result.snapshot?.val() || null;
 }
+function serverStatsMonthKey(ts = Date.now()) {
+  const d = new Date(Number(ts) || Date.now());
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+}
 
+function serverStatsInt(value, fallback = 0) {
+  const n = Number(value);
+  return Math.max(0, Math.floor(Number.isFinite(n) ? n : fallback));
+}
+
+function buildServerStatsResult(roomId, room, stake) {
+  const winnerSide = String(room?.winner || "").trim().toLowerCase();
+
+  if (winnerSide !== "do" && winnerSide !== "den") return null;
+
+  const loserSide = winnerSide === "do" ? "den" : "do";
+  const winnerPlayer = room?.players?.[winnerSide] || {};
+  const loserPlayer = room?.players?.[loserSide] || {};
+  const winnerWalletKey = safeWalletKey(winnerPlayer.walletKey || winnerPlayer.uid || "");
+  const loserWalletKey = safeWalletKey(loserPlayer.walletKey || loserPlayer.uid || "");
+
+  if (!roomId || !winnerWalletKey || !loserWalletKey || winnerWalletKey === loserWalletKey) {
+    return null;
+  }
+
+  const roundNo = Math.max(1, Math.floor(Number(room?.roundNo || 1) || 1));
+  const roundId = safeWalletKey(
+    room?.activeRoundId || `${roomId}_round_${roundNo}`
+  );
+  const finishedAt = Number(room?.finishedAt || room?.winnerAt || Date.now()) || Date.now();
+
+  return {
+    roundId,
+    roomId,
+    roundNo,
+    mode: room?.mode || "co-tuong",
+    stakePMC: Math.max(0, Math.floor(Number(stake ?? room?.stakePMC ?? 0) || 0)),
+    winnerSide,
+    loserSide,
+    winnerWalletKey,
+    loserWalletKey,
+    winnerUid: winnerPlayer.uid || "",
+    loserUid: loserPlayer.uid || "",
+    winnerName: winnerPlayer.name || winnerPlayer.username || "Người thắng",
+    loserName: loserPlayer.name || loserPlayer.username || "Người thua",
+    reason: room?.winReason || "win",
+    startedAt: Number(room?.startedAt || 0) || 0,
+    finishedAt,
+    serverCommittedAt: Date.now()
+  };
+}
+
+function applyServerStatsToWalletData(wallet, result, role) {
+  const w = wallet && typeof wallet === "object" ? { ...wallet } : {};
+  const roundId = String(result?.roundId || "").trim();
+  if (!roundId) return w;
+
+  const isWinner = role === "winner";
+  const isLoser = role === "loser";
+  if (!isWinner && !isLoser) return w;
+
+  const now = Date.now();
+  const at = Number(result.finishedAt || result.serverCommittedAt || now) || now;
+  const monthKey = serverStatsMonthKey(at);
+
+  const oldHistory = w.matchHistoryV2 && typeof w.matchHistoryV2 === "object"
+    ? { ...w.matchHistoryV2 }
+    : {};
+
+  // Chống cộng trùng. Ván đã có history rồi thì không + thêm.
+  if (oldHistory[roundId]) return w;
+
+  const oldStats = w.statsV2 && typeof w.statsV2 === "object" ? { ...w.statsV2 } : {};
+  const oldMonths = oldStats.months && typeof oldStats.months === "object" ? { ...oldStats.months } : {};
+  const oldThisMonth = oldMonths[monthKey] && typeof oldMonths[monthKey] === "object"
+    ? { ...oldMonths[monthKey] }
+    : {};
+
+  const oldStatsByMonth = w.statsByMonth && typeof w.statsByMonth === "object" ? { ...w.statsByMonth } : {};
+  const oldByMonth = oldStatsByMonth[monthKey] && typeof oldStatsByMonth[monthKey] === "object"
+    ? { ...oldStatsByMonth[monthKey] }
+    : {};
+
+  const addWin = isWinner ? 1 : 0;
+  const addLoss = isLoser ? 1 : 0;
+  const addMatch = 1;
+
+  const totalWins = serverStatsInt(oldStats.wins ?? oldStats.totalWins ?? 0) + addWin;
+  const totalLosses = serverStatsInt(oldStats.losses ?? oldStats.totalLosses ?? 0) + addLoss;
+  const totalMatches = Math.max(
+    serverStatsInt(oldStats.matches ?? oldStats.totalMatches ?? 0) + addMatch,
+    totalWins + totalLosses
+  );
+
+  const monthWins = serverStatsInt(oldThisMonth.wins ?? oldStats.monthWins ?? oldByMonth.wins ?? 0) + addWin;
+  const monthLosses = serverStatsInt(oldThisMonth.losses ?? oldStats.monthLosses ?? oldByMonth.losses ?? 0) + addLoss;
+  const monthMatches = Math.max(
+    serverStatsInt(oldThisMonth.matches ?? oldStats.monthMatches ?? oldByMonth.matches ?? 0) + addMatch,
+    monthWins + monthLosses
+  );
+
+  const historyEntry = {
+    done: true,
+    source: "server_pmc_settle_stats_v6",
+    role,
+    result: isWinner ? "win" : "loss",
+    roomId: result.roomId || "",
+    roundNo: result.roundNo || 0,
+    side: isWinner ? result.winnerSide : result.loserSide,
+    opponentWalletKey: isWinner ? result.loserWalletKey : result.winnerWalletKey,
+    opponentName: isWinner ? result.loserName : result.winnerName,
+    reason: result.reason || "",
+    mode: result.mode || "co-tuong",
+    stakePMC: result.stakePMC || 0,
+    at,
+    updatedAt: now
+  };
+
+  w.matchHistoryV2 = {
+    ...oldHistory,
+    [roundId]: historyEntry
+  };
+
+  const nextMonthObj = {
+    ...oldThisMonth,
+    wins: monthWins,
+    losses: monthLosses,
+    matches: monthMatches,
+    updatedAt: now
+  };
+
+  w.statsV2 = {
+    ...oldStats,
+    wins: totalWins,
+    losses: totalLosses,
+    matches: totalMatches,
+    totalWins,
+    totalLosses,
+    totalMatches,
+    monthWins,
+    monthLosses,
+    monthMatches,
+    monthKey,
+    lastResult: isWinner ? "win" : "loss",
+    lastReason: result.reason || "",
+    lastRoomId: result.roomId || "",
+    lastRoundId: roundId,
+    updatedAt: now,
+    source: "server_pmc_settle_stats_v6",
+    months: {
+      ...oldMonths,
+      [monthKey]: nextMonthObj
+    }
+  };
+
+  w.statsByMonth = {
+    ...oldStatsByMonth,
+    [monthKey]: {
+      ...oldByMonth,
+      wins: monthWins,
+      losses: monthLosses,
+      matches: monthMatches,
+      updatedAt: now
+    }
+  };
+
+  w.updatedAt = now;
+  return w;
+}
+
+async function applyServerStatsWalletOnce(db, walletKey, result, role) {
+  const safeKey = safeWalletKey(walletKey);
+  if (!safeKey || !result?.roundId) {
+    return { ok: false, error: "missing_stats_wallet_or_round" };
+  }
+
+  let alreadyCounted = false;
+  let afterStats = null;
+
+  const tx = await db.ref("wallets/" + safeKey).transaction(current => {
+    const w = current && typeof current === "object" ? current : {};
+    const oldHistory = w.matchHistoryV2 && typeof w.matchHistoryV2 === "object" ? w.matchHistoryV2 : {};
+
+    if (oldHistory[result.roundId]) {
+      alreadyCounted = true;
+      afterStats = w.statsV2 || null;
+      return w;
+    }
+
+    const next = applyServerStatsToWalletData(w, result, role);
+    afterStats = next.statsV2 || null;
+    return next;
+  });
+
+  return {
+    ok: !!tx.committed,
+    walletKey: safeKey,
+    role,
+    alreadyCounted,
+    statsV2: afterStats
+  };
+}
+
+async function applyServerMatchStatsV2(db, roomId, room, stake) {
+  const result = buildServerStatsResult(roomId, room, stake);
+
+  if (!result) {
+    return {
+      ok: false,
+      skipped: true,
+      error: "invalid_stats_result"
+    };
+  }
+
+  const [winnerStats, loserStats] = await Promise.all([
+    applyServerStatsWalletOnce(db, result.winnerWalletKey, result, "winner"),
+    applyServerStatsWalletOnce(db, result.loserWalletKey, result, "loser")
+  ]);
+
+  const marker = {
+    done: true,
+    source: "server_pmc_settle_stats_v6",
+    roundId: result.roundId,
+    roomId: result.roomId,
+    winnerWalletKey: result.winnerWalletKey,
+    loserWalletKey: result.loserWalletKey,
+    winnerSide: result.winnerSide,
+    loserSide: result.loserSide,
+    winnerApplied: !!winnerStats.ok,
+    loserApplied: !!loserStats.ok,
+    winnerAlreadyCounted: !!winnerStats.alreadyCounted,
+    loserAlreadyCounted: !!loserStats.alreadyCounted,
+    reason: result.reason || "",
+    at: Date.now()
+  };
+
+  await db.ref(`matches/${roomId}/statsV2Results/${result.roundId}`).set(marker).catch(() => {});
+  await db.ref(`statsV2Results/${result.roundId}`).set(marker).catch(() => {});
+
+  return {
+    ok: !!(winnerStats.ok && loserStats.ok),
+    result,
+    winnerStats,
+    loserStats,
+    marker
+  };
+}
 async function incrementMissionPool(db, amount, roomId) {
   const n = normalizePmc(amount);
   if (n <= 0) {
@@ -719,8 +967,19 @@ module.exports = async function handler(req, res) {
         error: expErr?.message || "exp_error"
       };
     }
+    let statsResult = null;
 
-    await settlementRef.set({
+    try {
+      statsResult = await applyServerMatchStatsV2(db, roomId, room, stake);
+      console.log("MATCH STATS V2 SERVER OK =", statsResult);
+    } catch (statsErr) {
+      console.error("MATCH STATS V2 SERVER ERROR =", statsErr);
+      statsResult = {
+        ok: false,
+        error: statsErr?.message || "stats_error"
+      };
+    }
+        await settlementRef.set({
       done: true,
       paid: true,
       paidAt: Date.now(),
@@ -737,9 +996,9 @@ module.exports = async function handler(req, res) {
       winnerWalletKey: safeWalletKey(winnerWalletKey),
       adminWalletKey: ADMIN_WALLET_KEY,
       expResult,
+      statsResult,
       at: Date.now()
     });
-
     await db.ref("matchFeeTransactions").push({
       roomId,
       type: "match_fee_pmc",
@@ -787,9 +1046,10 @@ module.exports = async function handler(req, res) {
       adminWalletKey: ADMIN_WALLET_KEY,
       winnerPmcBalance: winnerAfter?.pmcBalance ?? null,
       adminPmcBalance: adminAfter?.pmcBalance ?? null,
-      doPmcBalance: doPmcBalanceAfter,
+            doPmcBalance: doPmcBalanceAfter,
       denPmcBalance: denPmcBalanceAfter,
-      expResult
+      expResult,
+      statsResult
     });
   } catch (err) {
     console.error("pmc settle error =", err);
