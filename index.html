@@ -10444,35 +10444,18 @@ if (room.winner) {
                 scheduleResetWinnerRoomAfterPaid(room, listeningRoomId);
             }
              
-// 🔥 BỎ CHỮ AWAIT: Gọi chia tiền chạy ngầm, luồng UI chạy tiếp bật bảng SS luôn!
+// Gọi backend chia tiền/EXP chạy ngầm. Backend khóa chống chia 2 lần.
         maybeSettleStakeRoom(room, listeningRoomId).catch(err => console.error("Settle lỗi:", err));
-
-        // 🔥 FIX GIAO DIỆN KHÔNG CỘNG TIỀN KHI ĐẦU HÀNG/CHIẾU BÍ:
-        // Bắt tín hiệu "đã trả thưởng xong" từ Firebase để ép máy tải lại ví!
-        if (room.settlement && room.settlement.paid === true) {
-            const syncKey = `__wallet_synced_${listeningRoomId}_${room.winner}`;
-            if (!window[syncKey]) {
-                window[syncKey] = true;
-                setTimeout(() => {
-                    console.log("💰 Firebase báo chia tiền xong, tải lại ví mới nhất!");
-                    loadWalletBalance().then(() => {
-                        if (mySide) syncMyMatchBalanceToRoomNow();
-                    });
-                }, 800); // Đợi 800ms cho chắc ăn Firebase đã lưu xong xuôi
-            }
-        }
 
         // Tách riêng khối bàn giao phòng sau bỏ chạy.
         if (
-            room.winner === mySide &&
-            room.winReason === "bochay"
-        ) {
-            scheduleResetWinnerRoomAfterPaid(room, listeningRoomId);
-        }
+    room.winner === mySide &&
+    ["bochay", "dauhang"].includes(room.winReason)
+) {
+    scheduleResetWinnerRoomAfterPaid(room, listeningRoomId);
+}
 
-            // 🔥 FIX TRÍ MẠNG LỖI ĐẦU HÀNG ĐÉO CỘNG TIỀN:
-            // Khi máy người thua chia tiền xong, nó báo "paid = true" lên Firebase.
-            // Máy người thắng thấy chữ "paid = true" thì lập tức load lại ví mới nhất!
+            // Khi backend đóng dấu settlement.paid/done, ép máy tải lại ví mới nhất.
             if (room.settlement?.paid === true || room.settlement?.done === true) {
                 const syncKey = `__wallet_synced_${listeningRoomId}_${room.winner}`;
                 if (!window[syncKey]) {
@@ -10482,7 +10465,7 @@ if (room.winner) {
                         loadWalletBalance().then(() => {
                             if (mySide) syncMyMatchBalanceToRoomNow();
                         });
-                    }, 800); // Chờ 800ms cho Firebase ghi DB dứt điểm
+                    }, 800);
                 }
             }
 
@@ -12324,11 +12307,19 @@ async function settlePmcViaApi(roomId) {
     try {
         const walletKey = makeWalletDbKey(); // 🔥 THÊM DÒNG NÀY ĐỂ HẾT LỖI ĐỎ
         console.log("Giao dịch tại ví:", walletKey);
-        const res = await fetch("/api/pmc/settle", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ roomId })
-        });
+        const user = firebase.auth().currentUser;
+if (!user) throw new Error("Chưa đăng nhập Firebase");
+
+const token = await user.getIdToken(true);
+
+const res = await fetch("/api/pmc/settle", {
+    method: "POST",
+    headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + token
+    },
+    body: JSON.stringify({ roomId })
+});
 
         const rawText = await res.text();
 let data = {};
@@ -12640,90 +12631,71 @@ const hostStillInThisRoom =
     return room;
 }
 async function maybeSettleStakeRoom(room, roomId) {
-    const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
-    if (!roomId || !stake || !room?.winner || room.winner === "hoa") return;
+    if (!roomId || !room?.winner) return false;
 
-    // --- BỌC THÉP MÁY KHÁCH: MỖI VÁN ĐẤU CHỈ ĐƯỢC CHIA TIỀN ĐÚNG 1 LẦN ---
-    window.__settledRooms = window.__settledRooms || {};
-    // Dùng activeRoundId làm chìa khóa để phân biệt các ván đấu khác nhau trong cùng 1 phòng
-    const roundKey = room.activeRoundId || (roomId + "_" + room.startedAt); 
-    if (window.__settledRooms[roundKey]) {
-        console.log("Ván này đã chia tiền rồi, cấm chia lại!");
-        return false; 
-    }
-    window.__settledRooms[roundKey] = true; 
-    // ---------------------------------------------------------------------
-
-    const winnerSide = String(room.winner || "").trim();
+    const winnerSide = String(room.winner || "").trim().toLowerCase();
+    const isDraw = winnerSide === "hoa" || winnerSide === "draw";
     const winnerPlayer = room.players?.[winnerSide] || {};
     const isWinnerBot = winnerPlayer.uid === "bot_master_100" || winnerPlayer.isBot;
 
-    if (winnerSide !== mySide && !isWinnerBot) return false; 
+    // Chỉ máy người thắng gọi settle. Riêng hòa thì 2 máy đều được gọi, backend sẽ khóa 1 lần.
+    if (!isDraw && winnerSide !== mySide && !isWinnerBot) return false;
 
-    const winnerPaidRef = db.ref(`matches/${roomId}/settlement/winnerPaid`);
-    const winLock = await runRefTransaction(winnerPaidRef, current => {
-        if (current && current.done) return;
-        return { done: true, at: Date.now(), uid: getCurrentPlayerProfile().uid || "bot_helper" };
-    });
+    if (room.settlement?.paid === true || room.settlement?.done === true) {
+        return true;
+    }
 
-    if (!winLock.committed) return false;
+    window.__settledRooms = window.__settledRooms || {};
+    const roundKey = room.activeRoundId || `${roomId}_${room.roundNo || 1}_${room.startedAt || room.finishedAt || ""}`;
 
-    // TÍNH TOÁN CẮT PHẾ 20% TRÊN TIỀN LỜI (Đúng luật giang hồ)
-    const totalPot = stake * 2;
-    const feePMC = Math.max(0, Number(stake * 0.2)); // Xóa Math.floor để phế là 0.2, 0.4...
-    const winnerReceivePMC = totalPot - feePMC;
-    const adminWalletKey = "pi_admin_master";
+    if (window.__settledRooms[roundKey]) {
+        return false;
+    }
+
+    window.__settledRooms[roundKey] = true;
 
     try {
-        if (feePMC > 0) {
-            const missionFund = Number(feePMC * 0.2); // Trích quỹ lẻ
-            const adminNetFee = feePMC - missionFund;
+        const user = firebase.auth().currentUser;
+        if (!user) throw new Error("Chưa đăng nhập Firebase");
 
-            if (adminNetFee > 0) {
-                await adjustPmcWalletByKey(adminWalletKey, adminNetFee, { name: "Ví phí hệ thống" });
-            }
-            
-            if (missionFund > 0) {
-                // Dùng increment với số lẻ (Firebase hỗ trợ tốt)
-                await db.ref("treasury/missionPoolPmc").set(firebase.database.ServerValue.increment(missionFund));
-            }
+        const token = await user.getIdToken(true);
+
+        const res = await fetch("/api/pmc/settle?v=" + Date.now(), {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + token
+            },
+            body: JSON.stringify({ roomId })
+        });
+
+        const raw = await res.text();
+        let data = {};
+
+        try {
+            data = raw ? JSON.parse(raw) : {};
+        } catch (parseErr) {
+            console.error("SETTLE RAW RESPONSE:", raw);
+            throw new Error("API settle không trả JSON: " + String(raw || "").slice(0, 200));
         }
 
-        // 2. Chuyển tiền thưởng cho người thắng
-        let paid = null;
-        if (isWinnerBot) {
-            paid = await adjustPmcWalletByKey(adminWalletKey, winnerReceivePMC, { name: "Quỹ hệ thống (Bot Thắng)" });
-        } else {
-            const localWalletKey = makeWalletDbKey();
-            paid = await adjustPmcWalletByKey(localWalletKey, winnerReceivePMC);
-            
-            if (paid != null) {
-                currentPmcBalance = paid;
-                localStorage.setItem(getPmcCacheKey(), String(paid));
-                updatePmcUI(paid);
-                refreshMyMatchBalanceBoxesNow(getPiBalance(), paid);
-            }
+        if (!res.ok || !data.ok) {
+            console.error("SETTLE API ERROR:", data);
+            throw new Error(data.error || "Settle thất bại");
         }
 
-        // 3. Đóng dấu xác nhận hoàn tất
-        if (paid != null) {
-            await db.ref(`matches/${roomId}/settlement`).update({
-                paid: true,
-                paidAt: Date.now(),
-                feePMC,
-                winnerReceivePMC
-            });
-        }
+        console.log("MATCH_SETTLE_CLIENT_OK", data);
 
         await loadWalletBalance().catch(() => {});
-        if (!isWinnerBot) {
+        if (mySide) {
             await syncMyMatchBalanceToRoomNow().catch(() => {});
         }
 
+        return data;
     } catch (err) {
-        console.error("LỖI CHIA TIỀN:", err);
-        // Nếu lỡ bị lỗi mạng lúc đang chia, mở khóa ra để khách F5 còn nhận được tiền
-        delete window.__settledRooms[roundKey]; 
+        delete window.__settledRooms[roundKey];
+        console.error("SETTLE CLIENT ERROR:", err);
+        throw err;
     }
 }
 
