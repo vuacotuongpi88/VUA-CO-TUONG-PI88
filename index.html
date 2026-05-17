@@ -11359,30 +11359,19 @@ async function loadWalletBalance() {
         const snap = await walletRef().once("value");
         const data = snap.val() || {};
 
-        let piAmount = 0;
-        if (data.balance != null) {
-            piAmount = Number(data.balance) || 0;
-        } else {
-            const scopedCache = localStorage.getItem(getBalanceCacheKey());
-            const legacy = localStorage.getItem(PI_BALANCE_KEY);
-            piAmount = Number(scopedCache ?? legacy ?? 0) || 0;
-        }
-
-        let pmcAmount = 0;
-        if (data.pmcBalance != null) {
-            pmcAmount = Number(data.pmcBalance) || 0;
-        } else {
-            pmcAmount = Number(localStorage.getItem(getPmcCacheKey()) || 0) || 0;
-        }
+        // 🔥 CHỐT CHẶN THÉP: CHỈ LẤY TIỀN TỪ FIREBASE. 
+        // Nếu Firebase đéo có (null/undefined) thì mặc định là 0. Đéo lôi rác từ localStorage ra nữa!
+        const piAmount = Number(data.balance || data.piBalance || 0);
+        const pmcAmount = Number(data.pmcBalance || 0);
 
         currentWalletBalance = Math.max(0, piAmount);
         currentPmcBalance = Math.max(0, pmcAmount);
 
+        // Lấy số thật từ Firebase đè chết mẹ cái số rác trong cache của trình duyệt đi
         localStorage.setItem(getBalanceCacheKey(), String(currentWalletBalance));
         localStorage.setItem(getPmcCacheKey(), String(currentPmcBalance));
 
-        // 👇👇 BẮT ĐẦU FIX LỖI F5 MẤT TÊN 👇👇
-        // 1. Nếu Database đã có tên/ảnh do mầy tự đổi, thì phải kéo nó về đè lên màn hình
+        // 👇👇 FIX LỖI F5 MẤT TÊN 👇👇
         const nameToSave = data.name || localStorage.getItem("user-name-display") || "Người chơi";
         const photoToSave = data.photo || localStorage.getItem("user-photo") || "images/do_tuong.png";
 
@@ -11403,22 +11392,20 @@ async function loadWalletBalance() {
             if (editUserPhoto) editUserPhoto.src = data.photo;
         }
 
-        // 2. Chốt lại: Cập nhật Firebase bằng tên gốc của Database, không cho ghi đè bậy bạ nữa!
+        // Cập nhật Firebase bằng tên gốc của Database
         await walletRef().update({
-            // Xóa mẹ 2 dòng balance và pmcBalance ở đây đi, cấm tuyệt đối hàm Load được phép ghi đè tiền!
             updatedAt: firebase.database.ServerValue.TIMESTAMP,
             name: nameToSave,
             photo: photoToSave
         });
         // 👆👆 KẾT THÚC FIX LỖI 👆👆
 
+        // Cập nhật UI với số tiền CHUẨN 100% TỪ FIREBASE
         updateBalanceUI(currentWalletBalance);
         updatePmcUI(currentPmcBalance);
 
-        // 🔥 THÊM ĐOẠN NÀY VÀO: ĐỂ THANH EXP CẬP NHẬT ĐÚNG CẤP LÚC MỚI VÀO GAME
+        // Tải EXP đúng 1 lần lúc mới vào game
         if (typeof window.updateExpBarUI === 'function') {
-            // FIX TRIỆT ĐỂ: Chỉ tải EXP đúng 1 lần lúc mới vào game.
-            // Cấm tải đè lung tung trong lúc chơi để chống giật lùi!
             if (!window.__expBarInitialized) {
                 window.updateExpBarUI(data.exp || 0);
                 window.__expBarInitialized = true;
@@ -11428,7 +11415,7 @@ async function loadWalletBalance() {
         return { pi: currentWalletBalance, pmc: currentPmcBalance };
     } catch (err) {
         console.error("Lỗi load ví:", err);
-
+        // CHỈ KHI NÀO MẤT MẠNG, ĐÉO GỌI ĐƯỢC FIREBASE THÌ MỚI ĐƯỢC XÀI CACHE
         currentWalletBalance = Math.max(0, Number(localStorage.getItem(getBalanceCacheKey()) || 0) || 0);
         currentPmcBalance = Math.max(0, Math.floor(Number(localStorage.getItem(getPmcCacheKey()) || 0) || 0));
 
@@ -11437,7 +11424,6 @@ async function loadWalletBalance() {
         return { pi: currentWalletBalance, pmc: currentPmcBalance };
     }
 }
-
 function getPiBalance() {
     const cached = Number(localStorage.getItem(getBalanceCacheKey()) || currentWalletBalance || 0) || 0;
     return Math.max(0, cached);
