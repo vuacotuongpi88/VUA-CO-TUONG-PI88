@@ -12211,12 +12211,10 @@ async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
 
     try {
         const txResult = await runRefTransaction(ref, (current) => {
-            // 🔥 MẦY ĐÃ QUÊN COPY 2 DÒNG BÙA NÀY NÈ! 🔥
-            // Lần 1: Firebase luôn truyền current = null. Trả về dummy để ép nó gọi lên Server!
-            if (current === null) return { _dummy: true };
-            
-            // Lần 2: Nó đã lấy được số thật 488 PMC từ Server. Nếu ví trắng trơn thật sự thì mới hủy!
-            if (current._dummy) return;
+            // 🔥 XÓA BỎ BÙA _dummy. NẾU CACHE LÀ NULL -> TẠO VÍ TẠM ĐỂ VƯỢT TƯỜNG LỬA 🔥
+            if (!current) {
+                current = { balance: 0, piBalance: 0, pmcBalance: 0 };
+            }
 
             const currentPi = Number(current.balance || current.piBalance || 0);
             const currentPmc = Number(current.pmcBalance || 0);
