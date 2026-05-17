@@ -137,56 +137,42 @@ module.exports = async function handler(req, res) {
         }
 
         const now = Date.now();
-let finalWallet = null;
+const currentWallet = existsSnap.val() || {};
 
-const tx = await walletRef.transaction(current => {
-    if (!current || typeof current !== "object") return;
+const finalWallet = {
+    walletKey: safeWalletKey,
+    piUid,
+    piUsername,
+    piVerified: true,
+    verifiedAt: currentWallet.verifiedAt || now,
+    piLinkSource: "api_finance_pi_link",
 
-    // Cho phép ví hiện tại cập nhật lại Pi UID / địa chỉ rút.
-    // Không chặn UID cũ nữa vì ví test đã từng lưu sai UID.
-    finalWallet = {
-        ...current,
-                walletKey: safeWalletKey,
-                piUid,
-                piUsername,
-                piVerified: true,
-                verifiedAt: current.verifiedAt || now,
-                piLinkSource: "api_finance_pi_link",
+    piWalletAddress,
+    linkedWalletAddress: piWalletAddress,
+    piBrowserWalletAddress: piWalletAddress,
+    withdrawWalletAddress: piWalletAddress,
+    withdrawAddress: piWalletAddress,
 
-                piWalletAddress,
-                linkedWalletAddress: piWalletAddress,
-                piBrowserWalletAddress: piWalletAddress,
-                withdrawWalletAddress: piWalletAddress,
-                withdrawAddress: piWalletAddress,
+    linkedWallet: {
+        ...(currentWallet.linkedWallet || {}),
+        address: piWalletAddress,
+        linkedAt: now,
+        source: "api_finance_pi_link"
+    },
 
-                linkedWallet: {
-                    ...(current.linkedWallet || {}),
-                    address: piWalletAddress,
-                    linkedAt: now,
-                    source: "api_finance_pi_link"
-                },
+    piLink: {
+        ...(currentWallet.piLink || {}),
+        piUid,
+        piUsername,
+        walletAddress: piWalletAddress,
+        linkedAt: now,
+        source: "api_finance_pi_link"
+    },
 
-                piLink: {
-                    ...(current.piLink || {}),
-                    piUid,
-                    piUsername,
-                    walletAddress: piWalletAddress,
-                    linkedAt: now,
-                    source: "api_finance_pi_link"
-                },
+    updatedAt: now
+};
 
-                updatedAt: now
-            };
-
-            return finalWallet;
-        });
-
-        if (!tx.committed || !finalWallet) {
-    return res.status(500).json({
-        ok: false,
-        error: "Không lưu được địa chỉ ví Pi. Hãy thử lại."
-    });
-}
+await walletRef.update(finalWallet);
 
         await db.ref("piWalletLinkLogs").push({
             walletKey: safeWalletKey,
