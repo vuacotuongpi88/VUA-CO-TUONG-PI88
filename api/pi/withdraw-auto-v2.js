@@ -1,7 +1,7 @@
 function loadDeps(network) {
   const { getDatabase } = require("firebase-admin/database");
   const adminBundle = require("../_firebaseAdmin.js");
-  const core = require("../../lib/_withdraw-auto-core.js");
+  const core = require("./_withdraw-auto-core.js");
 
   // 🔥 ÉP CHẾT CỨNG 100% LẤY KEY TESTNET, ĐÉO QUAN TÂM MAINNET HAY DEV_PUBLIC NỮA
   const SOURCE_WALLET_PUBLIC = String(process.env.PI_PUBLIC_KEY_TESTNET || "").trim();
