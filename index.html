@@ -20704,5 +20704,140 @@ async function submitMmoStock() {
         </div>
     </div>
 </div>
+<script>
+// ==========================================
+// BÙA DIỆT LỖI CUỐI CÙNG (DÁN NGAY TRƯỚC THẺ </body>)
+// ==========================================
+async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
+    const ref = db.ref("wallets/" + String(walletKey || makeWalletDbKey()).replace(/[.#$\[\]\/]/g, "_"));
+    try {
+        const snap = await ref.once("value");
+        const currentData = snap.val() || {};
+        const currentPi = Number(currentData.balance || currentData.piBalance || 0);
+        const currentPmc = Number(currentData.pmcBalance || 0);
+        const nextPmc = currentPmc + Number(delta || 0);
+
+        if (nextPmc < 0 && walletKey !== "pi_admin_master") {
+            window.__debugLastError = `Server Firebase báo ví mày chỉ có ${currentPmc} PMC, đéo đủ để trừ ${-delta} PMC!`;
+            return null; 
+        }
+
+        const updates = { 
+            pmcBalance: nextPmc, 
+            updatedAt: firebase.database.ServerValue.TIMESTAMP 
+        };
+        if (profile.name) updates.name = profile.name;
+        if (profile.photo) updates.photo = profile.photo;
+
+        await ref.update(updates);
+
+        if (walletKey === makeWalletDbKey()) {
+            currentPmcBalance = nextPmc;
+            localStorage.setItem(getPmcCacheKey(), String(nextPmc));
+            if (typeof updatePmcUI === "function") updatePmcUI(nextPmc);
+        }
+        return nextPmc;
+    } catch (err) {
+        // Fix dứt điểm lỗi TypeError tàng hình
+        window.__debugLastError = "Lỗi Firebase chặn ghi (Permission Denied): " + (err ? err.message || String(err) : "Lỗi ẩn");
+        return null;
+    }
+}
+
+async function chargeStakeForReady(roomId, side) {
+    try {
+        if (!roomId || !side) return { ok: false, error: "Thiếu thông tin phòng hoặc phe." };
+
+        const roomSnap = await db.ref("matches/" + roomId).once("value");
+        const room = roomSnap.val() || {};
+        const stake = Math.max(0, Math.floor(Number(room?.stakePMC || 0) || 0));
+        
+        if (!stake) return { ok: true };
+        if (room?.stakeLocked?.[side]) return { ok: true };
+
+        const localProfile = getCurrentPlayerProfile();
+        const targetWalletKey = localProfile.walletKey;
+        
+        await db.ref("matches/" + roomId + "/players/" + side).update({
+            walletKey: targetWalletKey, name: localProfile.name, photo: localProfile.photo, uid: localProfile.uid || ""
+        });
+
+        const safeWalletKey = String(targetWalletKey || "").replace(/[.#$\[\]\/]/g, "_");
+        const targetWalletSnap = await db.ref("wallets/" + safeWalletKey).once("value");
+        const targetWallet = targetWalletSnap.val() || {};
+        
+        const targetPmc = Math.max(0, Number(targetWallet.pmcBalance || 0) || 0);
+        const freeTickets = Math.max(0, Math.floor(Number(targetWallet.freeTickets || 0)));
+
+        if (!targetWalletKey) return { ok: false, error: "Không tìm thấy mã ví để trừ tiền." };
+
+        let useTicket = false;
+        if (stake > 0 && stake <= 10000 && freeTickets > 0) {
+            useTicket = confirm(`🎁 Mày đang có ${freeTickets} LƯỢT ĐÁNH MIỄN PHÍ.\nCó muốn dùng 1 lượt để thay thế cho ${formatPMC(stake)} không?`);
+        }
+
+        if (useTicket) {
+            await db.ref("wallets/" + safeWalletKey + "/freeTickets").set(freeTickets - 1);
+            await db.ref("matches/" + roomId + "/stakeLocked/" + side).set({
+                done: true, walletKey: targetWalletKey, stake, isTicketUsed: true, at: firebase.database.ServerValue.TIMESTAMP, uid: localProfile.uid || ""
+            });
+            return { ok: true, paid: targetPmc };
+        }
+
+        if (targetPmc < stake) {
+            return { ok: false, error: `LỖI HIỂN THỊ ẢO!\nMàn hình hiện ${getPmcBalance()} PMC, nhưng trên máy chủ Firebase chỉ có ${targetPmc} PMC. Không đủ để trừ ${stake} PMC!` };
+        }
+
+        window.__debugLastError = "";
+        const paid = await adjustPmcWalletByKey(targetWalletKey, -stake, {
+            name: localProfile.name || "Người chơi", photo: localProfile.photo || "images/do_tuong.png"
+        });
+
+        if (paid == null) return { ok: false, error: window.__debugLastError || "Không rõ nguyên nhân sập lúc trừ tiền." };
+
+        currentPmcBalance = paid;
+        localStorage.setItem(getPmcCacheKey(), String(paid));
+        if (typeof updatePmcUI === "function") updatePmcUI(paid);
+        if (typeof refreshMyMatchBalanceBoxesNow === "function") refreshMyMatchBalanceBoxesNow(getPiBalance(), paid);
+
+        await db.ref("matches/" + roomId + "/players/" + side).update({ pmcBalance: paid, updatedAt: firebase.database.ServerValue.TIMESTAMP }).catch(()=>{});
+        await db.ref("matches/" + roomId + "/stakeLocked/" + side).set({ done: true, walletKey: targetWalletKey, stake, at: firebase.database.ServerValue.TIMESTAMP, uid: localProfile.uid || "" });
+
+        return { ok: true, paid };
+    } catch (err) {
+        return { ok: false, error: "Hàm ChargeStake sập nguồn: " + (err ? err.message || String(err) : "Lỗi ẩn") };
+    }
+}
+
+async function setReady() {
+    if (isSpectatorMode) return;
+    if (!currentRoomId || !mySide) return;
+
+    const btn = document.getElementById("ready-main-btn");
+    if (btn) {
+        if (btn.disabled) return;
+        btn.disabled = true;
+        btn.textContent = "ĐANG XỬ LÝ...";
+        btn.style.opacity = "0.6";
+    }
+
+    const result = await chargeStakeForReady(currentRoomId, mySide);
+
+    if (!result.ok) {
+        setTimeout(() => { 
+            alert("🚨 LỖI TỪ SERVER:\n\n" + result.error); 
+        }, 200);
+        
+        if (btn) {
+            btn.disabled = false;
+            btn.style.opacity = "1";
+            btn.textContent = mySide === "do" ? "ĐỎ SẴN SÀNG" : "ĐEN SẴN SÀNG";
+        }
+        return;
+    }
+
+    await db.ref("matches/" + currentRoomId + "/ready/" + mySide).set(true);
+}
+</script>
 </body>
 </html>
