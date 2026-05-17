@@ -12211,19 +12211,20 @@ async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
 
     try {
         const txResult = await runRefTransaction(ref, (current) => {
-            // 🔥 BÙA TỐI THƯỢNG: LỪA FIREBASE BẰNG VÍ TỶ PHÚ ẢO 🔥
-            // Lần 1: Chạy mù trên điện thoại (current = null). 
-            // Bơm 1 tỷ PMC ảo để nó không bị kẹt ở dòng (nextPmc < 0). Ép nó phải lên Server!
+            // 🔥 Lần 1: Chạy mù trên cache. 
+            // Nếu null, trả về ví ảo 1 tỷ PMC để vượt qua chốt chặn (nextPmc < 0), ép nó gọi lên Server
             if (current === null) {
-                return { balance: 0, piBalance: 0, pmcBalance: 999999999 }; 
+                return { balance: 0, piBalance: 0, pmcBalance: 999999999 };
             }
 
             const currentPi = Number(current.balance || current.piBalance || 0);
             const currentPmc = Number(current.pmcBalance || 0);
             const nextPmc = currentPmc + Number(delta || 0);
 
-            // Lần 2: Lấy số thật từ Server về (Ví dụ: 488). Nếu trừ mà âm tiền thật sự thì mới HỦY.
-            if (nextPmc < 0 && walletKey !== "pi_admin_master") return; 
+            // 🔥 Lần 2: Đã lấy số thật từ Server. Nếu âm tiền thật sự thì mới Hủy!
+            if (nextPmc < 0 && walletKey !== "pi_admin_master") {
+                return; // Trả về undefined để từ chối giao dịch
+            }
 
             // Ghi đè số liệu mới
             current.balance = currentPi;
@@ -12236,9 +12237,9 @@ async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
             return current;
         });
 
-        // Nếu giao dịch bị hủy (đéo đủ tiền thật sự trên Server)
+        // Nếu giao dịch bị hủy do đéo đủ tiền hoặc lỗi
         if (!txResult || !txResult.committed) {
-            console.error("Giao dịch PMC bị từ chối do đéo đủ tiền.");
+            console.error("Giao dịch PMC bị từ chối do không đủ tiền.");
             return null; 
         }
 
