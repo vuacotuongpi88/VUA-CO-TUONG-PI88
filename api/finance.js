@@ -137,21 +137,34 @@ module.exports = async function handler(req, res) {
         }
 
         const now = Date.now();
-        let finalWallet = null;
+let finalWallet = null;
 
-        const tx = await walletRef.transaction(current => {
-            if (!current || typeof current !== "object") return;
+const expectedWalletKeyFromPiUsername = safeKey("pi_" + String(piUsername || "").toLowerCase());
+const samePiUsernameWallet = expectedWalletKeyFromPiUsername === safeWalletKey;
 
-            const oldPiUid = cleanText(current.piUid || "");
+const tx = await walletRef.transaction(current => {
+    if (!current || typeof current !== "object") return;
 
-            // Chặn lấy ví game đã liên kết Pi UID khác
-            if (oldPiUid && oldPiUid !== piUid) {
-                return;
-            }
+    const oldPiUid = cleanText(current.piUid || "");
+    const oldPiUsername = cleanText(
+        current.piUsername ||
+        current.username ||
+        current.name ||
+        ""
+    ).toLowerCase();
 
-            finalWallet = {
-                ...current,
+    const sameOldUsername =
+        !!oldPiUsername &&
+        oldPiUsername === String(piUsername || "").toLowerCase();
 
+    // Chỉ chặn khi UID khác VÀ username/walletKey cũng không khớp.
+    // Nếu cùng ví pi_<username> thì cho cập nhật lại địa chỉ rút Pi.
+    if (oldPiUid && oldPiUid !== piUid && !samePiUsernameWallet && !sameOldUsername) {
+        return;
+    }
+
+    finalWallet = {
+        ...current,
                 walletKey: safeWalletKey,
                 piUid,
                 piUsername,
