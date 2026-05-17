@@ -179,13 +179,18 @@ module.exports = async function handler(req, res) {
         let exchangeResult = null;
 
         const txResult = await walletRef.transaction(current => {
-            // Nếu chưa có ví thì khởi tạo ảo để tránh lỗi null
-            if (!current) current = { balance: 0, piBalance: 0, pmcBalance: 0 };
+            // Lần 1: Firebase luôn truyền current = null. Phải trả về dummy để ép nó lên Server check số thật!
+            if (current === null) {
+                return { _dummy: true };
+            }
             
+            // Lần 2: Nó đã lấy được số thật từ Server. Nếu ví trắng trơn thật sự thì hủy
+            if (current._dummy) return;
+
             const currentPi = readPiBalance(current);
             const currentPmc = Math.floor(Number(current.pmcBalance ?? 0) || 0);
 
-            if (currentPi < safePi) return; // Không đủ Pi thì hủy lệnh không đổi
+            if (currentPi < safePi) return; // Không đủ Pi thật sự thì mới hủy lệnh
 
             exchangeResult = { newPiBalance: currentPi - safePi, newPmcBalance: currentPmc + pmcAdd };
 

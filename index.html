@@ -14129,8 +14129,7 @@ function updateExchangePreview() {
 
     const pi = Number(input.value || 0);
     const pmc = Math.max(0, Math.floor(pi * PMC_RATE));
-    // Đã fix lỗi lặp chữ "PMC PMC"
-    preview.innerText = "Nhận: " + formatPMC(pmc);
+    preview.innerText = "Nhận: " + formatPMC(pmc) + " PMC";
 }
 
 async function submitExchangeToPMC() {
@@ -14143,7 +14142,6 @@ async function submitExchangeToPMC() {
         return;
     }
 
-    // Đổi chữ nút bấm cho ngầu
     const btn = document.querySelector("#exchange-modal .stake-ok-btn");
     if (btn) {
         btn.disabled = true;
@@ -14151,115 +14149,50 @@ async function submitExchangeToPMC() {
     }
 
     try {
-        const pmcAdd = Math.floor(piAmount * PMC_RATE);
+        const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "";
         
-        // 🔥 TUYỆT KỸ TRANSACTION: Giao toàn quyền tính toán cho máy chủ Firebase
-        const txResult = await walletRef().transaction((current) => {
-            if (!current) return current; // Ví lỗi đéo tồn tại thì bỏ qua
-            
-            let currentPi = Number(current.balance || current.piBalance || 0);
-            let currentPmc = Number(current.pmcBalance || 0);
-
-            // Chốt chặn cuối: Nếu Pi trên server thật sự đéo đủ thì hủy kèo
-            if (currentPi < piAmount) {
-                return; // Trả về undefined để hủy transaction
-            }
-
-            // Trừ Pi, Cộng PMC ngay trên Server
-            current.balance = currentPi - piAmount;
-            current.piBalance = currentPi - piAmount;
-            current.pmcBalance = currentPmc + pmcAdd;
-            current.updatedAt = Date.now(); // Dùng Date.now() cho an toàn trong transaction
-
-            return current;
+        // GỌI THẲNG LÊN VERCEL KÊU NÓ ĐỔI TIỀN
+        const res = await fetch("/api/finance?v=" + Date.now(), {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "x-wallet-key": walletKey
+            },
+            body: JSON.stringify({
+                action: "pi_to_pmc", // Gọi Luồng 3 trên Vercel
+                piAmount: piAmount,
+                walletKey: walletKey
+            })
         });
 
-        // Nếu transaction bị hủy (do đéo đủ tiền trên server)
-        if (!txResult.committed) {
-            alert("🚨 Đổi thất bại! Có thể do Pi trong ví không đủ.");
-            if (btn) { btn.disabled = false; btn.innerText = "XÁC NHẬN ĐỔI"; }
-            return;
+        const raw = await res.text();
+        let data = {};
+        try { data = JSON.parse(raw); } catch (_) {}
+
+        if (!res.ok || !data.ok) {
+            throw new Error(data.error || "Giao dịch thất bại từ máy chủ.");
         }
 
-        // Lấy số liệu mới nhất vừa được Firebase duyệt để cập nhật ra màn hình
-        const finalData = txResult.snapshot.val();
-        const finalPi = finalData.balance;
-        const finalPmc = finalData.pmcBalance;
-
-        // Cập nhật lại UI và lưu vào máy
-        currentWalletBalance = finalPi;
-        currentPmcBalance = finalPmc;
-        localStorage.setItem(getBalanceCacheKey(), String(finalPi));
-        localStorage.setItem(getPmcCacheKey(), String(finalPmc));
+        // KHI VERCEL BÁO OK -> CẬP NHẬT GIAO DIỆN & CACHE TRONG MÁY
+        currentWalletBalance = data.newPiBalance;
+        currentPmcBalance = data.newPmcBalance;
+        localStorage.setItem(getBalanceCacheKey(), String(data.newPiBalance));
+        localStorage.setItem(getPmcCacheKey(), String(data.newPmcBalance));
         
-        updateBalanceUI(finalPi);
-        updatePmcUI(finalPmc);
+        updateBalanceUI(data.newPiBalance);
+        updatePmcUI(data.newPmcBalance);
 
-        alert("✅ Đổi thành công " + piAmount.toFixed(2) + " π → " + formatPMC(pmcAdd));
+        alert("✅ Đổi thành công " + piAmount.toFixed(2) + " π → " + formatPMC(data.pmcAmount));
         closeExchangeModal();
 
     } catch (error) {
-        console.error("Lỗi transaction Firebase:", error);
-        alert("🚨 Lỗi hệ thống! Chưa đổi được tiền, số dư vẫn giữ nguyên.\n" + error.message);
+        console.error("Lỗi đổi tiền qua API:", error);
+        alert("🚨 Lỗi: " + error.message);
     } finally {
-        // Nhả nút bấm ra
         if (btn) {
             btn.disabled = false;
             btn.innerText = "XÁC NHẬN ĐỔI";
         }
-    }
-}
-
-async function submitExchangeToPMC() {
-    const input = document.getElementById("exchange-pi-input");
-    if (!input) return;
-
-    const piAmount = Number(input.value || 0);
-    if (!Number.isFinite(piAmount) || piAmount <= 0) {
-        alert("Nhập số Pi muốn đổi trước đã.");
-        return;
-    }
-
-    const piBalance = getPiBalance();
-    if (piAmount > piBalance) {
-        alert("Pi không đủ. Hiện còn " + piBalance.toFixed(2) + " π");
-        return;
-    }
-
-    const pmcAdd = Math.floor(piAmount * PMC_RATE);
-    if (pmcAdd <= 0) {
-        alert("Số PMC nhận được không hợp lệ.");
-        return;
-    }
-
-    // 1. Tính toán trước số tiền mới
-    const newPi = piBalance - piAmount;
-    const newPmc = getPmcBalance() + pmcAdd;
-
-    try {
-        // 2. 🔥 ÉP FIREBASE GHI CÙNG LÚC 2 SỐ VÀO 1 LỆNH DUY NHẤT 🔥
-        await walletRef().update({
-            balance: newPi,
-            piBalance: newPi, // Đề phòng code mày gọi nhầm biến
-            pmcBalance: newPmc,
-            updatedAt: firebase.database.ServerValue.TIMESTAMP
-        });
-
-        // 3. CHỈ KHI FIREBASE BÁO "OK", TAO MỚI CẬP NHẬT GIAO DIỆN VÀ CACHE
-        currentWalletBalance = newPi;
-        currentPmcBalance = newPmc;
-        localStorage.setItem(getBalanceCacheKey(), String(newPi));
-        localStorage.setItem(getPmcCacheKey(), String(newPmc));
-        
-        updateBalanceUI(newPi);
-        updatePmcUI(newPmc);
-
-        alert("✅ Đổi thành công " + piAmount.toFixed(2) + " π → " + formatPMC(pmcAdd));
-        closeExchangeModal();
-        
-    } catch (error) {
-        console.error("Lỗi đồng bộ Firebase khi đổi tiền:", error);
-        alert("🚨 Lỗi mạng! Chưa đổi được tiền, số dư vẫn giữ nguyên.");
     }
 }
 const PMC_PER_PI = 500;
