@@ -1,5 +1,23 @@
-const { getDatabase } = require('firebase-admin/database');
-const adminBundle = require('./_firebaseAdmin.js');
+const admin = require('firebase-admin');
+
+// 1. KHỞI TẠO FIREBASE ADMIN (Giữ nguyên của mày)
+if (!admin.apps.length) {
+  try {
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: (process.env.FIREBASE_PRIVATE_KEY || "").replace(/\\n/g, '\n'),
+      }),
+      databaseURL: "https://co-tuong-bd072-default-rtdb.asia-southeast1.firebasedatabase.app"
+    });
+    console.log("Firebase Admin inited successfully!");
+  } catch (e) {
+    console.warn("Lỗi khởi tạo Admin (Có thể thiếu biến môi trường):", e);
+  }
+}
+
+const db = admin.apps.length ? admin.database() : null;
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
@@ -8,14 +26,21 @@ module.exports = async function handler(req, res) {
 
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
-    const { action, paymentId, txid, walletKey, amount } = body;
+    // CHÚ Ý: Bắt thêm chữ network từ Frontend gửi lên
+    const { action, paymentId, txid, walletKey, amount, network } = body;
 
     const PI_API_BASE = String(process.env.PI_API_BASE_URL || "https://api.minepi.com").trim();
-    // Tự động ăn API KEY theo biến môi trường mày cài trên Vercel
-    const PI_API_KEY = String(process.env.PI_API_KEY || process.env.PI_API_KEY_TESTNET || "").trim();
+    
+    // 🔥 BÙA PHÂN LUỒNG API KEY 🔥
+    let PI_API_KEY = "";
+    if (network === "testnet") {
+        PI_API_KEY = String(process.env.PI_API_KEY_TESTNET || "").trim();
+    } else {
+        PI_API_KEY = String(process.env.PI_API_KEY || "").trim();
+    }
 
     if (!PI_API_KEY) {
-      return res.status(500).json({ ok: false, error: "Chưa cài PI_API_KEY trên Vercel!" });
+      return res.status(500).json({ ok: false, error: `Chưa cài API KEY cho mạng ${network} trên Vercel!` });
     }
     if (!paymentId) {
       return res.status(400).json({ ok: false, error: "Thiếu paymentId" });
@@ -27,11 +52,17 @@ module.exports = async function handler(req, res) {
     if (action === "approve") {
       const piRes = await fetch(`${PI_API_BASE}/v2/payments/${encodeURIComponent(paymentId)}/approve`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Key ${PI_API_KEY}` }
+        headers: { 
+            "Content-Type": "application/json", 
+            "Authorization": `Key ${PI_API_KEY}`,
+            "Pi-Api-Key": PI_API_KEY // Gắn lại bùa chống kẹt Pi Server
+        }
       });
 
       const raw = await piRes.text();
       let data = {}; try { data = JSON.parse(raw); } catch (_) { data = { raw }; }
+      
+      if (!piRes.ok) console.error("PI APPROVE TỪ CHỐI:", data);
 
       return res.status(piRes.status).json({ ok: piRes.ok, status: piRes.status, data });
     }
@@ -44,7 +75,11 @@ module.exports = async function handler(req, res) {
 
       const piRes = await fetch(`${PI_API_BASE}/v2/payments/${encodeURIComponent(paymentId)}/complete`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Key ${PI_API_KEY}` },
+        headers: { 
+            "Content-Type": "application/json", 
+            "Authorization": `Key ${PI_API_KEY}`,
+            "Pi-Api-Key": PI_API_KEY
+        },
         body: JSON.stringify({ txid })
       });
 
@@ -60,10 +95,8 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      // 🔥 BỌC THÉP: SERVER TỰ ĐỘNG CỘNG TIỀN VÀO FIREBASE
-      if (walletKey && amount > 0) {
-         const adminApp = adminBundle.app || adminBundle;
-         const db = getDatabase(adminApp);
+      // 🔥 BỌC THÉP: SERVER TỰ ĐỘNG CỘNG TIỀN VÀO FIREBASE 🔥
+      if (walletKey && amount > 0 && db) {
          const userRef = db.ref("wallets/" + walletKey);
 
          await userRef.transaction((current) => {
@@ -75,7 +108,7 @@ module.exports = async function handler(req, res) {
              return current;
          });
 
-         // Ghi lại biên lai giao dịch
+         // Ghi lại biên lai giao dịch lịch sử
          await db.ref("walletTransactions").push({
              type: "deposit_pi", walletKey, amount: Number(amount), paymentId, txid, createdAt: Date.now(), status: "done"
          });
