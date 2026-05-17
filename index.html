@@ -17279,11 +17279,11 @@ async function startPiDeposit(amount = 1) {
       memo: `Nạp ${napSo} Pi vào game`,
       metadata: { type: "deposit", amount: napSo, time: Date.now() }
     }, {
-      // BỎ CHỮ ASYNC Ở ĐÂY, VÀ TUYỆT ĐỐI CẤM DÙNG ALERT DƯỚI MỌI HÌNH THỨC
       onReadyForServerApproval: function (paymentId) {
         console.log("1. Đã có PaymentID: " + paymentId + ". Đang gọi Vercel Approve...");
         
-        fetch("/api/pi-deposit?v=" + Date.now(), {
+        // 🔥 FIX Ở ĐÂY: Thêm /pi/ vào giữa đường dẫn
+        fetch("/api/pi/pi-deposit?v=" + Date.now(), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ action: "approve", paymentId: paymentId, network: currentNet })
@@ -17299,7 +17299,8 @@ async function startPiDeposit(amount = 1) {
       onReadyForServerCompletion: function (paymentId, txid) {
         console.log("5. Pi duyệt! TXID: " + txid + ". Xin Complete...");
         
-        fetch("/api/pi-deposit?v=" + Date.now(), {
+        // 🔥 FIX Ở ĐÂY: Thêm /pi/ vào giữa đường dẫn
+        fetch("/api/pi/pi-deposit?v=" + Date.now(), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ action: "complete", paymentId: paymentId, txid: txid, walletKey: walletKey, amount: napSo, network: currentNet })
@@ -17307,7 +17308,6 @@ async function startPiDeposit(amount = 1) {
         .then(res => res.json())
         .then(async data => {
             if(data.ok) {
-                // Lúc này Pi Wallet đã tự đóng, mầy alert thoải mái
                 alert("✅ NẠP PI THÀNH CÔNG RỰC RỠ!"); 
                 await loadWalletBalance();
             } else {
