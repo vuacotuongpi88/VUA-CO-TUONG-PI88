@@ -14129,7 +14129,85 @@ function updateExchangePreview() {
 
     const pi = Number(input.value || 0);
     const pmc = Math.max(0, Math.floor(pi * PMC_RATE));
-    preview.innerText = "Nhận: " + formatPMC(pmc) + " PMC";
+    // Đã fix lỗi lặp chữ "PMC PMC"
+    preview.innerText = "Nhận: " + formatPMC(pmc);
+}
+
+async function submitExchangeToPMC() {
+    const input = document.getElementById("exchange-pi-input");
+    if (!input) return;
+
+    const piAmount = Number(input.value || 0);
+    if (!Number.isFinite(piAmount) || piAmount <= 0) {
+        alert("Nhập số Pi muốn đổi trước đã.");
+        return;
+    }
+
+    // Đổi chữ nút bấm cho ngầu
+    const btn = document.querySelector("#exchange-modal .stake-ok-btn");
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = "ĐANG XỬ LÝ...";
+    }
+
+    try {
+        const pmcAdd = Math.floor(piAmount * PMC_RATE);
+        
+        // 🔥 TUYỆT KỸ TRANSACTION: Giao toàn quyền tính toán cho máy chủ Firebase
+        const txResult = await walletRef().transaction((current) => {
+            if (!current) return current; // Ví lỗi đéo tồn tại thì bỏ qua
+            
+            let currentPi = Number(current.balance || current.piBalance || 0);
+            let currentPmc = Number(current.pmcBalance || 0);
+
+            // Chốt chặn cuối: Nếu Pi trên server thật sự đéo đủ thì hủy kèo
+            if (currentPi < piAmount) {
+                return; // Trả về undefined để hủy transaction
+            }
+
+            // Trừ Pi, Cộng PMC ngay trên Server
+            current.balance = currentPi - piAmount;
+            current.piBalance = currentPi - piAmount;
+            current.pmcBalance = currentPmc + pmcAdd;
+            current.updatedAt = Date.now(); // Dùng Date.now() cho an toàn trong transaction
+
+            return current;
+        });
+
+        // Nếu transaction bị hủy (do đéo đủ tiền trên server)
+        if (!txResult.committed) {
+            alert("🚨 Đổi thất bại! Có thể do Pi trong ví không đủ.");
+            if (btn) { btn.disabled = false; btn.innerText = "XÁC NHẬN ĐỔI"; }
+            return;
+        }
+
+        // Lấy số liệu mới nhất vừa được Firebase duyệt để cập nhật ra màn hình
+        const finalData = txResult.snapshot.val();
+        const finalPi = finalData.balance;
+        const finalPmc = finalData.pmcBalance;
+
+        // Cập nhật lại UI và lưu vào máy
+        currentWalletBalance = finalPi;
+        currentPmcBalance = finalPmc;
+        localStorage.setItem(getBalanceCacheKey(), String(finalPi));
+        localStorage.setItem(getPmcCacheKey(), String(finalPmc));
+        
+        updateBalanceUI(finalPi);
+        updatePmcUI(finalPmc);
+
+        alert("✅ Đổi thành công " + piAmount.toFixed(2) + " π → " + formatPMC(pmcAdd));
+        closeExchangeModal();
+
+    } catch (error) {
+        console.error("Lỗi transaction Firebase:", error);
+        alert("🚨 Lỗi hệ thống! Chưa đổi được tiền, số dư vẫn giữ nguyên.\n" + error.message);
+    } finally {
+        // Nhả nút bấm ra
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = "XÁC NHẬN ĐỔI";
+        }
+    }
 }
 
 async function submitExchangeToPMC() {
