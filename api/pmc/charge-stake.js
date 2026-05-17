@@ -157,7 +157,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    let nextPmc = null;
+   let nextPmc = null;
 let beforePmc = null;
 
 console.log("CHARGE_STAKE_DEBUG_BEFORE", {
@@ -174,20 +174,45 @@ console.log("CHARGE_STAKE_DEBUG_BEFORE", {
   walletFreeTickets: wallet.freeTickets
 });
 
-const pmcTx = await runTx(walletRef.child("pmcBalance"), (current) => {
-  beforePmc = Math.max(0, Math.floor(Number(current || 0) || 0));
+// FIX: transaction nguyên ví, không transaction riêng child pmcBalance nữa.
+// Vì child transaction đôi khi nhận current=null trước, làm beforePmc = 0 giả.
+const pmcTx = await runTx(walletRef, (current) => {
+  const base =
+    current && typeof current === "object"
+      ? current
+      : wallet && typeof wallet === "object"
+        ? { ...wallet }
+        : null;
 
-  console.log("CHARGE_STAKE_TX", {
+  if (!base) return;
+
+  if (String(base.uid || "") !== uid) {
+    console.log("CHARGE_STAKE_UID_MISMATCH_TX", {
+      walletKey,
+      uid,
+      walletUid: base.uid
+    });
+    return;
+  }
+
+  beforePmc = Math.max(0, Math.floor(Number(base.pmcBalance || 0) || 0));
+
+  console.log("CHARGE_STAKE_TX_WALLET", {
     walletKey,
-    currentRaw: current,
     beforePmc,
-    stake
+    stake,
+    rawPmcBalance: base.pmcBalance
   });
 
   if (beforePmc < stake) return;
 
   nextPmc = beforePmc - stake;
-  return nextPmc;
+
+  return {
+    ...base,
+    pmcBalance: nextPmc,
+    updatedAt: Date.now()
+  };
 });
 
 if (!pmcTx.committed || nextPmc == null) {
