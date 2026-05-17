@@ -12210,18 +12210,21 @@ async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
     const ref = walletRefByKey(walletKey);
 
     try {
+        // 🔥 BÙA CHÍNH TÔNG DIỆT LỖI NGHẼN MẠNG 🔥
+        // Ép trình duyệt kết nối Server lấy số dư thật (488 PMC) về nhét vào Cache trước.
+        // Nhờ vậy, lệnh transaction bên dưới sẽ ĐÉO BAO GIỜ bị mù (null) nữa!
+        await ref.once("value");
+
         const txResult = await runRefTransaction(ref, (current) => {
-            // 🔥 Lần 1: Chạy mù trên cache. 
-            // Nếu null, trả về ví ảo 1 tỷ PMC để vượt qua chốt chặn (nextPmc < 0), ép nó gọi lên Server
-            if (current === null) {
-                return { balance: 0, piBalance: 0, pmcBalance: 999999999 };
-            }
+            // Lúc này 'current' chắc chắn đã chứa dữ liệu thật từ Server
+            // Nếu nó vẫn null nghĩa là cái ví này đéo tồn tại trên đời -> Hủy cmnl
+            if (!current) return; 
 
             const currentPi = Number(current.balance || current.piBalance || 0);
             const currentPmc = Number(current.pmcBalance || 0);
             const nextPmc = currentPmc + Number(delta || 0);
 
-            // 🔥 Lần 2: Đã lấy số thật từ Server. Nếu âm tiền thật sự thì mới Hủy!
+            // Nếu trừ tiền mà bị âm thật sự thì HỦY GIAO DỊCH
             if (nextPmc < 0 && walletKey !== "pi_admin_master") {
                 return; // Trả về undefined để từ chối giao dịch
             }
@@ -12237,9 +12240,9 @@ async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
             return current;
         });
 
-        // Nếu giao dịch bị hủy do đéo đủ tiền hoặc lỗi
+        // Nếu giao dịch bị hủy do đéo đủ tiền hoặc tường lửa chặn
         if (!txResult || !txResult.committed) {
-            console.error("Giao dịch PMC bị từ chối do không đủ tiền.");
+            console.error("Giao dịch PMC bị từ chối. Có thể do đéo đủ tiền.");
             return null; 
         }
 
