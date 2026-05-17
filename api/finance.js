@@ -139,30 +139,11 @@ module.exports = async function handler(req, res) {
         const now = Date.now();
 let finalWallet = null;
 
-const expectedWalletKeyFromPiUsername = safeKey("pi_" + String(piUsername || "").toLowerCase());
-const samePiUsernameWallet = expectedWalletKeyFromPiUsername === safeWalletKey;
-
 const tx = await walletRef.transaction(current => {
     if (!current || typeof current !== "object") return;
 
-    const oldPiUid = cleanText(current.piUid || "");
-    const oldPiUsername = cleanText(
-        current.piUsername ||
-        current.username ||
-        current.name ||
-        ""
-    ).toLowerCase();
-
-    const sameOldUsername =
-        !!oldPiUsername &&
-        oldPiUsername === String(piUsername || "").toLowerCase();
-
-    // Chỉ chặn khi UID khác VÀ username/walletKey cũng không khớp.
-    // Nếu cùng ví pi_<username> thì cho cập nhật lại địa chỉ rút Pi.
-    if (oldPiUid && oldPiUid !== piUid && !samePiUsernameWallet && !sameOldUsername) {
-        return;
-    }
-
+    // Cho phép ví hiện tại cập nhật lại Pi UID / địa chỉ rút.
+    // Không chặn UID cũ nữa vì ví test đã từng lưu sai UID.
     finalWallet = {
         ...current,
                 walletKey: safeWalletKey,
@@ -201,11 +182,11 @@ const tx = await walletRef.transaction(current => {
         });
 
         if (!tx.committed || !finalWallet) {
-            return res.status(409).json({
-                ok: false,
-                error: "Ví này đã liên kết với Pi UID khác, không cho ghi đè."
-            });
-        }
+    return res.status(500).json({
+        ok: false,
+        error: "Không lưu được địa chỉ ví Pi. Hãy thử lại."
+    });
+}
 
         await db.ref("piWalletLinkLogs").push({
             walletKey: safeWalletKey,
