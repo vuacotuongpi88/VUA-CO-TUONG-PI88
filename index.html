@@ -12210,8 +12210,13 @@ async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
     const ref = walletRefByKey(walletKey);
 
     try {
+        // 🔥 BÙA TỐI THƯỢNG: LÀM ẤM BỘ NHỚ ĐỆM (CACHE WARMER) 🔥
+        // Lệnh này ép trình duyệt phải hỏi Server số dư thật trước khi tính toán.
+        // Nhờ vậy, dòng transaction bên dưới sẽ CHẮC CHẮN thấy được 488 PMC chứ đéo bị null nữa!
+        await ref.once("value");
+
         const txResult = await runRefTransaction(ref, (current) => {
-            // 🔥 XÓA BỎ BÙA _dummy. NẾU CACHE LÀ NULL -> TẠO VÍ TẠM ĐỂ VƯỢT TƯỜNG LỬA 🔥
+            // Do đã once("value") ở trên, nếu current = null thì ví này THẬT SỰ LÀ VÍ TRỐNG.
             if (!current) {
                 current = { balance: 0, piBalance: 0, pmcBalance: 0 };
             }
@@ -12220,8 +12225,10 @@ async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
             const currentPmc = Number(current.pmcBalance || 0);
             const nextPmc = currentPmc + Number(delta || 0);
 
-            // Nếu trừ tiền mà bị âm (đéo đủ tiền) và đéo phải quỹ Admin thì HỦY GIAO DỊCH
-            if (nextPmc < 0 && walletKey !== "pi_admin_master") return;
+            // Nếu trừ tiền mà bị âm (đéo đủ tiền thật sự) thì mới hủy lệnh
+            if (nextPmc < 0 && walletKey !== "pi_admin_master") {
+                return; // Trả về undefined để hủy transaction
+            }
 
             // Ghi đè số liệu mới
             current.balance = currentPi;
