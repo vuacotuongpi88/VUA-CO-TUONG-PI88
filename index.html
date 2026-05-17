@@ -12766,6 +12766,37 @@ async function getPiLinkState() {
     };
   }
 
+  // Ưu tiên đọc qua API Admin, tránh rules Firebase làm lỗi
+  try {
+    const res = await fetch("/api/pi/link-wallet?v=" + Date.now(), {
+      method: "GET",
+      headers: {
+        "x-wallet-key": walletKey
+      }
+    });
+
+    const raw = await res.text();
+    let data = {};
+
+    try {
+      data = raw ? JSON.parse(raw) : {};
+    } catch (_) {
+      data = {};
+    }
+
+    if (res.ok && data?.ok) {
+      return {
+        ok: true,
+        walletKey,
+        piVerified: data.piVerified === true,
+        piUid: String(data.piUid || "").trim(),
+        piUsername: String(data.piUsername || "").trim(),
+        piWalletAddress: String(data.piWalletAddress || "").trim()
+      };
+    }
+  } catch (_) {}
+
+  // Fallback đọc Firebase client nếu API chưa deploy kịp
   if (!window.firebase || !firebase.database) {
     return {
       ok: false,
@@ -12782,7 +12813,13 @@ async function getPiLinkState() {
     piVerified: val.piVerified === true,
     piUid: String(val.piUid || "").trim(),
     piUsername: String(val.piUsername || "").trim(),
-    piWalletAddress: String(val.piWalletAddress || "").trim()
+    piWalletAddress: String(
+      val.piWalletAddress ||
+      val.linkedWalletAddress ||
+      val.piBrowserWalletAddress ||
+      val.withdrawWalletAddress ||
+      ""
+    ).trim()
   };
 }
 async function linkPiBrowser() {
@@ -12794,13 +12831,8 @@ async function linkPiBrowser() {
     throw new Error("Không xác định được walletKey.");
   }
 
-  if (!window.firebase || !firebase.database) {
-    throw new Error("Firebase client chưa sẵn sàng.");
-  }
-
   let auth;
   try {
-    // Link ví chỉ cần scope tối thiểu
     auth = await Pi.authenticate(["username", "wallet_address"]);
   } catch (err) {
     console.error("PI_LINK_AUTH_FAIL", err);
@@ -12845,14 +12877,15 @@ async function linkPiBrowser() {
     auth?.user?.publicKey ||
     state?.piWalletAddress ||
     ""
-  ).trim();
+  ).trim().toUpperCase();
 
   if (!linkedWalletAddress) {
     const typed = prompt(
       "Pi Browser chưa trả ví tự động.\n" +
-      "Dán địa chỉ ví Pi nhận tiền của bạn vào đây (bắt đầu bằng G):"
+      "Dán địa chỉ ví Pi nhận tiền của bạn vào đây.\n" +
+      "Địa chỉ ví phải bắt đầu bằng G:"
     );
-    linkedWalletAddress = String(typed || "").trim();
+    linkedWalletAddress = String(typed || "").trim().toUpperCase();
   }
 
   if (!linkedPiUid) {
@@ -12867,58 +12900,46 @@ async function linkPiBrowser() {
     throw new Error("Chưa có địa chỉ ví Pi để lưu.");
   }
 
-  if (!/^G[A-Z2-7]{20,}$/i.test(linkedWalletAddress)) {
-    throw new Error("Địa chỉ ví Pi không hợp lệ.");
+  if (!/^G[A-Z2-7]{55}$/.test(linkedWalletAddress)) {
+    throw new Error("Địa chỉ ví Pi không hợp lệ. Địa chỉ phải bắt đầu bằng G và dài 56 ký tự.");
   }
 
-  const now = Date.now();
-  const updatePayload = {
-    walletKey,
-    piUid: linkedPiUid,
-    piUsername: linkedPiUsername,
-    piVerified: true,
-    verifiedAt: now,
-    piLinkSource: "frontend_pi_browser",
-
-    piWalletAddress: linkedWalletAddress,
-    linkedWalletAddress: linkedWalletAddress,
-    piBrowserWalletAddress: linkedWalletAddress,
-
-    linkedWallet: {
-      address: linkedWalletAddress,
-      linkedAt: now,
-      source: "frontend_pi_browser"
+  const res = await fetch("/api/pi/link-wallet?v=" + Date.now(), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-wallet-key": walletKey
     },
+    body: JSON.stringify({
+      walletKey,
+      piUid: linkedPiUid,
+      piUsername: linkedPiUsername,
+      piWalletAddress: linkedWalletAddress
+    })
+  });
 
-    piLink: {
-      walletAddress: linkedWalletAddress,
-      linkedAt: now,
-      source: "frontend_pi_browser"
-    },
+  const raw = await res.text();
+  let data = {};
 
-    updatedAt: now
-  };
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch (_) {
+    throw new Error("API lưu ví Pi trả dữ liệu không hợp lệ.");
+  }
 
-  await firebase.database().ref("wallets/" + walletKey).update(updatePayload);
-
-  const verifySnap = await firebase.database().ref("wallets/" + walletKey).once("value");
-  const verifyVal = verifySnap.val() || {};
+  if (!res.ok || !data?.ok) {
+    throw new Error(data?.error || "Lưu địa chỉ ví Pi thất bại.");
+  }
 
   return {
     ok: true,
     walletKey,
-    piUid: String(verifyVal.piUid || linkedPiUid || "").trim(),
-    piUsername: String(verifyVal.piUsername || linkedPiUsername || "").trim(),
-    piWalletAddress: String(
-      verifyVal.piWalletAddress ||
-      verifyVal.linkedWalletAddress ||
-      verifyVal.piBrowserWalletAddress ||
-      linkedWalletAddress ||
-      ""
-    ).trim()
+    piVerified: true,
+    piUid: String(data.piUid || linkedPiUid || "").trim(),
+    piUsername: String(data.piUsername || linkedPiUsername || "").trim(),
+    piWalletAddress: String(data.piWalletAddress || linkedWalletAddress || "").trim()
   };
 }
-
 async function ensurePiLinkBeforeWithdraw() {
   const state = await getPiLinkState();
 
@@ -13019,8 +13040,12 @@ const walletKey = String(
     ""
 ).trim();
 
-const piUid = String(linkState?.piUid || "").trim();
-const piUsername = String(linkState?.piUsername || "").trim();
+const piWalletAddress = String(linkState?.piWalletAddress || "").trim();
+
+if (!piWalletAddress) {
+    alert("Chưa có địa chỉ ví Pi nhận tiền. Hãy liên kết Pi Browser trước.");
+    return;
+}
 
 if (!walletKey) {
     alert("Thiếu walletKey nội bộ.");
@@ -13036,10 +13061,11 @@ try {
             "Content-Type": "application/json",
             "x-wallet-key": walletKey
         },
-        body: JSON.stringify({
+    body: JSON.stringify({
     amount,
     piUid,
     piUsername,
+    piWalletAddress,
     walletKey,
     network: currentNetwork
 })
@@ -17953,7 +17979,13 @@ function renderMissionBoard() {
     const statsEl = document.getElementById('mission-stats-note');
     const marketingEl = document.getElementById('mission-marketing-note');
 
-    if (poolEl) poolEl.innerText = formatPmc(board.treasury?.missionPoolPmc || 0);
+    if (poolEl) {
+    const pool = Math.max(0, Number(board.treasury?.missionPoolPmc || 0) || 0);
+    poolEl.innerText = pool.toLocaleString('vi-VN', {
+        minimumFractionDigits: 6,
+        maximumFractionDigits: 6
+    }) + ' PMC';
+}
     if (claimableEl) claimableEl.innerText = formatPmc(board.claimableTotalPmc || 0);
     if (claimableNoteEl) {
       claimableNoteEl.innerText = (board.claimableCount || 0) > 0

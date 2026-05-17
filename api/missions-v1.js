@@ -75,10 +75,9 @@ function formatRewardText(amountPmc) {
 }
 
 function readPmcBalance(obj) {
-  return Math.max(
-    0,
-    Math.floor(Number(obj?.pmcBalance ?? obj?.pmc ?? 0) || 0)
-  );
+  const n = Number(obj?.pmcBalance ?? obj?.pmc ?? 0);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.round(n * 1000000) / 1000000);
 }
 
 function missionDefinitions() {
@@ -459,7 +458,10 @@ async function buildBoard(db, walletKey, now = Date.now()) {
   const treasuryPmc = readPmcBalance(treasuryVal);
   
   // 🔥 LẤY ĐÚNG SỐ TRÊN FIREBASE, KHÔNG NHÂN CHIA GÌ NỮA
-  const missionPoolPmc = Math.max(0, Math.floor(Number(missionPoolSnap.val()) || 0));
+  const missionPoolPmc = Math.max(
+  0,
+  Math.round((Number(missionPoolSnap.val()) || 0) * 1000000) / 1000000
+);
   const tabs = { day: [], week: [], month: [], referral: [] };
   let claimableTotalPmc = 0;
   let claimableCount = 0;
