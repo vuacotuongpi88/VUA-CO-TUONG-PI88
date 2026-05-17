@@ -12210,25 +12210,20 @@ async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
     const ref = walletRefByKey(walletKey);
 
     try {
-        // 🔥 BÙA TỐI THƯỢNG: LÀM ẤM BỘ NHỚ ĐỆM (CACHE WARMER) 🔥
-        // Lệnh này ép trình duyệt phải hỏi Server số dư thật trước khi tính toán.
-        // Nhờ vậy, dòng transaction bên dưới sẽ CHẮC CHẮN thấy được 488 PMC chứ đéo bị null nữa!
-        await ref.once("value");
-
         const txResult = await runRefTransaction(ref, (current) => {
-            // Do đã once("value") ở trên, nếu current = null thì ví này THẬT SỰ LÀ VÍ TRỐNG.
-            if (!current) {
-                current = { balance: 0, piBalance: 0, pmcBalance: 0 };
+            // 🔥 BÙA TỐI THƯỢNG: LỪA FIREBASE BẰNG VÍ TỶ PHÚ ẢO 🔥
+            // Lần 1: Chạy mù trên điện thoại (current = null). 
+            // Bơm 1 tỷ PMC ảo để nó không bị kẹt ở dòng (nextPmc < 0). Ép nó phải lên Server!
+            if (current === null) {
+                return { balance: 0, piBalance: 0, pmcBalance: 999999999 }; 
             }
 
             const currentPi = Number(current.balance || current.piBalance || 0);
             const currentPmc = Number(current.pmcBalance || 0);
             const nextPmc = currentPmc + Number(delta || 0);
 
-            // Nếu trừ tiền mà bị âm (đéo đủ tiền thật sự) thì mới hủy lệnh
-            if (nextPmc < 0 && walletKey !== "pi_admin_master") {
-                return; // Trả về undefined để hủy transaction
-            }
+            // Lần 2: Lấy số thật từ Server về (Ví dụ: 488). Nếu trừ mà âm tiền thật sự thì mới HỦY.
+            if (nextPmc < 0 && walletKey !== "pi_admin_master") return; 
 
             // Ghi đè số liệu mới
             current.balance = currentPi;
@@ -12241,9 +12236,9 @@ async function adjustPmcWalletByKey(walletKey, delta, profile = {}) {
             return current;
         });
 
-        // Nếu giao dịch bị hủy do đéo đủ tiền hoặc lỗi
+        // Nếu giao dịch bị hủy (đéo đủ tiền thật sự trên Server)
         if (!txResult || !txResult.committed) {
-            console.error("Giao dịch PMC bị từ chối. Có thể do đéo đủ tiền.");
+            console.error("Giao dịch PMC bị từ chối do đéo đủ tiền.");
             return null; 
         }
 
