@@ -1,4 +1,4 @@
-const { getDatabase } = require('firebase-admin/database');
+const { getDatabase, ServerValue } = require('firebase-admin/database');
 const adminBundle = require('./_firebaseAdmin.js');
 const crypto = require('crypto');
 
@@ -83,123 +83,190 @@ function readPmcBalance(obj) {
 
 function missionDefinitions() {
   return [
+    // =====================
+    // NGÀY - giữ nhẹ để người mới có cảm giác có quà
+    // =====================
     {
       id: 'daily_login',
       tab: 'day',
       title: 'Lộc đăng nhập',
-      desc: 'Vào game hôm nay là có quà mở màn.',
+      desc: 'Điểm danh hôm nay để giữ chuỗi nhận mốc tuần/tháng.',
       target: 1,
       metricKey: 'alwaysOne',
       periodType: 'day',
       rewardRate: 0.00015,
       minPmc: 2,
       maxPmc: 8,
-      note: 'Quà mở hàng nhẹ, lấy vui mỗi ngày.'
+      note: 'Quà nhỏ mỗi ngày, quan trọng là cộng ngày điểm danh.'
     },
     {
-      id: 'daily_play_3',
+      id: 'daily_play_5',
       tab: 'day',
-      title: 'Cày 3 ván',
-      desc: 'Hoàn thành 3 ván trong ngày để mở khóa thưởng.',
-      target: 3,
+      title: 'Cày 5 ván',
+      desc: 'Hoàn thành 5 ván trong ngày để mở khóa thưởng.',
+      target: 5,
       metricKey: 'dayMatches',
       periodType: 'day',
-      rewardRate: 0.00035,
-      minPmc: 5,
-      maxPmc: 18,
-      note: 'Chơi đều là có quà, nhưng không đốt quỹ.'
+      rewardRate: 0.00038,
+      minPmc: 6,
+      maxPmc: 20,
+      note: 'Tăng từ 3 lên 5 ván cho đỡ farm quá nhanh.'
     },
     {
-      id: 'daily_win_1',
+      id: 'daily_win_2',
       tab: 'day',
-      title: 'Thắng mở hàng',
-      desc: 'Có ít nhất 1 trận thắng hôm nay.',
-      target: 1,
+      title: 'Thắng 2 trận',
+      desc: 'Có ít nhất 2 trận thắng hôm nay.',
+      target: 2,
       metricKey: 'dayWins',
       periodType: 'day',
-      rewardRate: 0.00045,
-      minPmc: 6,
-      maxPmc: 25,
-      note: 'Thắng trận đầu có lộc nhỏ.'
+      rewardRate: 0.00050,
+      minPmc: 7,
+      maxPmc: 28,
+      note: 'Thắng đủ mới có lộc, thưởng nhích nhẹ.'
+    },
+
+    // =====================
+    // TUẦN - ép chơi đều, không cho 1 buổi ăn hết mốc
+    // =====================
+    {
+      id: 'weekly_checkin_7',
+      tab: 'week',
+      title: 'Điểm danh đủ tuần',
+      desc: 'Điểm danh đủ 7 ngày trong tuần.',
+      target: 7,
+      metricKey: 'weekCheckinDays',
+      periodType: 'week',
+      rewardRate: 0.00115,
+      minPmc: 22,
+      maxPmc: 95,
+      note: 'Mốc này bắt buộc quay lại mỗi ngày trong tuần.'
     },
     {
-      id: 'weekly_play_10',
+      id: 'weekly_play_45',
       tab: 'week',
       title: 'Chiến thần tuần',
-      desc: 'Hoàn thành 10 ván trong tuần.',
-      target: 10,
+      desc: 'Hoàn thành 45 ván trong tuần.',
+      target: 45,
       metricKey: 'weekMatches',
       periodType: 'week',
-      rewardRate: 0.0008,
-      minPmc: 12,
-      maxPmc: 60,
-      note: 'Mốc tuần cho người chăm chơi.'
+      rewardRate: 0.00125,
+      minPmc: 24,
+      maxPmc: 110,
+      note: 'Tăng mạnh số ván, thưởng nhích nhẹ.'
     },
     {
-      id: 'weekly_win_5',
+      id: 'weekly_win_22',
       tab: 'week',
-      title: '5 chiến thắng',
-      desc: 'Thắng 5 trận trong tuần để ăn quỹ lớn hơn.',
-      target: 5,
+      title: '22 chiến thắng',
+      desc: 'Thắng 22 trận trong tuần để ăn quỹ lớn hơn.',
+      target: 22,
       metricKey: 'weekWins',
       periodType: 'week',
-      rewardRate: 0.0010,
-      minPmc: 15,
-      maxPmc: 80,
-      note: 'Thắng nhiều thì thưởng khá hơn.'
+      rewardRate: 0.00155,
+      minPmc: 32,
+      maxPmc: 145,
+      note: 'Phải thắng thật nhiều mới mở được mốc này.'
     },
     {
-      id: 'weekly_active_3',
+      id: 'weekly_active_5',
       tab: 'week',
-      title: 'Chuyên cần 3 ngày',
-      desc: 'Có ít nhất 3 ngày trong tuần hoàn thành ván cờ.',
-      target: 3,
+      title: 'Chơi đều 5 ngày',
+      desc: 'Có ít nhất 5 ngày trong tuần hoàn thành ván cờ.',
+      target: 5,
       metricKey: 'weekActiveDays',
       periodType: 'week',
-      rewardRate: 0.0009,
-      minPmc: 14,
-      maxPmc: 70,
-      note: 'Giữ nhịp chơi đều là được cộng.'
+      rewardRate: 0.00110,
+      minPmc: 20,
+      maxPmc: 100,
+      note: 'Không cho cày dồn 1 ngày rồi nghỉ cả tuần.'
+    },
+
+    // =====================
+    // THÁNG - 3 mốc điểm danh: 7 / 15 / 30 ngày
+    // =====================
+    {
+      id: 'monthly_checkin_7',
+      tab: 'month',
+      title: 'Điểm danh 7 ngày',
+      desc: 'Trong tháng điểm danh đủ 7 ngày để nhận thưởng mốc 1.',
+      target: 7,
+      metricKey: 'monthCheckinDays',
+      periodType: 'month',
+      rewardRate: 0.00120,
+      minPmc: 25,
+      maxPmc: 110,
+      note: 'Mốc tháng đầu, dễ vừa đủ để giữ người chơi.'
     },
     {
-      id: 'monthly_play_30',
+      id: 'monthly_checkin_15',
+      tab: 'month',
+      title: 'Điểm danh 15 ngày',
+      desc: 'Trong tháng điểm danh đủ 15 ngày để nhận thưởng mốc 2.',
+      target: 15,
+      metricKey: 'monthCheckinDays',
+      periodType: 'month',
+      rewardRate: 0.00235,
+      minPmc: 55,
+      maxPmc: 230,
+      note: 'Muốn ăn mốc này phải quay lại nửa tháng.'
+    },
+    {
+      id: 'monthly_checkin_30',
+      tab: 'month',
+      title: 'Điểm danh 30 ngày',
+      desc: 'Trong tháng điểm danh đủ 30 ngày để nhận thưởng lớn.',
+      target: 30,
+      metricKey: 'monthCheckinDays',
+      periodType: 'month',
+      rewardRate: 0.00480,
+      minPmc: 110,
+      maxPmc: 460,
+      note: 'Mốc khó nhất, gần như ngày nào cũng phải vào nhận.'
+    },
+    {
+      id: 'monthly_play_180',
       tab: 'month',
       title: 'Tháng siêng năng',
-      desc: 'Hoàn thành 30 ván trong tháng.',
-      target: 30,
+      desc: 'Hoàn thành 180 ván trong tháng.',
+      target: 180,
       metricKey: 'monthMatches',
       periodType: 'month',
-      rewardRate: 0.0020,
-      minPmc: 40,
-      maxPmc: 180,
-      note: 'Mốc tháng đáng giá nhưng vẫn sống quỹ.'
+      rewardRate: 0.00300,
+      minPmc: 70,
+      maxPmc: 300,
+      note: 'Tăng từ 30 lên 180 ván, tránh cày vài buổi ăn sạch.'
     },
     {
-      id: 'monthly_win_15',
+      id: 'monthly_win_90',
       tab: 'month',
-      title: '15 chiến thắng tháng',
-      desc: 'Thắng 15 trận trong tháng để mở khóa thưởng VIP.',
-      target: 15,
+      title: '90 chiến thắng tháng',
+      desc: 'Thắng 90 trận trong tháng để mở khóa thưởng VIP.',
+      target: 90,
       metricKey: 'monthWins',
       periodType: 'month',
-      rewardRate: 0.0025,
-      minPmc: 55,
-      maxPmc: 240,
-      note: 'Ngon hơn mốc ngày, nhưng không quá tay.'
+      rewardRate: 0.00380,
+      minPmc: 90,
+      maxPmc: 390,
+      note: 'Mốc thắng được nâng cao, thưởng tăng nhẹ cho xứng.'
     },
     {
-      id: 'monthly_active_10',
+      id: 'monthly_active_22',
       tab: 'month',
-      title: 'Đều đặn 10 ngày',
-      desc: 'Có ít nhất 10 ngày trong tháng chơi đủ ván.',
-      target: 10,
+      title: 'Chơi đều 22 ngày',
+      desc: 'Có ít nhất 22 ngày trong tháng hoàn thành ván cờ.',
+      target: 22,
       metricKey: 'monthActiveDays',
       periodType: 'month',
-      rewardRate: 0.0022,
-      minPmc: 45,
-      maxPmc: 200,
-      note: 'Thưởng bền cho người chơi đều.'
+      rewardRate: 0.00360,
+      minPmc: 85,
+      maxPmc: 360,
+      note: 'Mốc này bắt người chơi vừa vào đều, vừa có đánh thật.'
     },
+
+    // =====================
+    // GIỚI THIỆU - giữ nguyên để không đụng flow referral
+    // =====================
     {
       id: 'ref_1',
       tab: 'referral',
@@ -267,7 +334,6 @@ function missionDefinitions() {
     }
   ];
 }
-
 function periodKeyForMission(def, now = Date.now()) {
   if (def.periodType === 'day') return localDayKey(now);
   if (def.periodType === 'week') return localWeekKey(now);
@@ -284,11 +350,15 @@ async function buildMetrics(db, walletKey, now = Date.now()) {
   const dayStart = dayStartMs(now);
   const weekStart = weekStartMs(now);
   const monthStart = monthStartMs(now);
+  const thisMonthKey = localMonthKey(now);
+  const thisWeekKey = localWeekKey(now);
 
-  // ĐÃ SỬA: Đọc lịch sử ván đấu (matchHistoryV2) của riêng người dùng này thay vì đọc toàn bộ nhánh matches rác!
-  const [historySnap, friendsSnap] = await Promise.all([
+  // Đọc lịch sử ván đấu + bạn bè + claim điểm danh hằng ngày.
+  // Mốc điểm danh tháng/tuần tính theo nhiệm vụ daily_login đã claim, không tính theo số ván.
+  const [historySnap, friendsSnap, claimsSnap] = await Promise.all([
     db.ref(`wallets/${walletKey}/matchHistoryV2`).once('value'),
-    db.ref(`social/friends/${walletKey}`).once('value')
+    db.ref(`social/friends/${walletKey}`).once('value'),
+    db.ref(`missionClaimsV1/${walletKey}`).once('value')
   ]);
 
   const metrics = {
@@ -301,15 +371,19 @@ async function buildMetrics(db, walletKey, now = Date.now()) {
     monthMatches: 0,
     monthWins: 0,
     weekActiveDays: 0,
-    monthActiveDays: 0
+    monthActiveDays: 0,
+    weekCheckinDays: 0,
+    monthCheckinDays: 0
   };
 
   const weekDays = new Set();
   const monthDays = new Set();
+  const weekCheckinDays = new Set();
+  const monthCheckinDays = new Set();
 
   historySnap.forEach(child => {
     const record = child.val() || {};
-    
+
     // Bỏ qua các ván đang đánh hoặc lỗi
     if (!record.done) return;
 
@@ -337,11 +411,35 @@ async function buildMetrics(db, walletKey, now = Date.now()) {
     }
   });
 
+  claimsSnap.forEach(child => {
+    const key = String(child.key || '');
+    const claim = child.val() || {};
+
+    if (!key.startsWith('daily_login__')) return;
+    if (claim.status !== 'done') return;
+
+    const periodKey = String(claim.periodKey || key.replace('daily_login__', '') || '');
+    const claimedAt = Number(claim.claimedAt || 0) || 0;
+
+    // daily_login dùng periodKey dạng YYYYMMDD.
+    if (/^\d{8}$/.test(periodKey)) {
+      if (periodKey.startsWith(thisMonthKey)) {
+        monthCheckinDays.add(periodKey);
+      }
+
+      const weekKeyOfClaim = claimedAt > 0 ? localWeekKey(claimedAt) : '';
+      if (weekKeyOfClaim === thisWeekKey) {
+        weekCheckinDays.add(periodKey);
+      }
+    }
+  });
+
   metrics.weekActiveDays = weekDays.size;
   metrics.monthActiveDays = monthDays.size;
+  metrics.weekCheckinDays = weekCheckinDays.size;
+  metrics.monthCheckinDays = monthCheckinDays.size;
   return metrics;
 }
-
 function rewardAmountPmc(def, missionPoolPmc) {
   const raw = Math.floor(Number(missionPoolPmc || 0) * Number(def.rewardRate || 0));
   return clamp(raw, Number(def.minPmc || 0), Number(def.maxPmc || 0));
@@ -555,7 +653,7 @@ async function claimMission(db, walletKey, missionId, now = Date.now()) {
     }
 
     // 🔥 THÊM DÒNG NÀY: Trừ tiền trong Quỹ Nhiệm Vụ hiển thị
-    await db.ref('treasury/missionPoolPmc').set(firebase.database.ServerValue.increment(-mission.rewardPmc)).catch(() => {});
+    await db.ref('treasury/missionPoolPmc').set(ServerValue.increment(-mission.rewardPmc)).catch(() => {});
 
     const txPayload = {
       type: 'mission_reward_pmc',
