@@ -7754,7 +7754,19 @@ async function processExitToLobby() {
         return;
     }
 
-    await leaveRealtimeMatch();
+        await leaveRealtimeMatch();
+
+    cleanupRoomListeners();
+    clearActiveMatchSnapshot();
+
+    currentRoomId = null;
+    mySide = null;
+    viewSide = "do";
+    currentRoomMode = null;
+    currentRoomStakePMC = 0;
+    currentRoomBucket = null;
+    currentRoomStatus = null;
+
     await setPlayerPresence("home").catch(() => {});
     showHomeUI();
     closeArenaFriendBox();
@@ -14765,15 +14777,62 @@ async function loadArenaTopPlayers() {
             .map(p => String(p.liveRoomId))
     ));
 
-    const viewerCounts = {};
+    const roomInfoMap = {};
+
     await Promise.all(liveRoomIds.map(async (roomId) => {
-        const snap = await db.ref("matches/" + roomId + "/viewers").once("value").catch(() => null);
-        viewerCounts[roomId] = snap?.numChildren ? snap.numChildren() : 0;
+        const [roomSnap, viewersSnap] = await Promise.all([
+            db.ref("matches/" + roomId).once("value").catch(() => null),
+            db.ref("matches/" + roomId + "/viewers").once("value").catch(() => null)
+        ]);
+
+        const room = roomSnap?.val?.() || null;
+
+        const playing =
+            !!room &&
+            room.status === "playing" &&
+            !room.winner &&
+            !!room.players?.do &&
+            !!room.players?.den;
+
+        roomInfoMap[roomId] = {
+            playing,
+            viewerCount: viewersSnap?.numChildren ? viewersSnap.numChildren() : 0
+        };
     }));
 
+    const staleUpdates = {};
+
     list.forEach(p => {
-        if (p.liveRoomId) p.viewerCount = viewerCounts[String(p.liveRoomId)] || 0;
+        const roomId = String(p.liveRoomId || "");
+        const info = roomId ? roomInfoMap[roomId] : null;
+
+        p.liveRoomPlaying = false;
+        p.liveRoomSpectating = false;
+
+        if (info?.playing) {
+            p.viewerCount = info.viewerCount || 0;
+            p.liveRoomPlaying = p.liveState === "arena";
+            p.liveRoomSpectating = p.liveState === "spectating";
+            return;
+        }
+
+        p.viewerCount = 0;
+
+        if (p.liveState === "arena" || p.liveState === "spectating") {
+            p.liveState = "home";
+            p.liveRoomId = "";
+            p.liveMode = "";
+
+            staleUpdates[`social/playerState/${p.walletKey}/state`] = "home";
+            staleUpdates[`social/playerState/${p.walletKey}/roomId`] = null;
+            staleUpdates[`social/playerState/${p.walletKey}/mode`] = null;
+            staleUpdates[`social/playerState/${p.walletKey}/updatedAt`] = Date.now();
+        }
     });
+
+    if (Object.keys(staleUpdates).length) {
+        db.ref().update(staleUpdates).catch(() => {});
+    }
 
     arenaTopCache = list;
     return list;
@@ -14840,8 +14899,8 @@ listEl.innerHTML = list.map((p, i) => {
         }
 
         const isMe = myWalletKey && String(p.walletKey || "") === myWalletKey;
-        const isPlaying = p.liveState === "arena" && !!p.liveRoomId;
-        const isSpectating = p.liveState === "spectating" && !!p.liveRoomId;
+        const isPlaying = !!p.online && !!p.liveRoomPlaying && p.liveState === "arena" && !!p.liveRoomId;
+        const isSpectating = !!p.online && !!p.liveRoomSpectating && p.liveState === "spectating" && !!p.liveRoomId;
         const onlineText = p.online ? "ONLINE" : "OFFLINE";
         let statusHtml = `<span class="top-status-chip ${p.online ? "online" : "offline"}">● ${onlineText}</span>`;
         if (isPlaying) {
@@ -15202,13 +15261,11 @@ async function openArenaTopModal(e) {
     const now = Date.now();
     const listEl = document.getElementById("arena-top-list");
 
-    // SỬA DÒNG NÀY: 30000 -> 300000
-    if (now - lastTopFetchTime < 300000 && arenaTopCache.length > 0) {
-        renderArenaTopList();
-    } else {
-        if (listEl && arenaTopCache.length === 0) listEl.innerHTML = '<div class="top-empty">Đang tải bảng Top...</div>';
-        await safeFetchAndRenderTop();
+    if (listEl && arenaTopCache.length === 0) {
+        listEl.innerHTML = '<div class="top-empty">Đang tải bảng Top...</div>';
     }
+
+    await safeFetchAndRenderTop();
 
     if (arenaTopUpdateTimer) clearInterval(arenaTopUpdateTimer);
 
@@ -16557,28 +16614,38 @@ async function setPlayerPresence(state = "home") {
         const me = getCurrentFriendProfile();
         if (!me?.walletKey) return;
 
+        let cleanState = String(state || "home").trim();
+        const shouldKeepRoom = cleanState === "arena" || cleanState === "spectating";
+
+        if (shouldKeepRoom && !currentRoomId) {
+            cleanState = "home";
+        }
+
+        const finalKeepRoom = cleanState === "arena" || cleanState === "spectating";
+
         const stateRef = db.ref("social/playerState/" + me.walletKey);
         await stateRef.update({
-            state,
-            roomId: currentRoomId || null,
-            mode: currentRoomMode || null,
+            state: finalKeepRoom ? cleanState : "home",
+            roomId: finalKeepRoom ? (currentRoomId || null) : null,
+            mode: finalKeepRoom ? (currentRoomMode || null) : null,
             online: true,
             updatedAt: Date.now()
         });
 
-        // CHỈ GẮN ONDISCONNECT ĐÚNG 1 LẦN DUY NHẤT LÚC MỚI VÀO GAME
         if (!isDisconnectHooked) {
             stateRef.onDisconnect().update({
+                state: "home",
+                roomId: null,
+                mode: null,
                 online: false,
                 updatedAt: firebase.database.ServerValue.TIMESTAMP
             });
-            isDisconnectHooked = true; 
+            isDisconnectHooked = true;
         }
     } catch (err) {
         console.error("Lỗi setPlayerPresence:", err);
     }
 }
-
 function startPresenceHeartbeat() {
     clearInterval(presenceHeartbeatTimer);
 
