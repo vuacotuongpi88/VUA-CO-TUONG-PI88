@@ -12944,30 +12944,25 @@ console.log("READY_WALLET_DEBUG", {
         if (!targetWalletKey) {
             return { ok: false, error: "Không tìm thấy mã ví để trừ tiền." };
         }
-        try {
-    await db.ref(`matches/${roomId}/players/${side}`).update({
-        walletKey: targetWalletKey,
-        name: localProfile.name || localProfile.username || targetWalletKey,
-        photo: localProfile.photo || "images/do_tuong.png",
-        updatedAt: firebase.database.ServerValue.TIMESTAMP
-    });
-} catch (_) {}
+        db.ref(`matches/${roomId}/players/${side}`).update({
+    walletKey: targetWalletKey,
+    name: localProfile.name || localProfile.username || targetWalletKey,
+    photo: localProfile.photo || "images/do_tuong.png",
+    updatedAt: firebase.database.ServerValue.TIMESTAMP
+}).catch(() => {});
         let useTicket = false;
 
         if (stake > 0 && stake <= 10000) {
-            const safeWalletKey = String(targetWalletKey || "").replace(/[.#$\[\]\/]/g, "_");
-            const targetWalletSnap = await db.ref("wallets/" + safeWalletKey).once("value");
-            const targetWallet = targetWalletSnap.val() || {};
-            const freeTickets = Math.max(0, Math.floor(Number(targetWallet.freeTickets || 0)));
+    const freeTickets = Math.max(0, Math.floor(Number(window.currentFreeTickets || 0)));
 
-            if (freeTickets > 0) {
-                useTicket = confirm(
-                    `🎁 Mày đang có ${freeTickets} LƯỢT ĐÁNH MIỄN PHÍ.\nCó muốn dùng 1 lượt để thay thế cho ${formatPMC(stake)} không?`
-                );
-            }
-        }
+    if (freeTickets > 0) {
+        useTicket = confirm(
+            `🎁 Mày đang có ${freeTickets} LƯỢT ĐÁNH MIỄN PHÍ.\nCó muốn dùng 1 lượt để thay thế cho ${formatPMC(stake)} không?`
+        );
+    }
+}
 
-        const token = await user.getIdToken(true);
+        const token = await user.getIdToken();
 
         const res = await fetch("/api/pmc/charge-stake", {
             method: "POST",
@@ -19764,10 +19759,20 @@ renderPlayersFromRoom = function(room) {
 const oldChargeStakeForReady = chargeStakeForReady;
 chargeStakeForReady = async function(roomId, side) {
     const res = await oldChargeStakeForReady(roomId, side);
-    // Nếu dùng thẻ / PMC thành công -> Load lại ví để cập nhật UI ngay lập tức
-    if (res.ok) {
-        await loadWalletBalance();
+
+    // Không chặn nút SS chờ load ví nữa. Cho vào trận trước, ví cập nhật sau.
+    if (res && res.ok) {
+        setTimeout(() => {
+            loadWalletBalance()
+                .then(() => {
+                    if (typeof syncMyMatchBalanceToRoomNow === "function") {
+                        return syncMyMatchBalanceToRoomNow();
+                    }
+                })
+                .catch(err => console.warn("READY_BALANCE_REFRESH_LATE_FAIL:", err));
+        }, 80);
     }
+
     return res;
 };
 // ===============================================
