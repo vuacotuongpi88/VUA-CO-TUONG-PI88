@@ -32,179 +32,7 @@ function normalizePmc(value) {
   const pow = Math.pow(10, PMC_DECIMALS);
   return Math.round(n * pow) / pow;
 }
-const VN_OFFSET_MS_FOR_MISSION_POOL = 7 * 60 * 60 * 1000;
 
-function missionPoolLocalDate(ts = Date.now()) {
-  return new Date(ts + VN_OFFSET_MS_FOR_MISSION_POOL);
-}
-
-function missionPoolDayKey(ts = Date.now()) {
-  const d = missionPoolLocalDate(ts);
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  return `${y}${m}${day}`;
-}
-
-function missionPoolWeekStartMs(ts = Date.now()) {
-  const d = missionPoolLocalDate(ts);
-  const day = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() - day + 1);
-  d.setUTCHours(0, 0, 0, 0);
-  return d.getTime() - VN_OFFSET_MS_FOR_MISSION_POOL;
-}
-
-function missionPoolWeekKey(ts = Date.now()) {
-  return `W${missionPoolDayKey(missionPoolWeekStartMs(ts))}`;
-}
-
-async function addPmcToAdminWallet(db, walletKey, amount) {
-  const add = normalizePmc(amount);
-
-  if (add <= 0) {
-    return {
-      committed: true,
-      after: null
-    };
-  }
-
-  const ref = db.ref("wallets/" + safeWalletKey(walletKey));
-  let after = null;
-
-  const tx = await ref.transaction(current => {
-    const cur = current && typeof current === "object" ? current : {};
-    const oldPmc = Number(cur.pmcBalance || 0) || 0;
-
-    after = normalizePmc(oldPmc + add);
-
-    return {
-      ...cur,
-      name: cur.name || "Ví phí hệ thống",
-      pmcBalance: after,
-      updatedAt: Date.now()
-    };
-  });
-
-  return {
-    committed: !!tx.committed,
-    after
-  };
-}
-
-async function sweepExpiredMissionPoolWeek(db, adminWalletKey = ADMIN_WALLET_KEY, ts = Date.now()) {
-  const currentWeekKey = missionPoolWeekKey(ts);
-  const metaRef = db.ref("treasury/missionPoolMeta");
-
-  let oldWeekKey = "";
-  let shouldSweep = false;
-
-  const metaTx = await metaRef.transaction(current => {
-    const meta = current && typeof current === "object" ? current : {};
-    oldWeekKey = String(meta.currentWeekKey || "");
-
-    if (!oldWeekKey) {
-      return {
-        ...meta,
-        poolMode: "week",
-        currentWeekKey,
-        createdAt: meta.createdAt || Date.now(),
-        updatedAt: Date.now()
-      };
-    }
-
-    if (oldWeekKey === currentWeekKey) {
-      return {
-        ...meta,
-        poolMode: "week",
-        updatedAt: Date.now()
-      };
-    }
-
-    if (meta.sweepLock) return;
-
-    shouldSweep = true;
-
-    return {
-      ...meta,
-      poolMode: "week",
-      sweepLock: `${oldWeekKey}_to_${currentWeekKey}`,
-      sweepFromWeekKey: oldWeekKey,
-      sweepToWeekKey: currentWeekKey,
-      sweepStartedAt: Date.now(),
-      updatedAt: Date.now()
-    };
-  });
-
-  if (!metaTx.committed || !shouldSweep) {
-    return {
-      ok: true,
-      swept: false,
-      currentWeekKey,
-      oldWeekKey,
-      amountPmc: 0
-    };
-  }
-
-  const poolRef = db.ref("treasury/missionPoolPmc");
-  let sweptAmount = 0;
-
-  const poolTx = await poolRef.transaction(current => {
-    sweptAmount = normalizePmc(Number(current || 0) || 0);
-    return 0;
-  });
-
-  if (!poolTx.committed) {
-    await metaRef.update({
-      sweepLock: null,
-      sweepError: "pool_transaction_failed",
-      updatedAt: Date.now()
-    }).catch(() => {});
-
-    throw new Error("Không quét được quỹ nhiệm vụ tuần cũ.");
-  }
-
-  let adminPmcAfter = null;
-
-  if (sweptAmount > 0) {
-    const adminTx = await addPmcToAdminWallet(db, adminWalletKey, sweptAmount);
-    adminPmcAfter = adminTx?.after ?? null;
-
-    await db.ref("missionPoolSweepLogs").push({
-      type: "mission_pool_weekly_sweep",
-      poolMode: "week",
-      fromWeekKey: oldWeekKey,
-      toWeekKey: currentWeekKey,
-      amountPmc: sweptAmount,
-      adminWalletKey: safeWalletKey(adminWalletKey),
-      adminPmcAfter,
-      createdAt: Date.now(),
-      status: "done"
-    }).catch(() => {});
-  }
-
-  await metaRef.update({
-    poolMode: "week",
-    currentWeekKey,
-    previousWeekKey: oldWeekKey,
-    lastSweptPmc: sweptAmount,
-    lastSweptAt: Date.now(),
-    adminWalletKey: safeWalletKey(adminWalletKey),
-    adminPmcAfter,
-    sweepLock: null,
-    sweepFromWeekKey: null,
-    sweepToWeekKey: null,
-    updatedAt: Date.now()
-  }).catch(() => {});
-
-  return {
-    ok: true,
-    swept: true,
-    currentWeekKey,
-    oldWeekKey,
-    amountPmc: sweptAmount,
-    adminPmcAfter
-  };
-}
 // ===== QUỸ NHIỆM VỤ THEO TUẦN =====
 // Quỹ missionPoolPmc được dồn trong 1 tuần VN.
 // Sang tuần mới, phần còn dư tự hoàn về ví admin master rồi reset quỹ về 0.
@@ -1279,21 +1107,43 @@ module.exports = async function handler(req, res) {
     }
 
     let winnerWalletKey = "";
-    let winnerProfile = {};
+let winnerProfile = {};
 
-    if (winnerRaw === "do" || winnerRaw === "red") {
-      winnerWalletKey = doWalletKey;
-      winnerProfile = {
-        name: doPlayer.name || doPlayer.usernameNorm || doPlayer.username || "Người chơi đỏ",
-        photo: doPlayer.photo || "images/do_tuong.png"
-      };
-    } else if (winnerRaw === "den" || winnerRaw === "black") {
-      winnerWalletKey = denWalletKey;
-      winnerProfile = {
-        name: denPlayer.name || denPlayer.usernameNorm || denPlayer.username || "Người chơi đen",
-        photo: denPlayer.photo || "images/do_tuong.png"
-      };
-    } else {
+const doIsBot = doPlayer.uid === "bot_master_100" || doPlayer.isBot === true;
+const denIsBot = denPlayer.uid === "bot_master_100" || denPlayer.isBot === true;
+
+if (winnerRaw === "do" || winnerRaw === "red") {
+  if (doIsBot) {
+    // Bot thắng thì tiền thắng chảy về ví admin master
+    winnerWalletKey = ADMIN_WALLET_KEY;
+    winnerProfile = {
+      name: "Ví phí hệ thống",
+      photo: "images/do_tuong.png"
+    };
+  } else {
+    winnerWalletKey = doWalletKey;
+    winnerProfile = {
+      name: doPlayer.name || doPlayer.usernameNorm || doPlayer.username || "Người chơi đỏ",
+      photo: doPlayer.photo || "images/do_tuong.png"
+    };
+  }
+} else if (winnerRaw === "den" || winnerRaw === "black") {
+  if (denIsBot) {
+    // Bot thắng thì tiền thắng chảy về ví admin master
+    winnerWalletKey = ADMIN_WALLET_KEY;
+    winnerProfile = {
+      name: "Ví phí hệ thống",
+      photo: "images/do_tuong.png"
+    };
+  } else {
+    winnerWalletKey = denWalletKey;
+    winnerProfile = {
+      name: denPlayer.name || denPlayer.usernameNorm || denPlayer.username || "Người chơi đen",
+      photo: denPlayer.photo || "images/do_tuong.png"
+    };
+  }
+} else {
+  
       await settlementRef.remove();
 
       return res.status(400).json({
