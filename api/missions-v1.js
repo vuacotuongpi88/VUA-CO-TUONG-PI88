@@ -619,10 +619,18 @@ async function buildMetrics(db, walletKey, now = Date.now()) {
   return metrics;
 }
 function rewardAmountPmc(def, missionPoolPmc) {
-  const raw = Math.floor(Number(missionPoolPmc || 0) * Number(def.rewardRate || 0));
-  return clamp(raw, Number(def.minPmc || 0), Number(def.maxPmc || 0));
-}
+  const pool = roundPmc(Number(missionPoolPmc || 0) || 0);
 
+  if (pool <= 0) return 0;
+
+  const raw = Math.floor(pool * Number(def.rewardRate || 0));
+  const reward = clamp(raw, Number(def.minPmc || 0), Number(def.maxPmc || 0));
+
+  // Quỹ chưa đủ mức thưởng tối thiểu thì chưa cho nhận.
+  if (reward > pool) return 0;
+
+  return reward;
+}
 async function buildBoard(db, walletKey, now = Date.now()) {
   const defs = missionDefinitions();
   const [walletSnap, treasurySnap, missionPoolSnap, metrics] = await Promise.all([
@@ -657,7 +665,12 @@ async function buildBoard(db, walletKey, now = Date.now()) {
     // Nếu ngày/tuần/tháng mới đến, currentPeriodKey sẽ tự động đổi.
     // Lúc đó Firebase check cái ID mới này đéo thấy (vì chưa claim), tự động 'claimed' sẽ = false! Xong bài!
     const claimed = !!(claimVal && claimVal.status === 'done');
-    const ready = !claimed && progress >= target && rewardPmc > 0 && treasuryPmc >= rewardPmc;
+    const ready =
+  !claimed &&
+  progress >= target &&
+  rewardPmc > 0 &&
+  treasuryPmc >= rewardPmc &&
+  missionPoolPmc >= rewardPmc;
 
     if (ready) {
       claimableTotalPmc += rewardPmc;
