@@ -11690,14 +11690,23 @@ function getOwnedAvatarSkins() {
     return normalizeOwnedAvatarSkins(localStorage.getItem(getOwnedAvatarSkinsCacheKey()));
 }
 
-function getEquippedAvatarSkin() {
-    const owned = getOwnedAvatarSkins();
-    const saved = localStorage.getItem(getAvatarSkinCacheKey()) || "none";
+function normalizeAvatarSkinId(id) {
+    const raw = String(id || "").trim();
 
-    if (!owned[saved]) return "none";
-    return getAvatarSkinById(saved).id;
+    if (!raw || raw === "skin_default" || raw === "default") {
+        return "none";
+    }
+
+    return getAvatarSkinById(raw).id;
 }
 
+function getEquippedAvatarSkin() {
+    const owned = getOwnedAvatarSkins();
+    const saved = normalizeAvatarSkinId(localStorage.getItem(getAvatarSkinCacheKey()) || "none");
+
+    if (!owned[saved]) return "none";
+    return saved;
+}
 function saveAvatarSkinLocal(equippedId, ownedMap) {
     const owned = normalizeOwnedAvatarSkins(ownedMap);
     let equipped = getAvatarSkinById(equippedId).id;
@@ -12135,8 +12144,16 @@ function refreshRoomAvatarSkinUI() {
 // BỔ SUNG HÀM BỊ THIẾU: Cập nhật skin cho đối thủ thấy ngay lập tức nếu đang ngồi trong bàn
 async function syncEquippedAvatarSkinToRoom(skinId) {
     if (!currentRoomId || !mySide) return;
+
+    const safeSkinId = getAvatarSkinById(skinId).id;
+
     try {
-        await db.ref(`matches/${currentRoomId}/players/${mySide}/avatarSkin`).set(skinId);
+        await db.ref(`matches/${currentRoomId}/players/${mySide}`).update({
+            avatarSkin: safeSkinId,
+            equippedAvatarSkin: safeSkinId,
+            equippedSkin: safeSkinId,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        });
     } catch (err) {
         console.error("Lỗi đồng bộ skin vào phòng:", err);
     }
@@ -12144,38 +12161,83 @@ async function syncEquippedAvatarSkinToRoom(skinId) {
 
 // THAY THẾ HÀM GẮN SKIN CŨ BẰNG HÀM NÀY ĐỂ BẢO ĐẢM LƯU LÊN FIREBASE
 async function equipAvatarSkin(skinId) {
-    // --- CHÈN DÒNG NÀY VÀO ĐẦU HÀM ĐỂ ÉP SHOP PHẢI VẼ LẠI ---
-    lastSkinShopDataHash = ""; 
-    // --------------------------------------------------------
+    lastSkinShopDataHash = "";
 
     const skin = getAvatarSkinById(skinId);
-    // ... các đoạn code bên dưới của mầy giữ nguyên
     const owned = getOwnedAvatarSkins();
+
+    if (!skin || !skin.id) {
+        alert("Skin không tồn tại.");
+        return;
+    }
 
     if (!owned[skin.id]) {
         alert("Mầy chưa mua skin này.");
         return;
     }
 
-    // 1. Lưu dưới máy mày để giao diện đổi ngay lập tức
+    // Đổi giao diện ngay
     saveAvatarSkinLocal(skin.id, owned);
     refreshOwnAvatarSkinUI();
     refreshRoomAvatarSkinUI();
 
-    try {
-        // 2. Chạy hàm (vừa được bổ sung) để đổi skin trên bàn cờ
-        await syncEquippedAvatarSkinToRoom(skin.id);
+    const walletKey = makeWalletDbKey();
 
-        // 3. QUAN TRỌNG NHẤT: Đẩy data lên Firebase. Giờ không bị crash ngầm nữa thì đoạn này mới được chạy!
+    try {
+        // 1. Gọi server chuẩn để lưu equippedAvatarSkin + cosmeticsEquippedV1
+        try {
+            const res = await fetch("/api/missions-v1?v=" + Date.now(), {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-wallet-key": walletKey
+                },
+                body: JSON.stringify({
+                    action: "shop_equip",
+                    walletKey,
+                    itemId: skin.id
+                })
+            });
+
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok || !data.ok) {
+                console.warn("Server shop_equip lỗi, dùng backup Firebase:", data.error || data);
+            }
+        } catch (serverErr) {
+            console.warn("Không gọi được shop_equip, dùng backup Firebase:", serverErr);
+        }
+
+        // 2. Backup trực tiếp: lưu đủ 3 field để chỗ nào đọc cũng thấy
         await walletRef().update({
             avatarSkin: skin.id,
+            equippedAvatarSkin: skin.id,
+            equippedSkin: skin.id,
             ownedAvatarSkins: owned,
             updatedAt: firebase.database.ServerValue.TIMESTAMP
         });
 
+        // 3. Lưu thêm node riêng cho shop
+        await db.ref(`cosmeticsEquippedV1/${walletKey}`).set({
+            avatarSkin: skin.id,
+            equippedAvatarSkin: skin.id,
+            equippedSkin: skin.id,
+            itemName: skin.name || skin.id,
+            equippedAt: firebase.database.ServerValue.TIMESTAMP
+        }).catch(() => {});
+
+        // 4. Nếu đang ở trong bàn thì sync luôn lên room
+        await syncEquippedAvatarSkinToRoom(skin.id);
+
+        // 5. Ép shop vẽ lại, nút phải hiện ĐANG GẮN
+        lastSkinShopDataHash = "";
+        avatarSkinShopTab = "bag";
         renderAvatarSkinShop();
+
+        alert("Đã gắn skin: " + skin.name);
     } catch (err) {
         console.error("Lỗi lưu skin avatar lên Database:", err);
+        alert("Lỗi lưu skin: " + (err.message || err));
     }
 }
 function safeWalletKeyForPath(walletKey) {
