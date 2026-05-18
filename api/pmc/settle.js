@@ -857,8 +857,6 @@ async function applyServerMatchStatsV2(db, roomId, room, stake) {
   };
 }
 async function incrementMissionPool(db, amount, roomId) {
-  await sweepExpiredMissionPoolWeek(db, ADMIN_WALLET_KEY, Date.now());
-
   const n = normalizePmc(amount);
 
   if (n <= 0) {
@@ -870,21 +868,23 @@ async function incrementMissionPool(db, amount, roomId) {
     };
   }
 
-  const ref = db.ref("treasury/missionPoolPmc");
-  let nextValue = null;
-
-  const tx = await ref.transaction(current => {
-    nextValue = normalizePmc((Number(current || 0) || 0) + n);
-    return nextValue;
-  });
-
-  const after = normalizePmc(Number(tx.snapshot?.val() ?? nextValue ?? 0) || 0);
-
+  // Chốt meta tuần TRƯỚC khi cộng quỹ.
+  // Không gọi sweep ở settle nữa, để tránh vừa cộng xong bị missions-v1 quét trả về admin.
   await db.ref("treasury/missionPoolMeta").update({
     poolMode: "week",
     currentWeekKey: missionPoolWeekKey(),
     updatedAt: Date.now()
   }).catch(() => {});
+
+  const poolRef = db.ref("treasury/missionPoolPmc");
+  let nextValue = 0;
+
+  const tx = await poolRef.transaction(current => {
+    nextValue = normalizePmc((Number(current || 0) || 0) + n);
+    return nextValue;
+  });
+
+  const finalPool = normalizePmc(Number(tx.snapshot?.val() ?? nextValue ?? 0) || 0);
 
   await db.ref("treasury/updatedAt").set(Date.now()).catch(() => {});
 
@@ -892,8 +892,8 @@ async function incrementMissionPool(db, amount, roomId) {
     roomId,
     type: "match_fee_mission_share",
     amountPmc: n,
-    missionPoolPmc: after,
-    source: "pmc_settle_fee20_week_pool",
+    missionPoolPmc: finalPool,
+    source: "pmc_settle_fee20_admin80_mission20",
     poolMode: "week",
     weekKey: missionPoolWeekKey(),
     createdAt: Date.now(),
@@ -901,11 +901,10 @@ async function incrementMissionPool(db, amount, roomId) {
   }).catch(() => {});
 
   return {
-    missionPoolPmc: after,
+    missionPoolPmc: finalPool,
     added: n
   };
 }
-
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({
