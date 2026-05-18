@@ -21501,7 +21501,7 @@ async function callHistoryApi(action, q = "") {
     const walletKey = typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "";
     if (!walletKey) throw new Error("Thiếu walletKey.");
 
-    const res = await fetch("/api/history-v1?v=" + Date.now(), {
+    const res = await fetch("/api/finance?v=" + Date.now(), {
         method: "POST",
         headers: {
             "Content-Type": "application/json",

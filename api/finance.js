@@ -23,6 +23,259 @@ function normalizePiAddress(value = "") {
 function isValidPiAddress(address = "") {
   return /^G[A-Z2-7]{55}$/.test(String(address || "").trim().toUpperCase());
 }
+// ===== HISTORY / LEDGER HELPERS - GOM VÀO FINANCE ĐỂ NÉ GIỚI HẠN API VERCEL =====
+function histNum(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function histRound(value) {
+  const n = Number(value || 0);
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n * 1000000) / 1000000;
+}
+
+function histSearchText(value = "") {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function histTs(row = {}) {
+  return (
+    histNum(row.createdAt) ||
+    histNum(row.paidAt) ||
+    histNum(row.endedAt) ||
+    histNum(row.boughtAt) ||
+    histNum(row.at) ||
+    histNum(row.updatedAt) ||
+    0
+  );
+}
+
+function histPickName(walletKey, wallet = {}) {
+  return (
+    wallet.name ||
+    wallet.displayName ||
+    wallet.username ||
+    wallet.usernameNorm ||
+    wallet.phone ||
+    String(walletKey || "").replace(/^pi_/, "") ||
+    "Người chơi"
+  );
+}
+
+async function histReadRecent(db, path, limit = 120) {
+  const snap = await db.ref(path).limitToLast(limit).once("value");
+  const arr = [];
+
+  snap.forEach(child => {
+    arr.push({
+      _key: child.key,
+      ...(child.val() || {})
+    });
+  });
+
+  return arr;
+}
+
+async function histLoadWalletMap(db, keys) {
+  const unique = Array.from(new Set(keys.map(safeKey).filter(Boolean)));
+  const map = {};
+
+  await Promise.all(
+    unique.map(async key => {
+      try {
+        const snap = await db.ref("wallets/" + key).once("value");
+        map[key] = snap.val() || {};
+      } catch (_) {
+        map[key] = {};
+      }
+    })
+  );
+
+  return map;
+}
+
+function histNormalizePlayerMatch(row = {}, key = "") {
+  const resultRaw = String(row.result || row.lastResult || "").toLowerCase();
+  const result =
+    resultRaw === "win" ? "win" :
+    (resultRaw === "lose" || resultRaw === "loss" ? "lose" : resultRaw || "done");
+
+  const stake = histRound(row.stakePmc || row.stakePMC || row.stake || 0);
+  const oppKey = safeKey(row.opponentWalletKey || row.rivalWalletKey || row.opponentKey || "");
+  const oppName = row.opponentName || row.rivalName || row.enemyName || "Đối thủ";
+  const mode = row.mode || row.gameMode || "co-tuong";
+
+  let title = row.title || "";
+  if (!title) {
+    if (result === "win") title = `Bạn thắng ${oppName} - kèo ${stake} PMC`;
+    else if (result === "lose") title = `Bạn thua ${oppName} - kèo ${stake} PMC`;
+    else title = `Ván với ${oppName} - kèo ${stake} PMC`;
+  }
+
+  return {
+    id: key,
+    roomId: row.roomId || "",
+    mode,
+    result,
+    title,
+    opponentWalletKey: oppKey,
+    opponentName: oppName,
+    opponentPhoto: row.opponentPhoto || row.rivalPhoto || "images/do_tuong.png",
+    stakePmc: stake,
+    netPmc: histRound(row.netPmc || row.netPMC || row.deltaPmc || 0),
+    createdAt: histTs(row),
+    searchText: histSearchText(`${title} ${oppName} ${oppKey} ${mode} ${stake}`)
+  };
+}
+
+function histAdminItemFromLedger(row = {}, walletMap = {}) {
+  const wk = safeKey(row.walletKey || row.buyerWalletKey || row.winnerWalletKey || "");
+  const wallet = walletMap[wk] || {};
+  const name = row.playerName || row.buyerName || row.winnerName || histPickName(wk, wallet);
+
+  return {
+    id: "ledger_" + row._key,
+    type: row.type || "admin_ledger",
+    title: row.title || "Sao kê hệ thống",
+    detail: row.detail || "",
+    amountPmc: histRound(row.amountPmc || row.adminAmountPmc || row.adminMasterSharePmc || 0),
+    missionPoolPmc: histRound(row.missionPoolPmc || row.missionPoolSharePmc || 0),
+    stakePmc: histRound(row.stakePmc || row.stakePMC || 0),
+    feePmc: histRound(row.feePmc || 0),
+    walletKey: wk,
+    playerName: name,
+    itemId: row.itemId || "",
+    itemName: row.itemName || "",
+    roomId: row.roomId || "",
+    createdAt: histTs(row),
+    searchText: histSearchText(`${row.title || ""} ${row.detail || ""} ${name} ${wk} ${row.itemName || ""} ${row.roomId || ""}`)
+  };
+}
+
+function histAdminItemFromWalletTx(row = {}, walletMap = {}) {
+  const type = String(row.type || "");
+  const wk = safeKey(row.walletKey || row.buyerWalletKey || row.winnerWalletKey || "");
+  const wallet = walletMap[wk] || {};
+  const name = histPickName(wk, wallet);
+
+  if (type === "buy_exp_package") {
+    const amount = histRound(row.feePMC || row.pricePmc || row.amountPmc || 0);
+
+    return {
+      id: "wtx_" + row._key,
+      type: "buy_exp",
+      title: `${name} mua gói EXP ${row.pkgId || ""}`,
+      detail: `Ví hệ thống nhận +${amount} PMC · +${histNum(row.expGained)} EXP · +${histNum(row.ticketsGained)} vé`,
+      amountPmc: amount,
+      missionPoolPmc: 0,
+      walletKey: wk,
+      playerName: name,
+      itemId: row.pkgId || "",
+      itemName: row.pkgName || row.pkgId || "Gói EXP",
+      roomId: "",
+      createdAt: histTs(row),
+      searchText: histSearchText(`${name} ${wk} ${row.pkgId || ""} mua exp goi exp`)
+    };
+  }
+
+  if (type === "cosmetic_shop_buy") {
+    const amount = histRound(Math.abs(histNum(row.amountPMC || row.pricePmc || row.amountPmc || 0)));
+    const itemName = row.itemName || row.itemId || "Skin";
+
+    return {
+      id: "wtx_" + row._key,
+      type: "buy_skin",
+      title: `${name} mua skin ${itemName}`,
+      detail: `Ví hệ thống nhận +${amount} PMC`,
+      amountPmc: amount,
+      missionPoolPmc: 0,
+      walletKey: wk,
+      playerName: name,
+      itemId: row.itemId || "",
+      itemName,
+      roomId: "",
+      createdAt: histTs(row),
+      searchText: histSearchText(`${name} ${wk} ${itemName} mua skin`)
+    };
+  }
+
+  if (type === "match_winner_settle") {
+    const amount = histRound(row.adminMasterSharePmc || row.amountPmc || 0);
+    const mission = histRound(row.missionPoolSharePmc || 0);
+
+    return {
+      id: "wtx_" + row._key,
+      type: "match_fee",
+      title: `Ván cờ đã chia tiền`,
+      detail: `Kèo ${histRound(row.stakePMC || row.stakePmc)} PMC · phí ${histRound(row.feePmc)} PMC · ví hệ thống +${amount} PMC · quỹ nhiệm vụ +${mission} PMC`,
+      amountPmc: amount,
+      missionPoolPmc: mission,
+      stakePmc: histRound(row.stakePMC || row.stakePmc || 0),
+      feePmc: histRound(row.feePmc || 0),
+      walletKey: wk,
+      playerName: name,
+      roomId: row.roomId || "",
+      createdAt: histTs(row),
+      searchText: histSearchText(`${name} ${wk} ${row.roomId || ""} van co phi bot thang thua`)
+    };
+  }
+
+  return null;
+}
+
+function histAdminItemFromMatchFee(row = {}, walletMap = {}) {
+  const wk = safeKey(row.winnerWalletKey || row.walletKey || "");
+  const wallet = walletMap[wk] || {};
+  const name = row.winnerName || histPickName(wk, wallet);
+
+  const amount = histRound(row.adminMasterSharePmc || row.amountPmc || 0);
+  const mission = histRound(row.missionPoolSharePmc || row.missionPoolPmc || 0);
+
+  return {
+    id: "matchfee_" + row._key,
+    type: "match_fee",
+    title: `Phí ván cờ: ${name} thắng`,
+    detail: `Kèo ${histRound(row.stakePMC || row.stakePmc)} PMC · phí ${histRound(row.feePmc)} PMC · ví hệ thống +${amount} PMC · quỹ +${mission} PMC`,
+    amountPmc: amount,
+    missionPoolPmc: mission,
+    stakePmc: histRound(row.stakePMC || row.stakePmc || 0),
+    feePmc: histRound(row.feePmc || 0),
+    walletKey: wk,
+    playerName: name,
+    roomId: row.roomId || "",
+    createdAt: histTs(row),
+    searchText: histSearchText(`${name} ${wk} ${row.roomId || ""} phi van co bot thang thua`)
+  };
+}
+
+function histAdminItemFromMmo(row = {}, walletMap = {}) {
+  const wk = safeKey(row.walletKey || row.buyerWalletKey || row.userWalletKey || "");
+  const wallet = walletMap[wk] || {};
+  const name = row.name || row.kyc?.name || histPickName(wk, wallet);
+  const itemName = row.itemName || row.productName || row.itemId || row.productId || "Tài khoản MMO";
+  const amount = histRound(row.totalCost || row.totalPmc || row.amountPmc || row.price || 0);
+
+  return {
+    id: "mmo_" + row._key,
+    type: "buy_mmo",
+    title: `${name} mua ${itemName}`,
+    detail: `Số lượng ${row.qty || row.quantity || 1} · ví hệ thống +${amount} PMC`,
+    amountPmc: amount,
+    missionPoolPmc: 0,
+    walletKey: wk,
+    playerName: name,
+    itemId: row.itemId || row.productId || "",
+    itemName,
+    roomId: "",
+    createdAt: histTs(row),
+    searchText: histSearchText(`${name} ${wk} ${itemName} mmo gmail acc tai khoan`)
+  };
+}
 module.exports = async function handler(req, res) {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
 
@@ -67,6 +320,130 @@ module.exports = async function handler(req, res) {
     if (!safeWalletKey) {
         return res.status(401).json({ ok: false, error: "Thiếu định danh ví." });
     }
+    // ==========================================
+// LỊCH SỬ ĐẤU NGƯỜI CHƠI + SAO KÊ HỆ THỐNG
+// GOM VÀO FINANCE.JS ĐỂ KHÔNG TẠO API FILE MỚI
+// ==========================================
+if (action === "player_history") {
+    const limit = Math.max(10, Math.min(100, Math.floor(histNum(body.limit, 50))));
+    const q = histSearchText(body.q || "");
+
+    const snap = await db
+        .ref(`wallets/${safeWalletKey}/matchHistoryV2`)
+        .limitToLast(limit)
+        .once("value");
+
+    const rows = [];
+
+    snap.forEach(child => {
+        const item = histNormalizePlayerMatch(child.val() || {}, child.key);
+        if (!q || item.searchText.includes(q)) rows.push(item);
+    });
+
+    rows.sort((a, b) => b.createdAt - a.createdAt);
+
+    return res.status(200).json({
+        ok: true,
+        action,
+        walletKey: safeWalletKey,
+        items: rows
+    });
+}
+
+if (action === "admin_ledger") {
+    const isAdmin406 =
+        safeWalletKey === "pi_0962903406" ||
+        safeWalletKey === "0962903406" ||
+        safeWalletKey === ADMIN_WALLET_KEY;
+
+    if (!isAdmin406) {
+        return res.status(403).json({
+            ok: false,
+            error: "Chỉ admin 406 được xem sao kê hệ thống."
+        });
+    }
+
+    const limit = Math.max(20, Math.min(250, Math.floor(histNum(body.limit, 120))));
+    const q = histSearchText(body.q || "");
+
+    const [adminLedger, walletTx, matchFees, mmoLogs] = await Promise.all([
+        histReadRecent(db, "adminLedgerV1", limit),
+        histReadRecent(db, "walletTransactions", limit),
+        histReadRecent(db, "matchFeeTransactions", limit),
+        histReadRecent(db, "mmo_kyc_logs", limit)
+    ]);
+
+    const walletKeys = [];
+
+    for (const r of adminLedger) {
+        if (r.walletKey) walletKeys.push(r.walletKey);
+        if (r.buyerWalletKey) walletKeys.push(r.buyerWalletKey);
+        if (r.winnerWalletKey) walletKeys.push(r.winnerWalletKey);
+        if (r.loserWalletKey) walletKeys.push(r.loserWalletKey);
+    }
+
+    for (const r of walletTx) {
+        if (r.walletKey) walletKeys.push(r.walletKey);
+        if (r.buyerWalletKey) walletKeys.push(r.buyerWalletKey);
+        if (r.winnerWalletKey) walletKeys.push(r.winnerWalletKey);
+    }
+
+    for (const r of matchFees) {
+        if (r.winnerWalletKey) walletKeys.push(r.winnerWalletKey);
+        if (r.loserWalletKey) walletKeys.push(r.loserWalletKey);
+    }
+
+    for (const r of mmoLogs) {
+        if (r.walletKey) walletKeys.push(r.walletKey);
+        if (r.buyerWalletKey) walletKeys.push(r.buyerWalletKey);
+        if (r.userWalletKey) walletKeys.push(r.userWalletKey);
+    }
+
+    const walletMap = await histLoadWalletMap(db, walletKeys);
+
+    const items = [];
+
+    for (const r of adminLedger) {
+        items.push(histAdminItemFromLedger(r, walletMap));
+    }
+
+    for (const r of walletTx) {
+        const item = histAdminItemFromWalletTx(r, walletMap);
+        if (item) items.push(item);
+    }
+
+    for (const r of matchFees) {
+        const item = histAdminItemFromMatchFee(r, walletMap);
+        if (item) items.push(item);
+    }
+
+    for (const r of mmoLogs) {
+        const item = histAdminItemFromMmo(r, walletMap);
+        if (item) items.push(item);
+    }
+
+    const dedup = new Map();
+
+    for (const item of items) {
+        if (!item) continue;
+        if (!item.createdAt) item.createdAt = Date.now();
+
+        if (!q || item.searchText.includes(q)) {
+            dedup.set(item.id, item);
+        }
+    }
+
+    const finalItems = Array.from(dedup.values())
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, limit);
+
+    return res.status(200).json({
+        ok: true,
+        action,
+        walletKey: safeWalletKey,
+        items: finalItems
+    });
+}
     // ==========================================
     // LUỒNG 0A: ĐỌC TRẠNG THÁI LIÊN KẾT VÍ PI
     // Không tạo thêm API route để né giới hạn 12 function của Vercel Hobby
