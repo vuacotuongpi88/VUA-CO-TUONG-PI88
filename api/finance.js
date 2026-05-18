@@ -386,73 +386,163 @@ module.exports = async function handler(req, res) {
     if (!safeWalletKey) {
         return res.status(401).json({ ok: false, error: "Thiếu định danh ví." });
     }
-    // ==========================================
+
+// ==========================================
 // LỊCH SỬ NẠP / RÚT PI RIÊNG TỪNG NGƯỜI CHƠI
+// ĐỌC CẢ NHÁNH CŨ DẠNG CON + NHÁNH MỚI DẠNG PHẲNG
 // ==========================================
 if (action === "pi_deposit_history") {
     const limit = Math.max(10, Math.min(100, Math.floor(Number(body.limit || 50) || 50)));
-
     const rows = [];
+    const noPiKey = safeWalletKey.replace(/^pi_/, "");
 
-    async function readUserRows(path) {
+    function rowWalletKeys(r = {}) {
+        return [
+            r.walletKey,
+            r.walletKeyRaw,
+            r.userWalletKey,
+            r.buyerWalletKey,
+            r.uid,
+            r.userId,
+            r.piUid,
+            r.payerId
+        ]
+            .map(v => safeKey(String(v || "").trim().toLowerCase()))
+            .filter(Boolean);
+    }
+
+    function sameWallet(r = {}) {
+        const keys = rowWalletKeys(r);
+        if (r._nested === true && keys.length === 0) return true;
+        return keys.includes(safeWalletKey) || keys.includes(noPiKey) || keys.includes("pi_" + noPiKey);
+    }
+
+    async function readNestedRows(path) {
         try {
             const snap = await db.ref(path).limitToLast(limit).once("value");
             snap.forEach(child => {
-                const v = child.val() || {};
                 rows.push({
                     id: child.key,
-                    ...v
+                    _source: path,
+                    _nested: true,
+                    ...(child.val() || {})
                 });
             });
         } catch (_) {}
     }
 
-    // Đọc nhiều nhánh để chống lệch tên node cũ/mới
+    async function readFlatRows(path) {
+        try {
+            const snap = await db.ref(path).limitToLast(limit * 5).once("value");
+            snap.forEach(child => {
+                rows.push({
+                    id: child.key,
+                    _source: path,
+                    _nested: false,
+                    ...(child.val() || {})
+                });
+            });
+        } catch (_) {}
+    }
+
     await Promise.all([
-        readUserRows(`piDepositRequests/${safeWalletKey}`),
-        readUserRows(`piDeposits/${safeWalletKey}`),
-        readUserRows(`depositRequests/${safeWalletKey}`),
-        readUserRows(`processed_payments/${safeWalletKey}`)
+        // nhánh cũ dạng /walletKey
+        readNestedRows(`piDepositRequests/${safeWalletKey}`),
+        readNestedRows(`piDeposits/${safeWalletKey}`),
+        readNestedRows(`depositRequests/${safeWalletKey}`),
+        readNestedRows(`processed_payments/${safeWalletKey}`),
+
+        // nhánh phẳng hay gặp
+        readFlatRows("piDepositRequests"),
+        readFlatRows("piDeposits"),
+        readFlatRows("depositRequests"),
+        readFlatRows("processed_payments"),
+        readFlatRows("walletTransactions"),
+        readFlatRows("walletTransactionsV2")
     ]);
 
-    const items = rows
-        .filter(r => {
-            const wk = String(r.walletKey || r.userWalletKey || r.uid || safeWalletKey || "");
-            return !wk || wk === safeWalletKey || wk === safeWalletKey.replace(/^pi_/, "");
-        })
-        .map(r => {
-            const amountPi = Number(r.amountPi || r.piAmount || r.amount || r.value || 0) || 0;
-            const amountPmc = Number(r.amountPmc || r.pmcAmount || r.pmc || amountPi * 500 || 0) || 0;
+    const dedup = new Map();
 
-            const statusRaw = String(r.status || r.state || "").toLowerCase();
-            const statusText =
-                statusRaw === "done" || statusRaw === "success" || statusRaw === "completed" || r.ok === true
-                    ? "Thành công"
-                    : statusRaw === "pending" || statusRaw === "waiting"
-                        ? "Đang xử lý"
-                        : statusRaw === "rejected" || statusRaw === "fail" || statusRaw === "failed"
-                            ? "Thất bại"
-                            : "Đã ghi nhận";
+    for (const r of rows) {
+        if (!sameWallet(r)) continue;
 
-            const ts =
-                Number(r.createdAt || 0) ||
-                Number(r.paidAt || 0) ||
-                Number(r.updatedAt || 0) ||
-                Number(r.time || 0) ||
-                Date.now();
+        const typeRaw = String(r.type || r.action || r.kind || r.source || "").toLowerCase();
+        const srcRaw = String(r._source || "").toLowerCase();
 
-            return {
-                id: r.id || "",
-                type: "deposit",
-                title: `Nạp ${amountPi} Pi`,
-                detail: `Quy đổi +${amountPmc} PMC · ${statusText}`,
-                amountPi,
-                amountPmc,
-                status: statusText,
-                txid: r.txid || r.txId || r.paymentId || r.identifier || "",
-                createdAt: ts
-            };
-        })
+        const looksDeposit =
+            r._nested === true ||
+            typeRaw.includes("deposit") ||
+            typeRaw.includes("nap") ||
+            typeRaw.includes("topup") ||
+            typeRaw.includes("payment") ||
+            srcRaw.includes("deposit") ||
+            srcRaw.includes("processed_payments");
+
+        if (!looksDeposit) continue;
+        if (typeRaw.includes("withdraw") || typeRaw.includes("rut")) continue;
+        if (typeRaw === "pmc_to_pi" || typeRaw === "pi_to_pmc") continue;
+
+        const amountPi = histRound(
+            r.amountPi ||
+            r.piAmount ||
+            r.amount ||
+            r.value ||
+            r.pi ||
+            0
+        );
+
+        const amountPmc = histRound(
+            r.amountPmc ||
+            r.pmcAmount ||
+            r.pmc ||
+            r.pmcDelta ||
+            (amountPi > 0 ? amountPi * PMC_PER_PI : 0)
+        );
+
+        const statusRaw = String(r.status || r.state || "").toLowerCase();
+        const statusText =
+            statusRaw === "done" ||
+            statusRaw === "success" ||
+            statusRaw === "completed" ||
+            statusRaw === "complete" ||
+            r.ok === true
+                ? "Thành công"
+                : statusRaw === "pending" ||
+                  statusRaw === "waiting" ||
+                  statusRaw === "approved" ||
+                  statusRaw === "created"
+                    ? "Đang xử lý"
+                    : statusRaw === "rejected" ||
+                      statusRaw === "fail" ||
+                      statusRaw === "failed"
+                        ? "Thất bại"
+                        : "Đã ghi nhận";
+
+        const ts =
+            Number(r.createdAt || 0) ||
+            Number(r.paidAt || 0) ||
+            Number(r.completedAt || 0) ||
+            Number(r.updatedAt || 0) ||
+            Number(r.time || 0) ||
+            Date.now();
+
+        const item = {
+            id: r.id || r.paymentId || r.txid || String(ts),
+            type: "deposit",
+            title: `Nạp ${amountPi} Pi`,
+            detail: `Quy đổi +${amountPmc} PMC · ${statusText}`,
+            amountPi,
+            amountPmc,
+            status: statusText,
+            txid: r.txid || r.txId || r.paymentId || r.identifier || "",
+            createdAt: ts
+        };
+
+        const key = item.txid || r.paymentId || r.id || `${item.type}_${ts}_${amountPi}`;
+        dedup.set(key, item);
+    }
+
+    const items = Array.from(dedup.values())
         .sort((a, b) => b.createdAt - a.createdAt)
         .slice(0, limit);
 
@@ -466,68 +556,160 @@ if (action === "pi_deposit_history") {
 
 if (action === "pi_withdraw_history") {
     const limit = Math.max(10, Math.min(100, Math.floor(Number(body.limit || 50) || 50)));
-
     const rows = [];
+    const noPiKey = safeWalletKey.replace(/^pi_/, "");
 
-    async function readWithdrawRows(path) {
+    function rowWalletKeys(r = {}) {
+        return [
+            r.walletKey,
+            r.walletKeyRaw,
+            r.userWalletKey,
+            r.uid,
+            r.userId,
+            r.piUid
+        ]
+            .map(v => safeKey(String(v || "").trim().toLowerCase()))
+            .filter(Boolean);
+    }
+
+    function sameWallet(r = {}) {
+        const keys = rowWalletKeys(r);
+        if (r._nested === true && keys.length === 0) return true;
+        return keys.includes(safeWalletKey) || keys.includes(noPiKey) || keys.includes("pi_" + noPiKey);
+    }
+
+    async function readNestedRows(path) {
         try {
             const snap = await db.ref(path).limitToLast(limit).once("value");
             snap.forEach(child => {
-                const v = child.val() || {};
                 rows.push({
                     id: child.key,
-                    ...v
+                    _source: path,
+                    _nested: true,
+                    ...(child.val() || {})
+                });
+            });
+        } catch (_) {}
+    }
+
+    async function readFlatRows(path) {
+        try {
+            const snap = await db.ref(path).limitToLast(limit * 5).once("value");
+            snap.forEach(child => {
+                rows.push({
+                    id: child.key,
+                    _source: path,
+                    _nested: false,
+                    ...(child.val() || {})
                 });
             });
         } catch (_) {}
     }
 
     await Promise.all([
-        readWithdrawRows(`piWithdrawRequests/${safeWalletKey}`),
-        readWithdrawRows(`piWithdraws/${safeWalletKey}`),
-        readWithdrawRows(`withdrawRequests/${safeWalletKey}`),
-        readWithdrawRows(`withdrawHistory/${safeWalletKey}`)
+        // nhánh cũ dạng /walletKey
+        readNestedRows(`piWithdrawRequests/${safeWalletKey}`),
+        readNestedRows(`piWithdraws/${safeWalletKey}`),
+        readNestedRows(`withdrawRequests/${safeWalletKey}`),
+        readNestedRows(`withdrawHistory/${safeWalletKey}`),
+
+        // nhánh thật đang dùng: dạng phẳng .push()
+        readFlatRows("piWithdrawRequests"),
+        readFlatRows("piWithdraws"),
+        readFlatRows("withdrawRequests"),
+        readFlatRows("withdrawHistory"),
+        readFlatRows("walletTransactions"),
+        readFlatRows("walletTransactionsV2")
     ]);
 
-    const items = rows
-        .filter(r => {
-            const wk = String(r.walletKey || r.userWalletKey || r.uid || safeWalletKey || "");
-            return !wk || wk === safeWalletKey || wk === safeWalletKey.replace(/^pi_/, "");
-        })
-        .map(r => {
-            const amountPi = Number(r.amountPi || r.piAmount || r.amount || r.value || 0) || 0;
-            const amountPmc = Number(r.amountPmc || r.pmcAmount || r.pmc || amountPi * 500 || 0) || 0;
+    const dedup = new Map();
 
-            const statusRaw = String(r.status || r.state || "").toLowerCase();
-            const statusText =
-                statusRaw === "done" || statusRaw === "success" || statusRaw === "completed" || r.approved === true
-                    ? "Đã duyệt"
-                    : statusRaw === "pending" || statusRaw === "waiting"
-                        ? "Đang chờ duyệt"
-                        : statusRaw === "rejected" || statusRaw === "fail" || statusRaw === "failed"
-                            ? "Từ chối"
-                            : "Đã gửi yêu cầu";
+    for (const r of rows) {
+        if (!sameWallet(r)) continue;
 
-            const ts =
-                Number(r.createdAt || 0) ||
-                Number(r.requestedAt || 0) ||
-                Number(r.approvedAt || 0) ||
-                Number(r.updatedAt || 0) ||
-                Date.now();
+        const typeRaw = String(r.type || r.action || r.kind || r.source || "").toLowerCase();
+        const srcRaw = String(r._source || "").toLowerCase();
 
-            return {
-                id: r.id || "",
-                type: "withdraw",
-                title: `Rút ${amountPi} Pi`,
-                detail: `Trừ ${amountPmc} PMC · ${statusText}`,
-                amountPi,
-                amountPmc,
-                status: statusText,
-                piAddress: r.piAddress || r.withdrawAddress || r.address || "",
-                txid: r.txid || r.txId || r.paymentId || "",
-                createdAt: ts
-            };
-        })
+        const looksWithdraw =
+            r._nested === true ||
+            typeRaw.includes("withdraw") ||
+            typeRaw.includes("rut") ||
+            typeRaw.includes("wallet_withdraw") ||
+            srcRaw.includes("withdraw");
+
+        if (!looksWithdraw) continue;
+
+        const amountPi = histRound(
+            r.amountPi ||
+            r.piAmount ||
+            r.amount ||
+            r.value ||
+            r.pi ||
+            0
+        );
+
+        const amountPmc = histRound(
+            r.amountPmc ||
+            r.pmcAmount ||
+            r.pmc ||
+            r.pmcDelta ||
+            (amountPi > 0 ? amountPi * PMC_PER_PI : 0)
+        );
+
+        const statusRaw = String(r.status || r.state || "").toLowerCase();
+
+        const statusText =
+            statusRaw === "done" ||
+            statusRaw === "success" ||
+            statusRaw === "completed" ||
+            statusRaw === "auto_done" ||
+            r.approved === true
+                ? "Đã duyệt"
+                : statusRaw === "pending_admin" ||
+                  statusRaw === "pending" ||
+                  statusRaw === "waiting" ||
+                  statusRaw === "initiated" ||
+                  statusRaw === "auto_processing" ||
+                  statusRaw === "chain_submitted"
+                    ? "Đang chờ duyệt"
+                    : statusRaw === "rejected" ||
+                      statusRaw === "fail" ||
+                      statusRaw === "failed"
+                        ? "Từ chối"
+                        : "Đã gửi yêu cầu";
+
+        const ts =
+            Number(r.createdAt || 0) ||
+            Number(r.requestedAt || 0) ||
+            Number(r.doneAt || 0) ||
+            Number(r.approvedAt || 0) ||
+            Number(r.updatedAt || 0) ||
+            Date.now();
+
+        const item = {
+            id: r.id || r.withdrawId || r.paymentId || r.txid || String(ts),
+            type: "withdraw",
+            title: `Rút ${amountPi} Pi`,
+            detail: `Trừ ${amountPmc} PMC · ${statusText}`,
+            amountPi,
+            amountPmc,
+            status: statusText,
+            piAddress:
+                r.piAddress ||
+                r.withdrawAddress ||
+                r.address ||
+                r.recipientAddress ||
+                r.piWalletAddress ||
+                "",
+            txid: r.txid || r.txId || r.paymentId || "",
+            createdAt: ts
+        };
+
+        const key = r.withdrawId || item.txid || r.paymentId || r.id || `${item.type}_${ts}_${amountPi}`;
+        dedup.set(key, item);
+    }
+
+    const items = Array.from(dedup.values())
         .sort((a, b) => b.createdAt - a.createdAt)
         .slice(0, limit);
 

@@ -11637,6 +11637,13 @@ document.addEventListener("click", function (event) {
     }
 });
 document.querySelectorAll("#profile-dropdown .menu-item").forEach(item => {
+    item.addEventListener("click", function () {
+        setTimeout(() => {
+            if (typeof closeProfileMenu === "function") closeProfileMenu();
+            document.getElementById("profile-dropdown")?.classList.remove("show");
+        }, 0);
+    });
+
     item.addEventListener("touchstart", function () {
         this.classList.remove("touch-release");
         this.classList.add("touch-active");
@@ -13755,6 +13762,9 @@ try {
 }
 
 async function openWallet(type) {
+    if (typeof closeProfileMenu === "function") closeProfileMenu();
+    document.getElementById("profile-dropdown")?.classList.remove("show");
+
     if (type === "nap") {
         const amount = await openDepositAmount();
         if (amount === null) return;
@@ -18000,9 +18010,13 @@ async function startPiDeposit(amount = 1) {
         .then(res => res.json())
         .then(async data => {
             if(data.ok) {
-                alert("✅ NẠP PI THÀNH CÔNG RỰC RỠ!"); 
-                await loadWalletBalance();
-            } else {
+    alert("✅ NẠP PI THÀNH CÔNG RỰC RỠ!"); 
+    await loadWalletBalance();
+
+    if (document.getElementById("pi-deposit-history-panel")?.classList.contains("show")) {
+        await loadPiHistory("deposit");
+    }
+} else {
                 alert("🚨 LỖI COMPLETE: " + (data.error || ""));
             }
         })
