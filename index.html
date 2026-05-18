@@ -12919,68 +12919,138 @@ async function chargeStakeForReady(roomId, side) {
 
         const localProfile = getCurrentPlayerProfile();
 
-const sidePlayer = room?.players?.[side] || {};
+        const sidePlayer = room?.players?.[side] || {};
 
-const realMyWalletKey = typeof makeWalletDbKey === "function"
-    ? String(makeWalletDbKey() || "").trim()
-    : "";
+        const realMyWalletKey = typeof makeWalletDbKey === "function"
+            ? String(makeWalletDbKey() || "").trim()
+            : "";
 
-const targetWalletKey = String(
-    realMyWalletKey ||
-    localProfile.walletKey ||
-    sidePlayer.walletKey ||
-    ""
-).trim();
-console.log("READY_WALLET_DEBUG", {
-    roomId,
-    side,
-    stake,
-    sidePlayerWalletKey: sidePlayer.walletKey,
-    localProfileWalletKey: localProfile.walletKey,
-    makeWalletDbKey: typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "",
-    targetWalletKey
-});
+        const targetWalletKey = String(
+            realMyWalletKey ||
+            localProfile.walletKey ||
+            sidePlayer.walletKey ||
+            ""
+        ).trim();
+
+        console.log("READY_WALLET_DEBUG", {
+            roomId,
+            side,
+            stake,
+            sidePlayerWalletKey: sidePlayer.walletKey,
+            localProfileWalletKey: localProfile.walletKey,
+            makeWalletDbKey: typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "",
+            targetWalletKey
+        });
 
         if (!targetWalletKey) {
             return { ok: false, error: "Không tìm thấy mã ví để trừ tiền." };
         }
+
         db.ref(`matches/${roomId}/players/${side}`).update({
-    walletKey: targetWalletKey,
-    name: localProfile.name || localProfile.username || targetWalletKey,
-    photo: localProfile.photo || "images/do_tuong.png",
-    updatedAt: firebase.database.ServerValue.TIMESTAMP
-}).catch(() => {});
+            walletKey: targetWalletKey,
+            name: localProfile.name || localProfile.username || targetWalletKey,
+            photo: localProfile.photo || "images/do_tuong.png",
+            freeTickets: Math.max(0, Math.floor(Number(window.currentFreeTickets || 0))),
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        }).catch(() => {});
+
         let useTicket = false;
+        let serverFreeTickets = 0;
 
+        // Chỉ đọc vé thật khi bàn có cược và bàn <= 10.000 PMC
         if (stake > 0 && stake <= 10000) {
-    const freeTickets = Math.max(0, Math.floor(Number(window.currentFreeTickets || 0)));
+            const safeWalletKey = String(targetWalletKey || "").replace(/[.#$\[\]\/]/g, "_");
 
-    if (freeTickets > 0) {
-        useTicket = confirm(
-            `🎁 Mày đang có ${freeTickets} LƯỢT ĐÁNH MIỄN PHÍ.\nCó muốn dùng 1 lượt để thay thế cho ${formatPMC(stake)} không?`
-        );
-    }
-}
+            try {
+                const ticketSnap = await db.ref(`wallets/${safeWalletKey}/freeTickets`).once("value");
+                serverFreeTickets = Math.max(0, Math.floor(Number(ticketSnap.val() || 0)));
+
+                if (typeof updateTicketUI === "function") {
+                    updateTicketUI(serverFreeTickets);
+                } else {
+                    window.currentFreeTickets = serverFreeTickets;
+                }
+            } catch (e) {
+                console.warn("READ_REAL_TICKET_FAIL:", e);
+                serverFreeTickets = Math.max(0, Math.floor(Number(window.currentFreeTickets || 0)));
+            }
+
+            if (serverFreeTickets > 0) {
+                useTicket = confirm(
+                    `🎁 Mày đang có ${serverFreeTickets} LƯỢT ĐÁNH MIỄN PHÍ.\n` +
+                    `Có muốn dùng 1 lượt để thay thế cho ${formatPMC(stake)} không?`
+                );
+            }
+        }
 
         const token = await user.getIdToken();
 
-        const res = await fetch("/api/pmc/charge-stake", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": "Bearer " + token
-            },
-            body: JSON.stringify({
-                roomId,
-                side,
-                walletKey: targetWalletKey,
-                useTicket,
-                name: localProfile.name || "Người chơi",
-                photo: localProfile.photo || "images/do_tuong.png"
-            })
-        });
+        async function callChargeStake(wantUseTicket) {
+            const res = await fetch("/api/pmc/charge-stake?v=" + Date.now(), {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": "Bearer " + token
+                },
+                body: JSON.stringify({
+                    roomId,
+                    side,
+                    walletKey: targetWalletKey,
+                    useTicket: !!wantUseTicket,
+                    name: localProfile.name || localProfile.username || "Người chơi",
+                    photo: localProfile.photo || "images/do_tuong.png"
+                })
+            });
 
-        const data = await res.json().catch(() => ({}));
+            const rawText = await res.text();
+            let data = {};
+
+            try {
+                data = rawText ? JSON.parse(rawText) : {};
+            } catch (parseErr) {
+                data = {
+                    ok: false,
+                    error: "API charge-stake không trả JSON: " + String(rawText || "").slice(0, 180)
+                };
+            }
+
+            return { res, data };
+        }
+
+        let result = await callChargeStake(useTicket);
+        let res = result.res;
+        let data = result.data;
+
+        // Nếu vé trên máy bị lệch, server báo không đủ vé thì hỏi chuyển sang trừ PMC
+        if ((!res.ok || !data.ok) && useTicket) {
+            const msg = String(data.error || "").toLowerCase();
+
+            if (
+                msg.includes("lượt miễn phí") ||
+                msg.includes("mien phi") ||
+                msg.includes("ticket") ||
+                msg.includes("free")
+            ) {
+                if (typeof updateTicketUI === "function") updateTicketUI(0);
+
+                const payByPmc = confirm(
+                    "Vé trên máy bị lệch với server hoặc vừa hết vé.\n" +
+                    "Bấm OK để chuyển sang trừ PMC vào trận.\n" +
+                    "Bấm Cancel để hủy SS."
+                );
+
+                if (!payByPmc) {
+                    return {
+                        ok: false,
+                        error: "Đã hủy SS vì server báo không đủ lượt miễn phí."
+                    };
+                }
+
+                result = await callChargeStake(false);
+                res = result.res;
+                data = result.data;
+            }
+        }
 
         if (!res.ok || !data.ok) {
             return {
@@ -12989,6 +13059,7 @@ console.log("READY_WALLET_DEBUG", {
             };
         }
 
+        // Cập nhật PMC nếu server trả về
         if (typeof data.paid !== "undefined" && data.paid !== null) {
             currentPmcBalance = Number(data.paid) || 0;
             localStorage.setItem(getPmcCacheKey(), String(currentPmcBalance));
@@ -13000,6 +13071,28 @@ console.log("READY_WALLET_DEBUG", {
             }
         }
 
+        // Cập nhật vé nếu server trả về số vé mới
+        const nextTickets =
+            typeof data.freeTickets !== "undefined" ? data.freeTickets :
+            typeof data.newTickets !== "undefined" ? data.newTickets :
+            typeof data.ticketLeft !== "undefined" ? data.ticketLeft :
+            null;
+
+        if (nextTickets !== null) {
+            if (typeof updateTicketUI === "function") {
+                updateTicketUI(nextTickets);
+            } else {
+                window.currentFreeTickets = Math.max(0, Math.floor(Number(nextTickets) || 0));
+            }
+        } else if (useTicket && data.ok) {
+            const left = Math.max(0, serverFreeTickets - 1);
+            if (typeof updateTicketUI === "function") {
+                updateTicketUI(left);
+            } else {
+                window.currentFreeTickets = left;
+            }
+        }
+
         return data;
     } catch (err) {
         return {
@@ -13008,7 +13101,6 @@ console.log("READY_WALLET_DEBUG", {
         };
     }
 }
-
 async function settlePmcViaApi(roomId) {
     try {
         const walletKey = makeWalletDbKey(); // 🔥 THÊM DÒNG NÀY ĐỂ HẾT LỖI ĐỎ
