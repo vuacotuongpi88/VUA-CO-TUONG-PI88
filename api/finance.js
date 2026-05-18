@@ -679,6 +679,29 @@ if (action === "submit_referral_code") {
     });
 }
 // ==========================================
+// ĐÁNH DẤU THÔNG BÁO ĐÃ ĐỌC - SERVER XỬ LÝ
+// ==========================================
+if (action === "mark_notification_read") {
+    const notificationId = safeKey(body.notificationId || body.notiId || "");
+
+    if (!notificationId) {
+        return res.status(400).json({
+            ok: false,
+            error: "Thiếu mã thông báo."
+        });
+    }
+
+    await db.ref(`notifications/${safeWalletKey}/${notificationId}`).update({
+        status: "read",
+        readAt: Date.now()
+    });
+
+    return res.status(200).json({
+        ok: true,
+        notificationId
+    });
+}
+// ==========================================
 // LỊCH SỬ NẠP / RÚT PI RIÊNG TỪNG NGƯỜI CHƠI
 // ĐỌC CẢ NHÁNH CŨ DẠNG CON + NHÁNH MỚI DẠNG PHẲNG
 // ==========================================

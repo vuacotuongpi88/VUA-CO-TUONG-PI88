@@ -7689,19 +7689,90 @@ async function applyLoggedInUI(displayName, photoURL) {
     renderRoomInviteOverlay();
 }
 function listenForNotifications() {
-    const myKey = makeWalletDbKey();
-    db.ref("notifications/" + myKey).on("child_added", (snap) => {
-        const notify = snap.val();
-        if (!notify || notify.status !== "unread") return;
+    const myKey = typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "";
+    if (!myKey) return;
 
-        // Hiện thông báo nhảy lên màn hình
-        alert(`🎁 CHÚC MỪNG: ${notify.fromName} ${notify.text}`);
+    const refPath = "notifications/" + myKey;
 
-        // Sau khi báo xong thì đánh dấu là đã đọc để lần sau vào game không bị hiện lại
-        db.ref("notifications/" + myKey + "/" + snap.key).update({ status: "read" });
-        
-        // Tải lại ví để tiền nhảy số luôn cho sướng
-        loadWalletBalance();
+    // Chống bị gắn nhiều listener khi login lại / reload UI
+    if (window.__notiListenRef) {
+        try {
+            window.__notiListenRef.off("child_added");
+        } catch (_) {}
+    }
+
+    window.__notiListenRef = db.ref(refPath);
+
+    const seenStorageKey = "seen_notifications_" + myKey;
+
+    function getSeenNotiMap() {
+        try {
+            return JSON.parse(localStorage.getItem(seenStorageKey) || "{}") || {};
+        } catch (_) {
+            return {};
+        }
+    }
+
+    function saveSeenNoti(id) {
+        const map = getSeenNotiMap();
+        map[id] = Date.now();
+
+        // Giữ tối đa 200 thông báo để khỏi phình localStorage
+        const entries = Object.entries(map)
+            .sort((a, b) => Number(b[1]) - Number(a[1]))
+            .slice(0, 200);
+
+        localStorage.setItem(seenStorageKey, JSON.stringify(Object.fromEntries(entries)));
+    }
+
+    async function markNotiReadOnServer(notificationId) {
+        try {
+            await fetch("/api/finance?v=" + Date.now(), {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-wallet-key": myKey
+                },
+                body: JSON.stringify({
+                    action: "mark_notification_read",
+                    walletKey: myKey,
+                    notificationId
+                })
+            });
+        } catch (err) {
+            console.warn("MARK_NOTI_READ_FAIL:", err);
+        }
+    }
+
+    window.__notiListenRef.on("child_added", async (snap) => {
+        const notify = snap.val() || {};
+        const notiId = snap.key;
+
+        if (!notiId) return;
+        if (notify.status !== "unread") return;
+
+        const seenMap = getSeenNotiMap();
+
+        // Đã báo trên máy này rồi thì không hiện lại nữa
+        if (seenMap[notiId]) {
+            markNotiReadOnServer(notiId);
+            return;
+        }
+
+        // Lưu trước khi alert, để người chơi tắt app/reload cũng không bị hiện lại
+        saveSeenNoti(notiId);
+
+        // Đánh dấu read bằng server, khỏi dính PERMISSION_DENIED
+        markNotiReadOnServer(notiId);
+
+        const fromName = notify.fromName || "Bạn bè";
+        const text = notify.text || "vừa gửi thông báo cho bạn.";
+
+        alert(`🎁 CHÚC MỪNG: ${fromName} ${text}`);
+
+        if (typeof loadWalletBalance === "function") {
+            loadWalletBalance().catch(() => {});
+        }
     });
 }
 function showLoginChoices() {
