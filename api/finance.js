@@ -386,7 +386,93 @@ module.exports = async function handler(req, res) {
     if (!safeWalletKey) {
         return res.status(401).json({ ok: false, error: "Thiếu định danh ví." });
     }
+    // ==========================================
+// TESTNET GATE - KHÓA / GIỚI HẠN NGƯỜI CHƠI
+// ==========================================
+if (action === "testnet_gate_status") {
+    const gateSnap = await db.ref("systemSettings/testnetGate").once("value");
+    const gate = gateSnap.val() || {};
 
+    const isAdmin =
+        safeWalletKey === "pi_0962903406" ||
+        safeWalletKey === "0962903406" ||
+        safeWalletKey === ADMIN_WALLET_KEY;
+
+    const whitelist = gate.whitelist || {};
+    const isWhite =
+        whitelist[safeWalletKey] === true ||
+        whitelist[safeWalletKey.replace(/^pi_/, "")] === true ||
+        whitelist["pi_" + safeWalletKey.replace(/^pi_/, "")] === true;
+
+    const now = Date.now();
+    const onlineSnap = await db.ref("social/playerState").once("value");
+
+    let onlineCount = 0;
+    onlineSnap.forEach(child => {
+        const v = child.val() || {};
+        const lastSeen = Number(v.lastSeen || v.updatedAt || v.heartbeatAt || 0);
+        if (lastSeen && now - lastSeen <= 2 * 60 * 1000) {
+            onlineCount++;
+        }
+    });
+
+    const maxOnline = Number(gate.maxOnline || 0);
+    const lockedBySwitch = gate.enabled === true;
+    const lockedByOnline = maxOnline > 0 && onlineCount >= maxOnline;
+
+    const blocked = !isAdmin && !isWhite && (lockedBySwitch || lockedByOnline);
+
+    return res.status(200).json({
+        ok: true,
+        blocked,
+        isAdmin,
+        isWhite,
+        enabled: gate.enabled === true,
+        onlineCount,
+        maxOnline,
+        message:
+            gate.message ||
+            (lockedByOnline
+                ? "Máy chủ đang đông người, vui lòng quay lại sau."
+                : "Testnet đang tạm khóa để bảo trì.")
+    });
+}
+
+if (action === "testnet_gate_update") {
+    const isAdmin =
+        safeWalletKey === "pi_0962903406" ||
+        safeWalletKey === "0962903406" ||
+        safeWalletKey === ADMIN_WALLET_KEY;
+
+    if (!isAdmin) {
+        return res.status(403).json({
+            ok: false,
+            error: "Chỉ admin 406 được chỉnh khóa testnet."
+        });
+    }
+
+    const enabled = body.enabled === true;
+    const maxOnline = Math.max(0, Math.min(999, Math.floor(Number(body.maxOnline || 0) || 0)));
+    const message = String(
+        body.message ||
+        "Testnet đang giới hạn người chơi để chống lag. Vui lòng quay lại sau."
+    ).trim();
+
+    await db.ref("systemSettings/testnetGate").update({
+        enabled,
+        maxOnline,
+        message,
+        updatedAt: Date.now(),
+        updatedBy: safeWalletKey
+    });
+
+    return res.status(200).json({
+        ok: true,
+        enabled,
+        maxOnline,
+        message
+    });
+}
 // ==========================================
 // LỊCH SỬ NẠP / RÚT PI RIÊNG TỪNG NGƯỜI CHƠI
 // ĐỌC CẢ NHÁNH CŨ DẠNG CON + NHÁNH MỚI DẠNG PHẲNG

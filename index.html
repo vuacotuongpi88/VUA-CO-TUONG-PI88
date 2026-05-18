@@ -6730,6 +6730,12 @@ console.log("Đang chạy trên môi trường:", currentNetwork.toUpperCase());
     <span class="menu-icon">🏦</span>
     <span>VÍ PHÍ HỆ THỐNG</span>
 </div>
+
+<div id="menu-testnet-gate" class="menu-item" onclick="openTestnetAdminPanel()" style="display:none;">
+    <span class="menu-icon">🔐</span>
+    <span>KHÓA TESTNET</span>
+</div>
+
 <div class="menu-item" onclick="switchAccount()">
     <span class="menu-icon">🔄</span>
     <span>ĐỔI TÀI KHOẢN</span>
@@ -7713,7 +7719,7 @@ function showLoginChoices() {
     const isPi = !!window.Pi;
 
     if (piBtn) piBtn.style.display = isPi ? "inline-flex" : "none";
-    if (googleBtn) googleBtn.style.display = "inline-flex";
+    if (googleBtn) googleBtn.style.display = "none"; // Tạm khóa đăng nhập Google
     if (piNote) piNote.style.display = isPi ? "none" : "block";
 
     if (oldPiBtn) oldPiBtn.style.display = "none";
@@ -7737,32 +7743,9 @@ function isRealPiBrowser() {
     return !!window.Pi && /pibrowser|pi browser|minepi/i.test(ua);
 }
 function loginGoogle() {
-    localStorage.removeItem("pi-user-name");
-    localStorage.removeItem("pi-user-photo");
-
-    auth.signInWithPopup(provider)
-        .then((result) => {
-            const user = result.user;
-            if (!user) return;
-
-            const displayName = user.displayName || "Người chơi";
-            const photoURL = user.photoURL || "images/do_tuong.png";
-
-            localStorage.setItem("user-name-display", displayName);
-            localStorage.setItem("user-photo", photoURL);
-
-            applyLoggedInUI(displayName, photoURL);
-            ensureFriendProfileSynced()
-    .then(() => bindFriendSystem())
-    .catch(err => console.error("Lỗi sync bạn bè sau login Google:", err));
-        })
-
-        .catch((err) => {
-            console.error("Lỗi đăng nhập Google:", err);
-            alert("Đăng nhập Google lỗi: " + (err.message || err.code || err));
-        });
+    alert("Đăng nhập Google đang tạm khóa trong giai đoạn testnet. Vui lòng đăng nhập bằng Pi Browser.");
+    return;
 }
-
 function logout() {
     document.querySelectorAll(".profile-menu").forEach(m => m.classList.remove("show"));
 
@@ -11644,6 +11627,7 @@ async function createAndPublishWaitingRoom(me, mode, stakePMC, bucket) {
 }
 async function joinOrCreateRealtimeMatch(mode, stakePMC = 0) {
     if (await tryResumeRealtimeMatch(mode)) return;
+    if (!(await ensureTestnetGateBeforeAction())) return;
 
     const safeStake = Math.max(0, Math.floor(Number(stakePMC) || 0));
     const me = getCurrentPlayerProfile();
@@ -15286,7 +15270,8 @@ setTimeout(syncAdminFeeMenuVisibility, 0);
 firebase.auth().onAuthStateChanged(() => {
     syncAdminFeeMenuVisibility();
 });
-function openStakeRoomModal(mode) {
+async function openStakeRoomModal(mode) {
+    if (!(await ensureTestnetGateBeforeAction())) return;
     selectedRoomMode = mode || "co-tuong";
     selectedRoomStakePMC = 0;
 
@@ -15325,6 +15310,7 @@ function pickStakePMC(value, el) {
 }
 
 async function confirmStakeSelection() {
+    if (!(await ensureTestnetGateBeforeAction())) return;
     if (isJoiningStakeRoom) return;
     isJoiningStakeRoom = true;
 
@@ -15891,6 +15877,7 @@ async function publishChallengeRoomToLobby(roomId, invite = {}) {
 }
 
 async function confirmTopChallengeInvite() {
+    if (!(await ensureTestnetGateBeforeAction())) return;
     const target = pendingTopChallengeTarget;
     const input = document.getElementById("top-challenge-stake-input");
     const stakePMC = Math.max(0, Math.floor(Number(input?.value || 0) || 0));
@@ -16137,6 +16124,7 @@ function canJoinLobbyRoom(room) {
 }
 
 async function joinRoomFromLobby(roomId) {
+    if (!(await ensureTestnetGateBeforeAction())) return;
     try {
         roomId = String(roomId || "").trim();
         if (!roomId) return;
@@ -16267,6 +16255,7 @@ async function joinRoomFromLobby(roomId) {
     }
 }
 async function joinRoomByInviteCode() {
+    if (!(await ensureTestnetGateBeforeAction())) return;
     const input = document.getElementById("invite-code-input");
     const code = normalizeInviteCode(input?.value || "");
 
@@ -17730,6 +17719,7 @@ async function declineRoomInvite(reason = "declined") {
 }
 async function acceptRoomInvite() {
     if (!activeRoomInvite) return;
+    if (!(await ensureTestnetGateBeforeAction())) return;
 
     const invite = activeRoomInvite;
     const me = getCurrentPlayerProfile();
@@ -20635,6 +20625,136 @@ async function submitReferralCode() {
     font-weight: bold;
     cursor: pointer;
 }
+
+
+/* ===== TESTNET GATE LOCK - KHÓA / GIỚI HẠN NGƯỜI CHƠI ===== */
+.testnet-gate-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 70000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.82);
+    padding: 14px;
+    box-sizing: border-box;
+    backdrop-filter: blur(5px);
+}
+
+.testnet-gate-modal.show {
+    display: flex;
+}
+
+.testnet-gate-box {
+    width: min(92vw, 430px);
+    background: rgba(10, 12, 16, 0.98);
+    border: 2px solid #55efc4;
+    border-radius: 20px;
+    padding: 18px;
+    box-shadow: 0 0 28px rgba(85,239,196,0.25);
+    text-align: center;
+}
+
+.testnet-gate-icon {
+    font-size: 48px;
+    margin-bottom: 10px;
+}
+
+.testnet-gate-title {
+    color: #ffd166;
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: 1px;
+}
+
+.testnet-gate-message {
+    color: #dfe6e9;
+    font-size: 14px;
+    line-height: 1.5;
+    margin-top: 12px;
+}
+
+.testnet-gate-small {
+    color: #7dffb3;
+    font-size: 12px;
+    margin-top: 10px;
+}
+
+.testnet-admin-panel {
+    position: fixed;
+    inset: 0;
+    z-index: 68000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.78);
+    padding: 14px;
+    box-sizing: border-box;
+}
+
+.testnet-admin-panel.show {
+    display: flex;
+}
+
+.testnet-admin-box {
+    width: min(94vw, 440px);
+    background: rgba(8,10,14,0.98);
+    border: 2px solid #55efc4;
+    border-radius: 18px;
+    padding: 16px;
+    box-shadow: 0 0 24px rgba(85,239,196,0.24);
+}
+
+.testnet-admin-title {
+    color: #ffd166;
+    font-size: 18px;
+    font-weight: 900;
+    margin-bottom: 12px;
+}
+
+.testnet-admin-box label {
+    display: block;
+    color: #dfe6e9;
+    font-size: 12px;
+    font-weight: 800;
+    margin: 10px 0 5px;
+}
+
+.testnet-admin-box input,
+.testnet-admin-box textarea {
+    width: 100%;
+    box-sizing: border-box;
+    background: #050505;
+    color: #fff;
+    border: 1px solid rgba(85,239,196,0.55);
+    border-radius: 10px;
+    padding: 10px;
+    outline: none;
+}
+
+.testnet-admin-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.testnet-admin-actions button {
+    border: 0;
+    border-radius: 12px;
+    padding: 11px;
+    font-weight: 900;
+    color: #fff;
+}
+
+.testnet-btn-off {
+    background: linear-gradient(180deg, #636e72, #2d3436);
+}
+
+.testnet-btn-on {
+    background: linear-gradient(180deg, #00b894, #007d63);
+}
+
 </style>
 <!-- Nút ngoài sảnh -->
 <div id="arena-referral-btn" onclick="openReferralModal()" title="Mời bạn kiếm tiền">
@@ -22189,6 +22309,144 @@ window.togglePiHistoryPanel = function(type) {
 
     loadPiHistory(type);
 };
+
+
+// ===== TESTNET GATE - KHÓA / GIỚI HẠN NGƯỜI CHƠI TESTNET =====
+window.__testnetGateBlocked = false;
+
+function isAdmin406ForGate() {
+    const wk = String(typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "").trim();
+    return wk === "pi_0962903406" || wk === "0962903406" || wk === "pi_admin_master";
+}
+
+function updateTestnetGateMenuVisible() {
+    const el = document.getElementById("menu-testnet-gate");
+    if (el) el.style.display = isAdmin406ForGate() ? "flex" : "none";
+}
+
+async function callTestnetGateApi(payload) {
+    const walletKey = typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "";
+    const res = await fetch("/api/finance?v=" + Date.now(), {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "x-wallet-key": walletKey
+        },
+        body: JSON.stringify({
+            walletKey,
+            ...payload
+        })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Lỗi testnet gate.");
+    }
+    return data;
+}
+
+async function checkTestnetGate() {
+    try {
+        const walletKey = typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "";
+        if (!walletKey) return true;
+
+        const data = await callTestnetGateApi({
+            action: "testnet_gate_status"
+        });
+
+        updateTestnetGateMenuVisible();
+        window.__testnetGateBlocked = data.blocked === true;
+
+        if (data.blocked) {
+            const modal = document.getElementById("testnet-gate-modal");
+            const msg = document.getElementById("testnet-gate-message");
+            const small = document.getElementById("testnet-gate-small");
+
+            if (msg) msg.innerText = data.message || "Testnet đang giới hạn người chơi.";
+            if (small) {
+                small.innerText = data.maxOnline > 0
+                    ? `Online hiện tại: ${data.onlineCount}/${data.maxOnline}`
+                    : "";
+            }
+
+            if (modal) modal.classList.add("show");
+            return false;
+        }
+
+        document.getElementById("testnet-gate-modal")?.classList.remove("show");
+        return true;
+    } catch (err) {
+        console.warn("checkTestnetGate fail:", err);
+        return true;
+    }
+}
+
+window.openTestnetAdminPanel = async function() {
+    if (typeof closeProfileMenu === "function") closeProfileMenu();
+    document.getElementById("profile-dropdown")?.classList.remove("show");
+
+    if (!isAdmin406ForGate()) {
+        alert("Chỉ admin 406 được chỉnh khóa testnet.");
+        return;
+    }
+
+    try {
+        const data = await callTestnetGateApi({
+            action: "testnet_gate_status"
+        });
+
+        const enabled = document.getElementById("testnet-admin-enabled");
+        const maxOnline = document.getElementById("testnet-admin-max-online");
+        const message = document.getElementById("testnet-admin-message");
+
+        if (enabled) enabled.checked = data.enabled === true;
+        if (maxOnline) maxOnline.value = data.maxOnline || 20;
+        if (message) message.value = data.message || "Testnet đang giới hạn người chơi để chống lag. Vui lòng quay lại sau.";
+
+        document.getElementById("testnet-admin-panel")?.classList.add("show");
+    } catch (err) {
+        alert("Lỗi tải khóa testnet: " + (err.message || err));
+    }
+};
+
+window.closeTestnetAdminPanel = function() {
+    document.getElementById("testnet-admin-panel")?.classList.remove("show");
+};
+
+window.saveTestnetGate = async function() {
+    try {
+        const enabled = document.getElementById("testnet-admin-enabled")?.checked === true;
+        const maxOnline = Number(document.getElementById("testnet-admin-max-online")?.value || 0) || 0;
+        const message = document.getElementById("testnet-admin-message")?.value || "";
+
+        await callTestnetGateApi({
+            action: "testnet_gate_update",
+            enabled,
+            maxOnline,
+            message
+        });
+
+        alert("Đã lưu khóa testnet.");
+        closeTestnetAdminPanel();
+        await checkTestnetGate();
+    } catch (err) {
+        alert("Lỗi lưu khóa testnet: " + (err.message || err));
+    }
+};
+
+async function ensureTestnetGateBeforeAction() {
+    const ok = await checkTestnetGate();
+    if (!ok) {
+        alert("Testnet đang giới hạn người chơi.");
+        return false;
+    }
+    return true;
+}
+
+setTimeout(checkTestnetGate, 1500);
+setInterval(checkTestnetGate, 60000);
+setTimeout(updateTestnetGateMenuVisible, 1000);
+
 </script>
 <div id="history-ledger-modal" class="history-ledger-modal">
     <div class="history-ledger-box">
@@ -22208,5 +22466,40 @@ window.togglePiHistoryPanel = function(type) {
         </div>
     </div>
 </div>
+
+
+<div id="testnet-gate-modal" class="testnet-gate-modal">
+    <div class="testnet-gate-box">
+        <div class="testnet-gate-icon">🔒</div>
+        <div class="testnet-gate-title">TESTNET ĐANG GIỚI HẠN</div>
+        <div id="testnet-gate-message" class="testnet-gate-message">
+            Testnet đang giới hạn người chơi để chống lag.
+        </div>
+        <div id="testnet-gate-small" class="testnet-gate-small"></div>
+    </div>
+</div>
+
+<div id="testnet-admin-panel" class="testnet-admin-panel">
+    <div class="testnet-admin-box">
+        <div class="testnet-admin-title">🔐 KHÓA TESTNET</div>
+
+        <label>
+            <input id="testnet-admin-enabled" type="checkbox" style="width:auto;">
+            Bật khóa / giới hạn người chơi
+        </label>
+
+        <label>Số người online tối đa</label>
+        <input id="testnet-admin-max-online" type="number" min="0" step="1" placeholder="Ví dụ: 20">
+
+        <label>Thông báo khi bị chặn</label>
+        <textarea id="testnet-admin-message" rows="3">Testnet đang giới hạn người chơi để chống lag. Vui lòng quay lại sau.</textarea>
+
+        <div class="testnet-admin-actions">
+            <button class="testnet-btn-off" onclick="closeTestnetAdminPanel()">HỦY</button>
+            <button class="testnet-btn-on" onclick="saveTestnetGate()">LƯU</button>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>
