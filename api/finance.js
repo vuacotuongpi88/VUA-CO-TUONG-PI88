@@ -228,51 +228,94 @@ function histAdminItemFromWalletTx(row = {}, walletMap = {}) {
   }
 
   if (type === "match_winner_settle") {
+    const winnerKey = safeKey(row.winnerWalletKey || row.walletKey || "");
+    const loserKey = safeKey(row.loserWalletKey || "");
+
+    const winnerWallet = walletMap[winnerKey] || {};
+    const loserWallet = walletMap[loserKey] || {};
+
+    const winnerName =
+      row.winnerName ||
+      row.winnerUsername ||
+      histPickName(winnerKey, winnerWallet) ||
+      "Người thắng";
+
+    const loserName =
+      row.loserName ||
+      row.loserUsername ||
+      histPickName(loserKey, loserWallet) ||
+      "Người thua";
+
+    const stake = histRound(row.stakePMC || row.stakePmc || row.stake || 0);
     const amount = histRound(row.adminMasterSharePmc || row.amountPmc || 0);
-    const mission = histRound(row.missionPoolSharePmc || 0);
+    const mission = histRound(row.missionPoolSharePmc || row.missionPoolPmc || 0);
+    const fee = histRound(row.feePmc || 0);
 
     return {
       id: "wtx_" + row._key,
       type: "match_fee",
-      title: `Ván cờ đã chia tiền`,
-      detail: `Kèo ${histRound(row.stakePMC || row.stakePmc)} PMC · phí ${histRound(row.feePmc)} PMC · ví hệ thống +${amount} PMC · quỹ nhiệm vụ +${mission} PMC`,
+      title: `${winnerName} thắng ${loserName} - kèo ${stake} PMC`,
+      detail: `Phí ${fee} PMC · Ví hệ thống +${amount} PMC · Quỹ nhiệm vụ +${mission} PMC`,
       amountPmc: amount,
       missionPoolPmc: mission,
-      stakePmc: histRound(row.stakePMC || row.stakePmc || 0),
-      feePmc: histRound(row.feePmc || 0),
-      walletKey: wk,
-      playerName: name,
+      stakePmc: stake,
+      feePmc: fee,
+      walletKey: winnerKey,
+      playerName: winnerName,
+      winnerWalletKey: winnerKey,
+      winnerName,
+      loserWalletKey: loserKey,
+      loserName,
       roomId: row.roomId || "",
       createdAt: histTs(row),
-      searchText: histSearchText(`${name} ${wk} ${row.roomId || ""} van co phi bot thang thua`)
+      searchText: histSearchText(`${winnerName} ${loserName} ${winnerKey} ${loserKey} ${row.roomId || ""} van co chia tien thang thua phi bot`)
     };
   }
 
   return null;
 }
-
 function histAdminItemFromMatchFee(row = {}, walletMap = {}) {
-  const wk = safeKey(row.winnerWalletKey || row.walletKey || "");
-  const wallet = walletMap[wk] || {};
-  const name = row.winnerName || histPickName(wk, wallet);
+  const winnerKey = safeKey(row.winnerWalletKey || row.walletKey || "");
+  const loserKey = safeKey(row.loserWalletKey || "");
 
+  const winnerWallet = walletMap[winnerKey] || {};
+  const loserWallet = walletMap[loserKey] || {};
+
+  const winnerName =
+    row.winnerName ||
+    row.winnerUsername ||
+    histPickName(winnerKey, winnerWallet) ||
+    "Người thắng";
+
+  const loserName =
+    row.loserName ||
+    row.loserUsername ||
+    histPickName(loserKey, loserWallet) ||
+    "Người thua";
+
+  const stake = histRound(row.stakePMC || row.stakePmc || row.stake || 0);
   const amount = histRound(row.adminMasterSharePmc || row.amountPmc || 0);
   const mission = histRound(row.missionPoolSharePmc || row.missionPoolPmc || 0);
+  const fee = histRound(row.feePmc || 0);
 
   return {
     id: "matchfee_" + row._key,
     type: "match_fee",
-    title: `Phí ván cờ: ${name} thắng`,
-    detail: `Kèo ${histRound(row.stakePMC || row.stakePmc)} PMC · phí ${histRound(row.feePmc)} PMC · ví hệ thống +${amount} PMC · quỹ +${mission} PMC`,
+    title: `${winnerName} thắng ${loserName} - kèo ${stake} PMC`,
+    detail: `Phí ${fee} PMC · Ví hệ thống +${amount} PMC · Quỹ nhiệm vụ +${mission} PMC`,
     amountPmc: amount,
     missionPoolPmc: mission,
-    stakePmc: histRound(row.stakePMC || row.stakePmc || 0),
-    feePmc: histRound(row.feePmc || 0),
-    walletKey: wk,
-    playerName: name,
+    stakePmc: stake,
+    feePmc: fee,
+    walletKey: winnerKey,
+    playerName: winnerName,
+    winnerWalletKey: winnerKey,
+    winnerName,
+    loserWalletKey: loserKey,
+    loserName,
     roomId: row.roomId || "",
     createdAt: histTs(row),
-    searchText: histSearchText(`${name} ${wk} ${row.roomId || ""} phi van co bot thang thua`)
+    searchText: histSearchText(`${winnerName} ${loserName} ${winnerKey} ${loserKey} ${row.roomId || ""} phi van co thang thua bot`)
   };
 }
 
@@ -407,11 +450,13 @@ if (action === "admin_ledger") {
     }
 
     for (const r of walletTx) {
-        if (r.walletKey) walletKeys.push(r.walletKey);
-        if (r.buyerWalletKey) walletKeys.push(r.buyerWalletKey);
-        if (r.winnerWalletKey) walletKeys.push(r.winnerWalletKey);
-    }
-
+    if (r.walletKey) walletKeys.push(r.walletKey);
+    if (r.buyerWalletKey) walletKeys.push(r.buyerWalletKey);
+    if (r.winnerWalletKey) walletKeys.push(r.winnerWalletKey);
+    if (r.loserWalletKey) walletKeys.push(r.loserWalletKey);
+    if (r.doWalletKey) walletKeys.push(r.doWalletKey);
+    if (r.denWalletKey) walletKeys.push(r.denWalletKey);
+}
     for (const r of matchFees) {
         if (r.winnerWalletKey) walletKeys.push(r.winnerWalletKey);
         if (r.loserWalletKey) walletKeys.push(r.loserWalletKey);
