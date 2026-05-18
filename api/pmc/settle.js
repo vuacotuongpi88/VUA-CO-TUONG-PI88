@@ -863,13 +863,12 @@ async function incrementMissionPool(db, amount, roomId) {
     const snap = await db.ref("treasury/missionPoolPmc").once("value");
 
     return {
-      missionPoolPmc: normalizePmc(Number(snap.val() || 0) || 0),
+      missionPoolPmc: normalizePmc(Math.max(0, Number(snap.val() || 0) || 0)),
       added: 0
     };
   }
 
   // Chốt meta tuần TRƯỚC khi cộng quỹ.
-  // Không gọi sweep ở settle nữa, để tránh vừa cộng xong bị missions-v1 quét trả về admin.
   await db.ref("treasury/missionPoolMeta").update({
     poolMode: "week",
     currentWeekKey: missionPoolWeekKey(),
@@ -880,11 +879,13 @@ async function incrementMissionPool(db, amount, roomId) {
   let nextValue = 0;
 
   const tx = await poolRef.transaction(current => {
-    nextValue = normalizePmc((Number(current || 0) || 0) + n);
+    // Quan trọng: nếu quỹ cũ bị âm do bug trước đó thì kéo về 0 rồi mới cộng.
+    const currentPool = Math.max(0, Number(current || 0) || 0);
+    nextValue = normalizePmc(currentPool + n);
     return nextValue;
   });
 
-  const finalPool = normalizePmc(Number(tx.snapshot?.val() ?? nextValue ?? 0) || 0);
+  const finalPool = normalizePmc(Math.max(0, Number(tx.snapshot?.val() ?? nextValue ?? 0) || 0));
 
   await db.ref("treasury/updatedAt").set(Date.now()).catch(() => {});
 
