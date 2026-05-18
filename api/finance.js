@@ -156,7 +156,30 @@ function histAdminItemFromLedger(row = {}, walletMap = {}) {
     searchText: histSearchText(`${row.title || ""} ${row.detail || ""} ${name} ${wk} ${row.itemName || ""} ${row.roomId || ""}`)
   };
 }
+function histAdminItemFromCosmeticLog(row = {}, walletMap = {}) {
+  const wk = safeKey(row.walletKey || row.buyerWalletKey || row.userWalletKey || "");
+  const wallet = walletMap[wk] || {};
+  const name = row.playerName || row.buyerName || histPickName(wk, wallet);
 
+  const itemName = row.itemName || row.itemId || "Skin";
+  const amount = histRound(row.pricePmc || row.amountPmc || row.amountPMC || row.price || 0);
+
+  return {
+    id: "cosmetic_" + row._key,
+    type: "buy_skin",
+    title: `${name} mua skin ${itemName}`,
+    detail: `Ví hệ thống nhận +${amount} PMC`,
+    amountPmc: amount,
+    missionPoolPmc: 0,
+    walletKey: wk,
+    playerName: name,
+    itemId: row.itemId || "",
+    itemName,
+    roomId: "",
+    createdAt: histTs(row),
+    searchText: histSearchText(`${name} ${wk} ${itemName} mua skin cosmetic`)
+  };
+}
 function histAdminItemFromWalletTx(row = {}, walletMap = {}) {
   const type = String(row.type || "");
   const wk = safeKey(row.walletKey || row.buyerWalletKey || row.winnerWalletKey || "");
@@ -366,12 +389,13 @@ if (action === "admin_ledger") {
     const limit = Math.max(20, Math.min(250, Math.floor(histNum(body.limit, 120))));
     const q = histSearchText(body.q || "");
 
-    const [adminLedger, walletTx, matchFees, mmoLogs] = await Promise.all([
-        histReadRecent(db, "adminLedgerV1", limit),
-        histReadRecent(db, "walletTransactions", limit),
-        histReadRecent(db, "matchFeeTransactions", limit),
-        histReadRecent(db, "mmo_kyc_logs", limit)
-    ]);
+    const [adminLedger, walletTx, matchFees, mmoLogs, cosmeticLogs] = await Promise.all([
+    histReadRecent(db, "adminLedgerV1", limit),
+    histReadRecent(db, "walletTransactions", limit),
+    histReadRecent(db, "matchFeeTransactions", limit),
+    histReadRecent(db, "mmo_kyc_logs", limit),
+    histReadRecent(db, "cosmeticShopLogsV1", limit)
+]);
 
     const walletKeys = [];
 
@@ -393,11 +417,11 @@ if (action === "admin_ledger") {
         if (r.loserWalletKey) walletKeys.push(r.loserWalletKey);
     }
 
-    for (const r of mmoLogs) {
-        if (r.walletKey) walletKeys.push(r.walletKey);
-        if (r.buyerWalletKey) walletKeys.push(r.buyerWalletKey);
-        if (r.userWalletKey) walletKeys.push(r.userWalletKey);
-    }
+    for (const r of cosmeticLogs) {
+    if (r.walletKey) walletKeys.push(r.walletKey);
+    if (r.buyerWalletKey) walletKeys.push(r.buyerWalletKey);
+    if (r.userWalletKey) walletKeys.push(r.userWalletKey);
+}
 
     const walletMap = await histLoadWalletMap(db, walletKeys);
 
@@ -421,7 +445,10 @@ if (action === "admin_ledger") {
         const item = histAdminItemFromMmo(r, walletMap);
         if (item) items.push(item);
     }
-
+for (const r of cosmeticLogs) {
+    const item = histAdminItemFromCosmeticLog(r, walletMap);
+    if (item) items.push(item);
+}
     const dedup = new Map();
 
     for (const item of items) {
