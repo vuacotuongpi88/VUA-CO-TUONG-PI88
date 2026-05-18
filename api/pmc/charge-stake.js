@@ -125,37 +125,126 @@ module.exports = async function handler(req, res) {
     }
 
     if (useTicket && stake <= 10000) {
-      const ticketTx = await runTx(walletRef.child("freeTickets"), (current) => {
-        const n = Math.max(0, Math.floor(Number(current || 0) || 0));
-        if (n <= 0) return;
-        return n - 1;
+  let ticketLeft = null;
+  let paidPmc = null;
+  let beforeTickets = null;
+
+  console.log("CHARGE_TICKET_DEBUG_BEFORE", {
+    roomId,
+    side,
+    uid,
+    walletKey,
+    stake,
+    walletUid: wallet.uid,
+    walletName: wallet.name,
+    walletFreeTickets: wallet.freeTickets,
+    walletPmcBalance: wallet.pmcBalance
+  });
+
+  // FIX: transaction nguyên ví, không transaction riêng child freeTickets nữa.
+  // Vì child transaction có lúc current=null, làm server tưởng hết vé.
+  const ticketTx = await runTx(walletRef, (current) => {
+    const base =
+      current && typeof current === "object"
+        ? current
+        : wallet && typeof wallet === "object"
+          ? { ...wallet }
+          : null;
+
+    if (!base) return;
+
+    if (String(base.uid || "") !== uid) {
+      console.log("CHARGE_TICKET_UID_MISMATCH_TX", {
+        walletKey,
+        uid,
+        walletUid: base.uid
       });
+      return;
+    }
 
-      if (!ticketTx.committed) {
-        return res.status(400).json({
-          ok: false,
-          error: "Không đủ lượt miễn phí"
-        });
-      }
+    beforeTickets = Math.max(0, Math.floor(Number(base.freeTickets || 0) || 0));
 
-      await roomRef.child(`stakeLocked/${side}`).set({
-        done: true,
+    console.log("CHARGE_TICKET_TX_WALLET", {
+      walletKey,
+      beforeTickets,
+      stake,
+      rawFreeTickets: base.freeTickets
+    });
+
+    if (beforeTickets <= 0) return;
+
+    ticketLeft = beforeTickets - 1;
+    paidPmc = Math.max(0, Number(base.pmcBalance || 0) || 0);
+
+    return {
+      ...base,
+      freeTickets: ticketLeft,
+      updatedAt: Date.now()
+    };
+  });
+
+  if (!ticketTx.committed || ticketLeft == null) {
+    const liveSnap = await walletRef.once("value");
+    const liveWallet = liveSnap.val() || {};
+
+    console.log("CHARGE_TICKET_NOT_ENOUGH_DEBUG", {
+      roomId,
+      side,
+      uid,
+      walletKey,
+      stake,
+      beforeTickets,
+      liveFreeTickets: liveWallet.freeTickets,
+      livePmcBalance: liveWallet.pmcBalance,
+      liveUid: liveWallet.uid,
+      liveName: liveWallet.name
+    });
+
+    return res.status(400).json({
+      ok: false,
+      error: "Không đủ lượt miễn phí",
+      debug: {
+        roomId,
+        side,
         walletKey,
         stake,
-        isTicketUsed: true,
-        uid,
-        at: Date.now()
-      });
+        beforeTickets,
+        liveFreeTickets: liveWallet.freeTickets,
+        livePmcBalance: liveWallet.pmcBalance,
+        liveUid: liveWallet.uid,
+        liveName: liveWallet.name
+      }
+    });
+  }
 
-      await roomRef.child(`ready/${side}`).set(true);
+  await roomRef.child(`players/${side}`).update({
+    walletKey,
+    uid,
+    freeTickets: ticketLeft,
+    pmcBalance: paidPmc,
+    updatedAt: Date.now()
+  });
 
-      return res.status(200).json({
-        ok: true,
-        stage: "ticket_used",
-        paid: Math.max(0, Number(wallet.pmcBalance || 0) || 0),
-        usedTicket: true
-      });
-    }
+  await roomRef.child(`stakeLocked/${side}`).set({
+    done: true,
+    walletKey,
+    stake,
+    isTicketUsed: true,
+    paidPmc: 0,
+    uid,
+    at: Date.now()
+  });
+
+  await roomRef.child(`ready/${side}`).set(true);
+
+  return res.status(200).json({
+    ok: true,
+    stage: "ticket_used",
+    paid: paidPmc,
+    usedTicket: true,
+    freeTickets: ticketLeft
+  });
+}
 
    let nextPmc = null;
 let beforePmc = null;

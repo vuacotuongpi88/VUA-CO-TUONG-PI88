@@ -13060,9 +13060,10 @@ async function chargeStakeForReady(roomId, side) {
             const res = await fetch("/api/pmc/charge-stake?v=" + Date.now(), {
                 method: "POST",
                 headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": "Bearer " + token
-                },
+    "Content-Type": "application/json",
+    "Authorization": "Bearer " + token,
+    "x-wallet-key": targetWalletKey
+},
                 body: JSON.stringify({
                     roomId,
                     side,
@@ -13102,8 +13103,7 @@ async function chargeStakeForReady(roomId, side) {
                 msg.includes("ticket") ||
                 msg.includes("free")
             ) {
-                if (typeof updateTicketUI === "function") updateTicketUI(0);
-
+await loadWalletBalance().catch(() => {});
                 const payByPmc = confirm(
                     "Vé trên máy bị lệch với server hoặc vừa hết vé.\n" +
                     "Bấm OK để chuyển sang trừ PMC vào trận.\n" +
