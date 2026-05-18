@@ -6055,6 +6055,68 @@ margin-bottom: 14px;
     box-sizing: border-box;
     outline: none;
 }
+/* ===== THÔNG BÁO RƯƠNG CẤP ĐỘ SẴN SÀNG ===== */
+#level-chest-ready-popup {
+    position: fixed;
+    left: 50%;
+    top: 18%;
+    transform: translateX(-50%);
+    width: min(92vw, 390px);
+    z-index: 50000;
+    background: rgba(12, 10, 18, 0.98);
+    border: 2px solid #ffd166;
+    border-radius: 18px;
+    padding: 16px;
+    box-shadow:
+        0 0 20px rgba(255, 209, 102, 0.35),
+        0 0 26px rgba(0,0,0,0.75);
+    text-align: center;
+    color: #fff;
+    animation: levelChestPop 0.25s ease-out;
+}
+
+.level-chest-ready-title {
+    color: #ffd166;
+    font-size: 18px;
+    font-weight: 900;
+    margin-bottom: 8px;
+}
+
+.level-chest-ready-text {
+    font-size: 13px;
+    line-height: 1.55;
+    color: #dfe6e9;
+    margin-bottom: 12px;
+}
+
+.level-chest-ready-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.level-chest-open-btn {
+    background: linear-gradient(180deg, #00c38a, #008f67) !important;
+    border-radius: 12px !important;
+    font-weight: 900 !important;
+}
+
+.level-chest-close-btn {
+    background: linear-gradient(180deg, #636e72, #2d3436) !important;
+    border-radius: 12px !important;
+    font-weight: 900 !important;
+}
+
+@keyframes levelChestPop {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-12px) scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0) scale(1);
+    }
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -12063,59 +12125,104 @@ window.renderAvatarSkinShop = function() {
 
 window.buyExpDirectly = async function(pkgId, expAmount, pmcCost, bonusTickets) {
     if (window.isBuyingExp) return;
-    const currentPmc = getPmcBalance();
-    if (currentPmc < pmcCost) { alert("Mầy không đủ PMC!"); return; }
 
-    let ticketMsg = bonusTickets > 0 ? `\n🎁 ĐƯỢC TẶNG KÈM: ${bonusTickets} Lượt Đánh Miễn Phí!` : "";
-    if (!confirm(`Đại gia muốn dùng ${pmcCost.toLocaleString('vi-VN')} PMC để đổi lấy ${expAmount.toLocaleString('vi-VN')} EXP?${ticketMsg}`)) return;
+    const currentPmc = getPmcBalance();
+    if (currentPmc < pmcCost) {
+        alert("Mầy không đủ PMC!");
+        return;
+    }
+
+    let ticketMsg = bonusTickets > 0
+        ? `\n🎁 ĐƯỢC TẶNG KÈM: ${bonusTickets} Lượt Đánh Miễn Phí!`
+        : "";
+
+    if (!confirm(`Đại gia muốn dùng ${pmcCost.toLocaleString('vi-VN')} PMC để đổi lấy ${expAmount.toLocaleString('vi-VN')} EXP?${ticketMsg}`)) {
+        return;
+    }
 
     window.isBuyingExp = true;
+
     try {
         const walletKey = makeWalletDbKey();
 
-const user = firebase.auth().currentUser;
-if (!user) throw new Error("Chưa đăng nhập Firebase");
-const token = await user.getIdToken(true);
+        const user = firebase.auth().currentUser;
+        if (!user) throw new Error("Chưa đăng nhập Firebase");
 
-const res = await fetch("/api/level-system?v=" + Date.now(), {
-    method: "POST",
-    headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer " + token,
-        "x-wallet-key": walletKey
-    },
-    body: JSON.stringify({ action: "buy_exp_direct", walletKey, pkgId })
-});
+        const token = await user.getIdToken(true);
+
+        const res = await fetch("/api/level-system?v=" + Date.now(), {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + token,
+                "x-wallet-key": walletKey
+            },
+            body: JSON.stringify({
+                action: "buy_exp_direct",
+                walletKey,
+                pkgId
+            })
+        });
 
         const data = await res.json();
-        if (!res.ok || !data.ok) throw new Error(data.error || "Giao dịch thất bại");
+        if (!res.ok || !data.ok) {
+            throw new Error(data.error || "Giao dịch thất bại");
+        }
 
-        // Nhận được data an toàn từ Vercel thì mới cập nhật giao diện
-        if (typeof setPmcBalance === 'function') setPmcBalance(data.newPmc);
-        localStorage.setItem('exp_cache', data.newExp); 
-        
-        let pkgs = JSON.parse(localStorage.getItem('bought_exp_pkgs') || '{}');
+        if (typeof setPmcBalance === "function") {
+            setPmcBalance(data.newPmc);
+        }
+
+        localStorage.setItem("exp_cache", data.newExp);
+
+        let pkgs = JSON.parse(localStorage.getItem("bought_exp_pkgs") || "{}");
         pkgs[pkgId] = true;
-        localStorage.setItem('bought_exp_pkgs', JSON.stringify(pkgs)); 
+        localStorage.setItem("bought_exp_pkgs", JSON.stringify(pkgs));
 
-        if (typeof window.updateExpBarUI === 'function') {
+        if (typeof updateTicketUI === "function") {
+            updateTicketUI(data.newTickets || 0);
+        }
+
+        if (typeof window.updateExpBarUI === "function") {
             window.updateExpBarUI(data.newExp);
         }
 
         await loadWalletBalance();
-        if (typeof window.spawnExpEffect === 'function') {
-            for(let i=0; i<3; i++) setTimeout(() => window.spawnExpEffect(true), i * 300);
+
+        if (typeof window.spawnExpEffect === "function") {
+            for (let i = 0; i < 3; i++) {
+                setTimeout(() => window.spawnExpEffect(true), i * 300);
+            }
         }
 
-        alert(`Chúc mừng! Đã bơm thành công ${expAmount.toLocaleString('vi-VN')} EXP vào người!`);
-        window.renderAvatarSkinShop(); 
-    } catch(err) {
+        let readyChests = [];
+        if (typeof checkLevelRewardNotification === "function") {
+            readyChests = await checkLevelRewardNotification({
+                forceShow: true,
+                silent: false
+            });
+        }
+
+        let chestMsg = "";
+        if (readyChests.length > 0) {
+            chestMsg = `\n\n🎁 Có ${readyChests.length} rương cấp độ đang chờ mở. Bấm MỞ NGAY hoặc vào 🎯 Nhiệm vụ > Cấp độ.`;
+        }
+
+        alert(
+            `Chúc mừng! Đã bơm thành công ${expAmount.toLocaleString('vi-VN')} EXP vào người!` +
+            `\nCấp hiện tại: ${data.newLevel || ""}` +
+            chestMsg
+        );
+
+        if (typeof window.renderAvatarSkinShop === "function") {
+            window.renderAvatarSkinShop();
+        }
+    } catch (err) {
         alert("Lỗi mua EXP: " + err.message);
     } finally {
         window.isBuyingExp = false;
     }
 };
-
 function refreshRoomAvatarSkinUI() {
     const skinId = getEquippedAvatarSkin();
 
@@ -18519,6 +18626,7 @@ const LEVEL_MILESTONES = [
     { level: 120, name: 'Rương Đỏ + Skin', desc: 'Mở khóa Skin Long Vương & 2 Lượt Miễn Phí', tickets: 2, skinId: 'dragon', icon: 'images/avatar_frames/dragon-frame.png', chestImage: 'images/ruong_do_01.png', chestPrefix: 'do', frameCount: 24, shadow: '#ff4757' },
     { level: 180, name: 'Rương Tím VIP + Skin', desc: 'Phượng Hoàng & 10 Lượt Miễn Phí VIP', tickets: 10, skinId: 'phoenix', icon: 'images/avatar_frames/phoenix-frame.png', chestImage: 'images/ruong_tim_01.png', chestPrefix: 'tim', frameCount: 30, shadow: '#a55eea' }
 ];
+
 async function renderLevelRewards() {
     const listEl = document.getElementById("level-reward-list");
     if (!listEl) return;
@@ -19122,6 +19230,13 @@ loadWalletBalance = async function() {
         
         // 🔥 LƯU LỊCH SỬ MUA GÓI EXP VÀO MÁY ĐỂ SHOP BIẾT ĐƯỜNG KHÓA NÚT
         localStorage.setItem('bought_exp_pkgs', JSON.stringify(data.boughtExpPackages || {}));
+        // Nếu có rương cấp độ đang chờ thì hiện chấm đỏ ở nút Nhiệm Vụ,
+// không bung popup để tránh phiền khi vừa load game.
+if (typeof checkLevelRewardNotification === "function") {
+    setTimeout(() => {
+        checkLevelRewardNotification({ silent: true }).catch(() => {});
+    }, 300);
+}
     } catch(e){}
     return res;
 };
@@ -20111,15 +20226,138 @@ async function submitReferralCode() {
     // Sau đó, cứ 15 phút (900.000 mili-giây) lại réo lên 1 lần
     setInterval(triggerTestnetWarning, 15 * 60 * 1000);
 })();
-function checkLevelRewardNotification() {
-    const btn = document.querySelector('.mission-top-tab[data-tab="level"]');
-    if (!btn) return;
-    const oldDot = btn.querySelector(".dot-red-small");
-    if (oldDot) oldDot.remove();
-    // Tạm thời ẩn chấm đỏ nếu chưa có logic rương mới
+function getLevelChestScopedKey(name) {
+    try {
+        const wk = typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "guest";
+        return `${name}_${wk}`;
+    } catch (_) {
+        return name;
+    }
 }
-// Biến toàn cục lưu danh sách quà chờ duyệt để kiểm tra
-window.currentPendingReferralsForPulse = null;
+
+function setMissionBadgeNumber(count) {
+    const n = Math.max(0, Math.floor(Number(count || 0) || 0));
+
+    const badge = document.getElementById("arena-mission-badge");
+    if (badge && n > 0) {
+        badge.innerText = String(n);
+        badge.classList.add("show");
+    }
+
+    const missionBtn = document.getElementById("arena-mission-btn");
+    if (missionBtn && n > 0) {
+        missionBtn.style.display = "flex";
+    }
+
+    const levelTab = document.querySelector('.mission-top-tab[data-tab="level"]');
+    if (levelTab && n > 0) {
+        const oldDot = levelTab.querySelector(".dot-red-small");
+        if (oldDot) oldDot.remove();
+
+        const dot = document.createElement("div");
+        dot.className = "dot-red-small show";
+        levelTab.appendChild(dot);
+    }
+}
+
+function closeLevelChestReadyPopup() {
+    const old = document.getElementById("level-chest-ready-popup");
+    if (old) old.remove();
+}
+
+function showLevelChestReadyPopup(readyChests, forceShow = false) {
+    const list = Array.isArray(readyChests) ? readyChests : [];
+    if (!list.length) return;
+
+    const chestKey = list.map(x => x.level).join("_");
+    const seenKey = getLevelChestScopedKey("seen_level_chest_ready");
+
+    // Không spam popup mỗi lần load, trừ khi vừa mua EXP thì forceShow = true.
+    if (!forceShow && localStorage.getItem(seenKey) === chestKey) return;
+    localStorage.setItem(seenKey, chestKey);
+
+    closeLevelChestReadyPopup();
+
+    const names = list
+        .slice(0, 3)
+        .map(x => `Lv.${x.level} - ${x.name}`)
+        .join("<br>");
+
+    const more = list.length > 3 ? `<br>và ${list.length - 3} rương khác.` : "";
+
+    const box = document.createElement("div");
+    box.id = "level-chest-ready-popup";
+    box.innerHTML = `
+        <div class="level-chest-ready-title">🎁 RƯƠNG CẤP ĐỘ SẴN SÀNG</div>
+        <div class="level-chest-ready-text">
+            Mày vừa đủ cấp để mở rương:<br>
+            <b style="color:#7dffb3">${names}${more}</b>
+        </div>
+        <div class="level-chest-ready-actions">
+            <button class="level-chest-close-btn" onclick="closeLevelChestReadyPopup()">ĐỂ SAU</button>
+            <button class="level-chest-open-btn" onclick="openLevelChestFromNotice()">MỞ NGAY</button>
+        </div>
+    `;
+
+    document.body.appendChild(box);
+}
+
+window.openLevelChestFromNotice = function() {
+    closeLevelChestReadyPopup();
+
+    if (typeof openMissionHub === "function") {
+        openMissionHub();
+    }
+
+    setTimeout(() => {
+        if (typeof switchMissionTab === "function") {
+            switchMissionTab("level");
+        }
+        if (typeof renderLevelRewards === "function") {
+            renderLevelRewards();
+        }
+    }, 350);
+};
+
+async function checkLevelRewardNotification(options = {}) {
+    const forceShow = !!options.forceShow;
+    const silent = !!options.silent;
+
+    try {
+        const walletKey = typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "";
+        if (!walletKey || !Array.isArray(LEVEL_MILESTONES)) return [];
+
+        const snap = await db.ref("wallets/" + walletKey).once("value");
+        const userData = snap.val() || {};
+
+        const currentLevel =
+            Math.max(1, Math.floor(Number(userData.level || 0) || 0)) ||
+            (
+                typeof getLevelFromExp === "function"
+                    ? getLevelFromExp(Number(userData.exp || 0) || 0)
+                    : 1
+            );
+
+        const claimedLevels = userData.claimedLevels || {};
+
+        const readyChests = LEVEL_MILESTONES.filter(m => {
+            return currentLevel >= Number(m.level || 0) && !claimedLevels[m.level];
+        });
+
+        if (readyChests.length > 0) {
+            setMissionBadgeNumber(readyChests.length);
+
+            if (!silent) {
+                showLevelChestReadyPopup(readyChests, forceShow);
+            }
+        }
+
+        return readyChests;
+    } catch (err) {
+        console.warn("Check rương cấp độ lỗi:", err);
+        return [];
+    }
+}
 
 // Hàm đếm số người mời (Update logic mới: Trạng thái bản thân / Số đệ tử + QUÉT QUÀ CHÓP CHÓP)
 function bindReferralCount() {
