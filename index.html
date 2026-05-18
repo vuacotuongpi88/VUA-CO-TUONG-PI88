@@ -12036,39 +12036,62 @@ window.renderAvatarSkinShop = function() {
             { id: "exp6", name: "Gói Thiên Vương", exp: 1650000, price: 1200000, desc: "LÊN THẲNG MAX CẤP 180<br><b style='color:#ff7675'>+18 Lượt Miễn Phí (Miễn Trảm)</b>", tickets: 18, icon: "🏆" }
         ];
 
-        list.innerHTML = expPackages.map(pkg => {
-            const isBought = !!boughtPkgs[pkg.id];
-            const canBuy = currentPmc >= pkg.price && !isBought;
-            
-            let btnClass = "avatar-shop-btn";
-            let btnText = "MUA";
-            let btnAttr = `onclick="window.buyExpDirectly('${pkg.id}', ${pkg.exp}, ${pkg.price}, ${pkg.tickets})"`;
-            
-            // XỬ LÝ KHÓA NÚT NẾU ĐÃ MUA RỒI
-            if (isBought) {
-                btnClass = "avatar-shop-btn equipped"; // Đổi màu xanh lá
-                btnText = "ĐÃ MUA";
-                btnAttr = "disabled style='opacity: 0.6; cursor: not-allowed;'";
-            } else if (!canBuy) {
-                btnClass = "avatar-shop-btn locked";
-                btnText = "THIẾU PMC";
-                btnAttr = "disabled";
-            }
-            
-            return `
-                <div class="avatar-shop-card">
-                    <div style="width:48px;height:48px; display:flex; align-items:center; justify-content:center; background:#111; border-radius:50%; border:1px solid #f4c542; font-size:24px;">
-                        ${pkg.icon}
-                    </div>
-                    <div>
-                        <div class="avatar-shop-name" style="color:#f4c542;">${pkg.name}</div>
-                        <div class="avatar-shop-desc">${pkg.desc}</div>
-                        <div class="avatar-shop-price">${formatPMC(pkg.price)} PMC</div>
-                    </div>
-                    <button class="${btnClass}" ${btnAttr}>${btnText}</button>
-                </div>
-            `;
-        }).join("");
+        const expPackageOrder = expPackages.map(p => p.id);
+const expPackageRank = {};
+expPackageOrder.forEach((id, idx) => {
+    expPackageRank[id] = idx + 1;
+});
+
+const highestBoughtRank = expPackages.reduce((max, pkg) => {
+    if (boughtPkgs[pkg.id]) {
+        return Math.max(max, expPackageRank[pkg.id] || 0);
+    }
+    return max;
+}, 0);
+
+list.innerHTML = expPackages.map(pkg => {
+    const rank = expPackageRank[pkg.id] || 0;
+
+    const isBought = !!boughtPkgs[pkg.id];
+
+    // Đã mua gói cao hơn thì gói thấp hơn coi như đã đạt mốc, không cho mua nữa
+    const reachedByHigherPackage = highestBoughtRank >= rank && !isBought;
+
+    const canBuy = currentPmc >= pkg.price && rank > highestBoughtRank;
+
+    let btnClass = "avatar-shop-btn";
+    let btnText = "MUA";
+    let btnAttr = `onclick="window.buyExpDirectly('${pkg.id}', ${pkg.exp}, ${pkg.price}, ${pkg.tickets})"`;
+    let extraLabel = "";
+
+    if (isBought) {
+        btnClass = "avatar-shop-btn equipped";
+        btnText = "ĐÃ MUA";
+        btnAttr = "disabled style='opacity: 0.55; cursor: not-allowed;'";
+        extraLabel = `<div class="avatar-shop-owned-label">Gói này đã mua rồi</div>`;
+    } else if (reachedByHigherPackage) {
+        btnClass = "avatar-shop-btn equipped";
+        btnText = "ĐÃ ĐẠT MỐC";
+        btnAttr = "disabled style='opacity: 0.38; cursor: not-allowed; filter: grayscale(1);'";
+        extraLabel = `<div class="avatar-shop-owned-label">Đã mua gói cao hơn, không cần mua gói này nữa</div>`;
+    } else if (!canBuy) {
+        btnClass = "avatar-shop-btn locked";
+        btnText = "THIẾU PMC";
+        btnAttr = "disabled";
+    }
+
+    return `
+        <div class="avatar-shop-card" style="${reachedByHigherPackage ? "opacity:0.45; filter:grayscale(1);" : ""}">
+            <div class="avatar-shop-icon">${pkg.icon}</div>
+            <div>
+                <div class="avatar-shop-name">${avatarShopEscape(pkg.name)}</div>
+                <div class="avatar-shop-desc">${pkg.desc}</div>
+                <div class="avatar-shop-price">${pkg.price.toLocaleString('vi-VN')} PMC</div>
+                ${extraLabel}
+            </div>
+            <button class="${btnClass}" ${btnAttr}>${btnText}</button>
+        </div>`;
+}).join("");
         return;
     }
 
@@ -12175,10 +12198,21 @@ window.buyExpDirectly = async function(pkgId, expAmount, pmcCost, bonusTickets) 
 
         localStorage.setItem("exp_cache", data.newExp);
 
-        let pkgs = JSON.parse(localStorage.getItem("bought_exp_pkgs") || "{}");
-        pkgs[pkgId] = true;
-        localStorage.setItem("bought_exp_pkgs", JSON.stringify(pkgs));
+        let pkgs = data.boughtExpPackages || JSON.parse(localStorage.getItem('bought_exp_pkgs') || '{}');
 
+const expOrder = ["exp1", "exp2", "exp3", "exp4", "exp5", "exp6"];
+const boughtIndex = expOrder.indexOf(pkgId);
+
+// Mua gói cao thì khóa luôn các gói thấp hơn trên máy
+if (boughtIndex >= 0) {
+    for (let i = 0; i <= boughtIndex; i++) {
+        pkgs[expOrder[i]] = true;
+    }
+} else {
+    pkgs[pkgId] = true;
+}
+
+localStorage.setItem('bought_exp_pkgs', JSON.stringify(pkgs));
         if (typeof updateTicketUI === "function") {
             updateTicketUI(data.newTickets || 0);
         }

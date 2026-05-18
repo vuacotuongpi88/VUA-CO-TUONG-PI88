@@ -13,7 +13,24 @@ const EXP_PACKAGES = {
   exp5: { exp: 500000, price: 400000, tickets: 16 },
   exp6: { exp: 1650000, price: 1200000, tickets: 18 }
 };
+const EXP_PACKAGE_ORDER = ["exp1", "exp2", "exp3", "exp4", "exp5", "exp6"];
 
+function getExpPackageRank(pkgId = "") {
+  const idx = EXP_PACKAGE_ORDER.indexOf(String(pkgId || "").trim());
+  return idx >= 0 ? idx + 1 : 0;
+}
+
+function getHighestBoughtExpPackageRank(bought = {}) {
+  let highest = 0;
+
+  for (const id of EXP_PACKAGE_ORDER) {
+    if (bought && bought[id]) {
+      highest = Math.max(highest, getExpPackageRank(id));
+    }
+  }
+
+  return highest;
+}
 const LEVEL_MILESTONES = {
   10: { tickets: 2 },
   20: { tickets: 2 },
@@ -234,79 +251,101 @@ module.exports = async function handler(req, res) {
     // =====================================================
     // 2. MUA GÓI EXP
     // =====================================================
-    if (action === "buy_exp_direct") {
-      const pkgId = String(body.pkgId || "").trim();
-      const pkg = EXP_PACKAGES[pkgId];
+   if (action === "buy_exp_direct") {
+  const pkgId = String(body.pkgId || "").trim();
+  const pkg = EXP_PACKAGES[pkgId];
 
-      if (!pkg) {
-        return res.status(400).json({
-          ok: false,
-          error: "Gói EXP không tồn tại"
-        });
-      }
+  if (!pkg) {
+    return res.status(400).json({
+      ok: false,
+      error: "Gói EXP không tồn tại"
+    });
+  }
 
-      const txResult = await runTransaction(userRef, (current) => {
-        if (!current) return current;
-        if (String(current.uid || "") !== String(uid)) return;
+  const pkgRank = getExpPackageRank(pkgId);
 
-        const livePmc = Math.max(
-          0,
-          Math.floor(Number(current.pmcBalance || 0))
-        );
+  if (!pkgRank) {
+    return res.status(400).json({
+      ok: false,
+      error: "Gói EXP không hợp lệ"
+    });
+  }
 
-        if (livePmc < pkg.price) return;
+  const txResult = await runTransaction(userRef, (current) => {
+    if (!current) return current;
+    if (String(current.uid || "") !== String(uid)) return;
 
-        current.boughtExpPackages = current.boughtExpPackages || {};
-        if (current.boughtExpPackages[pkgId]) return;
+    const livePmc = Math.max(
+      0,
+      Math.floor(Number(current.pmcBalance || 0))
+    );
 
-        current.pmcBalance = livePmc - pkg.price;
-        current.exp = Math.max(0, Math.floor(Number(current.exp || 0))) + pkg.exp;
-        current.level = calcLevel(current.exp);
-        current.freeTickets =
-          Math.max(0, Math.floor(Number(current.freeTickets || 0))) +
-          pkg.tickets;
+    if (livePmc < pkg.price) return;
 
-        current.boughtExpPackages[pkgId] = true;
-        current.updatedAt = Date.now();
+    current.boughtExpPackages = current.boughtExpPackages || {};
 
-        return current;
-      });
+    const highestBoughtRank = getHighestBoughtExpPackageRank(current.boughtExpPackages);
 
-      if (!txResult.committed) {
-        return res.status(400).json({
-          ok: false,
-          error: "Không đủ PMC hoặc đã mua gói này rồi"
-        });
-      }
+    // Đã mua gói bằng hoặc cao hơn rồi thì chặn mua lại gói thấp hơn.
+    // Ví dụ mua exp4 rồi thì exp1/exp2/exp3/exp4 đều bị khóa.
+    if (highestBoughtRank >= pkgRank) return;
 
-      await incrementAdminPmc(db, pkg.price);
+    current.pmcBalance = livePmc - pkg.price;
+    current.exp = Math.max(0, Math.floor(Number(current.exp || 0))) + pkg.exp;
+    current.level = calcLevel(current.exp);
+    current.freeTickets =
+      Math.max(0, Math.floor(Number(current.freeTickets || 0))) +
+      pkg.tickets;
 
-      await db.ref("walletTransactions").push({
-        type: "buy_exp_package",
-        uid,
-        walletKey: safeWalletKey,
-        adminWalletKey: "pi_admin_master",
-        pkgId,
-        feePMC: pkg.price,
-        expGained: pkg.exp,
-        ticketsGained: pkg.tickets,
-        createdAt: Date.now(),
-        status: "done"
-      });
-
-      const snapData = txResult.snapshot.val() || {};
-
-      return res.status(200).json({
-        ok: true,
-        action,
-        pkgId,
-        newExp: Math.max(0, Math.floor(Number(snapData.exp || 0))),
-        newLevel: Math.max(1, Math.floor(Number(snapData.level || 1))),
-        newPmc: Math.max(0, Math.floor(Number(snapData.pmcBalance || 0))),
-        newTickets: Math.max(0, Math.floor(Number(snapData.freeTickets || 0)))
-      });
+    // Mua gói cao thì đóng dấu luôn các gói thấp hơn là đã đạt mốc.
+    for (let i = 0; i < pkgRank; i++) {
+      current.boughtExpPackages[EXP_PACKAGE_ORDER[i]] = true;
     }
 
+    current.lastBoughtExpPackage = pkgId;
+    current.lastBoughtExpPackageRank = pkgRank;
+    current.updatedAt = Date.now();
+
+    return current;
+  });
+
+  if (!txResult.committed) {
+    return res.status(400).json({
+      ok: false,
+      error: "Không đủ PMC hoặc gói này đã bị khóa bởi gói EXP cao hơn."
+    });
+  }
+
+  await incrementAdminPmc(db, pkg.price);
+
+  await db.ref("walletTransactions").push({
+    type: "buy_exp_package",
+    uid,
+    walletKey: safeWalletKey,
+    adminWalletKey: "pi_admin_master",
+    pkgId,
+    packageRank: pkgRank,
+    feePMC: pkg.price,
+    expGained: pkg.exp,
+    ticketsGained: pkg.tickets,
+    createdAt: Date.now(),
+    status: "done"
+  });
+
+  const snapData = txResult.snapshot.val() || {};
+
+  return res.status(200).json({
+    ok: true,
+    action,
+    pkgId,
+    packageRank: pkgRank,
+    boughtExpPackages: snapData.boughtExpPackages || {},
+    newExp: Math.max(0, Math.floor(Number(snapData.exp || 0))),
+    newLevel: Math.max(1, Math.floor(Number(snapData.level || 1))),
+    newPmc: Math.max(0, Math.floor(Number(snapData.pmcBalance || 0))),
+    newTickets: Math.max(0, Math.floor(Number(snapData.freeTickets || 0)))
+  });
+}
     // =====================================================
     // 3. MUA LẠI EXP SAU KHI THUA
     // =====================================================
