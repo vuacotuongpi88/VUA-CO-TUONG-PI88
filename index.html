@@ -147,7 +147,13 @@ width: 9%;
 height: 9%;
 transform: translate(-50%, -50%);
 z-index: 20;
-transition: all 0.2s;
+transition:
+    left 0.42s cubic-bezier(0.22, 0.85, 0.25, 1),
+    top 0.42s cubic-bezier(0.22, 0.85, 0.25, 1),
+    transform 0.12s ease,
+    filter 0.12s ease,
+    opacity 0.12s ease;
+will-change: left, top, transform;
 cursor: pointer;
 border-radius: 60%;
 /* Bo tròn chuẩn */
@@ -156,7 +162,10 @@ clip-path: circle(60%);
 object-fit: cover;
 filter: drop-shadow(2px 4px 3px rgba(0, 0, 0, 0.5));
 }
-
+.piece-moving-smooth {
+    z-index: 999 !important;
+    pointer-events: none;
+}
 .selected {
 filter: drop-shadow(0 0 10px #55efc4) brightness(1.2);
 z-index: 100;
@@ -6466,6 +6475,21 @@ margin-bottom: 14px;
     font-size: 13px !important;
     padding: 18px 10px !important;
 }
+/* ===== ANIMATION QUÂN CỜ DI CHUYỂN MƯỢT ===== */
+.chess-piece-moving-ghost {
+    position: fixed;
+    z-index: 99999;
+    pointer-events: none;
+    transition:
+        left 0.36s cubic-bezier(0.22, 0.85, 0.25, 1),
+        top 0.36s cubic-bezier(0.22, 0.85, 0.25, 1),
+        transform 0.36s cubic-bezier(0.22, 0.85, 0.25, 1);
+    will-change: left, top, transform;
+}
+
+.chess-piece-hide-while-moving {
+    opacity: 0 !important;
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -8408,7 +8432,11 @@ function renderSpectatorRoomSnapshot(room = {}, roomId = "") {
     const newBoardHash = JSON.stringify(room.board || []);
     if (newBoardHash !== lastRoomBoardHash) {
         lastRoomBoardHash = newBoardHash;
-        applyBoardStateFromRoom(room.board || []);
+        if (lastRoomBoardHash && room.lastMoveFrom && room.lastMoveTo) {
+    animateRemoteMoveGhost(room.lastMoveFrom, room.lastMoveTo);
+}
+
+applyBoardStateFromRoom(room.board || []);
         isCoUp = !!room.isCoUp;
         luotDi = room.turn || "do";
         timeDo = typeof room.timeDo === "number" ? room.timeDo : 900;
@@ -9206,6 +9234,72 @@ function spawnDragonAttack(kingElement) {
 
     }, 2800); 
 }
+function animateRemoteMoveGhost(from, to) {
+    try {
+        if (!from || !to) return false;
+
+        const pieceEl = typeof getPieceAtBoardPos === "function"
+            ? getPieceAtBoardPos(from.c, from.r)
+            : null;
+
+        if (!pieceEl) return false;
+
+        const boardRect = board.getBoundingClientRect();
+        const pieceRect = pieceEl.getBoundingClientRect();
+
+        const toView = mapBoardToView(to.c, to.r);
+
+        const targetLeft =
+            boardRect.left +
+            boardRect.width * (columns[toView.c] / 100) -
+            pieceRect.width / 2;
+
+        const targetTop =
+            boardRect.top +
+            boardRect.height * (rows[toView.r] / 100) -
+            pieceRect.height / 2;
+
+        const ghost = pieceEl.cloneNode(true);
+        ghost.classList.remove("selected", "is-chieu", "lightning-chieu");
+        ghost.style.position = "fixed";
+        ghost.style.left = pieceRect.left + "px";
+        ghost.style.top = pieceRect.top + "px";
+        ghost.style.width = pieceRect.width + "px";
+        ghost.style.height = pieceRect.height + "px";
+        ghost.style.zIndex = "99999";
+        ghost.style.pointerEvents = "none";
+        ghost.style.transition =
+            "left " + window.CHESS_MOVE_ANIM_MS + "ms cubic-bezier(0.22, 0.85, 0.25, 1), " +
+            "top " + window.CHESS_MOVE_ANIM_MS + "ms cubic-bezier(0.22, 0.85, 0.25, 1), " +
+            "transform " + window.CHESS_MOVE_ANIM_MS + "ms cubic-bezier(0.22, 0.85, 0.25, 1)";
+        ghost.style.transform = "scale(1.04)";
+
+        document.body.appendChild(ghost);
+
+        window.__moveLandingHide = {
+            c: to.c,
+            r: to.r,
+            until: Date.now() + Number(window.CHESS_MOVE_ANIM_MS || 420) + 160
+        };
+
+        ghost.getBoundingClientRect();
+
+        requestAnimationFrame(() => {
+            ghost.style.left = targetLeft + "px";
+            ghost.style.top = targetTop + "px";
+            ghost.style.transform = "scale(1)";
+        });
+
+        setTimeout(() => {
+            if (ghost && ghost.parentNode) ghost.remove();
+        }, Number(window.CHESS_MOVE_ANIM_MS || 420) + 80);
+
+        return true;
+    } catch (err) {
+        console.warn("animateRemoteMoveGhost fail:", err);
+        return false;
+    }
+}
 function haiTuongDoiMat(mt) {
     let tDo = null, tDen = null;
     for(let r = 0; r < 10; r++) {
@@ -9366,9 +9460,16 @@ if (haiTuongDoiMat(mt)) {
     lastMoveTo = { c: c2, r: r2 };
 
     const newViewPos = mapBoardToView(c2, r2);
-    selectedPiece.style.left = columns[newViewPos.c] + "%";
-    selectedPiece.style.top = rows[newViewPos.r] + "%";
-    selectedPiece.classList.remove("selected");
+
+selectedPiece.classList.remove("selected");
+selectedPiece.classList.add("piece-moving-smooth");
+
+selectedPiece.style.left = columns[newViewPos.c] + "%";
+selectedPiece.style.top = rows[newViewPos.r] + "%";
+
+setTimeout(() => {
+    if (selectedPiece) selectedPiece.classList.remove("piece-moving-smooth");
+}, 520);
 
     luotDi = (luotDi === 'do') ? 'den' : 'do';
 
@@ -9575,6 +9676,9 @@ function exportBoardState() {
 function applyBoardStateFromRoom(pieces) {
     // XÓA BỎ DÒNG isGameOver = false; Ở ĐÂY VÌ NÓ LÀM LỖI X2 KINH NGHIỆM
     hideVictoryPopup();
+
+    const landingHide = window.__moveLandingHide || null;
+
     document.querySelectorAll(".piece").forEach(p => p.remove());
     clearMoveHints();
     clearLastMoveMarks();
@@ -9593,6 +9697,22 @@ function applyBoardStateFromRoom(pieces) {
         const viewPos = mapBoardToView(item.c, item.r);
         img.style.left = columns[viewPos.c] + "%";
         img.style.top = rows[viewPos.r] + "%";
+
+        // Nếu vừa có ghost bay tới ô này, tạm ẩn quân thật để khỏi thấy bị nhân đôi.
+        if (
+            landingHide &&
+            Number(item.c) === Number(landingHide.c) &&
+            Number(item.r) === Number(landingHide.r) &&
+            Date.now() < Number(landingHide.until || 0)
+        ) {
+            img.style.opacity = "0";
+
+            setTimeout(() => {
+                if (img && img.parentNode) {
+                    img.style.opacity = "1";
+                }
+            }, Math.max(80, Number(window.CHESS_MOVE_ANIM_MS || 420) - 60));
+        }
 
         board.appendChild(img);
     });
@@ -11201,7 +11321,11 @@ if (!canRenderLiveBoard) {
     if (newBoardHash !== lastRoomBoardHash) {
         lastRoomBoardHash = newBoardHash;
 
-        applyBoardStateFromRoom(room.board || []);
+        if (lastRoomBoardHash && room.lastMoveFrom && room.lastMoveTo) {
+    animateRemoteMoveGhost(room.lastMoveFrom, room.lastMoveTo);
+}
+
+applyBoardStateFromRoom(room.board || []);
         isCoUp = !!room.isCoUp;
          luotDi = room.turn || "do";
          
@@ -22541,7 +22665,88 @@ async function ensureTestnetGateBeforeAction() {
 setTimeout(checkTestnetGate, 1500);
 setInterval(checkTestnetGate, 60000);
 setTimeout(updateTestnetGateMenuVisible, 1000);
+// ===== HIỆU ỨNG KÉO QUÂN CỜ ĐI MƯỢT =====
+window.CHESS_MOVE_ANIM_MS = 420;
 
+function sleepMoveAnim(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function findBoardCellForAnim(row, col) {
+    return (
+        document.querySelector(`[data-row="${row}"][data-col="${col}"]`) ||
+        document.querySelector(`[data-r="${row}"][data-c="${col}"]`) ||
+        document.querySelector(`.cell-${row}-${col}`) ||
+        document.querySelector(`#cell-${row}-${col}`) ||
+        document.querySelector(`.board-cell[data-row="${row}"][data-col="${col}"]`) ||
+        document.querySelector(`.chess-cell[data-row="${row}"][data-col="${col}"]`)
+    );
+}
+
+function findPieceInsideCellForAnim(cell) {
+    if (!cell) return null;
+
+    return (
+        cell.querySelector(".piece") ||
+        cell.querySelector(".chess-piece") ||
+        cell.querySelector(".piece-img") ||
+        cell.querySelector("img") ||
+        cell.firstElementChild
+    );
+}
+
+async function animateChessPieceMove(fromRow, fromCol, toRow, toCol) {
+    try {
+        const fromCell = findBoardCellForAnim(fromRow, fromCol);
+        const toCell = findBoardCellForAnim(toRow, toCol);
+
+        if (!fromCell || !toCell) {
+            return false;
+        }
+
+        const pieceEl = findPieceInsideCellForAnim(fromCell);
+        if (!pieceEl) {
+            return false;
+        }
+
+        const fromRect = pieceEl.getBoundingClientRect();
+        const toRect = toCell.getBoundingClientRect();
+
+        const targetLeft = toRect.left + (toRect.width - fromRect.width) / 2;
+        const targetTop = toRect.top + (toRect.height - fromRect.height) / 2;
+
+        const ghost = pieceEl.cloneNode(true);
+        ghost.classList.add("chess-piece-moving-ghost");
+
+        ghost.style.left = fromRect.left + "px";
+        ghost.style.top = fromRect.top + "px";
+        ghost.style.width = fromRect.width + "px";
+        ghost.style.height = fromRect.height + "px";
+        ghost.style.transform = "scale(1.04)";
+
+        document.body.appendChild(ghost);
+        pieceEl.classList.add("chess-piece-hide-while-moving");
+
+        // ép browser nhận vị trí đầu
+        ghost.getBoundingClientRect();
+
+        requestAnimationFrame(() => {
+            ghost.style.left = targetLeft + "px";
+            ghost.style.top = targetTop + "px";
+            ghost.style.transform = "scale(1)";
+        });
+
+        await sleepMoveAnim(window.CHESS_MOVE_ANIM_MS + 40);
+
+        ghost.remove();
+        pieceEl.classList.remove("chess-piece-hide-while-moving");
+
+        return true;
+    } catch (err) {
+        console.warn("animateChessPieceMove fail:", err);
+        return false;
+    }
+}
 </script>
 <div id="history-ledger-modal" class="history-ledger-modal">
     <div class="history-ledger-box">
