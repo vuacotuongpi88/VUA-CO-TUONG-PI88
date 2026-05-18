@@ -932,12 +932,51 @@ function shopLevelByXp(xpValue) {
 
 function shopSkinCatalog() {
   return [
-    { id:'skin_bamboo_gold', type:'avatar_skin', name:'Viền Trúc Kim', icon:'🎋', pricePmc:25000, unlockLevel:10, desc:'Viền vàng xanh cho avatar, mốc đầu cho người chăm cày.' },
-    { id:'skin_dragon_purple', type:'avatar_skin', name:'Long Ảnh Tím', icon:'🐉', pricePmc:80000, unlockLevel:30, desc:'Hiệu ứng tím cao thủ, mua được nhưng cày Lv.30 cũng mở.' },
-    { id:'skin_phoenix_red', type:'avatar_skin', name:'Phượng Hỏa Đỏ', icon:'🔥', pricePmc:150000, unlockLevel:50, desc:'Viền đỏ rực cho người thích nổi bật.' },
-    { id:'skin_diamond_blue', type:'avatar_skin', name:'Kim Cương Lam', icon:'💎', pricePmc:300000, unlockLevel:80, desc:'Khung xanh kim cương, dành cho tài khoản mạnh.' },
-    { id:'skin_king_rainbow', type:'avatar_skin', name:'Vương Giả Ngũ Sắc', icon:'👑', pricePmc:800000, unlockLevel:120, desc:'Skin nhà giàu hoặc người cày lâu năm.' },
-    { id:'skin_god_neon', type:'avatar_skin', name:'Thần Quang Neon', icon:'⚡', pricePmc:1500000, unlockLevel:160, desc:'Mốc tối thượng Lv.160, mua rất đắt để đốt PMC.' }
+    {
+      id: 'none',
+      type: 'avatar_skin',
+      name: 'Mặc định',
+      icon: '⭕',
+      pricePmc: 0,
+      unlockLevel: 1,
+      desc: 'Avatar mặc định.'
+    },
+    {
+      id: 'bronze',
+      type: 'avatar_skin',
+      name: 'Hào Quang Đồng',
+      icon: '🥉',
+      pricePmc: 5000,
+      unlockLevel: 30,
+      desc: 'Vương miện đồng + hoa văn cổ.'
+    },
+    {
+      id: 'jade',
+      type: 'avatar_skin',
+      name: 'Ngọc Lục Bảo',
+      icon: '💚',
+      pricePmc: 10000,
+      unlockLevel: 60,
+      desc: 'Khung ngọc xanh, hoa văn ôm avatar.'
+    },
+    {
+      id: 'dragon',
+      type: 'avatar_skin',
+      name: 'Long Vương',
+      icon: '🐉',
+      pricePmc: 20000,
+      unlockLevel: 120,
+      desc: 'Rồng vàng ôm avatar, skin VIP.'
+    },
+    {
+      id: 'phoenix',
+      type: 'avatar_skin',
+      name: 'Phượng Hoàng',
+      icon: '🔥',
+      pricePmc: 50000,
+      unlockLevel: 180,
+      desc: 'Phượng hoàng tím hồng, skin cao cấp.'
+    }
   ];
 }
 
@@ -1114,31 +1153,80 @@ async function shopBuyItem(db, walletKey, itemId) {
 }
 
 async function shopEquipItem(db, walletKey, itemId) {
-  const item = shopSkinCatalog().find(x => x.id === itemId);
-  if (!item) throw new Error('Skin không tồn tại.');
+  const rawItemId = String(itemId || '').trim();
 
-  const [{ level }, invSnap] = await Promise.all([
+  const aliasMap = {
+    default: 'none',
+    skin_default: 'none'
+  };
+
+  const finalItemId = aliasMap[rawItemId] || rawItemId;
+  const item = shopSkinCatalog().find(x => x.id === finalItemId);
+
+  if (!item) {
+    throw new Error('Skin không tồn tại.');
+  }
+
+  const [{ wallet, level }, invSnap] = await Promise.all([
     getShopUserLevelAndWallet(db, walletKey),
     db.ref(`cosmeticsInventoryV1/${walletKey}/${item.id}`).once('value')
   ]);
 
-  const owned = !!(invSnap.val() && invSnap.val().owned);
-  const levelUnlocked = level >= item.unlockLevel;
+  const invVal = invSnap.val();
+  const ownedByInventory = !!(
+    invVal &&
+    (
+      invVal === true ||
+      invVal.owned === true
+    )
+  );
+
+  const ownedByWallet = !!(
+    wallet &&
+    wallet.ownedAvatarSkins &&
+    wallet.ownedAvatarSkins[item.id]
+  );
+
+  const levelUnlocked = level >= Number(item.unlockLevel || 9999);
+  const owned = item.id === 'none' || ownedByInventory || ownedByWallet;
 
   if (!owned && !levelUnlocked) {
     throw new Error(`Chưa sở hữu skin này. Mua bằng PMC hoặc đạt Lv.${item.unlockLevel}.`);
   }
 
-  await Promise.all([
-    db.ref(`wallets/${walletKey}`).update({ equippedAvatarSkin: item.id, updatedAt: nowMs() }),
-    db.ref(`cosmeticsEquippedV1/${walletKey}`).set({
-      avatarSkin: item.id,
-      itemName: item.name,
-      equippedAt: nowMs()
-    })
-  ]);
+  const updates = {};
 
-  return { ok: true, equippedAvatarSkin: item.id, itemName: item.name };
+  updates[`wallets/${walletKey}/avatarSkin`] = item.id;
+  updates[`wallets/${walletKey}/equippedAvatarSkin`] = item.id;
+  updates[`wallets/${walletKey}/equippedSkin`] = item.id;
+  updates[`wallets/${walletKey}/updatedAt`] = nowMs();
+
+  // Nếu người chơi mở bằng cấp hoặc đã mua ở hệ thống cũ thì đồng bộ lại túi.
+  updates[`wallets/${walletKey}/ownedAvatarSkins/${item.id}`] = true;
+  updates[`cosmeticsInventoryV1/${walletKey}/${item.id}`] = {
+    owned: true,
+    itemId: item.id,
+    itemName: item.name,
+    pricePmc: item.pricePmc || 0,
+    syncedFromEquip: true,
+    updatedAt: nowMs()
+  };
+
+  updates[`cosmeticsEquippedV1/${walletKey}`] = {
+    avatarSkin: item.id,
+    equippedAvatarSkin: item.id,
+    equippedSkin: item.id,
+    itemName: item.name,
+    equippedAt: nowMs()
+  };
+
+  await db.ref().update(updates);
+
+  return {
+    ok: true,
+    equippedAvatarSkin: item.id,
+    itemName: item.name
+  };
 }
 
 async function shopOpenLevelChest(db, walletKey, level) {
