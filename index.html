@@ -9107,9 +9107,28 @@ function clearRealtimeBoardVisualOnly() {
         sounds.heartbeat.currentTime = 0;
     }
 }
+function isBotPlayerObj(p = {}) {
+    return !!(
+        p &&
+        (
+            p.uid === "bot_master_100" ||
+            p.isBot === true ||
+            String(p.name || "").includes("Lão Tẩu") ||
+            String(p.name || "").includes("Vô Danh")
+        )
+    );
+}
+
 function scheduleResetWinnerRoomAfterPaid(room, roomId) {
     if (!roomId || !room?.winner) return;
-    if (room.winner !== mySide) return;
+
+    const roomHasBot =
+        isBotPlayerObj(room.players?.do) ||
+        isBotPlayerObj(room.players?.den);
+
+    // Người thật thắng thì cho người thắng dọn.
+    // Nếu ván có bot thì cho máy người thật dọn dù bot thắng hay thua.
+    if (!roomHasBot && room.winner !== mySide) return;
 
     window.__resetWinnerRoomAfterPaidKey = window.__resetWinnerRoomAfterPaidKey || "";
 
@@ -9129,13 +9148,23 @@ function scheduleResetWinnerRoomAfterPaid(room, roomId) {
             const fresh = snap.val() || {};
 
             if (!fresh.winner) return;
-            if (fresh.winner !== mySide) return;
 
-            const paidDone = fresh.settlement && fresh.settlement.paid === true;
+            const doPlayer = fresh.players?.do || null;
+            const denPlayer = fresh.players?.den || null;
+
+            const doIsBot = isBotPlayerObj(doPlayer);
+            const denIsBot = isBotPlayerObj(denPlayer);
+            const freshHasBot = doIsBot || denIsBot;
+
+            if (!freshHasBot && fresh.winner !== mySide) return;
+
+            const paidDone =
+                fresh.settlement &&
+                (fresh.settlement.paid === true || fresh.settlement.done === true);
 
             // Chưa cộng tiền xong thì tuyệt đối chưa reset phòng.
             if (!paidDone) {
-                if (attempt < 30) {
+                if (attempt < 40) {
                     setTimeout(() => tryReset(attempt + 1), 500);
                 } else {
                     console.warn("Chưa thấy settlement.paid, không dọn phòng để tránh mất PMC:", roomId);
@@ -9144,38 +9173,73 @@ function scheduleResetWinnerRoomAfterPaid(room, roomId) {
             }
 
             const winnerSide = fresh.winner;
-             let winnerPlayer = fresh.players?.[winnerSide];
+            const loserSide = winnerSide === "do" ? "den" : "do";
+            const winnerPlayer = fresh.players?.[winnerSide] || {};
+            const loserPlayer = fresh.players?.[loserSide] || {};
 
-             // BÙA DIỆT BOT: Nếu thằng thắng là Bot, tước quyền làm chủ của nó, bắt mày (người thật) làm chủ phòng để chờ khách mới!
-             if (winnerPlayer?.uid === "bot_master_100" || winnerPlayer?.isBot) {
-                 winnerPlayer = fresh.players?.[mySide]; 
-             }
+            const winnerIsBot = isBotPlayerObj(winnerPlayer);
+            const loserIsBot = isBotPlayerObj(loserPlayer);
 
-             if (!winnerPlayer?.uid) return;
+            let newHost = null;
 
-             const cleanMode = fresh.mode || currentRoomMode || "co-tuong";
-            const cleanStake = Math.max(0, Math.floor(Number(fresh.stakePMC || currentRoomStakePMC || 0) || 0));
-            const cleanBucket = fresh.roomBucket || currentRoomBucket || makeStakeBucket(cleanMode, cleanStake);
-            const cleanInviteCode = String(fresh.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
+            // Nếu bot thắng: đuổi bot, cho người thua giữ phòng.
+            if (winnerIsBot && !loserIsBot) {
+                newHost = loserPlayer;
+            }
+            // Nếu người thắng bot: người thắng giữ phòng.
+            else if (!winnerIsBot) {
+                newHost = winnerPlayer;
+            }
+            // Phòng lỗi toàn bot thì bỏ.
+            else {
+                return;
+            }
+
+            if (!newHost?.uid && !newHost?.walletKey) return;
+
+            const cleanMode = fresh.mode || currentRoomMode || "co-tuong";
+            const cleanStake = Math.max(
+                0,
+                Math.floor(Number(fresh.stakePMC || currentRoomStakePMC || 0) || 0)
+            );
+            const cleanBucket =
+                fresh.roomBucket ||
+                currentRoomBucket ||
+                makeStakeBucket(cleanMode, cleanStake);
+
+            const cleanInviteCode = String(
+                fresh.inviteCode || makeInviteCodeFromRoomId(roomId)
+            ).toUpperCase();
+
+            const newHostSafe = {
+                ...newHost,
+                uid: newHost.uid || "",
+                walletKey: newHost.walletKey || newHost.uid || "",
+                name: newHost.name || newHost.username || "Người chơi",
+                photo: newHost.photo || "images/do_tuong.png",
+                isBot: false,
+                side: "do",
+                updatedAt: firebase.database.ServerValue.TIMESTAMP
+            };
 
             const updates = {};
 
-            // Người thắng giữ phòng, chuyển về phe đỏ/chủ phòng cho ván mới
-           updates[`matches/${roomId}/players/do`] = {
-    ...winnerPlayer,
-    side: "do",
-    updatedAt: firebase.database.ServerValue.TIMESTAMP
-};
-updates[`matches/${roomId}/players/den`] = null;
-updates[`matches/${roomId}/hostUid`] = winnerPlayer.uid || "";
-updates[`matches/${roomId}/hostWalletKey`] = winnerPlayer.walletKey || "";
-updates[`matches/${roomId}/lobbyOpen`] = true;
-updates[`matches/${roomId}/lobbyOwnerUid`] = winnerPlayer.uid || "";
-updates[`matches/${roomId}/lobbyOwnerWalletKey`] = winnerPlayer.walletKey || "";
-updates[`matches/${roomId}/lobbyHeartbeatAt`] = firebase.database.ServerValue.TIMESTAMP;
-updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+            // Đưa người thật về ghế Đỏ, ghế Đen trống để người chơi khác/bot mới vào.
+            updates[`matches/${roomId}/players/do`] = newHostSafe;
+            updates[`matches/${roomId}/players/den`] = null;
 
+            updates[`matches/${roomId}/hostUid`] = newHostSafe.uid || "";
+            updates[`matches/${roomId}/hostWalletKey`] = newHostSafe.walletKey || "";
+
+            updates[`matches/${roomId}/roomBucket`] = cleanBucket;
             updates[`matches/${roomId}/status`] = "waiting";
+            updates[`matches/${roomId}/lobbyOpen`] = true;
+            updates[`matches/${roomId}/lobbyOwnerUid`] = newHostSafe.uid || "";
+            updates[`matches/${roomId}/lobbyOwnerWalletKey`] = newHostSafe.walletKey || "";
+            updates[`matches/${roomId}/lobbyHeartbeatAt`] = firebase.database.ServerValue.TIMESTAMP;
+            updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+            // Dọn sạch ván cũ.
             updates[`matches/${roomId}/turn`] = "do";
             updates[`matches/${roomId}/board`] = null;
             updates[`matches/${roomId}/moveCount`] = 0;
@@ -9183,13 +9247,6 @@ updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIME
             updates[`matches/${roomId}/finishedAt`] = null;
             updates[`matches/${roomId}/lastMoveFrom`] = null;
             updates[`matches/${roomId}/lastMoveTo`] = null;
-
-            updates[`matches/${roomId}/ready/do`] = false;
-            updates[`matches/${roomId}/ready/den`] = false;
-            updates[`matches/${roomId}/stakeLocked/do`] = false;
-            updates[`matches/${roomId}/stakeLocked/den`] = false;
-
-            // Chỉ xóa kết quả sau khi settlement.paid true
             updates[`matches/${roomId}/winner`] = null;
             updates[`matches/${roomId}/winReason`] = null;
             updates[`matches/${roomId}/drawRequest`] = null;
@@ -9198,13 +9255,21 @@ updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIME
             updates[`matches/${roomId}/quitAt`] = null;
             updates[`matches/${roomId}/settlement`] = null;
             updates[`matches/${roomId}/refunds`] = null;
+
+            // Reset SS cho ván sau.
+            updates[`matches/${roomId}/ready/do`] = false;
+            updates[`matches/${roomId}/ready/den`] = false;
+            updates[`matches/${roomId}/stakeLocked/do`] = false;
+            updates[`matches/${roomId}/stakeLocked/den`] = false;
+            updates[`matches/${roomId}/readyDeadlineAt`] = null;
+
             updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
 
             updates[`waitingRooms/${cleanBucket}/${roomId}`] = {
                 roomId,
-                uid: winnerPlayer.uid,
-                    walletKey: winnerPlayer.walletKey || "",
-                name: winnerPlayer.name || "Người chơi",
+                uid: newHostSafe.uid || "",
+                walletKey: newHostSafe.walletKey || "",
+                name: newHostSafe.name || "Người chơi",
                 mode: cleanMode,
                 stakePMC: cleanStake,
                 inviteCode: cleanInviteCode,
@@ -9215,25 +9280,53 @@ updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIME
 
             await db.ref().update(updates);
 
-           mySide = "do";
-viewSide = "do";
-currentRoomId = roomId;
-currentRoomMode = cleanMode;
-currentRoomStakePMC = cleanStake;
-currentRoomBucket = cleanBucket;
-currentRoomStatus = "waiting";
+            // Cập nhật máy hiện tại thành chủ phòng Đỏ.
+            mySide = "do";
+            viewSide = "do";
+            currentRoomId = roomId;
+            currentRoomMode = cleanMode;
+            currentRoomStakePMC = cleanStake;
+            currentRoomBucket = cleanBucket;
+            currentRoomStatus = "waiting";
 
-saveActiveMatchSnapshot({
-    roomId,
-    mode: cleanMode,
-    side: "do"
-});
+            readyDo = false;
+            readyDen = false;
+            readyDeadlineAt = 0;
+            readyTime = 0;
+
+            saveActiveMatchSnapshot({
+                roomId,
+                mode: cleanMode,
+                side: "do"
+            });
 
             clearRealtimeBoardVisualOnly();
             hideVictoryPopup();
             closeReadyOverlay();
             renderTimerUI();
             updateReadyUI();
+
+            // Cho Lão Tẩu đếm lại 15s cho ván sau.
+            // startBotWaitingTimer có sẵn botWaitSeconds = 15 và sẽ tự hủy nếu có người thật vào. 
+            if (typeof cancelBotWaiting === "function") {
+                cancelBotWaiting();
+            }
+
+            setTimeout(() => {
+                const latest = window.__lastBoundRoom || {};
+                const denEmpty = !latest.players?.den;
+
+                if (
+                    currentRoomId === roomId &&
+                    currentRoomStatus === "waiting" &&
+                    denEmpty &&
+                    cleanStake <= 3 &&
+                    typeof startBotWaitingTimer === "function"
+                ) {
+                    startBotWaitingTimer();
+                }
+            }, 700);
+
         } catch (err) {
             console.error("Dọn phòng sau khi settlement paid lỗi:", err);
         }
@@ -10460,13 +10553,22 @@ if (room.winner) {
         maybeSettleStakeRoom(room, listeningRoomId).catch(err => console.error("Settle lỗi:", err));
 
         // Tách riêng khối bàn giao phòng sau bỏ chạy.
-        if (
-    room.winner === mySide &&
-    ["bochay", "dauhang"].includes(room.winReason)
+        const winnerPlayerForReset = room.players?.[room.winner] || {};
+const loserSideForReset = room.winner === "do" ? "den" : "do";
+const loserPlayerForReset = room.players?.[loserSideForReset] || {};
+
+const resetRoomHasBot =
+    isBotPlayerObj(winnerPlayerForReset) ||
+    isBotPlayerObj(loserPlayerForReset);
+
+// Người thắng thật thì dọn như cũ.
+// Riêng ván có bot thì dù bot thắng hay thua cũng dọn, đá bot ra khỏi bàn.
+if (
+    (room.winner === mySide && ["bochay", "dauhang", "checkmate"].includes(room.winReason)) ||
+    resetRoomHasBot
 ) {
     scheduleResetWinnerRoomAfterPaid(room, listeningRoomId);
 }
-
             // Khi backend đóng dấu settlement.paid/done, ép máy tải lại ví mới nhất.
             if (room.settlement?.paid === true || room.settlement?.done === true) {
                 const syncKey = `__wallet_synced_${listeningRoomId}_${room.winner}`;
