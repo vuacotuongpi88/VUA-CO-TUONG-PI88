@@ -473,71 +473,210 @@ if (action === "testnet_gate_update") {
         message
     });
 }
-async function submitReferralCode() {
-    const inputEl = document.getElementById("input-ref-code");
-    const code = String(inputEl?.value || "").trim().toUpperCase();
+// ==========================================
+// NHẬP MÃ MỜI - SERVER XỬ LÝ, KHỎI PERMISSION_DENIED
+// ==========================================
+if (action === "submit_referral_code") {
+    const code = String(body.code || "")
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9_]/g, "");
 
     if (!code) {
-        alert("Mày chưa nhập mã kìa!");
-        return;
-    }
-
-    const myWalletKey = typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "";
-    const btn = document.querySelector(".btn-submit");
-
-    try {
-        if (btn) {
-            btn.disabled = true;
-            btn.innerText = "ĐANG XỬ LÝ...";
-        }
-
-        const meProfile = typeof getCurrentFriendProfile === "function"
-            ? getCurrentFriendProfile()
-            : {};
-
-        const res = await fetch("/api/finance?v=" + Date.now(), {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "x-wallet-key": myWalletKey
-            },
-            body: JSON.stringify({
-                action: "submit_referral_code",
-                walletKey: myWalletKey,
-                code,
-                uid: meProfile.uid || "",
-                username: meProfile.username || "",
-                displayName: meProfile.displayName || meProfile.name || "",
-                photo: meProfile.photo || ""
-            })
+        return res.status(400).json({
+            ok: false,
+            error: "Chưa nhập mã mời."
         });
+    }
 
-        const data = await res.json().catch(() => ({}));
+    const myWalletKey = safeWalletKey;
+    const adminWallet = ADMIN_WALLET_KEY || "pi_admin_master";
+    const rewardPmc = 5;
+    const totalCostPmc = 10;
+    const now = Date.now();
 
-        if (!res.ok || !data.ok) {
-            throw new Error(data.error || "Không nhập được mã mời.");
-        }
+    function refRound(value) {
+        const n = Number(value || 0);
+        if (!Number.isFinite(n)) return 0;
+        return Math.round(n * 1000000) / 1000000;
+    }
 
-        if (typeof loadWalletBalance === "function") {
-            await loadWalletBalance();
-        }
+    function refSafeKey(value = "") {
+        return String(value || "")
+            .trim()
+            .replace(/[.#$\[\]\/]/g, "_");
+    }
 
-        if (typeof bindReferralCount === "function") {
-            bindReferralCount();
-        }
+    let referrerWalletKey = null;
 
-        alert("🎉 " + (data.message || "Nhập mã mời thành công!"));
-        closeReferralModal();
+    // 1) Tìm mã trong referralCodes/CODE
+    const codeSnap = await db.ref("referralCodes/" + code).once("value");
 
-    } catch (err) {
-        console.error("LỖI NHẬP MÃ:", err);
-        alert("Lỗi hệ thống: " + (err.message || err));
-    } finally {
-        if (btn) {
-            btn.disabled = false;
-            btn.innerText = "NHẬN 5 PMC NGAY";
+    if (codeSnap.exists()) {
+        const val = codeSnap.val();
+
+        if (typeof val === "string") {
+            referrerWalletKey = refSafeKey(val);
+        } else if (val && typeof val === "object") {
+            referrerWalletKey = refSafeKey(
+                val.walletKey ||
+                val.ownerWalletKey ||
+                val.referrerWalletKey ||
+                ""
+            );
         }
     }
+
+    // 2) Nếu chưa có, đoán mã là số Pi username: 096xxx => pi_096xxx
+    if (!referrerWalletKey) {
+        const guessKey = refSafeKey("pi_" + code.toLowerCase());
+        const guessSnap = await db.ref("wallets/" + guessKey).once("value");
+
+        if (guessSnap.exists()) {
+            referrerWalletKey = guessKey;
+            await db.ref("referralCodes/" + code).set(guessKey).catch(() => {});
+        }
+    }
+
+    if (!referrerWalletKey) {
+        return res.status(404).json({
+            ok: false,
+            error: "Mã mời không tồn tại. Kêu chủ mã đăng nhập game 1 lần trước."
+        });
+    }
+
+    if (referrerWalletKey === myWalletKey) {
+        return res.status(400).json({
+            ok: false,
+            error: "Không được tự nhập mã của mình."
+        });
+    }
+
+    const [mySnap, refSnap] = await Promise.all([
+        db.ref("wallets/" + myWalletKey).once("value"),
+        db.ref("wallets/" + referrerWalletKey).once("value")
+    ]);
+
+    const myData = mySnap.val() || {};
+    const refData = refSnap.val() || {};
+
+    if (myData.referredBy) {
+        return res.status(400).json({
+            ok: false,
+            error: "Tài khoản này đã nhập mã mời rồi."
+        });
+    }
+
+    if (!refSnap.exists()) {
+        return res.status(404).json({
+            ok: false,
+            error: "Không tìm thấy ví người mời."
+        });
+    }
+
+    const pendingId = db.ref().push().key;
+    const unlockTime = now + 5 * 24 * 60 * 60 * 1000;
+
+    const meName =
+        body.displayName ||
+        body.username ||
+        myData.name ||
+        myData.displayName ||
+        myData.username ||
+        myWalletKey;
+
+    const mePhoto =
+        body.photo ||
+        myData.photo ||
+        "images/do_tuong.png";
+
+    const refName =
+        refData.name ||
+        refData.displayName ||
+        refData.username ||
+        referrerWalletKey;
+
+    const refPhoto =
+        refData.photo ||
+        "images/do_tuong.png";
+
+    // Trừ quỹ hệ thống 10 PMC
+    await db.ref(`wallets/${adminWallet}/pmcBalance`).transaction(v => {
+        return refRound(Number(v || 0) - totalCostPmc);
+    });
+
+    // Cộng người nhập mã 5 PMC
+    await db.ref(`wallets/${myWalletKey}/pmcBalance`).transaction(v => {
+        return refRound(Number(v || 0) + rewardPmc);
+    });
+
+    const updates = {};
+    const notiKey = db.ref("notifications/" + referrerWalletKey).push().key;
+    const ledgerKey = db.ref("adminLedgerV1").push().key;
+
+    updates[`wallets/${myWalletKey}/referredBy`] = referrerWalletKey;
+    updates[`wallets/${myWalletKey}/referredAt`] = now;
+    updates[`wallets/${myWalletKey}/updatedAt`] = now;
+
+    updates[`wallets/${referrerWalletKey}/pendingReferrals/${pendingId}`] = {
+        walletKeyB: myWalletKey,
+        nameB: meName,
+        amount: rewardPmc,
+        createdAt: now,
+        unlockAt: unlockTime,
+        status: "pending"
+    };
+
+    updates[`wallets/${referrerWalletKey}/referralCount`] =
+        Number(refData.referralCount || 0) + 1;
+
+    updates[`social/friends/${referrerWalletKey}/${myWalletKey}`] = {
+        walletKey: myWalletKey,
+        uid: myData.uid || "",
+        username: myData.username || "",
+        displayName: meName,
+        photo: mePhoto,
+        addedAt: now
+    };
+
+    updates[`social/friends/${myWalletKey}/${referrerWalletKey}`] = {
+        walletKey: referrerWalletKey,
+        uid: refData.uid || referrerWalletKey,
+        username: refData.username || "",
+        displayName: refName,
+        photo: refPhoto,
+        addedAt: now
+    };
+
+    updates[`notifications/${referrerWalletKey}/${notiKey}`] = {
+        type: "referral_success",
+        fromName: meName,
+        text: "vừa nhập mã mời của bạn. Thưởng 5 PMC đang nằm trong Quỹ Chờ Duyệt.",
+        at: now,
+        status: "unread"
+    };
+
+    updates[`adminLedgerV1/${ledgerKey}`] = {
+        type: "referral",
+        title: `${myWalletKey} nhập mã mời của ${referrerWalletKey}`,
+        detail: `Quỹ hệ thống trừ ${totalCostPmc} PMC · ${myWalletKey} nhận ${rewardPmc} PMC · ${referrerWalletKey} chờ duyệt ${rewardPmc} PMC`,
+        amountPmc: -totalCostPmc,
+        walletKey: adminWallet,
+        targetWalletKey: myWalletKey,
+        referrerWalletKey,
+        searchText: `${myWalletKey} ${referrerWalletKey} referral mã mời nhập mã`.toLowerCase(),
+        createdAt: now,
+        status: "done"
+    };
+
+    await db.ref().update(updates);
+
+    return res.status(200).json({
+        ok: true,
+        referrerWalletKey,
+        rewardPmc,
+        message: `Nhập mã thành công. Bạn nhận ${rewardPmc} PMC, người mời có ${rewardPmc} PMC trong quỹ chờ duyệt.`
+    });
 }
 // ==========================================
 // LỊCH SỬ NẠP / RÚT PI RIÊNG TỪNG NGƯỜI CHƠI
