@@ -473,6 +473,72 @@ if (action === "testnet_gate_update") {
         message
     });
 }
+async function submitReferralCode() {
+    const inputEl = document.getElementById("input-ref-code");
+    const code = String(inputEl?.value || "").trim().toUpperCase();
+
+    if (!code) {
+        alert("Mày chưa nhập mã kìa!");
+        return;
+    }
+
+    const myWalletKey = typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "";
+    const btn = document.querySelector(".btn-submit");
+
+    try {
+        if (btn) {
+            btn.disabled = true;
+            btn.innerText = "ĐANG XỬ LÝ...";
+        }
+
+        const meProfile = typeof getCurrentFriendProfile === "function"
+            ? getCurrentFriendProfile()
+            : {};
+
+        const res = await fetch("/api/finance?v=" + Date.now(), {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "x-wallet-key": myWalletKey
+            },
+            body: JSON.stringify({
+                action: "submit_referral_code",
+                walletKey: myWalletKey,
+                code,
+                uid: meProfile.uid || "",
+                username: meProfile.username || "",
+                displayName: meProfile.displayName || meProfile.name || "",
+                photo: meProfile.photo || ""
+            })
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok || !data.ok) {
+            throw new Error(data.error || "Không nhập được mã mời.");
+        }
+
+        if (typeof loadWalletBalance === "function") {
+            await loadWalletBalance();
+        }
+
+        if (typeof bindReferralCount === "function") {
+            bindReferralCount();
+        }
+
+        alert("🎉 " + (data.message || "Nhập mã mời thành công!"));
+        closeReferralModal();
+
+    } catch (err) {
+        console.error("LỖI NHẬP MÃ:", err);
+        alert("Lỗi hệ thống: " + (err.message || err));
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = "NHẬN 5 PMC NGAY";
+        }
+    }
+}
 // ==========================================
 // LỊCH SỬ NẠP / RÚT PI RIÊNG TỪNG NGƯỜI CHƠI
 // ĐỌC CẢ NHÁNH CŨ DẠNG CON + NHÁNH MỚI DẠNG PHẲNG

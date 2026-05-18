@@ -19964,137 +19964,64 @@ function shareRefToFB() {
 // 4. CHỨC NĂNG NHẬP MÃ - BỌC THÉP 100% CẢ SERVER LẪN GIAO DIỆN
 async function submitReferralCode() {
     const inputEl = document.getElementById("input-ref-code");
-    const code = inputEl.value.trim().toUpperCase();
+    const code = String(inputEl?.value || "").trim().toUpperCase();
 
     if (!code) {
         alert("Mày chưa nhập mã kìa!");
         return;
     }
 
-    const myWalletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "";
-    const adminWallet = "pi_admin_master"; // Ví Phí Hệ Thống (Nguồn chi thưởng)
-    
+    const myWalletKey = typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "";
+    const btn = document.querySelector(".btn-submit");
+
     try {
-        const btn = document.querySelector(".btn-submit");
         if (btn) {
             btn.disabled = true;
-            btn.innerText = "ĐANG XỬ LÝ QUỸ...";
+            btn.innerText = "ĐANG XỬ LÝ...";
         }
 
-        // --- BƯỚC 1: TÌM KIẾM CHỦ MÃ ---
-        let referrerWalletKey = null;
-        const codeSnap = await db.ref("referralCodes/" + code).once("value");
-        referrerWalletKey = codeSnap.val();
+        const meProfile = typeof getCurrentFriendProfile === "function"
+            ? getCurrentFriendProfile()
+            : {};
 
-        if (!referrerWalletKey) {
-            const guessKey = "pi_" + code.toLowerCase();
-            const guessSnap = await db.ref("wallets/" + guessKey).once("value");
-            if (guessSnap.exists()) {
-                referrerWalletKey = guessKey; 
-                db.ref("referralCodes/" + code).set(guessKey).catch(()=>{});
-            }
-        }
-
-        if (!referrerWalletKey) {
-            alert("Mã này đéo tồn tại! Kêu chủ mã đăng nhập game 1 lần đi.");
-            if (btn) { btn.disabled = false; btn.innerText = "NHẬN 5 PMC NGAY"; }
-            return;
-        }
-
-        if (referrerWalletKey === myWalletKey) {
-            alert("Đéo cho tự nhập mã của mình đâu con trai!");
-            if (btn) { btn.disabled = false; btn.innerText = "NHẬN 5 PMC NGAY"; }
-            return;
-        }
-
-        // --- BƯỚC 2: KIỂM TRA MÌNH NHẬN CHƯA ---
-        const mySnap = await db.ref("wallets/" + myWalletKey).once("value");
-        const myData = mySnap.val() || {};
-        if (myData.referredBy) {
-            alert("Mày đã nhận thưởng nhập mã mời rồi!");
-            if (btn) { btn.disabled = false; btn.innerText = "NHẬN 5 PMC NGAY"; }
-            return;
-        }
-
-        const refSnap = await db.ref("wallets/" + referrerWalletKey).once("value");
-        const refData = refSnap.val() || {};
-        const meProfile = getCurrentFriendProfile();
-
-        // --- BƯỚC 3: TRỪ 10 PMC TỪ QUỸ HỆ THỐNG ---
-        await adjustPmcWalletByKey(adminWallet, -10, { name: "Quỹ Thưởng Hệ Thống" });
-
-        // --- BƯỚC 4: CỘNG 5 PMC CHO MÌNH (THẰNG B) ---
-        await adjustPmcWalletByKey(myWalletKey, 5);
-        await db.ref("wallets/" + myWalletKey).update({
-            referredBy: referrerWalletKey,
-            referredAt: firebase.database.ServerValue.TIMESTAMP
+        const res = await fetch("/api/finance?v=" + Date.now(), {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "x-wallet-key": myWalletKey
+            },
+            body: JSON.stringify({
+                action: "submit_referral_code",
+                walletKey: myWalletKey,
+                code,
+                uid: meProfile.uid || "",
+                username: meProfile.username || "",
+                displayName: meProfile.displayName || meProfile.name || "",
+                photo: meProfile.photo || ""
+            })
         });
 
-        // --- BƯỚC 5: KHỞI TẠO GIỎ CHỨA LỆNH (ĐỂ HẾT LỖI) ---
-        const updates = {};
+        const data = await res.json().catch(() => ({}));
 
-        // GIAM 5 PMC CỦA THẰNG A VÀO QUỸ CHỜ DUYỆT
-        const pendingId = db.ref().push().key;
-        
-        // CÔNG THỨC THỜI GIAN: Đang để 1 phút (60 * 1000) để mày test. Test xong nhớ đổi thành 5 ngày!
-        const GIAM_TIME_MS = 5 * 24 * 60 * 60 * 1000; 
-        const unlockTime = Date.now() + GIAM_TIME_MS;
+        if (!res.ok || !data.ok) {
+            throw new Error(data.error || "Không nhập được mã mời.");
+        }
 
-        updates[`wallets/${referrerWalletKey}/pendingReferrals/${pendingId}`] = {
-            walletKeyB: myWalletKey,
-            nameB: meProfile.displayName || meProfile.username || "Người chơi",
-            amount: 5,
-            createdAt: firebase.database.ServerValue.TIMESTAMP,
-            unlockAt: unlockTime,
-            status: "pending" // Trạng thái: pending (đang giam), claimed (đã ăn), revoked (bị hủy)
-        };
-        updates[`wallets/${referrerWalletKey}/referralCount`] = firebase.database.ServerValue.increment(1);
+        if (typeof loadWalletBalance === "function") {
+            await loadWalletBalance();
+        }
 
-        // --- BƯỚC 6: ÉP KẾT BẠN & GỬI THÔNG BÁO ---
-        // Ghi B vào sổ bạn bè của A
-        updates[`social/friends/${referrerWalletKey}/${myWalletKey}`] = {
-            walletKey: myWalletKey,
-            uid: meProfile.uid || "",
-            username: meProfile.username || "",
-            displayName: meProfile.displayName || "Người chơi",
-            photo: meProfile.photo || "images/do_tuong.png",
-            addedAt: firebase.database.ServerValue.TIMESTAMP
-        };
-        
-        // Ghi A vào sổ bạn bè của B
-        updates[`social/friends/${myWalletKey}/${referrerWalletKey}`] = {
-            walletKey: referrerWalletKey,
-            uid: refData.uid || referrerWalletKey,
-            username: refData.username || "",
-            displayName: refData.name || "Người mời",
-            photo: refData.photo || "images/do_tuong.png",
-            addedAt: firebase.database.ServerValue.TIMESTAMP
-        };
-        
-        // Ném cục thông báo vào mặt thằng A (Đã sửa chữ cho phù hợp)
-        const notiKey = db.ref("notifications/" + referrerWalletKey).push().key;
-        updates[`notifications/${referrerWalletKey}/${notiKey}`] = {
-            type: "referral_success",
-            fromName: meProfile.displayName || "Bạn bè",
-            text: "vừa nhập mã mời của bạn! Thưởng 5 PMC đang nằm trong Quỹ Chờ Duyệt.",
-            at: firebase.database.ServerValue.TIMESTAMP,
-            status: "unread"
-        };
+        if (typeof bindReferralCount === "function") {
+            bindReferralCount();
+        }
 
-        // Ghi 1 phát lên Firebase dính cả đám
-        await db.ref().update(updates);
-
-        // Load lại ví của mình để nhảy số trên màn hình
-        if (typeof loadWalletBalance === 'function') await loadWalletBalance();
-
-        alert(`🎉 THÀNH CÔNG! Mày nhận được 5 PMC từ Quỹ. Người mời cũng đã nhận được quà và hai đứa đã kết bạn!`);
+        alert("🎉 " + (data.message || "Nhập mã mời thành công!"));
         closeReferralModal();
 
     } catch (err) {
         console.error("LỖI NHẬP MÃ:", err);
         alert("Lỗi hệ thống: " + (err.message || err));
     } finally {
-        const btn = document.querySelector(".btn-submit");
         if (btn) {
             btn.disabled = false;
             btn.innerText = "NHẬN 5 PMC NGAY";
