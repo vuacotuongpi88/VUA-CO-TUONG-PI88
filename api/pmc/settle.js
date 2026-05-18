@@ -32,7 +32,230 @@ function normalizePmc(value) {
   const pow = Math.pow(10, PMC_DECIMALS);
   return Math.round(n * pow) / pow;
 }
+// ===== QUỸ NHIỆM VỤ THEO TUẦN =====
+// Quỹ missionPoolPmc được dồn trong 1 tuần VN.
+// Sang tuần mới, phần còn dư tự hoàn về ví admin master rồi reset quỹ về 0.
+const VN_OFFSET_MS_FOR_MISSION_POOL = 7 * 60 * 60 * 1000;
 
+function missionPoolLocalDate(ts = Date.now()) {
+  return new Date(ts + VN_OFFSET_MS_FOR_MISSION_POOL);
+}
+
+function missionPoolWeekStartMs(ts = Date.now()) {
+  const d = missionPoolLocalDate(ts);
+  const day = d.getUTCDay() || 7; // Thứ 2 = đầu tuần
+  d.setUTCDate(d.getUTCDate() - day + 1);
+  d.setUTCHours(0, 0, 0, 0);
+  return d.getTime() - VN_OFFSET_MS_FOR_MISSION_POOL;
+}
+
+function missionPoolDayKey(ts = Date.now()) {
+  const d = missionPoolLocalDate(ts);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}${m}${day}`;
+}
+
+function missionPoolWeekKey(ts = Date.now()) {
+  return `W${missionPoolDayKey(missionPoolWeekStartMs(ts))}`;
+}
+
+async function addPmcToAdminWallet(db, walletKey, amount) {
+  const add = normalizePmc(amount);
+  if (add <= 0) {
+    return {
+      committed: true,
+      after: null
+    };
+  }
+
+  const ref = db.ref("wallets/" + safeWalletKey(walletKey));
+  let after = null;
+
+  const tx = await ref.transaction(current => {
+    const cur = current && typeof current === "object" ? current : {};
+    const currentPmc = Number(cur.pmcBalance || 0) || 0;
+    after = normalizePmc(currentPmc + add);
+
+    return {
+      ...cur,
+      name: cur.name || "Ví phí hệ thống",
+      pmcBalance: after,
+      updatedAt: Date.now()
+    };
+  });
+
+  return {
+    committed: !!tx.committed,
+    after
+  };
+}
+
+async function sweepExpiredMissionPoolWeek(db, adminWalletKey = ADMIN_WALLET_KEY, ts = Date.now()) {
+  const currentWeekKey = missionPoolWeekKey(ts);
+  const metaRef = db.ref("treasury/missionPoolMeta");
+
+  let oldWeekKey = "";
+  let shouldSweep = false;
+
+  const metaTx = await metaRef.transaction(current => {
+    const meta = current && typeof current === "object" ? current : {};
+    oldWeekKey = String(meta.currentWeekKey || "");
+
+    // Lần đầu chạy bản tuần: chỉ đóng dấu tuần hiện tại, không quét bậy tiền đang có.
+    if (!oldWeekKey) {
+      return {
+        ...meta,
+        poolMode: "week",
+        currentWeekKey,
+        createdAt: meta.createdAt || Date.now(),
+        updatedAt: Date.now()
+      };
+    }
+
+    if (oldWeekKey === currentWeekKey) {
+      return {
+        ...meta,
+        poolMode: "week",
+        updatedAt: Date.now()
+      };
+    }
+
+    if (meta.sweepLock) return;
+
+    shouldSweep = true;
+
+    return {
+      ...meta,
+      poolMode: "week",
+      sweepLock: `${oldWeekKey}_to_${currentWeekKey}`,
+      sweepFromWeekKey: oldWeekKey,
+      sweepToWeekKey: currentWeekKey,
+      sweepStartedAt: Date.now(),
+      updatedAt: Date.now()
+    };
+  });
+
+  if (!metaTx.committed || !shouldSweep) {
+    return {
+      ok: true,
+      swept: false,
+      currentWeekKey,
+      oldWeekKey,
+      amountPmc: 0
+    };
+  }
+
+  const poolRef = db.ref("treasury/missionPoolPmc");
+  let sweptAmount = 0;
+
+  const poolTx = await poolRef.transaction(current => {
+    sweptAmount = normalizePmc(Number(current || 0) || 0);
+    return 0;
+  });
+
+  if (!poolTx.committed) {
+    await metaRef.update({
+      sweepLock: null,
+      sweepError: "pool_transaction_failed",
+      updatedAt: Date.now()
+    }).catch(() => {});
+
+    throw new Error("Không quét được quỹ nhiệm vụ tuần cũ.");
+  }
+
+  let adminPmcAfter = null;
+
+  if (sweptAmount > 0) {
+    const adminTx = await addPmcToAdminWallet(db, adminWalletKey, sweptAmount);
+    adminPmcAfter = adminTx.after;
+
+    await db.ref("missionPoolSweepLogs").push({
+      type: "mission_pool_weekly_sweep",
+      poolMode: "week",
+      fromWeekKey: oldWeekKey,
+      toWeekKey: currentWeekKey,
+      amountPmc: sweptAmount,
+      adminWalletKey: safeWalletKey(adminWalletKey),
+      adminPmcAfter,
+      createdAt: Date.now(),
+      status: "done"
+    }).catch(() => {});
+  }
+
+  await metaRef.update({
+    poolMode: "week",
+    currentWeekKey,
+    previousWeekKey: oldWeekKey,
+    lastSweptPmc: sweptAmount,
+    lastSweptAt: Date.now(),
+    adminWalletKey: safeWalletKey(adminWalletKey),
+    adminPmcAfter,
+    sweepLock: null,
+    sweepFromWeekKey: null,
+    sweepToWeekKey: null,
+    updatedAt: Date.now()
+  }).catch(() => {});
+
+  return {
+    ok: true,
+    swept: true,
+    currentWeekKey,
+    oldWeekKey,
+    amountPmc: sweptAmount,
+    adminPmcAfter
+  };
+}
+
+async function addMissionPoolPmcWeek(db, amount, roomId) {
+  await sweepExpiredMissionPoolWeek(db, ADMIN_WALLET_KEY, Date.now());
+
+  const n = normalizePmc(amount);
+
+  if (n <= 0) {
+    const snap = await db.ref("treasury/missionPoolPmc").once("value");
+    return {
+      missionPoolPmc: normalizePmc(Number(snap.val() || 0) || 0),
+      added: 0
+    };
+  }
+
+  const ref = db.ref("treasury/missionPoolPmc");
+  let nextValue = null;
+
+  const tx = await ref.transaction(current => {
+    nextValue = normalizePmc((Number(current || 0) || 0) + n);
+    return nextValue;
+  });
+
+  const after = normalizePmc(Number(tx.snapshot?.val() ?? nextValue ?? 0) || 0);
+
+  await db.ref("treasury/missionPoolMeta").update({
+    poolMode: "week",
+    currentWeekKey: missionPoolWeekKey(),
+    updatedAt: Date.now()
+  }).catch(() => {});
+
+  await db.ref("treasury/updatedAt").set(Date.now()).catch(() => {});
+
+  await db.ref("missionPoolTransactions").push({
+    roomId,
+    type: "match_fee_mission_share",
+    amountPmc: n,
+    missionPoolPmc: after,
+    source: "pmc_settle_fee20_week_pool",
+    poolMode: "week",
+    weekKey: missionPoolWeekKey(),
+    createdAt: Date.now(),
+    status: "done"
+  }).catch(() => {});
+
+  return {
+    missionPoolPmc: after,
+    added: n
+  };
+}
 function getLevelXpNeedFromLevel(level) {
   const lv = Math.max(1, Math.min(LEVEL_MAX - 1, Math.floor(Number(level || 1))));
 
@@ -633,37 +856,11 @@ async function applyServerMatchStatsV2(db, roomId, room, stake) {
   };
 }
 async function incrementMissionPool(db, amount, roomId) {
-  const n = normalizePmc(amount);
-  if (n <= 0) {
-    return {
-      missionPoolPmc: null,
-      added: 0
-    };
-  }
-
-  const ref = db.ref("treasury/missionPoolPmc");
-  let nextValue = null;
-
-  const tx = await ref.transaction(current => {
-    nextValue = normalizePmc((Number(current || 0) || 0) + n);
-    return nextValue;
-  });
-
-  await db.ref("treasury/updatedAt").set(Date.now()).catch(() => {});
-
-  await db.ref("missionPoolTransactions").push({
-    roomId,
-    type: "match_fee_mission_share",
-    amountPmc: n,
-    missionPoolPmc: tx.snapshot?.val() ?? nextValue,
-    source: "pmc_settle_fee20",
-    createdAt: Date.now(),
-    status: "done"
-  }).catch(() => {});
+  const result = await addMissionPoolPmcWeek(db, amount, roomId);
 
   return {
-    missionPoolPmc: tx.snapshot?.val() ?? nextValue,
-    added: n
+    missionPoolPmc: result.missionPoolPmc,
+    added: result.added
   };
 }
 

@@ -1,4 +1,4 @@
-const { getDatabase, ServerValue } = require('firebase-admin/database');
+const { getDatabase } = require('firebase-admin/database');
 const adminBundle = require('./_firebaseAdmin.js');
 const crypto = require('crypto');
 
@@ -64,7 +64,186 @@ function localWeekKey(ts = Date.now()) {
   const start = weekStartMs(ts);
   return `W${localDayKey(start)}`;
 }
+function roundPmc(value) {
+  const n = Number(value || 0);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.round(n * 1000000) / 1000000);
+}
 
+// ===== QUỸ NHIỆM VỤ THEO TUẦN =====
+// Quỹ missionPoolPmc dồn trong 1 tuần VN.
+// Sang tuần mới, phần còn dư hoàn về ví admin master rồi reset về 0.
+function missionPoolWeekKey(ts = Date.now()) {
+  return localWeekKey(ts);
+}
+
+async function addPmcToAdminWallet(db, walletKey, amount) {
+  const add = roundPmc(amount);
+  if (add <= 0) {
+    return {
+      committed: true,
+      after: null
+    };
+  }
+
+  const ref = db.ref(`wallets/${safeKey(walletKey)}`);
+  let after = null;
+
+  const tx = await ref.transaction(current => {
+    const cur = current && typeof current === 'object' ? current : {};
+    const currentPmc = readPmcBalance(cur);
+    after = roundPmc(currentPmc + add);
+
+    return {
+      ...cur,
+      name: cur.name || 'Ví phí hệ thống',
+      pmcBalance: after,
+      updatedAt: nowMs()
+    };
+  });
+
+  return {
+    committed: !!tx.committed,
+    after
+  };
+}
+
+async function sweepExpiredMissionPoolWeek(db, adminWalletKey = ADMIN_TREASURY_WALLET_KEY, ts = Date.now()) {
+  const currentWeekKey = missionPoolWeekKey(ts);
+  const metaRef = db.ref('treasury/missionPoolMeta');
+
+  let oldWeekKey = '';
+  let shouldSweep = false;
+
+  const metaTx = await metaRef.transaction(current => {
+    const meta = current && typeof current === 'object' ? current : {};
+    oldWeekKey = String(meta.currentWeekKey || '');
+
+    // Lần đầu chạy bản tuần: chỉ đóng dấu tuần hiện tại, không quét bậy tiền đang có.
+    if (!oldWeekKey) {
+      return {
+        ...meta,
+        poolMode: 'week',
+        currentWeekKey,
+        createdAt: meta.createdAt || nowMs(),
+        updatedAt: nowMs()
+      };
+    }
+
+    if (oldWeekKey === currentWeekKey) {
+      return {
+        ...meta,
+        poolMode: 'week',
+        updatedAt: nowMs()
+      };
+    }
+
+    if (meta.sweepLock) return;
+
+    shouldSweep = true;
+
+    return {
+      ...meta,
+      poolMode: 'week',
+      sweepLock: `${oldWeekKey}_to_${currentWeekKey}`,
+      sweepFromWeekKey: oldWeekKey,
+      sweepToWeekKey: currentWeekKey,
+      sweepStartedAt: nowMs(),
+      updatedAt: nowMs()
+    };
+  });
+
+  if (!metaTx.committed || !shouldSweep) {
+    return {
+      ok: true,
+      swept: false,
+      currentWeekKey,
+      oldWeekKey,
+      amountPmc: 0
+    };
+  }
+
+  const poolRef = db.ref('treasury/missionPoolPmc');
+  let sweptAmount = 0;
+
+  const poolTx = await poolRef.transaction(current => {
+    sweptAmount = roundPmc(Number(current || 0) || 0);
+    return 0;
+  });
+
+  if (!poolTx.committed) {
+    await metaRef.update({
+      sweepLock: null,
+      sweepError: 'pool_transaction_failed',
+      updatedAt: nowMs()
+    }).catch(() => {});
+
+    throw new Error('Không quét được quỹ nhiệm vụ tuần cũ.');
+  }
+
+  let adminPmcAfter = null;
+
+  if (sweptAmount > 0) {
+    const adminTx = await addPmcToAdminWallet(db, adminWalletKey, sweptAmount);
+    adminPmcAfter = adminTx.after;
+
+    await db.ref('missionPoolSweepLogs').push({
+      type: 'mission_pool_weekly_sweep',
+      poolMode: 'week',
+      fromWeekKey: oldWeekKey,
+      toWeekKey: currentWeekKey,
+      amountPmc: sweptAmount,
+      adminWalletKey: safeKey(adminWalletKey),
+      adminPmcAfter,
+      createdAt: nowMs(),
+      status: 'done'
+    }).catch(() => {});
+  }
+
+  await metaRef.update({
+    poolMode: 'week',
+    currentWeekKey,
+    previousWeekKey: oldWeekKey,
+    lastSweptPmc: sweptAmount,
+    lastSweptAt: nowMs(),
+    adminWalletKey: safeKey(adminWalletKey),
+    adminPmcAfter,
+    sweepLock: null,
+    sweepFromWeekKey: null,
+    sweepToWeekKey: null,
+    updatedAt: nowMs()
+  }).catch(() => {});
+
+  return {
+    ok: true,
+    swept: true,
+    currentWeekKey,
+    oldWeekKey,
+    amountPmc: sweptAmount,
+    adminPmcAfter
+  };
+}
+
+async function subtractMissionPoolPmc(db, amount) {
+  const sub = roundPmc(amount);
+  if (sub <= 0) return { committed: true, after: null };
+
+  const ref = db.ref('treasury/missionPoolPmc');
+  let after = 0;
+
+  const tx = await ref.transaction(current => {
+    const cur = roundPmc(Number(current || 0) || 0);
+    if (cur + 0.000001 < sub) return;
+
+    after = roundPmc(cur - sub);
+    return after;
+  });
+
+  return {
+    committed: !!tx.committed,
+    after
+  };
+}
 function countChildren(obj) {
   if (!obj || typeof obj !== 'object') return 0;
   return Object.keys(obj).length;
@@ -458,10 +637,7 @@ async function buildBoard(db, walletKey, now = Date.now()) {
   const treasuryPmc = readPmcBalance(treasuryVal);
   
   // 🔥 LẤY ĐÚNG SỐ TRÊN FIREBASE, KHÔNG NHÂN CHIA GÌ NỮA
-  const missionPoolPmc = Math.max(
-  0,
-  Math.round((Number(missionPoolSnap.val()) || 0) * 1000000) / 1000000
-);
+  const missionPoolPmc = roundPmc(Number(missionPoolSnap.val()) || 0);
   const tabs = { day: [], week: [], month: [], referral: [] };
   let claimableTotalPmc = 0;
   let claimableCount = 0;
@@ -654,8 +830,19 @@ async function claimMission(db, walletKey, missionId, now = Date.now()) {
       throw new Error('Không cộng được thưởng vào ví người chơi.');
     }
 
-    // 🔥 THÊM DÒNG NÀY: Trừ tiền trong Quỹ Nhiệm Vụ hiển thị
-    await db.ref('treasury/missionPoolPmc').set(ServerValue.increment(-mission.rewardPmc)).catch(() => {});
+    // Trừ quỹ nhiệm vụ hiển thị bằng transaction để không âm khi nhiều người claim cùng lúc.
+const poolTx = await subtractMissionPoolPmc(db, mission.rewardPmc);
+if (!poolTx.committed) {
+  await txAdjustPmc(
+    treasuryRef,
+    mission.rewardPmc,
+    { name: 'Ví phí hệ thống' },
+    treasuryPreRead
+  ).catch(() => {});
+  await txAdjustPmc(userRef, -mission.rewardPmc, {}, userPreRead).catch(() => {});
+  await claimRef.remove().catch(() => {});
+  throw new Error('Quỹ nhiệm vụ hiện không đủ để trả thưởng.');
+}
 
     const txPayload = {
       type: 'mission_reward_pmc',
@@ -1049,9 +1236,20 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ ok: false, error: 'Thiếu walletKey.' });
     }
 
-    const adminApp = adminBundle.app || adminBundle;
-    const db = getDatabase(adminApp);
-
+    await sweepExpiredMissionPoolWeek(
+  db,
+  safeKey(ADMIN_TREASURY_WALLET_KEY),
+  nowMs()
+).catch(err => {
+  console.error("MISSION_POOL_WEEK_SWEEP_FAIL:", err);
+});
+    await sweepExpiredMissionPool(
+  db,
+  safeKey(ADMIN_TREASURY_WALLET_KEY),
+  nowMs()
+).catch(err => {
+  console.error("MISSION_POOL_SWEEP_FAIL:", err);
+});
     if (action === 'shop_board') {
       const shopBoard = await buildShopBoard(db, walletKey);
       return res.status(200).json(shopBoard);
