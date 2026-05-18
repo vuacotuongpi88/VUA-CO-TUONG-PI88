@@ -6327,6 +6327,145 @@ margin-bottom: 14px;
     font-size: 12px;
     padding: 12px;
 }
+/* ===== FIX NẠP/RÚT PI CHE SẢNH + LỊCH SỬ FULL MÀN ===== */
+#deposit-amount-modal,
+#withdraw-amount-modal {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    background: rgba(0, 0, 0, 0.78) !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 14px !important;
+    box-sizing: border-box !important;
+    z-index: 52000 !important;
+    backdrop-filter: blur(4px);
+}
+
+#deposit-amount-modal .withdraw-amount-box,
+#withdraw-amount-modal .withdraw-amount-box {
+    width: min(94vw, 430px) !important;
+    max-height: 88dvh !important;
+    overflow-y: auto !important;
+    box-sizing: border-box !important;
+}
+
+/* nút lịch sử vẫn nằm góc phải trong bảng */
+.pi-history-mini-btn {
+    position: absolute !important;
+    top: 12px !important;
+    right: 48px !important;
+    border: 1px solid rgba(85, 239, 196, 0.5) !important;
+    background: rgba(0,0,0,0.42) !important;
+    color: #7dffb3 !important;
+    border-radius: 999px !important;
+    padding: 6px 10px !important;
+    font-size: 11px !important;
+    font-weight: 900 !important;
+    cursor: pointer !important;
+    z-index: 4 !important;
+}
+
+/* lịch sử bung ra full màn hình */
+.pi-history-panel {
+    display: none;
+}
+
+.pi-history-panel.show {
+    position: fixed !important;
+    left: 8px !important;
+    right: 8px !important;
+    top: max(8px, env(safe-area-inset-top, 0px)) !important;
+    bottom: max(8px, env(safe-area-inset-bottom, 0px)) !important;
+    width: auto !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 12px !important;
+    box-sizing: border-box !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    border: 2px solid #55efc4 !important;
+    border-radius: 18px !important;
+    background: rgba(7, 10, 12, 0.97) !important;
+    box-shadow: 0 0 28px rgba(85,239,196,0.28), 0 0 40px rgba(0,0,0,0.86) !important;
+    z-index: 52050 !important;
+}
+
+.pi-history-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 4px 2px 10px;
+    border-bottom: 1px solid rgba(85,239,196,0.24);
+    flex-shrink: 0;
+}
+
+.pi-history-head-title {
+    color: #55efc4;
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: 1px;
+}
+
+.pi-history-close-btn {
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    background: rgba(255,255,255,0.08) !important;
+    color: #fff !important;
+    border: 1px solid rgba(85,239,196,0.35) !important;
+    font-size: 20px !important;
+    font-weight: 900 !important;
+}
+
+.pi-history-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 2px 2px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.pi-history-row {
+    padding: 12px !important;
+    margin-bottom: 10px !important;
+    border-radius: 14px !important;
+    background: rgba(255,255,255,0.06) !important;
+    border: 1px solid rgba(85,239,196,0.18) !important;
+}
+
+.pi-history-title {
+    color: #fff !important;
+    font-size: 14px !important;
+    font-weight: 900 !important;
+}
+
+.pi-history-detail {
+    margin-top: 6px !important;
+    color: #dfe6e9 !important;
+    font-size: 12px !important;
+    line-height: 1.45 !important;
+    word-break: break-word !important;
+}
+
+.pi-history-time {
+    margin-top: 7px !important;
+    color: #ffd166 !important;
+    font-size: 11px !important;
+    font-weight: 900 !important;
+}
+
+.pi-history-empty {
+    color: #b2bec3 !important;
+    text-align: center !important;
+    font-size: 13px !important;
+    padding: 18px 10px !important;
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -21901,7 +22040,7 @@ try {
         };
     }
 } catch (_) {}
-// ===== LỊCH SỬ NẠP / RÚT PI TRONG CHÍNH BẢNG NẠP RÚT =====
+// ===== LỊCH SỬ NẠP / RÚT PI FULL MÀN HÌNH =====
 function formatPiHistoryTime(ts) {
     const n = Number(ts || 0);
     if (!n) return "";
@@ -21922,14 +22061,30 @@ function escapePiHistory(text) {
         .replace(/'/g, "&#39;");
 }
 
-function formatPiNum(value, max = 6) {
-    const n = Number(value || 0);
-    if (!Number.isFinite(n)) return "0";
-    return n.toLocaleString("vi-VN", {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: max
-    });
+function piHistoryShell(type, innerHtml) {
+    const isWithdraw = type === "withdraw";
+    return `
+        <div class="pi-history-head">
+            <div class="pi-history-head-title">
+                ${isWithdraw ? "📜 LỊCH SỬ RÚT PI" : "📜 LỊCH SỬ NẠP PI"}
+            </div>
+            <button type="button" class="pi-history-close-btn" onclick="closePiHistoryPanel('${type}')">×</button>
+        </div>
+        <div class="pi-history-list">
+            ${innerHtml || ""}
+        </div>
+    `;
 }
+
+window.closePiHistoryPanel = function(type) {
+    const isWithdraw = type === "withdraw";
+    const panelId = isWithdraw ? "pi-withdraw-history-panel" : "pi-deposit-history-panel";
+    const panel = document.getElementById(panelId);
+    if (!panel) return;
+
+    panel.classList.remove("show");
+    panel.innerHTML = "";
+};
 
 async function loadPiHistory(type) {
     const isWithdraw = type === "withdraw";
@@ -21938,7 +22093,10 @@ async function loadPiHistory(type) {
     if (!panel) return;
 
     panel.classList.add("show");
-    panel.innerHTML = `<div class="pi-history-empty">Đang tải lịch sử...</div>`;
+    panel.innerHTML = piHistoryShell(
+        type,
+        `<div class="pi-history-empty">Đang tải lịch sử...</div>`
+    );
 
     try {
         const walletKey = typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "";
@@ -21953,7 +22111,7 @@ async function loadPiHistory(type) {
             body: JSON.stringify({
                 action: isWithdraw ? "pi_withdraw_history" : "pi_deposit_history",
                 walletKey,
-                limit: 50
+                limit: 80
             })
         });
 
@@ -21966,11 +22124,14 @@ async function loadPiHistory(type) {
         const items = data.items || [];
 
         if (!items.length) {
-            panel.innerHTML = `<div class="pi-history-empty">Chưa có lịch sử ${isWithdraw ? "rút" : "nạp"} Pi.</div>`;
+            panel.innerHTML = piHistoryShell(
+                type,
+                `<div class="pi-history-empty">Chưa có lịch sử ${isWithdraw ? "rút" : "nạp"} Pi.</div>`
+            );
             return;
         }
 
-        panel.innerHTML = items.map(item => {
+        const listHtml = items.map(item => {
             const tx = item.txid
                 ? `<br>Mã GD: ${escapePiHistory(item.txid)}`
                 : "";
@@ -21991,10 +22152,29 @@ async function loadPiHistory(type) {
                 </div>
             `;
         }).join("");
+
+        panel.innerHTML = piHistoryShell(type, listHtml);
     } catch (err) {
-        panel.innerHTML = `<div class="pi-history-empty">Lỗi: ${escapePiHistory(err.message || err)}</div>`;
+        panel.innerHTML = piHistoryShell(
+            type,
+            `<div class="pi-history-empty">Lỗi: ${escapePiHistory(err.message || err)}</div>`
+        );
     }
 }
+
+window.togglePiHistoryPanel = function(type) {
+    const isWithdraw = type === "withdraw";
+    const panelId = isWithdraw ? "pi-withdraw-history-panel" : "pi-deposit-history-panel";
+    const panel = document.getElementById(panelId);
+    if (!panel) return;
+
+    if (panel.classList.contains("show")) {
+        closePiHistoryPanel(type);
+        return;
+    }
+
+    loadPiHistory(type);
+};
 
 window.togglePiHistoryPanel = function(type) {
     const isWithdraw = type === "withdraw";
