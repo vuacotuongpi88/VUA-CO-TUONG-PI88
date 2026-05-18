@@ -387,6 +387,158 @@ module.exports = async function handler(req, res) {
         return res.status(401).json({ ok: false, error: "Thiếu định danh ví." });
     }
     // ==========================================
+// LỊCH SỬ NẠP / RÚT PI RIÊNG TỪNG NGƯỜI CHƠI
+// ==========================================
+if (action === "pi_deposit_history") {
+    const limit = Math.max(10, Math.min(100, Math.floor(Number(body.limit || 50) || 50)));
+
+    const rows = [];
+
+    async function readUserRows(path) {
+        try {
+            const snap = await db.ref(path).limitToLast(limit).once("value");
+            snap.forEach(child => {
+                const v = child.val() || {};
+                rows.push({
+                    id: child.key,
+                    ...v
+                });
+            });
+        } catch (_) {}
+    }
+
+    // Đọc nhiều nhánh để chống lệch tên node cũ/mới
+    await Promise.all([
+        readUserRows(`piDepositRequests/${safeWalletKey}`),
+        readUserRows(`piDeposits/${safeWalletKey}`),
+        readUserRows(`depositRequests/${safeWalletKey}`),
+        readUserRows(`processed_payments/${safeWalletKey}`)
+    ]);
+
+    const items = rows
+        .filter(r => {
+            const wk = String(r.walletKey || r.userWalletKey || r.uid || safeWalletKey || "");
+            return !wk || wk === safeWalletKey || wk === safeWalletKey.replace(/^pi_/, "");
+        })
+        .map(r => {
+            const amountPi = Number(r.amountPi || r.piAmount || r.amount || r.value || 0) || 0;
+            const amountPmc = Number(r.amountPmc || r.pmcAmount || r.pmc || amountPi * 500 || 0) || 0;
+
+            const statusRaw = String(r.status || r.state || "").toLowerCase();
+            const statusText =
+                statusRaw === "done" || statusRaw === "success" || statusRaw === "completed" || r.ok === true
+                    ? "Thành công"
+                    : statusRaw === "pending" || statusRaw === "waiting"
+                        ? "Đang xử lý"
+                        : statusRaw === "rejected" || statusRaw === "fail" || statusRaw === "failed"
+                            ? "Thất bại"
+                            : "Đã ghi nhận";
+
+            const ts =
+                Number(r.createdAt || 0) ||
+                Number(r.paidAt || 0) ||
+                Number(r.updatedAt || 0) ||
+                Number(r.time || 0) ||
+                Date.now();
+
+            return {
+                id: r.id || "",
+                type: "deposit",
+                title: `Nạp ${amountPi} Pi`,
+                detail: `Quy đổi +${amountPmc} PMC · ${statusText}`,
+                amountPi,
+                amountPmc,
+                status: statusText,
+                txid: r.txid || r.txId || r.paymentId || r.identifier || "",
+                createdAt: ts
+            };
+        })
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, limit);
+
+    return res.status(200).json({
+        ok: true,
+        action,
+        walletKey: safeWalletKey,
+        items
+    });
+}
+
+if (action === "pi_withdraw_history") {
+    const limit = Math.max(10, Math.min(100, Math.floor(Number(body.limit || 50) || 50)));
+
+    const rows = [];
+
+    async function readWithdrawRows(path) {
+        try {
+            const snap = await db.ref(path).limitToLast(limit).once("value");
+            snap.forEach(child => {
+                const v = child.val() || {};
+                rows.push({
+                    id: child.key,
+                    ...v
+                });
+            });
+        } catch (_) {}
+    }
+
+    await Promise.all([
+        readWithdrawRows(`piWithdrawRequests/${safeWalletKey}`),
+        readWithdrawRows(`piWithdraws/${safeWalletKey}`),
+        readWithdrawRows(`withdrawRequests/${safeWalletKey}`),
+        readWithdrawRows(`withdrawHistory/${safeWalletKey}`)
+    ]);
+
+    const items = rows
+        .filter(r => {
+            const wk = String(r.walletKey || r.userWalletKey || r.uid || safeWalletKey || "");
+            return !wk || wk === safeWalletKey || wk === safeWalletKey.replace(/^pi_/, "");
+        })
+        .map(r => {
+            const amountPi = Number(r.amountPi || r.piAmount || r.amount || r.value || 0) || 0;
+            const amountPmc = Number(r.amountPmc || r.pmcAmount || r.pmc || amountPi * 500 || 0) || 0;
+
+            const statusRaw = String(r.status || r.state || "").toLowerCase();
+            const statusText =
+                statusRaw === "done" || statusRaw === "success" || statusRaw === "completed" || r.approved === true
+                    ? "Đã duyệt"
+                    : statusRaw === "pending" || statusRaw === "waiting"
+                        ? "Đang chờ duyệt"
+                        : statusRaw === "rejected" || statusRaw === "fail" || statusRaw === "failed"
+                            ? "Từ chối"
+                            : "Đã gửi yêu cầu";
+
+            const ts =
+                Number(r.createdAt || 0) ||
+                Number(r.requestedAt || 0) ||
+                Number(r.approvedAt || 0) ||
+                Number(r.updatedAt || 0) ||
+                Date.now();
+
+            return {
+                id: r.id || "",
+                type: "withdraw",
+                title: `Rút ${amountPi} Pi`,
+                detail: `Trừ ${amountPmc} PMC · ${statusText}`,
+                amountPi,
+                amountPmc,
+                status: statusText,
+                piAddress: r.piAddress || r.withdrawAddress || r.address || "",
+                txid: r.txid || r.txId || r.paymentId || "",
+                createdAt: ts
+            };
+        })
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, limit);
+
+    return res.status(200).json({
+        ok: true,
+        action,
+        walletKey: safeWalletKey,
+        items
+    });
+}
+    // ==========================================
 // LỊCH SỬ ĐẤU NGƯỜI CHƠI + SAO KÊ HỆ THỐNG
 // GOM VÀO FINANCE.JS ĐỂ KHÔNG TẠO API FILE MỚI
 // ==========================================
