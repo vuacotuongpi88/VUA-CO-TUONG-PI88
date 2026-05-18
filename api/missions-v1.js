@@ -1236,20 +1236,20 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ ok: false, error: 'Thiếu walletKey.' });
     }
 
+    // PHẢI TẠO db TRƯỚC, rồi mới quét quỹ.
+    const adminApp = adminBundle.app || adminBundle;
+    const db = getDatabase(adminApp);
+
+    // Quỹ nhiệm vụ dồn theo TUẦN.
+    // Sang tuần mới thì phần còn dư tự hoàn về ví admin master.
     await sweepExpiredMissionPoolWeek(
-  db,
-  safeKey(ADMIN_TREASURY_WALLET_KEY),
-  nowMs()
-).catch(err => {
-  console.error("MISSION_POOL_WEEK_SWEEP_FAIL:", err);
-});
-    await sweepExpiredMissionPool(
-  db,
-  safeKey(ADMIN_TREASURY_WALLET_KEY),
-  nowMs()
-).catch(err => {
-  console.error("MISSION_POOL_SWEEP_FAIL:", err);
-});
+      db,
+      safeKey(ADMIN_TREASURY_WALLET_KEY),
+      nowMs()
+    ).catch(err => {
+      console.error('MISSION_POOL_WEEK_SWEEP_FAIL:', err);
+    });
+
     if (action === 'shop_board') {
       const shopBoard = await buildShopBoard(db, walletKey);
       return res.status(200).json(shopBoard);
@@ -1274,8 +1274,12 @@ module.exports = async function handler(req, res) {
 
     if (action === 'claim') {
       const missionId = String(body.missionId || '').trim();
+
       if (!missionId) {
-        return res.status(400).json({ ok: false, error: 'Thiếu missionId.' });
+        return res.status(400).json({
+          ok: false,
+          error: 'Thiếu missionId.'
+        });
       }
 
       const claimed = await claimMission(db, walletKey, missionId, nowMs());
@@ -1286,6 +1290,7 @@ module.exports = async function handler(req, res) {
     return res.status(200).json(board);
   } catch (err) {
     console.error('MISSIONS_V1_FAIL:', err);
+
     return res.status(500).json({
       ok: false,
       error: err?.message || 'Lỗi hệ thống nhiệm vụ.'
