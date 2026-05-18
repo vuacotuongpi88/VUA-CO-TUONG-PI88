@@ -921,12 +921,100 @@ module.exports = async function handler(req, res) {
         : (req.body || {});
 
     if (body.action === "avatar-skin-buy") {
-      try {
-        const { handleAvatarSkinBuy } = require("../../lib/avatar-skin-buy");
+  try {
+    const { handleAvatarSkinBuy } = require("../../lib/avatar-skin-buy");
 
-        const result = await handleAvatarSkinBuy(body, req);
-        return res.status(result.status || 200).json(result.json);
-      } catch (err) {
+    const result = await handleAvatarSkinBuy(body, req);
+    const json = result.json || {};
+
+    // ===== GHI SAO KÊ HỆ THỐNG CHO SHOP SKIN AVATAR =====
+    // Mua skin đang chạy qua /api/pmc/settle action avatar-skin-buy,
+    // nên phải ghi log ở đây, không trông chờ missions-v1 shop_buy.
+    try {
+      if (json.ok && !json.alreadyOwned && !json.alreadyPurchased) {
+        const db = getDatabase(adminBundle.app || adminBundle);
+
+        const cleanKey = (v = "") =>
+          String(v || "").trim().replace(/[.#$\[\]\/]/g, "_");
+
+        const skinCatalog = {
+          bronze: {
+            id: "bronze",
+            name: "Hào Quang Đồng",
+            pricePmc: 5000
+          },
+          jade: {
+            id: "jade",
+            name: "Ngọc Lục Bảo",
+            pricePmc: 10000
+          },
+          dragon: {
+            id: "dragon",
+            name: "Long Vương",
+            pricePmc: 20000
+          },
+          phoenix: {
+            id: "phoenix",
+            name: "Phượng Hoàng",
+            pricePmc: 50000
+          }
+        };
+
+        const walletKey = cleanKey(
+          req.headers["x-wallet-key"] ||
+          body.walletKey ||
+          json.walletKey ||
+          ""
+        );
+
+        const skinId = String(
+          body.skinId ||
+          body.itemId ||
+          json.skinId ||
+          json.itemId ||
+          ""
+        ).trim();
+
+        const item = skinCatalog[skinId];
+
+        if (walletKey && item && item.pricePmc > 0) {
+          const now = Date.now();
+          const buyerName = String(
+            body.name ||
+            json.name ||
+            json.playerName ||
+            walletKey.replace(/^pi_/, "") ||
+            "Người chơi"
+          ).trim();
+
+          await db.ref("adminLedgerV1").push({
+            type: "buy_skin",
+            title: `${buyerName} mua skin ${item.name}`,
+            detail: `Ví hệ thống nhận +${item.pricePmc} PMC`,
+            amountPmc: item.pricePmc,
+            missionPoolPmc: 0,
+
+            walletKey,
+            buyerWalletKey: walletKey,
+            buyerName,
+            playerName: buyerName,
+
+            itemId: item.id,
+            itemName: item.name,
+            source: "avatar_skin_buy_settle",
+
+            searchText: `${buyerName} ${walletKey} ${item.id} ${item.name} mua skin avatar shop`.toLowerCase(),
+            createdAt: now,
+            status: "done"
+          }).catch(() => {});
+        }
+      }
+    } catch (ledgerErr) {
+      console.error("AVATAR_SKIN_ADMIN_LEDGER_FAIL:", ledgerErr);
+    }
+
+    return res.status(result.status || 200).json(json);
+  } catch (err) {
         console.error("AVATAR_SKIN_BUY_IN_SETTLE_FAIL", err);
 
         return res.status(500).json({
