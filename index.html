@@ -8431,8 +8431,10 @@ function renderSpectatorRoomSnapshot(room = {}, roomId = "") {
 
     const newBoardHash = JSON.stringify(room.board || []);
     if (newBoardHash !== lastRoomBoardHash) {
-        lastRoomBoardHash = newBoardHash;
-        if (lastRoomBoardHash && room.lastMoveFrom && room.lastMoveTo) {
+const hadOldBoardHash = !!lastRoomBoardHash;
+lastRoomBoardHash = newBoardHash;
+
+if (hadOldBoardHash && room.lastMoveFrom && room.lastMoveTo) {
     animateRemoteMoveGhost(room.lastMoveFrom, room.lastMoveTo);
 }
 
@@ -9234,6 +9236,7 @@ function spawnDragonAttack(kingElement) {
 
     }, 2800); 
 }
+window.CHESS_MOVE_ANIM_MS = 420;
 function animateRemoteMoveGhost(from, to) {
     try {
         if (!from || !to) return false;
@@ -9461,14 +9464,18 @@ if (haiTuongDoiMat(mt)) {
 
     const newViewPos = mapBoardToView(c2, r2);
 
-selectedPiece.classList.remove("selected");
-selectedPiece.classList.add("piece-moving-smooth");
+const movingPiece = selectedPiece;
 
-selectedPiece.style.left = columns[newViewPos.c] + "%";
-selectedPiece.style.top = rows[newViewPos.r] + "%";
+movingPiece.classList.remove("selected");
+movingPiece.classList.add("piece-moving-smooth");
+
+movingPiece.style.left = columns[newViewPos.c] + "%";
+movingPiece.style.top = rows[newViewPos.r] + "%";
 
 setTimeout(() => {
-    if (selectedPiece) selectedPiece.classList.remove("piece-moving-smooth");
+    if (movingPiece && movingPiece.parentNode) {
+        movingPiece.classList.remove("piece-moving-smooth");
+    }
 }, 520);
 
     luotDi = (luotDi === 'do') ? 'den' : 'do';
@@ -11319,9 +11326,10 @@ if (!canRenderLiveBoard) {
     const newBoardHash = JSON.stringify(room.board || []);
 
     if (newBoardHash !== lastRoomBoardHash) {
-        lastRoomBoardHash = newBoardHash;
+const hadOldBoardHash = !!lastRoomBoardHash;
+lastRoomBoardHash = newBoardHash;
 
-        if (lastRoomBoardHash && room.lastMoveFrom && room.lastMoveTo) {
+if (hadOldBoardHash && room.lastMoveFrom && room.lastMoveTo) {
     animateRemoteMoveGhost(room.lastMoveFrom, room.lastMoveTo);
 }
 
@@ -22666,7 +22674,7 @@ setTimeout(checkTestnetGate, 1500);
 setInterval(checkTestnetGate, 60000);
 setTimeout(updateTestnetGateMenuVisible, 1000);
 // ===== HIỆU ỨNG KÉO QUÂN CỜ ĐI MƯỢT =====
-window.CHESS_MOVE_ANIM_MS = 420;
+
 
 function sleepMoveAnim(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
