@@ -1144,6 +1144,19 @@ async function shopBuyItem(db, walletKey, itemId) {
       createdAt: nowMs(),
       status: 'done'
     });
+await db.ref('adminLedgerV1').push().set({
+  type: 'buy_skin',
+  title: `${walletKey} mua skin ${item.name}`,
+  detail: `Ví hệ thống nhận +${item.pricePmc} PMC`,
+  amountPmc: item.pricePmc,
+  missionPoolPmc: 0,
+  walletKey,
+  itemId: item.id,
+  itemName: item.name,
+  searchText: `${walletKey} ${item.id} ${item.name} mua skin`.toLowerCase(),
+  createdAt: nowMs(),
+  status: 'done'
+}).catch(() => {});
 
     return { ok: true, itemId: item.id, itemName: item.name, newPmcBalance: debit.afterBalance };
   } catch (err) {

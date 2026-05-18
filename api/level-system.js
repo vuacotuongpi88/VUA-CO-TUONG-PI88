@@ -331,7 +331,21 @@ module.exports = async function handler(req, res) {
     createdAt: Date.now(),
     status: "done"
   });
-
+await db.ref("adminLedgerV1").push({
+  type: "buy_exp",
+  title: `${safeWalletKey} mua gói EXP ${pkgId}`,
+  detail: `Ví hệ thống nhận +${pkg.price} PMC · +${pkg.exp} EXP · +${pkg.tickets} vé`,
+  amountPmc: pkg.price,
+  missionPoolPmc: 0,
+  walletKey: safeWalletKey,
+  itemId: pkgId,
+  itemName: pkg.name || pkgId,
+  expGained: pkg.exp,
+  ticketsGained: pkg.tickets,
+  searchText: `${safeWalletKey} ${pkgId} ${pkg.name || ""} mua exp goi exp`.toLowerCase(),
+  createdAt: Date.now(),
+  status: "done"
+}).catch(() => {});
   const snapData = txResult.snapshot.val() || {};
 
   return res.status(200).json({

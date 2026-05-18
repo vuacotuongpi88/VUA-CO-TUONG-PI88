@@ -1199,6 +1199,73 @@ if (winnerRaw === "do" || winnerRaw === "red") {
     }
 
     const missionPoolResult = await incrementMissionPool(db, missionPoolSharePmc, roomId);
+    // ===== SAO KÊ HỆ THỐNG ADMIN 406 =====
+try {
+  const winnerSideForLedger =
+    winnerRaw === "do" || winnerRaw === "red" ? "do" :
+    winnerRaw === "den" || winnerRaw === "black" ? "den" : "";
+
+  const loserSideForLedger = winnerSideForLedger === "do" ? "den" : "do";
+
+  const winnerPlayerForLedger = room.players?.[winnerSideForLedger] || {};
+  const loserPlayerForLedger = room.players?.[loserSideForLedger] || {};
+
+  const winnerNameForLedger =
+    winnerPlayerForLedger.name ||
+    winnerPlayerForLedger.username ||
+    winnerPlayerForLedger.usernameNorm ||
+    winnerProfile?.name ||
+    "Người thắng";
+
+  const loserNameForLedger =
+    loserPlayerForLedger.name ||
+    loserPlayerForLedger.username ||
+    loserPlayerForLedger.usernameNorm ||
+    "Người thua";
+
+  const winnerKeyForLedger = safeWalletKey(winnerWalletKey);
+  const loserKeyForLedger = safeWalletKey(
+    loserSideForLedger === "do" ? doWalletKey : denWalletKey
+  );
+
+  const botWinner =
+    winnerKeyForLedger === ADMIN_WALLET_KEY ||
+    winnerPlayerForLedger.uid === "bot_master_100" ||
+    winnerPlayerForLedger.isBot === true;
+
+  const adminLedgerAmount = normalizePmc(
+    adminMasterSharePmc + (botWinner ? winnerReceivePmc : 0)
+  );
+
+  const modeTextForLedger = room.mode === "co-up" ? "Cờ úp" : "Cờ tướng";
+
+  await db.ref("adminLedgerV1").push({
+    type: botWinner ? "bot_win" : "match_fee",
+    title: botWinner
+      ? `${loserNameForLedger} thua bot - kèo ${stake} PMC`
+      : `${winnerNameForLedger} thắng ${loserNameForLedger} - kèo ${stake} PMC`,
+    detail:
+      `${modeTextForLedger} · phí ${feePmc} PMC · ví hệ thống +${adminLedgerAmount} PMC · quỹ nhiệm vụ +${missionPoolSharePmc} PMC`,
+    amountPmc: adminLedgerAmount,
+    adminMasterSharePmc,
+    missionPoolPmc: missionPoolSharePmc,
+    feePmc,
+    stakePmc: stake,
+    grossPot,
+    winnerReceivePmc,
+    winnerWalletKey: winnerKeyForLedger,
+    winnerName: winnerNameForLedger,
+    loserWalletKey: loserKeyForLedger,
+    loserName: loserNameForLedger,
+    roomId,
+    mode: room.mode || "co-tuong",
+    searchText: `${winnerNameForLedger} ${loserNameForLedger} ${winnerKeyForLedger} ${loserKeyForLedger} ${roomId} ${modeTextForLedger} bot thang thua phi`.toLowerCase(),
+    createdAt: Date.now(),
+    status: "done"
+  }).catch(() => {});
+} catch (ledgerErr) {
+  console.error("ADMIN_LEDGER_MATCH_FAIL:", ledgerErr);
+}
 
     const doWalletAfterSnap = await db.ref("wallets/" + safeWalletKey(doWalletKey)).once("value");
     const denWalletAfterSnap = await db.ref("wallets/" + safeWalletKey(denWalletKey)).once("value");

@@ -6117,6 +6117,148 @@ margin-bottom: 14px;
         transform: translateX(-50%) translateY(0) scale(1);
     }
 }
+/* ===== LỊCH SỬ ĐẤU + SAO KÊ HỆ THỐNG ===== */
+.history-ledger-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 52000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.78);
+    padding: 12px;
+    box-sizing: border-box;
+}
+
+.history-ledger-modal.show {
+    display: flex;
+}
+
+.history-ledger-box {
+    width: min(94vw, 760px);
+    max-height: 88vh;
+    background: rgba(10, 10, 14, 0.98);
+    border: 2px solid #55efc4;
+    border-radius: 18px;
+    box-shadow: 0 0 22px rgba(85,239,196,0.22), 0 0 28px rgba(0,0,0,0.82);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.history-ledger-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    background: linear-gradient(90deg, #2d0b57, #006b4e);
+    color: #fff8d6;
+    font-weight: 900;
+}
+
+.history-ledger-close {
+    cursor: pointer;
+    font-size: 18px;
+}
+
+.history-ledger-search {
+    padding: 10px;
+    background: rgba(255,255,255,0.035);
+    border-bottom: 1px solid rgba(85,239,196,0.14);
+}
+
+.history-ledger-search input {
+    width: 100%;
+    box-sizing: border-box;
+    background: #050505;
+    color: #fff;
+    border: 1px solid rgba(85,239,196,0.55);
+    border-radius: 12px;
+    padding: 11px 12px;
+    outline: none;
+    font-size: 13px;
+}
+
+.history-ledger-list {
+    padding: 10px;
+    overflow-y: auto;
+    max-height: calc(88vh - 116px);
+}
+
+.history-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    padding: 10px;
+    margin-bottom: 8px;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.055);
+    border: 1px solid rgba(85,239,196,0.16);
+}
+
+.history-row-title {
+    color: #fff;
+    font-size: 13px;
+    font-weight: 900;
+    line-height: 1.35;
+}
+
+.history-row-detail {
+    margin-top: 4px;
+    color: #b2bec3;
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.history-row-time {
+    color: #ffd166;
+    font-size: 10px;
+    font-weight: 800;
+    white-space: nowrap;
+    text-align: right;
+}
+
+.history-amount {
+    margin-top: 4px;
+    color: #7dffb3;
+    font-size: 12px;
+    font-weight: 900;
+    text-align: right;
+}
+
+.history-loss {
+    color: #ff7675 !important;
+}
+
+.history-challenge-btn {
+    margin-top: 7px;
+    padding: 7px 10px !important;
+    border-radius: 10px !important;
+    font-size: 10px !important;
+    font-weight: 900 !important;
+    background: linear-gradient(180deg, #7b2ff7, #4d1d95) !important;
+    color: #fff8d6 !important;
+    border: 1px solid rgba(244,197,66,0.42) !important;
+}
+
+.history-empty {
+    padding: 18px;
+    text-align: center;
+    color: #b2bec3;
+    font-size: 13px;
+}
+
+@media (max-width: 600px) {
+    .history-row {
+        grid-template-columns: 1fr;
+    }
+
+    .history-row-time,
+    .history-amount {
+        text-align: left;
+    }
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -6366,6 +6508,17 @@ console.log("Đang chạy trên môi trường:", currentNetwork.toUpperCase());
     <span class="menu-icon">💸</span>
     <span>RÚT PI</span>
 </div>
+
+<div class="menu-item" onclick="openPlayerHistoryModal()">
+    <span class="menu-icon">📜</span>
+    <span>LỊCH SỬ ĐẤU</span>
+</div>
+
+<div id="menu-admin-ledger" class="menu-item" onclick="openAdminLedgerModal()" style="display:none;">
+    <span class="menu-icon">📊</span>
+    <span>SAO KÊ HỆ THỐNG</span>
+</div>
+
 <div id="menu-admin-fee-wallet" class="menu-item" onclick="openAdminFeeTreasuryModal()" style="display:none;">
     <span class="menu-icon">🏦</span>
     <span>VÍ PHÍ HỆ THỐNG</span>
@@ -21300,6 +21453,307 @@ async function setReady() {
 
     return;
 }
+// ===== LỊCH SỬ ĐẤU NGƯỜI CHƠI + SAO KÊ HỆ THỐNG ADMIN =====
+window.__historyLedgerMode = "player";
+window.__historyLedgerTimer = null;
+
+function isAdmin406Wallet() {
+    const wk = String(typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "").trim();
+    return wk === "pi_0962903406" || wk === "0962903406" || wk === "pi_admin_master";
+}
+
+function updateAdminLedgerMenuVisible() {
+    const el = document.getElementById("menu-admin-ledger");
+    if (el) el.style.display = isAdmin406Wallet() ? "flex" : "none";
+}
+
+function escapeHistoryHtml(text) {
+    return String(text || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function formatHistoryTime(ts) {
+    const n = Number(ts || 0);
+    if (!n) return "";
+    const d = new Date(n);
+    return d.toLocaleString("vi-VN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        day: "2-digit",
+        month: "2-digit"
+    });
+}
+
+function formatHistoryPmc(value) {
+    const n = Number(value || 0);
+    if (!Number.isFinite(n)) return "0";
+    return n.toLocaleString("vi-VN", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 6
+    });
+}
+
+async function callHistoryApi(action, q = "") {
+    const walletKey = typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "";
+    if (!walletKey) throw new Error("Thiếu walletKey.");
+
+    const res = await fetch("/api/history-v1?v=" + Date.now(), {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "x-wallet-key": walletKey
+        },
+        body: JSON.stringify({
+            action,
+            walletKey,
+            q,
+            limit: 150
+        })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Không tải được lịch sử.");
+    }
+
+    return data.items || [];
+}
+
+function closeHistoryLedgerModal() {
+    const modal = document.getElementById("history-ledger-modal");
+    if (modal) modal.classList.remove("show");
+}
+
+function showHistoryLedgerModal(title) {
+    const modal = document.getElementById("history-ledger-modal");
+    const titleEl = document.getElementById("history-ledger-title");
+    const list = document.getElementById("history-ledger-list");
+    const input = document.getElementById("history-ledger-search-input");
+
+    if (titleEl) titleEl.innerText = title || "📜 LỊCH SỬ";
+    if (input) input.value = "";
+    if (list) list.innerHTML = `<div class="history-empty">Đang tải...</div>`;
+    if (modal) modal.classList.add("show");
+}
+
+function renderPlayerHistoryList(items) {
+    const list = document.getElementById("history-ledger-list");
+    if (!list) return;
+
+    if (!Array.isArray(items) || !items.length) {
+        list.innerHTML = `<div class="history-empty">Chưa có lịch sử đấu.</div>`;
+        return;
+    }
+
+    list.innerHTML = items.map(item => {
+        const result = String(item.result || "");
+        const isLose = result === "lose" || result === "loss";
+        const amountClass = isLose ? "history-loss" : "";
+        const modeText = item.mode === "co-up" ? "Cờ úp" : "Cờ tướng";
+        const oppKey = escapeHistoryHtml(item.opponentWalletKey || "");
+        const oppName = escapeHistoryHtml(item.opponentName || "Đối thủ");
+        const oppPhoto = escapeHistoryHtml(item.opponentPhoto || "images/do_tuong.png");
+
+        const canChallenge =
+            item.opponentWalletKey &&
+            item.opponentWalletKey !== "bot_master_100" &&
+            item.opponentWalletKey !== "pi_admin_master";
+
+        return `
+            <div class="history-row">
+                <div>
+                    <div class="history-row-title">${escapeHistoryHtml(item.title || "Ván cờ")}</div>
+                    <div class="history-row-detail">
+                        ${modeText} · Kèo ${formatHistoryPmc(item.stakePmc)} PMC
+                        ${item.roomId ? " · Phòng " + escapeHistoryHtml(item.roomId) : ""}
+                    </div>
+                    ${canChallenge ? `
+                        <button class="history-challenge-btn"
+                            onclick="openHistoryChallengeModal('${oppKey}', '${oppName}', '${oppPhoto}')">
+                            THÁCH ĐẤU LẠI
+                        </button>
+                    ` : ""}
+                </div>
+                <div>
+                    <div class="history-row-time">${formatHistoryTime(item.createdAt)}</div>
+                    <div class="history-amount ${amountClass}">
+                        ${item.netPmc ? (item.netPmc > 0 ? "+" : "") + formatHistoryPmc(item.netPmc) + " PMC" : ""}
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join("");
+}
+
+function renderAdminLedgerList(items) {
+    const list = document.getElementById("history-ledger-list");
+    if (!list) return;
+
+    if (!Array.isArray(items) || !items.length) {
+        list.innerHTML = `<div class="history-empty">Chưa có sao kê hệ thống.</div>`;
+        return;
+    }
+
+    list.innerHTML = items.map(item => {
+        const plus = Number(item.amountPmc || 0) > 0 ? "+" : "";
+        const mission = Number(item.missionPoolPmc || 0) > 0
+            ? ` · Quỹ nhiệm vụ +${formatHistoryPmc(item.missionPoolPmc)} PMC`
+            : "";
+
+        return `
+            <div class="history-row">
+                <div>
+                    <div class="history-row-title">${escapeHistoryHtml(item.title || "Sao kê")}</div>
+                    <div class="history-row-detail">
+                        ${escapeHistoryHtml(item.detail || "")}
+                        ${item.walletKey ? "<br>Ví: " + escapeHistoryHtml(item.walletKey) : ""}
+                        ${item.roomId ? "<br>Phòng: " + escapeHistoryHtml(item.roomId) : ""}
+                    </div>
+                </div>
+                <div>
+                    <div class="history-row-time">${formatHistoryTime(item.createdAt)}</div>
+                    <div class="history-amount">
+                        ${plus}${formatHistoryPmc(item.amountPmc)} PMC${mission}
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join("");
+}
+
+async function loadPlayerHistory(q = "") {
+    window.__historyLedgerMode = "player";
+
+    const list = document.getElementById("history-ledger-list");
+    if (list) list.innerHTML = `<div class="history-empty">Đang tải lịch sử đấu...</div>`;
+
+    try {
+        const items = await callHistoryApi("player_history", q);
+        renderPlayerHistoryList(items);
+    } catch (err) {
+        if (list) list.innerHTML = `<div class="history-empty">Lỗi: ${escapeHistoryHtml(err.message || err)}</div>`;
+    }
+}
+
+async function loadAdminLedger(q = "") {
+    window.__historyLedgerMode = "admin";
+
+    const list = document.getElementById("history-ledger-list");
+    if (list) list.innerHTML = `<div class="history-empty">Đang tải sao kê hệ thống...</div>`;
+
+    try {
+        const items = await callHistoryApi("admin_ledger", q);
+        renderAdminLedgerList(items);
+    } catch (err) {
+        if (list) list.innerHTML = `<div class="history-empty">Lỗi: ${escapeHistoryHtml(err.message || err)}</div>`;
+    }
+}
+
+function historyLedgerSearchChanged() {
+    clearTimeout(window.__historyLedgerTimer);
+
+    window.__historyLedgerTimer = setTimeout(() => {
+        const q = document.getElementById("history-ledger-search-input")?.value || "";
+
+        if (window.__historyLedgerMode === "admin") {
+            loadAdminLedger(q);
+        } else {
+            loadPlayerHistory(q);
+        }
+    }, 280);
+}
+
+window.openPlayerHistoryModal = function() {
+    showHistoryLedgerModal("📜 LỊCH SỬ ĐẤU CỦA TÔI");
+    loadPlayerHistory("");
+};
+
+window.openAdminLedgerModal = function() {
+    if (!isAdmin406Wallet()) {
+        alert("Chỉ admin 406 được xem sao kê hệ thống.");
+        return;
+    }
+
+    showHistoryLedgerModal("📊 SAO KÊ HỆ THỐNG");
+    loadAdminLedger("");
+};
+
+window.openHistoryChallengeModal = function(walletKey, name, photo) {
+    closeHistoryLedgerModal();
+
+    const target = {
+        walletKey: String(walletKey || ""),
+        uid: String(walletKey || ""),
+        name: String(name || "Đối thủ"),
+        photo: String(photo || "images/do_tuong.png"),
+        liveState: "home",
+        liveRoomId: ""
+    };
+
+    const me = typeof getCurrentFriendProfile === "function" ? getCurrentFriendProfile() : {};
+    if (String(me?.walletKey || "") === String(target.walletKey || "")) {
+        alert("Không thể tự thách đấu chính mình.");
+        return;
+    }
+
+    window.pendingTopChallengeTarget = target;
+    if (typeof pendingTopChallengeTarget !== "undefined") {
+        pendingTopChallengeTarget = target;
+    }
+
+    if (typeof pendingTopChallengeMode !== "undefined") {
+        pendingTopChallengeMode = currentRoomMode || "co-tuong";
+    }
+
+    if (typeof pickTopChallengeMode === "function") {
+        pickTopChallengeMode(currentRoomMode || "co-tuong");
+    }
+
+    const targetEl = document.getElementById("top-challenge-target");
+    const myPmcEl = document.getElementById("top-challenge-my-pmc");
+    const input = document.getElementById("top-challenge-stake-input");
+    const modal = document.getElementById("top-challenge-modal");
+
+    if (targetEl) targetEl.innerText = "Đối thủ: " + target.name;
+    if (myPmcEl) myPmcEl.innerText = "Số dư PMC của mầy: " + formatPMC(getPmcBalance()) + " PMC";
+    if (input) input.value = "";
+    if (modal) modal.classList.add("show");
+};
+
+// Mỗi lần load ví xong thì hiện/ẩn nút sao kê 406
+setTimeout(updateAdminLedgerMenuVisible, 800);
+
+try {
+    const oldToggleProfileMenuForLedger = window.toggleProfileMenu;
+    if (typeof oldToggleProfileMenuForLedger === "function") {
+        window.toggleProfileMenu = function(event) {
+            updateAdminLedgerMenuVisible();
+            return oldToggleProfileMenuForLedger(event);
+        };
+    }
+} catch (_) {}
 </script>
+<div id="history-ledger-modal" class="history-ledger-modal">
+    <div class="history-ledger-box">
+        <div class="history-ledger-head">
+            <div id="history-ledger-title">📜 LỊCH SỬ</div>
+            <div class="history-ledger-close" onclick="closeHistoryLedgerModal()">✕</div>
+        </div>
+
+        <div class="history-ledger-search">
+            <input id="history-ledger-search-input"
+                   placeholder="Tìm tên / SĐT / ví / món mua / đối thủ..."
+                   oninput="historyLedgerSearchChanged()">
+        </div>
+
+        <div id="history-ledger-list" class="history-ledger-list">
+            <div class="history-empty">Đang tải...</div>
+        </div>
+    </div>
+</div>
 </body>
 </html>
