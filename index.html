@@ -9296,20 +9296,15 @@ function spawnDragonAttack(kingElement) {
 
     }, 2800); 
 }
-window.CHESS_MOVE_ANIM_MS = 1200;
-function animateRemoteMoveGhost(from, to) {
+window.CHESS_MOVE_ANIM_MS = 1800;
+function animateLocalMoveGhost(pieceEl, to) {
     try {
-        if (!from || !to) return false;
+        if (!pieceEl || !to || !board) return false;
 
-        const pieceEl = typeof getPieceAtBoardPos === "function"
-            ? getPieceAtBoardPos(from.c, from.r)
-            : null;
-
-        if (!pieceEl) return false;
+        const ms = Number(window.CHESS_MOVE_ANIM_MS || 1200);
 
         const boardRect = board.getBoundingClientRect();
         const pieceRect = pieceEl.getBoundingClientRect();
-
         const toView = mapBoardToView(to.c, to.r);
 
         const targetLeft =
@@ -9323,26 +9318,33 @@ function animateRemoteMoveGhost(from, to) {
             pieceRect.height / 2;
 
         const ghost = pieceEl.cloneNode(true);
-        ghost.classList.remove("selected", "is-chieu", "lightning-chieu");
+        ghost.classList.remove("selected", "is-chieu", "lightning-chieu", "piece-moving-smooth");
+
         ghost.style.position = "fixed";
         ghost.style.left = pieceRect.left + "px";
         ghost.style.top = pieceRect.top + "px";
         ghost.style.width = pieceRect.width + "px";
         ghost.style.height = pieceRect.height + "px";
-        ghost.style.zIndex = "99999";
+        ghost.style.margin = "0";
+        ghost.style.zIndex = "999999";
         ghost.style.pointerEvents = "none";
+        ghost.style.transform = "none";
         ghost.style.transition =
-            "left " + window.CHESS_MOVE_ANIM_MS + "ms cubic-bezier(0.22, 0.85, 0.25, 1), " +
-            "top " + window.CHESS_MOVE_ANIM_MS + "ms cubic-bezier(0.22, 0.85, 0.25, 1), " +
-            "transform " + window.CHESS_MOVE_ANIM_MS + "ms cubic-bezier(0.22, 0.85, 0.25, 1)";
-        ghost.style.transform = "scale(1.04)";
+            "left " + ms + "ms cubic-bezier(0.18, 0.75, 0.22, 1), " +
+            "top " + ms + "ms cubic-bezier(0.18, 0.75, 0.22, 1), " +
+            "opacity 120ms ease";
 
         document.body.appendChild(ghost);
+
+        // Ẩn quân thật để khỏi thấy nó nhảy tức thì.
+        pieceEl.style.transition = "none";
+        pieceEl.style.opacity = "0";
+        pieceEl.style.pointerEvents = "none";
 
         window.__moveLandingHide = {
             c: to.c,
             r: to.r,
-            until: Date.now() + Number(window.CHESS_MOVE_ANIM_MS || 420) + 160
+            until: Date.now() + ms + 300
         };
 
         ghost.getBoundingClientRect();
@@ -9350,16 +9352,22 @@ function animateRemoteMoveGhost(from, to) {
         requestAnimationFrame(() => {
             ghost.style.left = targetLeft + "px";
             ghost.style.top = targetTop + "px";
-            ghost.style.transform = "scale(1)";
         });
 
         setTimeout(() => {
             if (ghost && ghost.parentNode) ghost.remove();
-        }, Number(window.CHESS_MOVE_ANIM_MS || 420) + 80);
+
+            if (pieceEl && pieceEl.parentNode) {
+                pieceEl.style.transition = "";
+                pieceEl.style.opacity = "";
+                pieceEl.style.pointerEvents = "";
+                pieceEl.classList.remove("piece-moving-smooth");
+            }
+        }, ms + 120);
 
         return true;
     } catch (err) {
-        console.warn("animateRemoteMoveGhost fail:", err);
+        console.warn("animateLocalMoveGhost fail:", err);
         return false;
     }
 }
@@ -9529,14 +9537,12 @@ const movingPiece = selectedPiece;
 movingPiece.classList.remove("selected");
 movingPiece.classList.add("piece-moving-smooth");
 
+// Cho mắt người chơi thấy quân bay chậm.
+animateLocalMoveGhost(movingPiece, { c: c2, r: r2 });
+
+// Quân thật nhảy ngầm tới ô mới để exportBoardState/sync Firebase vẫn đúng.
 movingPiece.style.left = columns[newViewPos.c] + "%";
 movingPiece.style.top = rows[newViewPos.r] + "%";
-
-setTimeout(() => {
-    if (movingPiece && movingPiece.parentNode) {
-        movingPiece.classList.remove("piece-moving-smooth");
-    }
-}, Number(window.CHESS_MOVE_ANIM_MS || 1200) + 150);
     luotDi = (luotDi === 'do') ? 'den' : 'do';
 
     if (isCoUp && selectedPiece.dataset.isUp === "true") {
@@ -22802,7 +22808,7 @@ async function animateChessPieceMove(fromRow, fromCol, toRow, toCol) {
         ghost.style.top = fromRect.top + "px";
         ghost.style.width = fromRect.width + "px";
         ghost.style.height = fromRect.height + "px";
-        ghost.style.transform = "scale(1.04)";
+        ghost.style.transform = "none";
 
         document.body.appendChild(ghost);
         pieceEl.classList.add("chess-piece-hide-while-moving");
@@ -22813,7 +22819,7 @@ async function animateChessPieceMove(fromRow, fromCol, toRow, toCol) {
         requestAnimationFrame(() => {
             ghost.style.left = targetLeft + "px";
             ghost.style.top = targetTop + "px";
-            ghost.style.transform = "scale(1)";
+            ghost.style.transform = "none";
         });
 
         await sleepMoveAnim(window.CHESS_MOVE_ANIM_MS + 40);
