@@ -8284,12 +8284,14 @@ function closeBotInvite() {
 
 window.isCallingBot = false;
 async function acceptBotMatch() {
-    // BÙA CHỐNG NHẤP ĐÚP: Đang gọi Bot rồi thì cấm bấm tiếp!
     if (window.isCallingBot) return;
     window.isCallingBot = true;
 
     closeBotInvite();
-    if (!currentRoomId) {
+    cancelBotWaiting();
+
+    const roomId = currentRoomId;
+    if (!roomId) {
         window.isCallingBot = false;
         return;
     }
@@ -8299,25 +8301,54 @@ async function acceptBotMatch() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                action: "join", 
-                roomId: currentRoomId,
-                hostWallet: typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "",
+                action: "join",
+                roomId,
+                hostWallet: typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "",
                 botData: window.currentInvitingBot
             })
         });
-        
+
         const data = await res.json();
+
         if (!data.ok) {
-            alert(data.error || "Lão tẩu đang bận đánh bàn khác rồi!");
-        } else {
-            console.log("Bot đã nhập tiệc thành công!");
+            alert(data.error || "Lão Tẩu đang bận đánh bàn khác rồi!");
+            return;
         }
-    } catch(e) {
+
+        // Đọc lại phòng ngay, tránh chờ snapshot chậm.
+        const freshSnap = await db.ref("matches/" + roomId).once("value");
+        const freshRoom = freshSnap.val() || {};
+
+        window.__lastBoundRoom = freshRoom;
+        window.__lastBoundRoomId = roomId;
+
+        const botJoined =
+            freshRoom.status === "waiting" &&
+            freshRoom.players?.do &&
+            freshRoom.players?.den &&
+            !freshRoom.winner;
+
+        if (botJoined) {
+            cancelBotWaiting();
+
+            readyDo = false;
+            readyDen = false;
+            readyDeadlineAt = Number(freshRoom.readyDeadlineAt || 0);
+            readyTime = readyDeadlineAt ? getReadySecondsLeft(readyDeadlineAt) : 30;
+
+            if (typeof ensureReadyOverlayForWaitingRoom === "function") {
+                ensureReadyOverlayForWaitingRoom(freshRoom, roomId);
+            } else {
+                showReadyOverlay(freshRoom.mode || currentRoomMode || "co-tuong", true);
+            }
+        }
+
+        console.log("Bot đã nhập tiệc thành công!");
+    } catch (e) {
         console.error("Gọi bot lỗi:", e);
         alert("Không kết nối được với Server Bot!");
     } finally {
-        // Mở khóa để ván sau còn gọi được
-        window.isCallingBot = false; 
+        window.isCallingBot = false;
     }
 }
 // ==========================================
@@ -8912,12 +8943,11 @@ async function cleanupOpponentWhoLeftHomeFromReadyRoom(room = {}, roomId = curre
         if (side === mySideNow) continue;
         if (typeof isSamePlayerAsMe === "function" && isSamePlayerAsMe(p)) continue;
 
-        // Bot thì cho hệ thống dọn bằng logic bot cũ.
-        if (typeof isBotPlayerObj === "function" && isBotPlayerObj(p)) {
-            leavingSides.push(side);
-            continue;
-        }
-
+        // Bot đang chờ SS thì KHÔNG được dọn.
+// Bot chỉ bị đá sau khi ván kết thúc / dọn bàn riêng.
+if (typeof isBotPlayerObj === "function" && isBotPlayerObj(p)) {
+    continue;
+}
         const walletKey = String(p.walletKey || p.uid || "").trim();
         if (!walletKey) continue;
 
@@ -11829,9 +11859,17 @@ if (
     cleanupLeavingPlayersFromWaitingRoom(room, listeningRoomId)
         .catch(err => console.error("Dọn ghế người đã thoát lỗi:", err));
 }
+const roomHasBotWaiting =
+    typeof isBotPlayerObj === "function" &&
+    (
+        isBotPlayerObj(room.players?.do) ||
+        isBotPlayerObj(room.players?.den)
+    );
+
 if (
     room.status === "waiting" &&
     !room.winner &&
+    !roomHasBotWaiting &&
     typeof cleanupOpponentWhoLeftHomeFromReadyRoom === "function"
 ) {
     cleanupOpponentWhoLeftHomeFromReadyRoom(room, listeningRoomId)
