@@ -10233,7 +10233,7 @@ function syncMyWalletCacheFromRoomPlayer(room = {}) {
     const hasPi = (p.piBalance ?? p.balance) !== undefined && (p.piBalance ?? p.balance) !== null && (p.piBalance ?? p.balance) !== "";
 
     if (hasPmc) {
-        const roomPmc = Math.max(0, Math.floor(Number(p.pmcBalance) || 0));
+        const roomPmc = normalizeClientPmc(p.pmcBalance);
 
         if (roomPmc !== getPmcBalance()) {
             currentPmcBalance = roomPmc;
@@ -10416,8 +10416,8 @@ if (bottomPmcBox) bottomPmcBox.innerText = formatPMC(myPmc);
 
         if (isPlayingNow) {
             topRank.innerText = roomStake > 0
-                ? ("PHÒNG " + formatPMC(roomStake) + " PMC")
-                : (formatPMC(oppPmc) + " PMC");
+                ? ("PHÒNG " + formatPMC(roomStake))
+                : (formatPMC(oppPmc));
             topRank.classList.add("player-ready-on");
         } else {
             topRank.innerText = oppReady ? "ĐÃ SS" : "CHƯA SS";
@@ -10430,8 +10430,8 @@ if (bottomPmcBox) bottomPmcBox.innerText = formatPMC(myPmc);
 
         if (isPlayingNow) {
             bottomRank.innerText = roomStake > 0
-                ? ("PHÒNG " + formatPMC(roomStake) + " PMC")
-                : (formatPMC(myPmc) + " PMC");
+                ? ("PHÒNG " + formatPMC(roomStake))
+                : (formatPMC(myPmc));
             bottomRank.classList.add("player-ready-on");
         } else {
             bottomRank.innerText = myReady ? "ĐÃ SS" : "CHƯA SS";
@@ -11900,7 +11900,7 @@ room.players?.den
     const denProfile = {
         ...me,
         side: "den",
-        pmcBalance: Math.max(0, Math.floor(Number(me.pmcBalance || getPmcBalance() || 0) || 0)),
+        pmcBalance: normalizeClientPmc(me.pmcBalance || getPmcBalance() || 0),
         balance: Math.max(0, Number(me.balance ?? getPiBalance() ?? 0) || 0),
         piBalance: Math.max(0, Number(me.piBalance ?? me.balance ?? getPiBalance() ?? 0) || 0),
         updatedAt: firebase.database.ServerValue.TIMESTAMP
@@ -12263,14 +12263,20 @@ function updatePmcUI(amount) {
     }
 }
 
+function normalizeClientPmc(value) {
+    const n = Number(value || 0);
+    if (!Number.isFinite(n)) return 0;
+    return Math.max(0, Math.round(n * 1000000) / 1000000);
+}
+
 function formatPMC(amount) {
-    // Hiện nhiều số lẻ để soi quỹ / phí PMC nhỏ không bị mất dấu.
-    return Math.max(0, Number(amount) || 0).toLocaleString("vi-VN", {
+    const n = normalizeClientPmc(amount);
+
+    return n.toLocaleString("vi-VN", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 6
     }) + " PMC";
 }
-
 function makeStakeBucket(mode, stakePMC) {
     return `${mode}__${Math.max(0, Math.floor(Number(stakePMC) || 0))}`;
 }
@@ -12360,7 +12366,7 @@ async function loadWalletBalance() {
         console.error("Lỗi load ví:", err);
         // CHỈ KHI NÀO MẤT MẠNG, ĐÉO GỌI ĐƯỢC FIREBASE THÌ MỚI ĐƯỢC XÀI CACHE
         currentWalletBalance = Math.max(0, Number(localStorage.getItem(getBalanceCacheKey()) || 0) || 0);
-        currentPmcBalance = Math.max(0, Math.floor(Number(localStorage.getItem(getPmcCacheKey()) || 0) || 0));
+        currentPmcBalance = normalizeClientPmc(localStorage.getItem(getPmcCacheKey()) || 0);
 
         updateBalanceUI(currentWalletBalance);
         updatePmcUI(currentPmcBalance);
@@ -12402,12 +12408,12 @@ function refreshMyMatchBalanceBoxesNow(piAmount = getPiBalance(), pmcAmount = ge
 
     // Trong render hiện tại: dưới luôn là mình, trên là đối thủ
     if (bottomPiBox) bottomPiBox.innerText = Math.max(0, Number(piAmount) || 0).toFixed(2) + " π";
-    if (bottomPmcBox) bottomPmcBox.innerText = formatPMC(pmcAmount) + " PMC";
+    if (bottomPmcBox) bottomPmcBox.innerText = formatPMC(pmcAmount);
 
     // Nếu có lúc UI chưa đảo đúng, vẫn ép theo mySide cho chắc
     if (mySide === "den") {
         if (topPiBox) topPiBox.innerText = Math.max(0, Number(piAmount) || 0).toFixed(2) + " π";
-        if (topPmcBox) topPmcBox.innerText = formatPMC(pmcAmount) + " PMC";
+        if (topPmcBox) topPmcBox.innerText = formatPMC(pmcAmount);
     }
 }
 
@@ -12804,7 +12810,7 @@ window.renderAvatarSkinShop = function() {
     window.refreshAvatarSkinShopTabs();
     // ... (đoạn code render phía dưới giữ nguyên)
     const currentPmc = getPmcBalance();
-    if (balance) balance.innerText = "Số dư: " + formatPMC(currentPmc) + " PMC";
+    if (balance) balance.innerText = "Số dư: " + formatPMC(currentPmc);
 
     if (window.avatarSkinShopTab === "exp") {
         // Lấy lịch sử mua từ máy ra check
@@ -12912,7 +12918,7 @@ list.innerHTML = expPackages.map(pkg => {
             if (isOwned) { btnText = "ĐÃ CÓ"; btnClass += " equipped"; btnAttr = "disabled"; extraLabel = `<div class="avatar-shop-owned-label">Đã nằm trong túi</div>`; } 
             else { btnText = canBuy ? "MUA" : "THIẾU PMC"; btnClass += canBuy ? "" : " locked"; btnAttr = canBuy ? `onclick="buyAvatarSkin('${skin.id}')"` : "disabled"; }
         }
-        const priceText = skin.price <= 0 ? "Miễn phí" : formatPMC(skin.price) + " PMC";
+        const priceText = skin.price <= 0 ? "Miễn phí" : formatPMC(skin.price);
         return `
             <div class="avatar-shop-card">
                 <div class="avatar-frame-shell" data-skin="${skin.id}" style="width:48px;height:48px;">
@@ -13246,13 +13252,12 @@ async function buyAvatarSkin(skinId) {
         data.error ||
         (
             "Mua skin thất bại. Ví server đọc được: " +
-            formatPMC(data.currentPmc || 0) +
-            " PMC"
+            formatPMC(data.currentPmc || 0)
         )
     );
 }
 
-        const newPmc = Math.max(0, Math.floor(Number(data.newPmcBalance || 0) || 0));
+        const newPmc = normalizeClientPmc(data.newPmcBalance || 0);
         const newOwned = normalizeOwnedAvatarSkins(data.ownedAvatarSkins || owned);
         const currentEquipped = data.avatarSkin || getEquippedAvatarSkin();
 
@@ -13828,6 +13833,41 @@ const hostStillInThisRoom =
 
     return room;
 }
+
+function showMatchSettleNote(data = {}) {
+    try {
+        const subEl = document.getElementById("sub-result");
+        if (!subEl) return;
+
+        let note = document.getElementById("settle-result-note");
+        if (!note) {
+            note = document.createElement("div");
+            note.id = "settle-result-note";
+            note.style.cssText = `
+                margin-top:10px;
+                font-size:13px;
+                line-height:1.55;
+                color:#7dffb3;
+                font-weight:900;
+                text-align:center;
+            `;
+            subEl.insertAdjacentElement("afterend", note);
+        }
+
+        const stake = normalizeClientPmc(data.stakePMC || data.stakePmc || currentRoomStakePMC || 0);
+        const grossPot = normalizeClientPmc(data.grossPot || stake * 2);
+        const fee = normalizeClientPmc(data.feePmc || stake * 0.2);
+        const receive = normalizeClientPmc(data.winnerReceivePmc || grossPot - fee);
+        const netProfit = normalizeClientPmc(receive - stake);
+
+        note.innerHTML =
+            `💰 Thắng nhận: ${formatPMC(receive)}<br>` +
+            `📈 Lãi sau trừ phí: +${formatPMC(netProfit)} · Phí ván: ${formatPMC(fee)}`;
+    } catch (err) {
+        console.warn("showMatchSettleNote lỗi:", err);
+    }
+}
+
 async function maybeSettleStakeRoom(room, roomId) {
     if (!roomId || !room?.winner) return false;
 
@@ -13883,6 +13923,23 @@ async function maybeSettleStakeRoom(room, roomId) {
         }
 
         console.log("MATCH_SETTLE_CLIENT_OK", data);
+
+        const myServerPmc =
+            mySide === "do" ? data.doPmcBalance :
+            mySide === "den" ? data.denPmcBalance :
+            null;
+
+        if (myServerPmc !== undefined && myServerPmc !== null) {
+            currentPmcBalance = normalizeClientPmc(myServerPmc);
+            localStorage.setItem(getPmcCacheKey(), String(currentPmcBalance));
+            updatePmcUI(currentPmcBalance);
+
+            if (typeof refreshMyMatchBalanceBoxesNow === "function") {
+                refreshMyMatchBalanceBoxesNow(getPiBalance(), currentPmcBalance);
+            }
+        }
+
+        showMatchSettleNote(data);
 
         await loadWalletBalance().catch(() => {});
         if (mySide) {
@@ -15354,7 +15411,7 @@ function updateExchangePreview() {
 
     const pi = Number(input.value || 0);
     const pmc = Math.max(0, Math.floor(pi * PMC_RATE));
-    preview.innerText = "Nhận: " + formatPMC(pmc) + " PMC";
+    preview.innerText = "Nhận: " + formatPMC(pmc);
 }
 
 async function submitExchangeToPMC() {
@@ -15771,7 +15828,7 @@ async function openStakeRoomModal(mode) {
     document.querySelectorAll(".stake-chip").forEach(btn => btn.classList.remove("active"));
 
     if (title) title.innerText = selectedRoomMode === "co-up" ? "CHỌN PHÒNG CỜ ÚP" : "CHỌN PHÒNG CỜ TƯỚNG";
-    if (now) now.innerText = formatPMC(getPmcBalance()) + " PMC";
+    if (now) now.innerText = formatPMC(getPmcBalance());
     if (preview) preview.innerText = "Mức đã chọn: 0 PMC";
     if (custom) custom.value = "";
 
@@ -15793,7 +15850,7 @@ function pickStakePMC(value, el) {
     if (custom) custom.value = "";
 
     const preview = document.getElementById("stake-preview");
-    if (preview) preview.innerText = "Mức đã chọn: " + formatPMC(selectedRoomStakePMC) + " PMC";
+    if (preview) preview.innerText = "Mức đã chọn: " + formatPMC(selectedRoomStakePMC);
 }
 
 async function confirmStakeSelection() {
@@ -16276,7 +16333,7 @@ function openTopChallengeModal(walletKey) {
     const modal = document.getElementById("top-challenge-modal");
 
     if (targetEl) targetEl.innerText = "Đối thủ: " + (target.name || "Người chơi Top");
-    if (myPmcEl) myPmcEl.innerText = "Số dư PMC của mầy: " + formatPMC(getPmcBalance()) + " PMC";
+    if (myPmcEl) myPmcEl.innerText = "Số dư PMC của mầy: " + formatPMC(getPmcBalance());
     if (input) input.value = "";
     if (modal) modal.classList.add("show");
 }
@@ -18250,7 +18307,7 @@ async function acceptRoomInvite() {
         const denProfile = {
             ...me,
             side: "den",
-            pmcBalance: Math.max(0, Math.floor(Number(me.pmcBalance || getPmcBalance() || 0) || 0)),
+            pmcBalance: normalizeClientPmc(me.pmcBalance || getPmcBalance() || 0),
             balance: Math.max(0, Number(me.balance ?? getPiBalance() ?? 0) || 0),
             piBalance: Math.max(0, Number(me.piBalance ?? me.balance ?? getPiBalance() ?? 0) || 0),
             updatedAt: firebase.database.ServerValue.TIMESTAMP
@@ -22567,7 +22624,7 @@ window.openHistoryChallengeModal = function(walletKey, name, photo) {
     const modal = document.getElementById("top-challenge-modal");
 
     if (targetEl) targetEl.innerText = "Đối thủ: " + target.name;
-    if (myPmcEl) myPmcEl.innerText = "Số dư PMC của mầy: " + formatPMC(getPmcBalance()) + " PMC";
+    if (myPmcEl) myPmcEl.innerText = "Số dư PMC của mầy: " + formatPMC(getPmcBalance());
     if (input) input.value = "";
     if (modal) modal.classList.add("show");
 };
