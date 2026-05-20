@@ -8937,10 +8937,30 @@ async function cleanupOpponentWhoLeftHomeFromReadyRoom(room = {}, roomId = curre
     if (!mySideNow) return false;
 
     const sides = ["do", "den"].filter(side => !!room.players?.[side]);
-    if (sides.length < 2) return false;
+if (sides.length < 2) return false;
 
-    const now = Date.now();
-    const leavingSides = [];
+// 🔥 FIX: Người mới vừa vào phòng thì chờ vài giây,
+// đừng vội đọc presence cũ rồi đá họ ra.
+const now = Date.now();
+const freshJoinAt =
+    readRoomTimeValue(room.lobbyUpdatedAt) ||
+    readRoomTimeValue(room.updatedAt) ||
+    readRoomTimeValue(room.createdAt);
+
+if (
+    room.status === "waiting" &&
+    room.players?.do &&
+    room.players?.den &&
+    (
+        isPendingServerTimestamp(room.lobbyUpdatedAt) ||
+        isPendingServerTimestamp(room.updatedAt) ||
+        (freshJoinAt && now - freshJoinAt < 7000)
+    )
+) {
+    return false;
+}
+
+const leavingSides = [];
 
     for (const side of sides) {
         const p = room.players?.[side];
@@ -12364,7 +12384,21 @@ room.players?.den
     if (room.players?.do?.uid === me.uid || room.players?.do?.walletKey === me.walletKey) {
         return false;
     }
+    // 🔥 FIX: Bấm vào bàn là phải nhận trạng thái ĐEN + ARENA trước,
+// tránh máy chủ phòng thấy mình còn ở home rồi đá văng ra sảnh.
+mySide = "den";
+viewSide = "den";
+currentRoomId = roomId;
+currentRoomMode = roomMode;
+currentRoomStakePMC = roomStake;
+currentRoomBucket = room?.roomBucket || makeStakeBucket(roomMode, roomStake);
+currentRoomStatus = "waiting";
 
+prepareRealtimeArenaUI();
+clearInterval(interval);
+
+// setPlayerPresence cần currentRoomId trước, không có nó sẽ tự ghi home.
+await setPlayerPresence("arena").catch(() => {});
     const denProfile = {
         ...me,
         side: "den",
