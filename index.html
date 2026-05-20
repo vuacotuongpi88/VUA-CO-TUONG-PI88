@@ -12526,7 +12526,10 @@ for (const waiting of waitingList) {
         readyDen = !!freshRoom.ready?.den;
         window.__lastBoundRoom = freshRoom;
         window.__lastBoundRoomId = waiting.roomId;
-        showReadyOverlay(freshRoom.mode || mode);
+        readyDeadlineAt = Number(freshRoom.readyDeadlineAt || 0);
+readyTime = readyDeadlineAt ? getReadySecondsLeft(readyDeadlineAt) : 30;
+
+ensureReadyOverlayForWaitingRoom(freshRoom, waiting.roomId);
     } else {
         closeReadyOverlay();
         updateReadyUI();
@@ -15591,58 +15594,87 @@ function startReadyCountdown() {
     clearInterval(readyInterval);
     readyInterval = null;
 
-    const tickReadyCountdown = () => {
+    const ensureReadyDeadlineFresh = async () => {
+        if (!currentRoomId) return false;
+
+        const room = window.__lastBoundRoom || {};
+        const roomId = currentRoomId;
+        const now = readyNowMs();
+
+        const enoughPlayers =
+            !!room.players?.do &&
+            !!room.players?.den &&
+            room.status === "waiting" &&
+            !room.winner;
+
+        if (!enoughPlayers) return false;
+
+        const liveDeadline = Number(room.readyDeadlineAt || 0);
+
+        if (liveDeadline && liveDeadline > now) {
+            readyDeadlineAt = liveDeadline;
+            readyTime = getReadySecondsLeft(readyDeadlineAt);
+            return true;
+        }
+
+        // Không có deadline / deadline cũ đã hết thì tạo lại 30s mới.
+        readyDeadlineAt = 0;
+        readyTime = 30;
+        updateReadyUI();
+
+        await db.ref("matches/" + roomId + "/readyDeadlineAt").transaction((current) => {
+            const n = readyNowMs();
+            const cur = Number(current || 0);
+
+            if (cur && cur > n) return cur;
+            return n + 30000;
+        }, undefined, false).catch(err => {
+            console.error("CREATE_READY_DEADLINE_FAIL:", err);
+        });
+
+        return false;
+    };
+
+    const tickReadyCountdown = async () => {
         const overlay = document.getElementById("ready-overlay");
 
-        // Nếu overlay đã tắt thì dừng countdown luôn
         if (!overlay || overlay.style.display === "none") {
             clearInterval(readyInterval);
             readyInterval = null;
             return;
         }
 
-        // Có deadline chung thì tính theo deadline chung.
-        // Như vậy 2 máy sẽ hiện cùng 1 số, không còn lệch 17/18.
-if (readyDeadlineAt) {
-    readyTime = getReadySecondsLeft(readyDeadlineAt);
-} else {
-    // Fallback cũ nếu chưa có deadline
-    readyTime = Math.max(0, Math.floor(Number(readyTime) || 0) - 1);
-}
+        const room = window.__lastBoundRoom || {};
 
-        updateReadyUI();
+        const enoughPlayers =
+            !!room.players?.do &&
+            !!room.players?.den &&
+            room.status === "waiting" &&
+            !room.winner;
 
-if (readyTime <= 0) {
-    clearInterval(readyInterval);
-    readyInterval = null;
+        if (!enoughPlayers) {
+            closeReadyOverlay();
+            clearInterval(readyInterval);
+            readyInterval = null;
+            return;
+        }
 
-    if (!overlay || overlay.style.display === "none") return;
+        // Lấy deadline mới nhất từ Firebase, tránh dùng deadline cũ trong máy.
+        const liveDeadline = Number(room.readyDeadlineAt || 0);
+        if (liveDeadline) readyDeadlineAt = liveDeadline;
 
-    const iAmReady =
-        (mySide === "do" && readyDo) ||
-        (mySide === "den" && readyDen);
+        // Nếu chưa có deadline hoặc deadline đã quá hạn từ snapshot cũ,
+        // tạo lại 30s mới rồi chờ Firebase bắn snapshot tiếp.
+        if (!readyDeadlineAt || readyDeadlineAt <= readyNowMs()) {
+            await ensureReadyDeadlineFresh();
+            return;
+        }
 
-    // Chủ phòng A/Đỏ luôn được quyền xử lý hết giờ:
-    // A không văng, nhưng A sẽ đá B/Đen nếu B chưa SS.
-    if (mySide === "do") {
-        Promise.resolve(failReadyAndBackHome()).catch(err => {
-            console.error("HOST_READY_TIMEOUT_CLEANUP_FAIL:", err);
-        });
-        return;
-    }
+        readyDo = !!room.ready?.do;
+        readyDen = !!room.ready?.den;
 
-    // B/Đen nếu đã SS rồi thì không tự văng.
-    if (mySide === "den" && iAmReady) {
-        updateReadyUI();
-        return;
-    }
+        readyTime = getReadySecondsLeft(readyDeadlineAt);
 
-    // B/Đen chưa SS thì bị đá ra.
-    Promise.resolve(failReadyAndBackHome()).catch(err => {
-        console.error("GUEST_READY_TIMEOUT_LEAVE_FAIL:", err);
-    });
-}
-    };
         // Nếu đối thủ đã về sảnh/offline nhưng Firebase vẫn còn ghế,
         // máy còn lại tự dọn phòng và lên làm chủ phòng.
         if (
@@ -15659,7 +15691,52 @@ if (readyTime <= 0) {
                     .catch(err => console.error("READY_PRESENCE_CLEANUP_FAIL:", err));
             }
         }
-    updateReadyUI();
+
+        updateReadyUI();
+
+        if (readyTime > 0) return;
+
+        clearInterval(readyInterval);
+        readyInterval = null;
+
+        if (!overlay || overlay.style.display === "none") return;
+
+        const freshRoom = window.__lastBoundRoom || {};
+        const doReadyNow = !!freshRoom.ready?.do;
+        const denReadyNow = !!freshRoom.ready?.den;
+
+        // Nếu cả 2 đã SS rồi thì không báo hết giờ nữa,
+        // chờ backend/Firebase chuyển status sang playing.
+        if (doReadyNow && denReadyNow) {
+            updateReadyUI();
+            return;
+        }
+
+        const iAmReady =
+            (mySide === "do" && doReadyNow) ||
+            (mySide === "den" && denReadyNow);
+
+        // Chủ phòng A/Đỏ: hết giờ thì xử lý dọn B nếu B chưa SS.
+        if (mySide === "do") {
+            Promise.resolve(failReadyAndBackHome()).catch(err => {
+                console.error("HOST_READY_TIMEOUT_CLEANUP_FAIL:", err);
+            });
+            return;
+        }
+
+        // B/Đen đã SS rồi thì không tự văng.
+        if (mySide === "den" && iAmReady) {
+            updateReadyUI();
+            return;
+        }
+
+        // B/Đen chưa SS thì bị đá ra.
+        Promise.resolve(failReadyAndBackHome()).catch(err => {
+            console.error("GUEST_READY_TIMEOUT_LEAVE_FAIL:", err);
+        });
+    };
+
+    tickReadyCountdown();
     readyInterval = setInterval(tickReadyCountdown, 1000);
 }
 function getCurrentMode() {
