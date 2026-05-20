@@ -755,7 +755,36 @@ async function txAdjustPmc(ref, delta, extra = {}, preRead = null) {
 
   return result;
 }
+async function txAdjustWalletPmcBalance(db, walletKey, delta, fallbackWallet = {}) {
+  const safeWalletKey = safeKey(walletKey);
+  const add = roundPmc(Number(delta || 0) || 0);
+  const balRef = db.ref(`wallets/${safeWalletKey}/pmcBalance`);
 
+  let afterBalance = 0;
+
+  const tx = await balRef.transaction(current => {
+    const curNum = Number(current);
+    const cur = Number.isFinite(curNum)
+      ? roundPmc(curNum)
+      : readPmcBalance(fallbackWallet);
+
+    const next = roundPmc(cur + add);
+
+    if (next < -0.000001) return;
+
+    afterBalance = Math.max(0, next);
+    return afterBalance;
+  });
+
+  if (tx.committed) {
+    await db.ref(`wallets/${safeWalletKey}/updatedAt`).set(nowMs()).catch(() => {});
+  }
+
+  return {
+    committed: !!tx.committed,
+    afterBalance
+  };
+}
 async function claimMission(db, walletKey, missionId, now = Date.now()) {
   const CLAIM_PROCESSING_TTL_MS = 45000;
 
@@ -845,7 +874,7 @@ if (!poolTx.committed) {
   throw new Error('Quỹ nhiệm vụ hiện không đủ để trả thưởng.');
 }
 
-const userTx = await txAdjustPmc(userRef, mission.rewardPmc, {}, userPreRead);
+const userTx = await txAdjustWalletPmcBalance(db, walletKey, mission.rewardPmc, userPreRead);
 
     if (!userTx.committed) {
   await db.ref('treasury/missionPoolPmc').transaction(current => {
@@ -869,19 +898,24 @@ const userTx = await txAdjustPmc(userRef, mission.rewardPmc, {}, userPreRead);
       status: 'done'
     };
 
-    await Promise.all([
-      walletTxnRef(db).push().set(txPayload),
-      missionTxnRef(db).push().set(txPayload),
-      claimRef.set({
-        status: 'done',
-        missionId: def.id,
-        fullKey: `${def.id}__${mission.periodKey}`,
-        walletKey,
-        amountPmc: mission.rewardPmc,
-        periodKey: mission.periodKey,
-        claimedAt: now
-      })
-    ]);
+    const claimDonePayload = {
+  status: 'done',
+  missionId: def.id,
+  fullKey: `${def.id}__${mission.periodKey}`,
+  walletKey,
+  amountPmc: mission.rewardPmc,
+  periodKey: mission.periodKey,
+  claimedAt: now
+};
+
+// Quan trọng: ghi DONE trước, để không bị trả nút nhận lại.
+await claimRef.set(claimDonePayload);
+
+// Log phụ thôi, log lỗi cũng không được làm mất thưởng.
+await Promise.allSettled([
+  walletTxnRef(db).push().set(txPayload),
+  missionTxnRef(db).push().set(txPayload)
+]);
 
     return {
       ok: true,
@@ -892,20 +926,28 @@ const userTx = await txAdjustPmc(userRef, mission.rewardPmc, {}, userPreRead);
       periodKey: mission.periodKey
     };
     } catch (err) {
-    await db.ref('missionClaimFailLogsV1').push().set({
-      walletKey,
-      missionId,
-      missionTitle: mission?.title || '',
-      rewardPmc: mission?.rewardPmc || 0,
-      periodKey: mission?.periodKey || '',
-      error: err?.message || String(err),
-      createdAt: nowMs(),
-      status: 'fail'
-    }).catch(() => {});
+  await db.ref('missionClaimFailLogsV1').push().set({
+    walletKey,
+    missionId,
+    missionTitle: mission?.title || '',
+    rewardPmc: mission?.rewardPmc || 0,
+    periodKey: mission?.periodKey || '',
+    error: err?.message || String(err),
+    createdAt: nowMs(),
+    status: 'fail'
+  }).catch(() => {});
 
+  // Chỉ xóa khóa nếu còn đang processing.
+  // Nếu đã set done thì không được xóa, kẻo nút nhận sáng lại.
+  const curSnap = await claimRef.once('value').catch(() => null);
+  const curVal = curSnap ? curSnap.val() : null;
+
+  if (!curVal || curVal.status !== 'done') {
     await claimRef.remove().catch(() => {});
-    throw err;
   }
+
+  throw err;
+}
 }
 
 // ===== SHOP SKIN + TÚI ĐỒ + RƯƠNG CẤP GỘP VÀO MISSIONS-V1 =====
