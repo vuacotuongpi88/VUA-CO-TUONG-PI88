@@ -20361,9 +20361,9 @@ async function renderLevelRewards() {
                 <!-- Ô BÊN TRÁI BÂY GIỜ LÀ NÚT NHẬN -->
                 <button class="${btnClass}" ${onclick} ${isLocked || isClaimed ? "disabled" : ""} style="flex: 1; margin: 0; min-height: 48px; border-radius: 12px;">${btnText}</button>
 
-                <!-- Ô BÊN PHẢI BÂY GIỜ LÀ RƯƠNG -->
-                <div style="flex-shrink: 0; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; border-radius: 12px; overflow: hidden; ${isReady ? 'background: rgba(241, 196, 15, 0.15); border: 2px solid #f1c40f; animation: chestReadyPulse 0.8s infinite alternate;' : 'background: rgba(0,0,0,0.3); border: 1px dashed rgba(85, 239, 196, 0.3); opacity: ' + (isClaimed ? '0.4' : '1')};">
-    <img src="${m.chestImage}" style="width: 64px; height: 64px; object-fit: contain; transform: scale(1.45); transform-origin: center; filter: drop-shadow(0 0 ${isReady ? '15px' : '8px'} ${m.shadow}) ${isReady ? 'brightness(1.2)' : ''};" onerror="this.src='images/do_tuong.png'">
+                <!-- Ô BÊN PHẢI LÀ RƯƠNG: ô giữ nguyên, chỉ căn giữa hình rương -->
+<div style="flex-shrink: 0; width: 64px; height: 64px; align-self: center; position: relative; display: flex; align-items: center; justify-content: center; border-radius: 12px; overflow: hidden; ${isReady ? 'background: rgba(241, 196, 15, 0.15); border: 2px solid #f1c40f; animation: chestReadyPulse 0.8s infinite alternate;' : 'background: rgba(0,0,0,0.3); border: 1px dashed rgba(85, 239, 196, 0.3); opacity: ' + (isClaimed ? '0.4' : '1')};">
+    <img src="${m.chestImage}" style="position: absolute; left: 50%; top: 54%; width: 56px; height: 56px; object-fit: contain; object-position: center; transform: translate(-50%, -50%) scale(1.28); transform-origin: center center; filter: drop-shadow(0 0 ${isReady ? '15px' : '8px'} ${m.shadow}) ${isReady ? 'brightness(1.2)' : ''};" onerror="this.src='images/do_tuong.png'">
 </div>
             </div>
 
