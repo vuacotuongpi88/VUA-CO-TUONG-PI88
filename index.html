@@ -12330,9 +12330,16 @@ room.players?.den
         return false;
     }
 
-   await db.ref().update({
+   const newReadyDeadlineAt = readyNowMs() + 30000;
+
+await db.ref().update({
+    [`matches/${roomId}/ready/do`]: false,
     [`matches/${roomId}/ready/den`]: false,
     [`matches/${roomId}/stakeLocked/den`]: false,
+
+    // đủ 2 người là tạo lại 30 giây SS mới, không dùng deadline cũ
+    [`matches/${roomId}/readyDeadlineAt`]: newReadyDeadlineAt,
+    [`matches/${roomId}/readyNonce`]: Date.now(),
 
     // Đủ 2 người rồi thì không cho hiện ngoài danh sách bàn nữa
     [`matches/${roomId}/lobbyOpen`]: false,
@@ -12353,7 +12360,10 @@ room.players?.den
     currentRoomMode = roomMode;
     currentRoomStakePMC = roomStake;
     currentRoomBucket = room?.roomBucket || makeStakeBucket(roomMode, roomStake);
-
+readyDeadlineAt = newReadyDeadlineAt;
+readyTime = 30;
+readyDo = false;
+readyDen = false;
     saveActiveMatchSnapshot({
         roomId,
         mode: roomMode,
@@ -15661,7 +15671,9 @@ function startReadyCountdown() {
 
         // Lấy deadline mới nhất từ Firebase, tránh dùng deadline cũ trong máy.
         const liveDeadline = Number(room.readyDeadlineAt || 0);
-        if (liveDeadline) readyDeadlineAt = liveDeadline;
+if (liveDeadline && liveDeadline > readyNowMs()) {
+    readyDeadlineAt = liveDeadline;
+}
 
         // Nếu chưa có deadline hoặc deadline đã quá hạn từ snapshot cũ,
         // tạo lại 30s mới rồi chờ Firebase bắn snapshot tiếp.
@@ -15827,40 +15839,53 @@ function ensureReadyOverlayForWaitingRoom(room = {}, roomId = currentRoomId) {
 
     if (!hasEnoughPlayersWaiting) return;
 
-const key = [
-    roomId || "",
-    room.players?.do?.uid || room.players?.do?.walletKey || "",
-    room.players?.den?.uid || room.players?.den?.walletKey || "",
-    room.status || "",
-    Number(room.readyDeadlineAt || 0)
-].join("|");
-
-// 🔥 FIX LỖI VÀO PHÒNG BỊ HẾT GIỜ: Kể cả có deadline mà là của ván cũ (đã qua) thì ép tạo 30s mới!
     const now = readyNowMs();
-    const currentDeadline = Number(room.readyDeadlineAt || 0);
+    let currentDeadline = Number(room.readyDeadlineAt || 0);
 
+    // Nếu deadline thiếu hoặc đã hết hạn thì tự tạo 30s mới NGAY,
+    // không chờ snapshot Firebase nữa.
     if (!currentDeadline || currentDeadline <= now) {
-        db.ref("matches/" + roomId + "/readyDeadlineAt").transaction((current) => {
-            // Chỉ giữ lại nếu đang có 1 deadline hợp lệ trong tương lai
-            if (current && current > now) return current;
-            return readyNowMs() + 30000;
-        }, undefined, false);
+        currentDeadline = now + 30000;
+        readyDeadlineAt = currentDeadline;
+        readyTime = 30;
 
-        return;
+        db.ref("matches/" + roomId + "/readyDeadlineAt").transaction((current) => {
+            const n = readyNowMs();
+            const cur = Number(current || 0);
+
+            if (cur && cur > n) return cur;
+            return n + 30000;
+        }, undefined, false).then((result) => {
+            const fixedDeadline = Number(result?.snapshot?.val?.() || 0);
+            if (fixedDeadline && fixedDeadline > readyNowMs()) {
+                readyDeadlineAt = fixedDeadline;
+                readyTime = getReadySecondsLeft(fixedDeadline);
+                updateReadyUI();
+            }
+        }).catch(err => {
+            console.error("FIX_READY_DEADLINE_FAIL:", err);
+        });
+    } else {
+        readyDeadlineAt = currentDeadline;
+        readyTime = getReadySecondsLeft(readyDeadlineAt);
     }
 
-    readyDeadlineAt = currentDeadline;
-    readyTime = getReadySecondsLeft(readyDeadlineAt);
+    const key = [
+        roomId || "",
+        room.players?.do?.uid || room.players?.do?.walletKey || "",
+        room.players?.den?.uid || room.players?.den?.walletKey || "",
+        room.status || "",
+        Number(readyDeadlineAt || 0)
+    ].join("|");
 
     const oldKey = readyOverlayRoomKey || "";
     const alreadyVisible = overlay.style.display === "flex";
 
     readyOverlayWaitingShown = true;
     readyOverlayRoomKey = key;
+    readyOverlayOpeningLock = false;
 
-    // Nếu bảng SS đang hiện rồi thì không mở lại, chỉ cập nhật số giây + nút.
     if (alreadyVisible) {
-        readyOverlayOpeningLock = false;
         updateReadyUI();
 
         if (!readyInterval) {
@@ -15870,16 +15895,14 @@ const key = [
         return;
     }
 
-    readyOverlayOpeningLock = false;
-
     const needResetTime =
         oldKey !== key ||
         !readyTime ||
-        readyTime <= 0;
+        readyTime <= 0 ||
+        !readyInterval;
 
     showReadyOverlay(room.mode || currentRoomMode, needResetTime);
 }
-
 
 async function batDauTranDau(loai) {
     const mode = loai === "up" ? "co-up" : "co-tuong";
