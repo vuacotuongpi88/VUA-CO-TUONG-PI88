@@ -6498,6 +6498,13 @@ margin-bottom: 14px;
 .chess-piece-hide-while-moving {
     opacity: 0 !important;
 }
+.mission-claim-btn.claimed,
+.mission-card button.claimed {
+    background: linear-gradient(180deg, #2d3436, #111) !important;
+    color: #ffeaa7 !important;
+    border: 1px solid rgba(255, 234, 167, 0.45) !important;
+    box-shadow: none !important;
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -19976,91 +19983,104 @@ switchMissionTab(MISSION_UI_STATE.activeTab || 'day');
     });
   };
 
-  window.claimMissionReward = async function (missionId, btnElement) {
+  window.claimMissionReward = function (missionId, btnElement) {
     if (MISSION_UI_STATE.claiming) return;
     MISSION_UI_STATE.claiming = true;
-    
-    // 1. LỪA TÌNH GIAO DIỆN (OPTIMISTIC UI): 
-    // Khách vừa bấm là khóa nút, đổi chữ "ĐANG XỬ LÝ..." ngay lập tức đéo cho delay 1 mili-giây nào!
+
+    const oldText = btnElement ? btnElement.innerText : "NHẬN THƯỞNG";
+    const oldOpacity = btnElement ? btnElement.style.opacity : "";
+    const oldTransform = btnElement ? btnElement.style.transform : "";
+
+    const card = btnElement ? btnElement.closest(".mission-card") : null;
+    const progressFill = card ? card.querySelector(".mission-card-progress-fill") : null;
+
+    // ✅ Cho người chơi thấy nhận liền, không chờ server
     if (btnElement) {
         btnElement.disabled = true;
-        btnElement.innerText = "ĐANG XỬ LÝ...";
-        btnElement.style.opacity = "0.7";
-        btnElement.style.transform = "scale(0.95)";
+        btnElement.innerText = "ĐÃ NHẬN";
+        btnElement.classList.add("claimed");
+        btnElement.style.opacity = "0.55";
+        btnElement.style.transform = "scale(0.98)";
+        btnElement.style.pointerEvents = "none";
     }
 
-    try {
-        const walletKey = missionWalletKey();
-        if (!walletKey) throw new Error('Thiếu walletKey.');
+    if (progressFill) {
+        progressFill.style.width = "100%";
+    }
 
-        // Gửi lệnh ngầm lên server
-        const res = await fetch('/api/missions-v1?v=' + Date.now(), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-wallet-key': walletKey
-            },
-            body: JSON.stringify({ action: 'claim', missionId, walletKey })
-        });
+    missionToast("✅ Đã nhận thưởng, hệ thống đang cộng PMC vào ví...");
 
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.ok) {
-            throw new Error(data.error || 'Không nhận được thưởng.');
+    const walletKey = missionWalletKey();
+
+    if (!walletKey) {
+        if (btnElement) {
+            btnElement.disabled = false;
+            btnElement.innerText = oldText;
+            btnElement.classList.remove("claimed");
+            btnElement.style.opacity = oldOpacity || "1";
+            btnElement.style.transform = oldTransform || "scale(1)";
+            btnElement.style.pointerEvents = "";
         }
 
-        // 2. NHẬN ĐƯỢC TIỀN LÀ CHO TIỀN NHẢY SỐ NGAY TRÊN GIAO DIỆN
-        if (typeof data.newPmcBalance === 'number' && typeof setPmcBalance === 'function') {
+        missionToast("❌ Lỗi: thiếu walletKey.");
+        MISSION_UI_STATE.claiming = false;
+        return;
+    }
+
+    // ✅ Server chạy ngầm phía sau
+    fetch("/api/missions-v1?v=" + Date.now(), {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "x-wallet-key": walletKey
+        },
+        body: JSON.stringify({
+            action: "claim",
+            missionId,
+            walletKey
+        })
+    })
+    .then(async function (res) {
+        const data = await res.json().catch(function () {
+            return {};
+        });
+
+        if (!res.ok || !data.ok) {
+            throw new Error(data.error || "Không nhận được thưởng.");
+        }
+
+        if (typeof data.newPmcBalance === "number" && typeof setPmcBalance === "function") {
             setPmcBalance(data.newPmcBalance);
         }
 
-        // 3. BIẾN HÌNH CÁI NÚT VÀ THẺ NHIỆM VỤ THÀNH TRẠNG THÁI "ĐÃ NHẬN" (Khỏi cần tải lại bảng ngốn RAM)
-        if (btnElement) {
-            btnElement.innerText = "ĐÃ NHẬN";
-            btnElement.style.background = "linear-gradient(180deg, #636e72, #2d3436)"; // Đổi màu xám xịt
-            btnElement.style.color = "#dfe6e9";
-            btnElement.style.border = "1px solid #636e72";
-            btnElement.style.opacity = "0.8";
-            btnElement.style.transform = "scale(1)";
-            btnElement.style.cursor = "not-allowed";
-            
-            // Xử lý luôn cái Badge nhỏ góc phải trên của thẻ
-            const card = btnElement.closest('.mission-card');
-            if (card) {
-                const badge = card.querySelector('.mission-card-badge');
-                if (badge) {
-                    badge.className = "mission-card-badge claimed";
-                    badge.innerText = "ĐÃ NHẬN";
-                }
-                const progressFill = card.querySelector('.mission-card-progress-fill');
-                if(progressFill) progressFill.style.width = "100%"; // Kéo thanh kinh nghiệm full
-            }
-        }
+        const reward = Number(data.amountPmc || 0);
+        missionToast("✅ Đã cộng +" + formatPmc(reward) + " PMC vào ví.");
 
-        // 4. BỎ MẸ CÁI ALERT() CHẶN GAME ĐI. BÁO CHỮ NHỎ GÓC DƯỚI LÀ ĐƯỢC!
-        missionToast('✅ Đã nhận ' + formatPmc(data.amountPmc || 0) + ' vào ví!');
-        if (typeof playSnd === 'function') playSnd('win'); // Nổ cái tiếng cho phê
+        if (typeof playSnd === "function") playSnd("win");
 
-        // 5. Cập nhật quỹ thưởng tổng và tắt chấm đỏ ngay
-        const poolEl = document.getElementById('mission-pool-value');
-        if (poolEl && data.treasury) poolEl.innerText = formatPmc(data.treasury.missionPoolPmc || 0);
-        
-        // Tải lại ngầm data sau 3 giây để đồng bộ cho chắc, đéo ảnh hưởng thằng chơi
-        setTimeout(() => { fetchMissionBoard(true); }, 3000);
+        // ✅ Reload bảng trễ 1 chút, không làm người chơi chờ nút
+        setTimeout(function () {
+            fetchMissionBoard(true);
+        }, 1200);
+    })
+    .catch(function (err) {
+        console.error("MISSION_CLAIM_FAIL:", err);
 
-    } catch (err) {
-        console.error('MISSION_CLAIM_FAIL', err);
-        missionToast('❌ Lỗi: ' + (err.message || 'Chưa nhận được'));
-        
-        // Nếu lỗi, nhả cái nút ra cho nó bấm lại
+        // ❌ Nếu server báo lỗi thật thì trả nút lại
         if (btnElement) {
             btnElement.disabled = false;
-            btnElement.innerText = "NHẬN THƯỞNG";
-            btnElement.style.opacity = "1";
-            btnElement.style.transform = "scale(1)";
+            btnElement.innerText = oldText || "NHẬN THƯỞNG";
+            btnElement.classList.remove("claimed");
+            btnElement.style.opacity = oldOpacity || "1";
+            btnElement.style.transform = oldTransform || "scale(1)";
+            btnElement.style.pointerEvents = "";
         }
-    } finally {
+
+        missionToast("❌ " + (err?.message || "Chưa nhận được thưởng."));
+    })
+    .finally(function () {
         MISSION_UI_STATE.claiming = false;
-    }
+    });
 };
 
   function updateMissionLobbyBadge(board) {
