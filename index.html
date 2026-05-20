@@ -10157,9 +10157,17 @@ function scheduleResetWinnerRoomAfterPaid(room, roomId) {
         isBotPlayerObj(room.players?.do) ||
         isBotPlayerObj(room.players?.den);
 
-    // Người thật thắng thì cho người thắng dọn.
-    // Nếu ván có bot thì cho máy người thật dọn dù bot thắng hay thua.
-    if (!roomHasBot && room.winner !== mySide) return;
+    const winnerLeaving =
+        typeof isRoomSideMarkedLeaving === "function" &&
+        isRoomSideMarkedLeaving(room, room.winner);
+
+    const hasLeaving =
+        typeof getLeavingSidesFromRoom === "function" &&
+        getLeavingSidesFromRoom(room).length > 0;
+
+    // Người thắng thật thì cho người thắng dọn.
+    // Nếu ván có bot hoặc có người bấm thoát thì máy còn lại cũng được dọn.
+    if (!roomHasBot && room.winner !== mySide && !winnerLeaving && !hasLeaving) return;
 
     window.__resetWinnerRoomAfterPaidKey = window.__resetWinnerRoomAfterPaidKey || "";
 
@@ -10167,7 +10175,8 @@ function scheduleResetWinnerRoomAfterPaid(room, roomId) {
         roomId,
         room.winner || "",
         room.winReason || "",
-        room.finishedAt || room.updatedAt || ""
+        room.finishedAt || room.updatedAt || "",
+        JSON.stringify(room.leaveRequests || {})
     ].join("|");
 
     if (window.__resetWinnerRoomAfterPaidKey === resetKey) return;
@@ -10180,20 +10189,11 @@ function scheduleResetWinnerRoomAfterPaid(room, roomId) {
 
             if (!fresh.winner) return;
 
-            const doPlayer = fresh.players?.do || null;
-            const denPlayer = fresh.players?.den || null;
-
-            const doIsBot = isBotPlayerObj(doPlayer);
-            const denIsBot = isBotPlayerObj(denPlayer);
-            const freshHasBot = doIsBot || denIsBot;
-
-            if (!freshHasBot && fresh.winner !== mySide) return;
-
             const paidDone =
                 fresh.settlement &&
                 (fresh.settlement.paid === true || fresh.settlement.done === true);
 
-            // Chưa cộng tiền xong thì tuyệt đối chưa reset phòng.
+            // Chưa cộng tiền xong thì chưa reset phòng.
             if (!paidDone) {
                 if (attempt < 40) {
                     setTimeout(() => tryReset(attempt + 1), 500);
@@ -10205,28 +10205,11 @@ function scheduleResetWinnerRoomAfterPaid(room, roomId) {
 
             const winnerSide = fresh.winner;
             const loserSide = winnerSide === "do" ? "den" : "do";
-            const winnerPlayer = fresh.players?.[winnerSide] || {};
-            const loserPlayer = fresh.players?.[loserSide] || {};
 
-            const winnerIsBot = isBotPlayerObj(winnerPlayer);
-            const loserIsBot = isBotPlayerObj(loserPlayer);
-
-            let newHost = null;
-
-            // Nếu bot thắng: đuổi bot, cho người thua giữ phòng.
-            if (winnerIsBot && !loserIsBot) {
-                newHost = loserPlayer;
-            }
-            // Nếu người thắng bot: người thắng giữ phòng.
-            else if (!winnerIsBot) {
-                newHost = winnerPlayer;
-            }
-            // Phòng lỗi toàn bot thì bỏ.
-            else {
-                return;
-            }
-
-            if (!newHost?.uid && !newHost?.walletKey) return;
+            const doPlayer = fresh.players?.do || null;
+            const denPlayer = fresh.players?.den || null;
+            const winnerPlayer = fresh.players?.[winnerSide] || null;
+            const loserPlayer = fresh.players?.[loserSide] || null;
 
             const cleanMode = fresh.mode || currentRoomMode || "co-tuong";
             const cleanStake = Math.max(
@@ -10242,27 +10225,84 @@ function scheduleResetWinnerRoomAfterPaid(room, roomId) {
                 fresh.inviteCode || makeInviteCodeFromRoomId(roomId)
             ).toUpperCase();
 
+            const sideCanStay = (side, p) => {
+                if (!p) return false;
+                if (isBotPlayerObj(p)) return false;
+                if (typeof isRoomSideMarkedLeaving === "function" && isRoomSideMarkedLeaving(fresh, side)) return false;
+                return !!(p.uid || p.walletKey);
+            };
+
+            let newHost = null;
+
+            // Ưu tiên người thắng nếu người thắng KHÔNG thoát.
+            if (sideCanStay(winnerSide, winnerPlayer)) {
+                newHost = winnerPlayer;
+            }
+            // Nếu người thắng đã thoát thì giữ người còn lại.
+            else if (sideCanStay(loserSide, loserPlayer)) {
+                newHost = loserPlayer;
+            }
+            // Fallback chống lỗi dữ liệu.
+            else if (sideCanStay("do", doPlayer)) {
+                newHost = doPlayer;
+            }
+            else if (sideCanStay("den", denPlayer)) {
+                newHost = denPlayer;
+            }
+
+            const updates = {};
+
+            // Nếu cả 2 đều thoát hoặc chỉ còn bot thì xoá sạch phòng.
+            if (!newHost) {
+                updates[`waitingRooms/${cleanBucket}/${roomId}`] = null;
+                updates[`matches/${roomId}`] = null;
+                await db.ref().update(updates);
+
+                if (currentRoomId === roomId) {
+                    cleanupRoomListeners();
+                    clearActiveMatchSnapshot();
+                    currentRoomId = null;
+                    mySide = null;
+                    viewSide = "do";
+                    currentRoomMode = null;
+                    currentRoomStakePMC = 0;
+                    currentRoomBucket = null;
+                    currentRoomStatus = null;
+                    closeReadyOverlay();
+                    clearRealtimeBoardVisualOnly();
+                    showHomeUI();
+                }
+
+                return;
+            }
+
+            const {
+                leaving,
+                leftAt,
+                leaveAt,
+                exitedAt,
+                ...newHostClean
+            } = newHost;
+
             const newHostSafe = {
-                ...newHost,
-                uid: newHost.uid || "",
-                walletKey: newHost.walletKey || newHost.uid || "",
-                name: newHost.name || newHost.username || "Người chơi",
-                photo: newHost.photo || "images/do_tuong.png",
+                ...newHostClean,
+                uid: newHostClean.uid || "",
+                walletKey: newHostClean.walletKey || newHostClean.uid || "",
+                name: newHostClean.name || newHostClean.username || "Người chơi",
+                photo: newHostClean.photo || "images/do_tuong.png",
                 isBot: false,
                 side: "do",
                 updatedAt: firebase.database.ServerValue.TIMESTAMP
             };
 
-            const updates = {};
-
-            // Đưa người thật về ghế Đỏ, ghế Đen trống để người chơi khác/bot mới vào.
+            // Luôn đưa người còn ở lại về ghế Đỏ, ghế Đen trống.
             updates[`matches/${roomId}/players/do`] = newHostSafe;
             updates[`matches/${roomId}/players/den`] = null;
 
             updates[`matches/${roomId}/hostUid`] = newHostSafe.uid || "";
             updates[`matches/${roomId}/hostWalletKey`] = newHostSafe.walletKey || "";
-
             updates[`matches/${roomId}/roomBucket`] = cleanBucket;
+
             updates[`matches/${roomId}/status`] = "waiting";
             updates[`matches/${roomId}/lobbyOpen`] = true;
             updates[`matches/${roomId}/lobbyOwnerUid`] = newHostSafe.uid || "";
@@ -10270,7 +10310,7 @@ function scheduleResetWinnerRoomAfterPaid(room, roomId) {
             updates[`matches/${roomId}/lobbyHeartbeatAt`] = firebase.database.ServerValue.TIMESTAMP;
             updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
 
-            // Dọn sạch ván cũ.
+            // Dọn sạch dữ liệu ván cũ.
             updates[`matches/${roomId}/turn`] = "do";
             updates[`matches/${roomId}/board`] = null;
             updates[`matches/${roomId}/moveCount`] = 0;
@@ -10278,6 +10318,7 @@ function scheduleResetWinnerRoomAfterPaid(room, roomId) {
             updates[`matches/${roomId}/finishedAt`] = null;
             updates[`matches/${roomId}/lastMoveFrom`] = null;
             updates[`matches/${roomId}/lastMoveTo`] = null;
+
             updates[`matches/${roomId}/winner`] = null;
             updates[`matches/${roomId}/winReason`] = null;
             updates[`matches/${roomId}/drawRequest`] = null;
@@ -10287,13 +10328,16 @@ function scheduleResetWinnerRoomAfterPaid(room, roomId) {
             updates[`matches/${roomId}/settlement`] = null;
             updates[`matches/${roomId}/refunds`] = null;
 
-            // Reset SS cho ván sau.
+            // Dọn dấu thoát, nếu không nó sẽ tự đá tiếp.
+            updates[`matches/${roomId}/leaveRequests`] = null;
+            updates[`matches/${roomId}/exitRequests`] = null;
+
+            // Reset SS.
             updates[`matches/${roomId}/ready/do`] = false;
             updates[`matches/${roomId}/ready/den`] = false;
             updates[`matches/${roomId}/stakeLocked/do`] = false;
             updates[`matches/${roomId}/stakeLocked/den`] = false;
             updates[`matches/${roomId}/readyDeadlineAt`] = null;
-
             updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
 
             updates[`waitingRooms/${cleanBucket}/${roomId}`] = {
@@ -10311,52 +10355,61 @@ function scheduleResetWinnerRoomAfterPaid(room, roomId) {
 
             await db.ref().update(updates);
 
-            // Cập nhật máy hiện tại thành chủ phòng Đỏ.
-            mySide = "do";
-            viewSide = "do";
-            currentRoomId = roomId;
-            currentRoomMode = cleanMode;
-            currentRoomStakePMC = cleanStake;
-            currentRoomBucket = cleanBucket;
-            currentRoomStatus = "waiting";
+            const myWalletNow =
+                typeof makeWalletDbKey === "function" ? String(makeWalletDbKey() || "") : "";
+            const myUidNow = String(firebase.auth().currentUser?.uid || "");
 
-            readyDo = false;
-            readyDen = false;
-            readyDeadlineAt = 0;
-            readyTime = 0;
+            const newHostIsMe =
+                (!!myWalletNow && String(newHostSafe.walletKey || "") === myWalletNow) ||
+                (!!myUidNow && String(newHostSafe.uid || "") === myUidNow);
 
-            saveActiveMatchSnapshot({
-                roomId,
-                mode: cleanMode,
-                side: "do"
-            });
+            // Chỉ máy của người còn ở lại mới được tự nhận lại phòng.
+            // Máy thằng đã thoát tuyệt đối không được tự nhảy vô lại.
+            if (newHostIsMe) {
+                mySide = "do";
+                viewSide = "do";
+                currentRoomId = roomId;
+                currentRoomMode = cleanMode;
+                currentRoomStakePMC = cleanStake;
+                currentRoomBucket = cleanBucket;
+                currentRoomStatus = "waiting";
 
-            clearRealtimeBoardVisualOnly();
-            hideVictoryPopup();
-            closeReadyOverlay();
-            renderTimerUI();
-            updateReadyUI();
+                readyDo = false;
+                readyDen = false;
+                readyDeadlineAt = 0;
+                readyTime = 0;
 
-            // Cho Lão Tẩu đếm lại 15s cho ván sau.
-            // startBotWaitingTimer có sẵn botWaitSeconds = 15 và sẽ tự hủy nếu có người thật vào. 
-            if (typeof cancelBotWaiting === "function") {
-                cancelBotWaiting();
-            }
+                saveActiveMatchSnapshot({
+                    roomId,
+                    mode: cleanMode,
+                    side: "do"
+                });
 
-            setTimeout(() => {
-                const latest = window.__lastBoundRoom || {};
-                const denEmpty = !latest.players?.den;
+                clearRealtimeBoardVisualOnly();
+                hideVictoryPopup();
+                closeReadyOverlay();
+                renderTimerUI();
+                updateReadyUI();
 
-                if (
-                    currentRoomId === roomId &&
-                    currentRoomStatus === "waiting" &&
-                    denEmpty &&
-                    cleanStake <= 3 &&
-                    typeof startBotWaitingTimer === "function"
-                ) {
-                    startBotWaitingTimer();
+                if (typeof cancelBotWaiting === "function") {
+                    cancelBotWaiting();
                 }
-            }, 700);
+
+                setTimeout(() => {
+                    const latest = window.__lastBoundRoom || {};
+                    const denEmpty = !latest.players?.den;
+
+                    if (
+                        currentRoomId === roomId &&
+                        currentRoomStatus === "waiting" &&
+                        denEmpty &&
+                        cleanStake <= 3 &&
+                        typeof startBotWaitingTimer === "function"
+                    ) {
+                        startBotWaitingTimer();
+                    }
+                }, 700);
+            }
 
         } catch (err) {
             console.error("Dọn phòng sau khi settlement paid lỗi:", err);
@@ -10787,7 +10840,25 @@ async function leaveRealtimeMatch() {
 
         // Hoàn tiền nếu phòng đang ở sảnh chờ
         await maybeRefundWaitingStakePMC(roomId, room, side).catch(()=>{});
+        // Dọn theo leaveRequests trước, tránh logic cũ nhét lại người đã thoát vào phòng.
+const paidDoneForLeave =
+    !room.winner ||
+    room.winner === "hoa" ||
+    stake <= 0 ||
+    room.settlement?.paid === true ||
+    room.settlement?.done === true;
 
+if (
+    paidDoneForLeave &&
+    typeof buildLeavingPlayersCleanupUpdates === "function"
+) {
+    const leaveCleanupUpdates = buildLeavingPlayersCleanupUpdates(roomId, room);
+
+    if (leaveCleanupUpdates) {
+        await db.ref().update(leaveCleanupUpdates);
+        return;
+    }
+}
         const cleanMode = room.mode || mode || "co-tuong";
         const cleanStake = Math.max(0, Math.floor(Number(room.stakePMC || 0)));
         const cleanBucket = room.roomBucket || roomBucket || makeStakeBucket(cleanMode, cleanStake);
