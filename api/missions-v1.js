@@ -758,6 +758,8 @@ async function txAdjustPmc(ref, delta, extra = {}, preRead = null) {
 }
 
 async function claimMission(db, walletKey, missionId, now = Date.now()) {
+  const CLAIM_PROCESSING_TTL_MS = 45000;
+
   const def = missionDefinitions().find(item => item.id === missionId);
   if (!def) {
     throw new Error('Không tìm thấy nhiệm vụ.');
@@ -765,26 +767,44 @@ async function claimMission(db, walletKey, missionId, now = Date.now()) {
 
   const board = await buildBoard(db, walletKey, now);
   const mission = (board.tabs[def.tab] || []).find(item => item.id === missionId);
+
   if (!mission) {
     throw new Error('Nhiệm vụ không tồn tại trong bảng hiện tại.');
   }
+
   if (mission.claimed) {
     throw new Error('Nhiệm vụ này đã nhận rồi.');
   }
+
   if (!mission.ready) {
     throw new Error('Chưa đủ điều kiện nhận nhiệm vụ này.');
   }
 
   const claimRef = missionClaimRef(db, walletKey, def, now);
+
+  // Khóa chống bấm nhiều lần, nhưng processing cũ quá 45s thì cho nhận lại.
   const lock = await new Promise((resolve, reject) => {
     claimRef.transaction(
       current => {
-        if (current && current.status === 'done') return;
-        if (current && current.status === 'processing') return;
+        const cur = current && typeof current === 'object' ? current : null;
+
+        if (cur && cur.status === 'done') return;
+
+        if (cur && cur.status === 'processing') {
+          const lockedAt = Number(cur.lockedAt || 0) || 0;
+
+          // Đang xử lý thật thì chặn.
+          if (lockedAt && now - lockedAt < CLAIM_PROCESSING_TTL_MS) return;
+
+          // Quá 45s coi như kẹt, cho ghi đè nhận lại.
+        }
+
         return {
           status: 'processing',
           missionId,
           walletKey,
+          periodKey: mission.periodKey,
+          amountPmc: mission.rewardPmc,
           lockedAt: now
         };
       },
@@ -800,25 +820,25 @@ async function claimMission(db, walletKey, missionId, now = Date.now()) {
     throw new Error('Nhiệm vụ đang được xử lý hoặc đã nhận rồi.');
   }
 
-  const treasuryRef = db.ref(`wallets/${safeKey(ADMIN_TREASURY_WALLET_KEY)}`);
-  const userRef = db.ref(`wallets/${walletKey}`);
-
-  const [treasuryPreSnap, userPreSnap] = await Promise.all([
-    treasuryRef.once('value'),
-    userRef.once('value')
-  ]);
-
-  const treasuryPreRead =
-    treasuryPreSnap.val() && typeof treasuryPreSnap.val() === 'object'
-      ? treasuryPreSnap.val()
-      : {};
-
-  const userPreRead =
-    userPreSnap.val() && typeof userPreSnap.val() === 'object'
-      ? userPreSnap.val()
-      : {};
-
   try {
+    const treasuryRef = db.ref(`wallets/${safeKey(ADMIN_TREASURY_WALLET_KEY)}`);
+    const userRef = db.ref(`wallets/${walletKey}`);
+
+    const [treasuryPreSnap, userPreSnap] = await Promise.all([
+      treasuryRef.once('value'),
+      userRef.once('value')
+    ]);
+
+    const treasuryPreRead =
+      treasuryPreSnap.val() && typeof treasuryPreSnap.val() === 'object'
+        ? treasuryPreSnap.val()
+        : {};
+
+    const userPreRead =
+      userPreSnap.val() && typeof userPreSnap.val() === 'object'
+        ? userPreSnap.val()
+        : {};
+
     const treasuryTx = await txAdjustPmc(
       treasuryRef,
       -mission.rewardPmc,
@@ -832,6 +852,7 @@ async function claimMission(db, walletKey, missionId, now = Date.now()) {
     }
 
     const userTx = await txAdjustPmc(userRef, mission.rewardPmc, {}, userPreRead);
+
     if (!userTx.committed) {
       await txAdjustPmc(
         treasuryRef,
@@ -839,23 +860,26 @@ async function claimMission(db, walletKey, missionId, now = Date.now()) {
         { name: 'Ví phí hệ thống' },
         treasuryPreRead
       ).catch(() => {});
+
       await claimRef.remove().catch(() => {});
       throw new Error('Không cộng được thưởng vào ví người chơi.');
     }
 
-    // Trừ quỹ nhiệm vụ hiển thị bằng transaction để không âm khi nhiều người claim cùng lúc.
-const poolTx = await subtractMissionPoolPmc(db, mission.rewardPmc);
-if (!poolTx.committed) {
-  await txAdjustPmc(
-    treasuryRef,
-    mission.rewardPmc,
-    { name: 'Ví phí hệ thống' },
-    treasuryPreRead
-  ).catch(() => {});
-  await txAdjustPmc(userRef, -mission.rewardPmc, {}, userPreRead).catch(() => {});
-  await claimRef.remove().catch(() => {});
-  throw new Error('Quỹ nhiệm vụ hiện không đủ để trả thưởng.');
-}
+    const poolTx = await subtractMissionPoolPmc(db, mission.rewardPmc);
+
+    if (!poolTx.committed) {
+      await txAdjustPmc(
+        treasuryRef,
+        mission.rewardPmc,
+        { name: 'Ví phí hệ thống' },
+        treasuryPreRead
+      ).catch(() => {});
+
+      await txAdjustPmc(userRef, -mission.rewardPmc, {}, userPreRead).catch(() => {});
+      await claimRef.remove().catch(() => {});
+
+      throw new Error('Quỹ nhiệm vụ hiện không đủ để trả thưởng.');
+    }
 
     const txPayload = {
       type: 'mission_reward_pmc',
@@ -864,19 +888,19 @@ if (!poolTx.committed) {
       walletKey,
       sourceWalletKey: safeKey(ADMIN_TREASURY_WALLET_KEY),
       amountPMC: mission.rewardPmc,
+      amountPmc: mission.rewardPmc,
       periodKey: mission.periodKey,
       createdAt: now,
       status: 'done'
     };
 
-   await Promise.all([
+    await Promise.all([
       walletTxnRef(db).push().set(txPayload),
       missionTxnRef(db).push().set(txPayload),
-      // BẮT BUỘC lưu với cấu trúc ID kèm Khóa chu kỳ để nó tự động reset
-      db.ref(`missionClaimsV1/${walletKey}/${def.id}__${mission.periodKey}`).set({
+      claimRef.set({
         status: 'done',
-        missionId: def.id,  // Giữ ID gốc để dễ tìm
-        fullKey: `${def.id}__${mission.periodKey}`, // Khóa chu kỳ hiện tại
+        missionId: def.id,
+        fullKey: `${def.id}__${mission.periodKey}`,
         walletKey,
         amountPmc: mission.rewardPmc,
         periodKey: mission.periodKey,
