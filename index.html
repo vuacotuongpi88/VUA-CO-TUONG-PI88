@@ -148,8 +148,8 @@ height: 9%;
 transform: translate(-50%, -50%);
 z-index: 20;
 transition:
-    left 0.42s cubic-bezier(0.22, 0.85, 0.25, 1),
-    top 0.42s cubic-bezier(0.22, 0.85, 0.25, 1),
+    left 0.85s cubic-bezier(0.18, 0.75, 0.22, 1),
+    top 0.85s cubic-bezier(0.18, 0.75, 0.22, 1),
     transform 0.12s ease,
     filter 0.12s ease,
     opacity 0.12s ease;
@@ -9236,7 +9236,7 @@ function spawnDragonAttack(kingElement) {
 
     }, 2800); 
 }
-window.CHESS_MOVE_ANIM_MS = 420;
+window.CHESS_MOVE_ANIM_MS = 850;
 function animateRemoteMoveGhost(from, to) {
     try {
         if (!from || !to) return false;
@@ -9476,7 +9476,7 @@ setTimeout(() => {
     if (movingPiece && movingPiece.parentNode) {
         movingPiece.classList.remove("piece-moving-smooth");
     }
-}, 520);
+}, 950);
 
     luotDi = (luotDi === 'do') ? 'den' : 'do';
 
