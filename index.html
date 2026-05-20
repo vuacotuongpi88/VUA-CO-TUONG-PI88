@@ -8499,10 +8499,20 @@ const isMyLocalVisualUpdate =
 lastRoomBoardHash = newBoardHash;
 
 if (!isMyLocalVisualUpdate) {
-    if (hadOldBoardHash && room.lastMoveFrom && room.lastMoveTo) {
-        animateRemoteMoveGhost(room.lastMoveFrom, room.lastMoveTo);
+    try {
+        if (
+            hadOldBoardHash &&
+            room.lastMoveFrom &&
+            room.lastMoveTo &&
+            typeof animateRemoteMoveGhost === "function"
+        ) {
+            animateRemoteMoveGhost(room.lastMoveFrom, room.lastMoveTo);
+        }
+    } catch (err) {
+        console.warn("REMOTE_MOVE_GHOST_FAIL:", err);
     }
 
+    // Dù hiệu ứng lỗi vẫn phải render bàn mới cho đối thủ thấy.
     applyBoardStateFromRoom(room.board || []);
 } else {
     console.log("SKIP Firebase render để giữ animation quân đang đi");
@@ -9067,7 +9077,7 @@ function taoMaTran() {
 function getPieceAtBoardPos(c, r) {
     const viewPos = mapBoardToView(c, r);
 
-    return Array.from(document.querySelectorAll(".piece")).find(p => {
+    return Array.from(board.querySelectorAll(":scope > .piece")).find(p => {
         const pc = columns.indexOf(parseFloat(p.style.left));
         const pr = rows.indexOf(parseFloat(p.style.top));
 
@@ -9304,6 +9314,79 @@ function spawnDragonAttack(kingElement) {
 
     }, 2800); 
 }
+function animateRemoteMoveGhost(from, to) {
+    try {
+        if (!from || !to || !board) return false;
+
+        const ms = Number(window.CHESS_MOVE_ANIM_MS || 700);
+
+        const pieceEl = typeof getPieceAtBoardPos === "function"
+            ? getPieceAtBoardPos(from.c, from.r)
+            : null;
+
+        if (!pieceEl) return false;
+
+        const boardRect = board.getBoundingClientRect();
+        const pieceRect = pieceEl.getBoundingClientRect();
+        const toView = mapBoardToView(to.c, to.r);
+
+        const targetLeft =
+            boardRect.left +
+            boardRect.width * (columns[toView.c] / 100) -
+            pieceRect.width / 2;
+
+        const targetTop =
+            boardRect.top +
+            boardRect.height * (rows[toView.r] / 100) -
+            pieceRect.height / 2;
+
+        const ghost = pieceEl.cloneNode(true);
+
+        // Cực quan trọng: ghost không được là .piece
+        ghost.classList.remove("piece", "selected", "is-chieu", "lightning-chieu", "piece-moving-smooth");
+        ghost.classList.add("move-ghost");
+
+        ghost.style.position = "fixed";
+        ghost.style.left = pieceRect.left + "px";
+        ghost.style.top = pieceRect.top + "px";
+        ghost.style.width = pieceRect.width + "px";
+        ghost.style.height = pieceRect.height + "px";
+        ghost.style.margin = "0";
+        ghost.style.zIndex = "999999";
+        ghost.style.pointerEvents = "none";
+        ghost.style.transform = "none";
+        ghost.style.transition =
+            "left " + ms + "ms cubic-bezier(0.18, 0.75, 0.22, 1), " +
+            "top " + ms + "ms cubic-bezier(0.18, 0.75, 0.22, 1), " +
+            "opacity 120ms ease";
+
+        document.body.appendChild(ghost);
+
+        // Khi apply board mới, quân thật ở ô đích tạm ẩn để khỏi bị nhân đôi.
+        window.__moveLandingHide = {
+            c: to.c,
+            r: to.r,
+            until: Date.now() + ms + 160
+        };
+
+        ghost.getBoundingClientRect();
+
+        requestAnimationFrame(() => {
+            ghost.style.left = targetLeft + "px";
+            ghost.style.top = targetTop + "px";
+        });
+
+        setTimeout(() => {
+            if (ghost && ghost.parentNode) ghost.remove();
+        }, ms + 120);
+
+        return true;
+    } catch (err) {
+        console.warn("animateRemoteMoveGhost fail:", err);
+        return false;
+    }
+}
+
 window.CHESS_MOVE_ANIM_MS = 700;
 function animateLocalMoveGhost(pieceEl, to) {
     try {
@@ -11430,10 +11513,20 @@ const isMyLocalVisualUpdate =
 lastRoomBoardHash = newBoardHash;
 
 if (!isMyLocalVisualUpdate) {
-    if (hadOldBoardHash && room.lastMoveFrom && room.lastMoveTo) {
-        animateRemoteMoveGhost(room.lastMoveFrom, room.lastMoveTo);
+    try {
+        if (
+            hadOldBoardHash &&
+            room.lastMoveFrom &&
+            room.lastMoveTo &&
+            typeof animateRemoteMoveGhost === "function"
+        ) {
+            animateRemoteMoveGhost(room.lastMoveFrom, room.lastMoveTo);
+        }
+    } catch (err) {
+        console.warn("REMOTE_MOVE_GHOST_FAIL:", err);
     }
 
+    // Dù hiệu ứng lỗi vẫn phải render bàn mới cho đối thủ thấy.
     applyBoardStateFromRoom(room.board || []);
 } else {
     console.log("SKIP Firebase render để giữ animation quân đang đi");
