@@ -10313,20 +10313,32 @@ function scheduleResetWinnerRoomAfterPaid(room, roomId) {
 
             if (!fresh.winner) return;
 
-            const paidDone =
-                fresh.settlement &&
-                (fresh.settlement.paid === true || fresh.settlement.done === true);
+            const freshStake = Math.max(
+    0,
+    Math.floor(Number(fresh.stakePMC || currentRoomStakePMC || 0) || 0)
+);
 
-            // Chưa cộng tiền xong thì chưa reset phòng.
-            if (!paidDone) {
-                if (attempt < 40) {
-                    setTimeout(() => tryReset(attempt + 1), 500);
-                } else {
-                    console.warn("Chưa thấy settlement.paid, không dọn phòng để tránh mất PMC:", roomId);
-                }
-                return;
-            }
+const freshRoomHasBot =
+    isBotPlayerObj(fresh.players?.do) ||
+    isBotPlayerObj(fresh.players?.den);
 
+// Ván 0 PMC / dùng vé thì không cần chờ settlement.
+// Có tiền cược mới bắt buộc chờ paid để tránh mất PMC.
+const paidDone =
+    freshStake <= 0 ||
+    (
+        fresh.settlement &&
+        (fresh.settlement.paid === true || fresh.settlement.done === true)
+    );
+
+if (!paidDone) {
+    if (attempt < 40) {
+        setTimeout(() => tryReset(attempt + 1), 500);
+    } else {
+        console.warn("Chưa thấy settlement.paid, không dọn phòng để tránh mất PMC:", roomId);
+    }
+    return;
+}
             const winnerSide = fresh.winner;
             const loserSide = winnerSide === "do" ? "den" : "do";
 
@@ -15374,12 +15386,35 @@ async function handleMatchAction(type) {
             const isOppBot = opp && (opp.uid === "bot_master_100" || opp.isBot || (opp.name && opp.name.includes("Lão Tẩu")));
             if (isOppBot) reason = "checkmate";
 
-            db.ref("matches/" + currentRoomId).update({
-                winner: mySide === "do" ? "den" : "do",
-                winReason: reason,
-                finishedAt: firebase.database.ServerValue.TIMESTAMP,
-                updatedAt: firebase.database.ServerValue.TIMESTAMP
-            });
+            const winnerSide = mySide === "do" ? "den" : "do";
+const bucket = currentRoomBucket;
+
+const updates = {};
+updates[`matches/${currentRoomId}/winner`] = winnerSide;
+updates[`matches/${currentRoomId}/winReason`] = reason;
+updates[`matches/${currentRoomId}/finishedAt`] = firebase.database.ServerValue.TIMESTAMP;
+updates[`matches/${currentRoomId}/quitSide`] = mySide;
+updates[`matches/${currentRoomId}/status`] = "finished";
+updates[`matches/${currentRoomId}/lobbyOpen`] = false;
+updates[`matches/${currentRoomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+if (bucket) {
+    updates[`waitingRooms/${bucket}/${currentRoomId}`] = null;
+}
+
+await db.ref().update(updates);
+
+// Nếu đối thủ là bot thì ép dọn sau khi ghi kết quả.
+// Ván 0 PMC sẽ dọn ngay, ván có cược sẽ chờ paid xong.
+if (isOppBot && typeof scheduleResetWinnerRoomAfterPaid === "function") {
+    setTimeout(async () => {
+        const snap = await db.ref("matches/" + currentRoomId).once("value").catch(() => null);
+        const freshRoom = snap?.val?.();
+        if (freshRoom?.winner) {
+            scheduleResetWinnerRoomAfterPaid(freshRoom, currentRoomId);
+        }
+    }, 600);
+}
         }
         return;
     }
