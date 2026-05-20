@@ -11637,7 +11637,9 @@ const detectedSide = getMySideFromRoomSafe(room);
 // Nếu mình là B/đen, nhưng Firebase đã xóa players/den
 // nghĩa là A đã đá B vì hết 30 giây chưa SS.
 // Chỉ xử lý local cho B văng về sảnh, KHÔNG gọi leaveRealtimeMatch nữa.
-const iWasKickedByReadyTimeout =
+const readyKickReason = String(room?.readyKick?.den?.reason || "");
+
+const iWasRemovedFromReadyRoom =
     mySide === "den" &&
     !detectedSide &&
     room.status === "waiting" &&
@@ -11645,13 +11647,15 @@ const iWasKickedByReadyTimeout =
     !!room.players?.do &&
     !room.players?.den;
 
-if (iWasKickedByReadyTimeout) {
+if (iWasRemovedFromReadyRoom) {
     clearInterval(readyInterval);
     readyInterval = null;
 
     closeReadyOverlay();
 
-    alert("Hết thời gian sẵn sàng!");
+        if (readyKickReason === "timeout") {
+        alert("Hết thời gian sẵn sàng!");
+    }
 
     clearActiveMatchSnapshot(listeningRoomId);
     cleanupRoomListeners();
@@ -15501,10 +15505,16 @@ async function failReadyAndBackHome() {
         const bucket = room.roomBucket || currentRoomBucket || makeStakeBucket(room.mode || currentRoomMode, room.stakePMC || currentRoomStakePMC);
         const inviteCode = String(room.inviteCode || makeInviteCodeFromRoomId(roomId)).toUpperCase();
 
-        if (room.players?.den && !denReady) {
+                if (room.players?.den && !denReady) {
             updates[`matches/${roomId}/players/den`] = null;
             updates[`matches/${roomId}/ready/den`] = false;
             updates[`matches/${roomId}/stakeLocked/den`] = false;
+
+            // Đánh dấu B bị đá vì hết giờ SS thật.
+            updates[`matches/${roomId}/readyKick/den`] = {
+                reason: "timeout",
+                at: firebase.database.ServerValue.TIMESTAMP
+            };
         }
 
         // reset deadline cũ để người C/D/B vào lại thì tạo 30 giây mới
@@ -15706,29 +15716,46 @@ if (liveDeadline && liveDeadline > readyNowMs()) {
 
         updateReadyUI();
 
-        if (readyTime > 0) return;
+                if (readyTime > 0) return;
+
+        // Chống máy con ăn snapshot cũ: đọc Firebase 1 lần trước khi xử lý hết giờ.
+        let freshRoom = window.__lastBoundRoom || {};
+        try {
+            if (currentRoomId) {
+                const freshSnap = await db.ref("matches/" + currentRoomId).once("value");
+                freshRoom = freshSnap.val() || freshRoom;
+                window.__lastBoundRoom = freshRoom;
+                window.__lastBoundRoomId = currentRoomId;
+            }
+        } catch (err) {
+            console.error("READY_TIMEOUT_FRESH_READ_FAIL:", err);
+        }
+
+        const freshDeadline = Number(freshRoom.readyDeadlineAt || 0);
+
+        // Nếu Firebase còn deadline thật trong tương lai thì KHÔNG báo hết giờ.
+        if (freshDeadline && freshDeadline > readyNowMs()) {
+            readyDeadlineAt = freshDeadline;
+            readyTime = getReadySecondsLeft(freshDeadline);
+            updateReadyUI();
+            return;
+        }
 
         clearInterval(readyInterval);
         readyInterval = null;
 
         if (!overlay || overlay.style.display === "none") return;
 
-        const freshRoom = window.__lastBoundRoom || {};
         const doReadyNow = !!freshRoom.ready?.do;
         const denReadyNow = !!freshRoom.ready?.den;
 
-        // Nếu cả 2 đã SS rồi thì không báo hết giờ nữa,
-        // chờ backend/Firebase chuyển status sang playing.
         if (doReadyNow && denReadyNow) {
             updateReadyUI();
             return;
         }
 
-        const iAmReady =
-            (mySide === "do" && doReadyNow) ||
-            (mySide === "den" && denReadyNow);
-
-        // Chủ phòng A/Đỏ: hết giờ thì xử lý dọn B nếu B chưa SS.
+        // Chỉ chủ phòng A/Đỏ được quyền xử lý hết giờ.
+        // B/Đen không tự đá mình nữa để tránh lệch cache / lệch đồng hồ.
         if (mySide === "do") {
             Promise.resolve(failReadyAndBackHome()).catch(err => {
                 console.error("HOST_READY_TIMEOUT_CLEANUP_FAIL:", err);
@@ -15736,16 +15763,8 @@ if (liveDeadline && liveDeadline > readyNowMs()) {
             return;
         }
 
-        // B/Đen đã SS rồi thì không tự văng.
-        if (mySide === "den" && iAmReady) {
-            updateReadyUI();
-            return;
-        }
-
-        // B/Đen chưa SS thì bị đá ra.
-        Promise.resolve(failReadyAndBackHome()).catch(err => {
-            console.error("GUEST_READY_TIMEOUT_LEAVE_FAIL:", err);
-        });
+        updateReadyUI();
+        return;
     };
 
     tickReadyCountdown();
@@ -18863,7 +18882,10 @@ async function acceptRoomInvite() {
         updates[`matches/${invite.roomId}/ready/den`] = false;
         updates[`matches/${invite.roomId}/stakeLocked/do`] = false;
         updates[`matches/${invite.roomId}/stakeLocked/den`] = false;
-        updates[`matches/${invite.roomId}/readyDeadlineAt`] = null;
+                const inviteReadyDeadlineAt = readyNowMs() + 30000;
+
+        updates[`matches/${invite.roomId}/readyDeadlineAt`] = inviteReadyDeadlineAt;
+        updates[`matches/${invite.roomId}/readyNonce`] = Date.now();
         updates[`matches/${invite.roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
         await db.ref().update(updates);
 
@@ -18877,6 +18899,10 @@ async function acceptRoomInvite() {
         currentRoomStakePMC = stakePMC;
         currentRoomBucket = room.roomBucket || invite.roomBucket || makeStakeBucket(mode, stakePMC);
         currentRoomStatus = "waiting";
+                readyDeadlineAt = inviteReadyDeadlineAt;
+        readyTime = 30;
+        readyDo = false;
+        readyDen = false;
         isGameOver = false;
         luotDi = "do";
         timeDo = Number(room.timeDo || 900);
