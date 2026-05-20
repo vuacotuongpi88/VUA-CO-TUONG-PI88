@@ -8888,36 +8888,130 @@ function buildLeavingPlayersCleanupUpdates(roomId, room = {}) {
     return updates;
 }
 
-async function cleanupLeavingPlayersFromWaitingRoom(room = {}, roomId = currentRoomId) {
+async function cleanupOpponentWhoLeftHomeFromReadyRoom(room = {}, roomId = currentRoomId) {
     if (!roomId || !room) return false;
+    if (room.status !== "waiting" || room.winner) return false;
 
-    // Đang đánh thật thì không xoá ghế ở đây, để leaveRealtimeMatch xử thua trước.
-    if (room.status === "playing" && !room.winner) return false;
+    const mySideNow = typeof getMySideFromRoomSafe === "function"
+        ? getMySideFromRoomSafe(room)
+        : mySide;
 
-    // Chưa chia tiền xong thì chưa xoá player, tránh backend thiếu dữ liệu trả thưởng.
-    const stake = Math.max(0, Math.floor(Number(room.stakePMC || 0) || 0));
-    if (room.winner && room.winner !== "hoa" && stake > 0 && room.settlement?.paid !== true && room.settlement?.done !== true) {
-        return false;
+    if (!mySideNow) return false;
+
+    const sides = ["do", "den"].filter(side => !!room.players?.[side]);
+    if (sides.length < 2) return false;
+
+    const now = Date.now();
+    const leavingSides = [];
+
+    for (const side of sides) {
+        const p = room.players?.[side];
+        if (!p) continue;
+
+        // Không tự đá chính mình.
+        if (side === mySideNow) continue;
+        if (typeof isSamePlayerAsMe === "function" && isSamePlayerAsMe(p)) continue;
+
+        // Bot thì cho hệ thống dọn bằng logic bot cũ.
+        if (typeof isBotPlayerObj === "function" && isBotPlayerObj(p)) {
+            leavingSides.push(side);
+            continue;
+        }
+
+        const walletKey = String(p.walletKey || p.uid || "").trim();
+        if (!walletKey) continue;
+
+        let state = null;
+        try {
+            const stSnap = await db.ref("social/playerState/" + walletKey).once("value");
+            state = stSnap.val() || {};
+        } catch (err) {
+            console.warn("READ_PLAYER_STATE_FAIL:", walletKey, err);
+            continue;
+        }
+
+        const stateName = String(state.state || "").trim();
+        const stateRoomId = String(state.roomId || "").trim();
+        const updatedAt = Number(state.updatedAt || 0) || 0;
+
+        // Không có dữ liệu state thì bỏ qua, tránh đá nhầm người đang chơi bản cũ.
+        if (!stateName && !updatedAt) continue;
+
+        const isStillInThisRoom =
+            stateName === "arena" &&
+            stateRoomId === roomId;
+
+        const isStaleArena =
+            isStillInThisRoom &&
+            updatedAt > 0 &&
+            now - updatedAt > 45000;
+
+        const isClearlyLeft =
+            stateName &&
+            !isStillInThisRoom;
+
+        if (isClearlyLeft || isStaleArena) {
+            leavingSides.push(side);
+        }
     }
 
-    const updates = buildLeavingPlayersCleanupUpdates(roomId, room);
+    if (!leavingSides.length) return false;
+
+    const lockKey = [
+        roomId,
+        leavingSides.join(","),
+        room.updatedAt || "",
+        Math.floor(Date.now() / 2500)
+    ].join("|");
+
+    window.__presenceCleanupRoomLock = window.__presenceCleanupRoomLock || "";
+    if (window.__presenceCleanupRoomLock === lockKey) return false;
+    window.__presenceCleanupRoomLock = lockKey;
+
+    const forcedRoom = {
+        ...room,
+        players: { ...(room.players || {}) },
+        leaveRequests: { ...(room.leaveRequests || {}) }
+    };
+
+    for (const side of leavingSides) {
+        const p = forcedRoom.players?.[side] || {};
+        forcedRoom.players[side] = {
+            ...p,
+            leaving: true,
+            leftAt: Date.now()
+        };
+
+        const rawKey = "presence_" + side + "_" + (p.walletKey || p.uid || Date.now());
+        const reqKey = typeof safeKey === "function"
+            ? safeKey(rawKey)
+            : rawKey.replace(/[.#$\[\]/]/g, "_");
+
+        forcedRoom.leaveRequests[reqKey] = {
+            side,
+            uid: p.uid || "",
+            walletKey: p.walletKey || p.uid || "",
+            reason: "presence_home_or_stale",
+            at: Date.now()
+        };
+    }
+
+    const updates = buildLeavingPlayersCleanupUpdates(roomId, forcedRoom);
     if (!updates) return false;
 
-    const lockKey = JSON.stringify([
-        roomId,
-        room.updatedAt || "",
-        Object.keys(room.leaveRequests || {}).join(","),
-        getLeavingSidesFromRoom(room).join(",")
-    ]);
-
-    window.__cleanupLeavingPlayersLock = window.__cleanupLeavingPlayersLock || "";
-    if (window.__cleanupLeavingPlayersLock === lockKey) return false;
-    window.__cleanupLeavingPlayersLock = lockKey;
-
     await db.ref().update(updates);
+
+    if (currentRoomId === roomId) {
+        closeReadyOverlay();
+        readyDo = false;
+        readyDen = false;
+        readyDeadlineAt = 0;
+        readyTime = 30;
+    }
+
+    console.log("Đã tự dọn người rời phòng theo presence:", leavingSides);
     return true;
 }
-
 
 async function preloadNextMatchData() {
     const roomId = currentRoomId;
@@ -11731,7 +11825,14 @@ if (
     cleanupLeavingPlayersFromWaitingRoom(room, listeningRoomId)
         .catch(err => console.error("Dọn ghế người đã thoát lỗi:", err));
 }
-
+if (
+    room.status === "waiting" &&
+    !room.winner &&
+    typeof cleanupOpponentWhoLeftHomeFromReadyRoom === "function"
+) {
+    cleanupOpponentWhoLeftHomeFromReadyRoom(room, listeningRoomId)
+        .catch(err => console.error("Dọn người về sảnh/offline lỗi:", err));
+}
 renderPlayersFromRoom(room);
 updateReadyUI();
 // Khởi động lại đếm ngược gọi Bot nếu mày là chủ phòng và ghế Đen đang trống
@@ -15542,7 +15643,22 @@ if (readyTime <= 0) {
     });
 }
     };
+        // Nếu đối thủ đã về sảnh/offline nhưng Firebase vẫn còn ghế,
+        // máy còn lại tự dọn phòng và lên làm chủ phòng.
+        if (
+            currentRoomId &&
+            window.__lastBoundRoom &&
+            typeof cleanupOpponentWhoLeftHomeFromReadyRoom === "function"
+        ) {
+            window.__readyPresenceSweepAt = window.__readyPresenceSweepAt || 0;
 
+            if (Date.now() - window.__readyPresenceSweepAt > 2500) {
+                window.__readyPresenceSweepAt = Date.now();
+
+                cleanupOpponentWhoLeftHomeFromReadyRoom(window.__lastBoundRoom, currentRoomId)
+                    .catch(err => console.error("READY_PRESENCE_CLEANUP_FAIL:", err));
+            }
+        }
     updateReadyUI();
     readyInterval = setInterval(tickReadyCountdown, 1000);
 }
