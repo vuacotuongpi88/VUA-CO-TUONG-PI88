@@ -148,8 +148,8 @@ height: 9%;
 transform: translate(-50%, -50%);
 z-index: 20;
 transition:
-    left 1.20s cubic-bezier(0.18, 0.75, 0.22, 1),
-    top 1.20s cubic-bezier(0.18, 0.75, 0.22, 1),
+    left 0.70s cubic-bezier(0.18, 0.75, 0.22, 1),
+    top 0.70s cubic-bezier(0.18, 0.75, 0.22, 1),
     transform 0.12s ease,
     filter 0.12s ease,
     opacity 0.12s ease;
@@ -161,6 +161,14 @@ clip-path: circle(60%);
 /* Cắt sạch nền dư, ôm sát con cờ */
 object-fit: cover;
 filter: drop-shadow(2px 4px 3px rgba(0, 0, 0, 0.5));
+}
+.move-ghost {
+    position: fixed !important;
+    border-radius: 60% !important;
+    clip-path: circle(60%) !important;
+    object-fit: cover !important;
+    filter: drop-shadow(2px 4px 3px rgba(0, 0, 0, 0.5)) !important;
+    pointer-events: none !important;
 }
 .piece-moving-smooth {
     z-index: 999 !important;
@@ -9296,7 +9304,7 @@ function spawnDragonAttack(kingElement) {
 
     }, 2800); 
 }
-window.CHESS_MOVE_ANIM_MS = 1800;
+window.CHESS_MOVE_ANIM_MS = 700;
 function animateLocalMoveGhost(pieceEl, to) {
     try {
         if (!pieceEl || !to || !board) return false;
@@ -9318,7 +9326,11 @@ function animateLocalMoveGhost(pieceEl, to) {
             pieceRect.height / 2;
 
         const ghost = pieceEl.cloneNode(true);
-        ghost.classList.remove("selected", "is-chieu", "lightning-chieu", "piece-moving-smooth");
+
+// CỰC QUAN TRỌNG: ghost không được giữ class "piece"
+// nếu không exportBoardState sẽ quét nhầm ghost rồi sync Firebase sai.
+ghost.classList.remove("piece", "selected", "is-chieu", "lightning-chieu", "piece-moving-smooth");
+ghost.classList.add("move-ghost");
 
         ghost.style.position = "fixed";
         ghost.style.left = pieceRect.left + "px";
@@ -9651,7 +9663,7 @@ refreshTimerRings();
                         });
                     }
                 };
-            }, Number(window.CHESS_MOVE_ANIM_MS || 1200) + 350);
+            }, Number(window.CHESS_MOVE_ANIM_MS || 700) + 150);
         }
     }
 }; // Kết thúc board.onclick
@@ -9732,20 +9744,34 @@ function mapViewToBoard(c, r) {
     return { c, r };
 }
 function exportBoardState() {
-    return Array.from(document.querySelectorAll(".piece")).map(p => {
+    const list = [];
+
+    // Chỉ lấy quân thật nằm trực tiếp trong bàn cờ.
+    // Không lấy ghost bay ngoài body.
+    const pieces = Array.from(board.querySelectorAll(":scope > .piece"));
+
+    for (const p of pieces) {
+        if (!p.dataset.side || !p.dataset.type) continue;
+
         const viewC = columns.indexOf(parseFloat(p.style.left));
         const viewR = rows.indexOf(parseFloat(p.style.top));
+
+        // Nếu style đang là px hoặc lỗi vị trí thì bỏ qua, không ghi rác lên Firebase.
+        if (viewC < 0 || viewR < 0) continue;
+
         const realPos = mapViewToBoard(viewC, viewR);
 
-        return {
+        list.push({
             c: realPos.c,
             r: realPos.r,
             side: p.dataset.side,
             type: p.dataset.type,
             isUp: p.dataset.isUp === "true",
             src: p.getAttribute("src") || p.src
-        };
-    });
+        });
+    }
+
+    return list;
 }
 
 function applyBoardStateFromRoom(pieces) {
@@ -9754,7 +9780,7 @@ function applyBoardStateFromRoom(pieces) {
 
     const landingHide = window.__moveLandingHide || null;
 
-    document.querySelectorAll(".piece").forEach(p => p.remove());
+    board.querySelectorAll(":scope > .piece").forEach(p => p.remove());
     clearMoveHints();
     clearLastMoveMarks();
     selectedPiece = null;
