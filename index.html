@@ -148,8 +148,8 @@ height: 9%;
 transform: translate(-50%, -50%);
 z-index: 20;
 transition:
-    left 0.85s cubic-bezier(0.18, 0.75, 0.22, 1),
-    top 0.85s cubic-bezier(0.18, 0.75, 0.22, 1),
+    left 1.20s cubic-bezier(0.18, 0.75, 0.22, 1),
+    top 1.20s cubic-bezier(0.18, 0.75, 0.22, 1),
     transform 0.12s ease,
     filter 0.12s ease,
     opacity 0.12s ease;
@@ -8482,13 +8482,23 @@ function renderSpectatorRoomSnapshot(room = {}, roomId = "") {
     const newBoardHash = JSON.stringify(room.board || []);
     if (newBoardHash !== lastRoomBoardHash) {
 const hadOldBoardHash = !!lastRoomBoardHash;
+
+const isMyLocalVisualUpdate =
+    window.__localMoveBoardHash &&
+    newBoardHash === window.__localMoveBoardHash &&
+    Date.now() < Number(window.__localMoveVisualUntil || 0);
+
 lastRoomBoardHash = newBoardHash;
 
-if (hadOldBoardHash && room.lastMoveFrom && room.lastMoveTo) {
-    animateRemoteMoveGhost(room.lastMoveFrom, room.lastMoveTo);
-}
+if (!isMyLocalVisualUpdate) {
+    if (hadOldBoardHash && room.lastMoveFrom && room.lastMoveTo) {
+        animateRemoteMoveGhost(room.lastMoveFrom, room.lastMoveTo);
+    }
 
-applyBoardStateFromRoom(room.board || []);
+    applyBoardStateFromRoom(room.board || []);
+} else {
+    console.log("SKIP Firebase render để giữ animation quân đang đi");
+}
         isCoUp = !!room.isCoUp;
         luotDi = room.turn || "do";
         timeDo = typeof room.timeDo === "number" ? room.timeDo : 900;
@@ -9286,7 +9296,7 @@ function spawnDragonAttack(kingElement) {
 
     }, 2800); 
 }
-window.CHESS_MOVE_ANIM_MS = 850;
+window.CHESS_MOVE_ANIM_MS = 1200;
 function animateRemoteMoveGhost(from, to) {
     try {
         if (!from || !to) return false;
@@ -9526,8 +9536,7 @@ setTimeout(() => {
     if (movingPiece && movingPiece.parentNode) {
         movingPiece.classList.remove("piece-moving-smooth");
     }
-}, 950);
-
+}, Number(window.CHESS_MOVE_ANIM_MS || 1200) + 150);
     luotDi = (luotDi === 'do') ? 'den' : 'do';
 
     if (isCoUp && selectedPiece.dataset.isUp === "true") {
@@ -9579,7 +9588,10 @@ refreshTimerRings();
     }, 200);
 
     if (currentRoomId) {
-        syncRoomFromBoard();
+    window.__localMoveBoardHash = JSON.stringify(exportBoardState());
+    window.__localMoveVisualUntil = Date.now() + Number(window.CHESS_MOVE_ANIM_MS || 1200) + 300;
+
+    syncRoomFromBoard();
         
         // --- ÉP CPU MÁY KHÁCH TÍNH TOÁN CHO BOT (DỰA VÀO UID, KHÔNG DỰA VÀO TÊN) ---
         const currentRoom = window.__lastBoundRoom || {};
@@ -9633,7 +9645,7 @@ refreshTimerRings();
                         });
                     }
                 };
-            }, 500);
+            }, Number(window.CHESS_MOVE_ANIM_MS || 1200) + 350);
         }
     }
 }; // Kết thúc board.onclick
@@ -11377,13 +11389,23 @@ if (!canRenderLiveBoard) {
 
     if (newBoardHash !== lastRoomBoardHash) {
 const hadOldBoardHash = !!lastRoomBoardHash;
+
+const isMyLocalVisualUpdate =
+    window.__localMoveBoardHash &&
+    newBoardHash === window.__localMoveBoardHash &&
+    Date.now() < Number(window.__localMoveVisualUntil || 0);
+
 lastRoomBoardHash = newBoardHash;
 
-if (hadOldBoardHash && room.lastMoveFrom && room.lastMoveTo) {
-    animateRemoteMoveGhost(room.lastMoveFrom, room.lastMoveTo);
-}
+if (!isMyLocalVisualUpdate) {
+    if (hadOldBoardHash && room.lastMoveFrom && room.lastMoveTo) {
+        animateRemoteMoveGhost(room.lastMoveFrom, room.lastMoveTo);
+    }
 
-applyBoardStateFromRoom(room.board || []);
+    applyBoardStateFromRoom(room.board || []);
+} else {
+    console.log("SKIP Firebase render để giữ animation quân đang đi");
+}
         isCoUp = !!room.isCoUp;
          luotDi = room.turn || "do";
          
