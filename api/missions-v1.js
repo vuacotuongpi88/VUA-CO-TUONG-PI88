@@ -669,7 +669,6 @@ async function buildBoard(db, walletKey, now = Date.now()) {
   !claimed &&
   progress >= target &&
   rewardPmc > 0 &&
-  treasuryPmc >= rewardPmc &&
   missionPoolPmc >= rewardPmc;
 
     if (ready) {
@@ -839,47 +838,23 @@ async function claimMission(db, walletKey, missionId, now = Date.now()) {
         ? userPreSnap.val()
         : {};
 
-    const treasuryTx = await txAdjustPmc(
-      treasuryRef,
-      -mission.rewardPmc,
-      { name: 'Ví phí hệ thống' },
-      treasuryPreRead
-    );
-
-    if (!treasuryTx.committed) {
-      await claimRef.remove().catch(() => {});
-      throw new Error('Ví phí hệ thống hiện không đủ quỹ để trả thưởng.');
-    }
-
-    const userTx = await txAdjustPmc(userRef, mission.rewardPmc, {}, userPreRead);
-
-    if (!userTx.committed) {
-      await txAdjustPmc(
-        treasuryRef,
-        mission.rewardPmc,
-        { name: 'Ví phí hệ thống' },
-        treasuryPreRead
-      ).catch(() => {});
-
-      await claimRef.remove().catch(() => {});
-      throw new Error('Không cộng được thưởng vào ví người chơi.');
-    }
-
     const poolTx = await subtractMissionPoolPmc(db, mission.rewardPmc);
 
-    if (!poolTx.committed) {
-      await txAdjustPmc(
-        treasuryRef,
-        mission.rewardPmc,
-        { name: 'Ví phí hệ thống' },
-        treasuryPreRead
-      ).catch(() => {});
+if (!poolTx.committed) {
+  await claimRef.remove().catch(() => {});
+  throw new Error('Quỹ nhiệm vụ hiện không đủ để trả thưởng.');
+}
 
-      await txAdjustPmc(userRef, -mission.rewardPmc, {}, userPreRead).catch(() => {});
-      await claimRef.remove().catch(() => {});
+const userTx = await txAdjustPmc(userRef, mission.rewardPmc, {}, userPreRead);
 
-      throw new Error('Quỹ nhiệm vụ hiện không đủ để trả thưởng.');
-    }
+    if (!userTx.committed) {
+  await db.ref('treasury/missionPoolPmc').transaction(current => {
+    return roundPmc((Number(current || 0) || 0) + mission.rewardPmc);
+  }).catch(() => {});
+
+  await claimRef.remove().catch(() => {});
+  throw new Error('Không cộng được thưởng vào ví người chơi.');
+}
 
     const txPayload = {
       type: 'mission_reward_pmc',
@@ -916,7 +891,18 @@ async function claimMission(db, walletKey, missionId, now = Date.now()) {
       newPmcBalance: userTx.afterBalance,
       periodKey: mission.periodKey
     };
-  } catch (err) {
+    } catch (err) {
+    await db.ref('missionClaimFailLogsV1').push().set({
+      walletKey,
+      missionId,
+      missionTitle: mission?.title || '',
+      rewardPmc: mission?.rewardPmc || 0,
+      periodKey: mission?.periodKey || '',
+      error: err?.message || String(err),
+      createdAt: nowMs(),
+      status: 'fail'
+    }).catch(() => {});
+
     await claimRef.remove().catch(() => {});
     throw err;
   }
