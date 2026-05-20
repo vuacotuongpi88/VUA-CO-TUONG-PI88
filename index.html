@@ -7718,10 +7718,10 @@ function listenForNotifications() {
 
     const refPath = "notifications/" + myKey;
 
-    // Chống bị gắn nhiều listener khi login lại / reload UI
+    // Gỡ listener cũ, tránh vào game lại bị gắn nhiều lần
     if (window.__notiListenRef) {
         try {
-            window.__notiListenRef.off("child_added");
+            window.__notiListenRef.off();
         } catch (_) {}
     }
 
@@ -7738,18 +7738,25 @@ function listenForNotifications() {
     }
 
     function saveSeenNoti(id) {
+        if (!id) return;
+
         const map = getSeenNotiMap();
         map[id] = Date.now();
 
-        // Giữ tối đa 200 thông báo để khỏi phình localStorage
         const entries = Object.entries(map)
             .sort((a, b) => Number(b[1]) - Number(a[1]))
-            .slice(0, 200);
+            .slice(0, 300);
 
         localStorage.setItem(seenStorageKey, JSON.stringify(Object.fromEntries(entries)));
     }
 
-    async function markNotiReadOnServer(notificationId) {
+    async function markNotiRead(notificationId) {
+        if (!notificationId) return;
+
+        // 1) Lưu local trước cho chắc, reload cũng không hiện lại
+        saveSeenNoti(notificationId);
+
+        // 2) Thử gọi server
         try {
             await fetch("/api/finance?v=" + Date.now(), {
                 method: "POST",
@@ -7764,39 +7771,82 @@ function listenForNotifications() {
                 })
             });
         } catch (err) {
-            console.warn("MARK_NOTI_READ_FAIL:", err);
+            console.warn("MARK_NOTI_READ_SERVER_FAIL:", err);
+        }
+
+        // 3) Fallback client, nếu rules cho thì nó tự đổi read luôn
+        try {
+            await db.ref(`${refPath}/${notificationId}`).update({
+                status: "read",
+                readAt: Date.now()
+            });
+        } catch (err) {
+            console.warn("MARK_NOTI_READ_CLIENT_FAIL:", err);
         }
     }
 
-    window.__notiListenRef.on("child_added", async (snap) => {
-        const notify = snap.val() || {};
-        const notiId = snap.key;
+    // Bước 1: khi mới vào game, quét thông báo cũ rồi đánh dấu read âm thầm
+    window.__notiListenRef.once("value").then(async (snap) => {
+        const oldList = [];
 
-        if (!notiId) return;
-        if (notify.status !== "unread") return;
+        snap.forEach(child => {
+            const notify = child.val() || {};
+            const notiId = child.key;
 
-        const seenMap = getSeenNotiMap();
+            if (!notiId) return;
 
-        // Đã báo trên máy này rồi thì không hiện lại nữa
-        if (seenMap[notiId]) {
-            markNotiReadOnServer(notiId);
-            return;
+            // Dù unread hay đã seen rồi thì cũng lưu local để khỏi bật lại
+            if (notify.status === "unread") {
+                oldList.push(notiId);
+            }
+        });
+
+        for (const id of oldList) {
+            await markNotiRead(id);
         }
 
-        // Lưu trước khi alert, để người chơi tắt app/reload cũng không bị hiện lại
-        saveSeenNoti(notiId);
+        // Bước 2: từ lúc này trở đi mới nghe thông báo mới thật sự
+        window.__notiListenerReadyAt = Date.now();
 
-        // Đánh dấu read bằng server, khỏi dính PERMISSION_DENIED
-        markNotiReadOnServer(notiId);
+        window.__notiListenRef.on("child_added", async (snap) => {
+            const notify = snap.val() || {};
+            const notiId = snap.key;
 
-        const fromName = notify.fromName || "Bạn bè";
-        const text = notify.text || "vừa gửi thông báo cho bạn.";
+            if (!notiId) return;
+            if (notify.status !== "unread") return;
 
-        alert(`🎁 CHÚC MỪNG: ${fromName} ${text}`);
+            const seenMap = getSeenNotiMap();
+            if (seenMap[notiId]) {
+                markNotiRead(notiId);
+                return;
+            }
 
-        if (typeof loadWalletBalance === "function") {
-            loadWalletBalance().catch(() => {});
-        }
+            const createdAt = Number(
+                notify.createdAt ||
+                notify.at ||
+                notify.time ||
+                0
+            );
+
+            // Nếu là thông báo cũ tồn tại trước lúc vào game thì chỉ read, không popup
+            if (createdAt && createdAt < Number(window.__notiListenerReadyAt || 0) - 3000) {
+                markNotiRead(notiId);
+                return;
+            }
+
+            await markNotiRead(notiId);
+
+            const fromName = notify.fromName || "Bạn bè";
+            const text = notify.text || "vừa gửi thông báo cho bạn.";
+
+            alert(`🎁 CHÚC MỪNG: ${fromName} ${text}`);
+
+            if (typeof loadWalletBalance === "function") {
+                loadWalletBalance().catch(() => {});
+            }
+        });
+    }).catch(err => {
+        console.warn("INIT_NOTI_LISTENER_FAIL:", err);
     });
 }
 function showLoginChoices() {
