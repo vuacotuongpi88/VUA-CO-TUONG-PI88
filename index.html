@@ -1383,21 +1383,50 @@ z-index: 10000;
 cursor: pointer;
 }
 
-/* TẠO HÌNH 3 GẠCH (Cái này mầy thiếu nè) */
-.hamburger-icon {
-width: 25px;
-height: 18px;
-display: flex;
-flex-direction: column;
-justify-content: space-between;
+/* AVATAR MENU GÓC TRÁI */
+.menu-avatar-btn {
+    width: 46px;
+    height: 46px;
+    min-width: 46px;
+    border-radius: 50%;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #55efc4;
+    background: rgba(0, 0, 0, 0.72);
+    box-shadow:
+        0 0 10px rgba(85, 239, 196, 0.45),
+        0 0 16px rgba(0, 0, 0, 0.65);
+    overflow: visible;
 }
 
-.hamburger-icon span {
-display: block;
-width: 100%;
-height: 3px;
-background-color: #55efc4;
-border-radius: 3px;
+.menu-avatar-btn:active {
+    transform: scale(0.94);
+}
+
+.menu-avatar-img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #111;
+    border: 1px solid rgba(255,255,255,0.82);
+}
+
+.menu-avatar-badge {
+    position: absolute;
+    top: -5px;
+    right: -6px;
+    background: red;
+    color: white;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 50%;
+    border: 1px solid white;
+    z-index: 100;
+    font-family: Arial;
+    font-weight: bold;
 }
 
 /* Chữ và Khung số dư */
@@ -6712,11 +6741,12 @@ console.log("Đang chạy trên môi trường:", currentNetwork.toUpperCase());
 </div>
 
 <div id="user-display" class="hamburger-menu-container" style="display: none;">
-<div class="hamburger-icon" onclick="toggleProfileMenu(event)" style="position: relative;">
-<span></span>
-<span></span>
-<span></span>
-<div id="admin-msg-badge" style="display:none; position:absolute; top:-5px; right:-8px; background:red; color:white; font-size:10px; padding:2px 6px; border-radius:50%; border:1px solid white; z-index:100; font-family:Arial; font-weight:bold;">!</div>
+<div class="menu-avatar-btn" onclick="toggleProfileMenu(event)" title="Menu tài khoản">
+    <img id="menu-avatar-photo"
+         class="menu-avatar-img"
+         src="images/do_tuong.png"
+         onerror="this.src='images/do_tuong.png'">
+    <div id="admin-msg-badge" class="menu-avatar-badge" style="display:none;">!</div>
 </div>
 
 <div class="user-meta" onclick="toggleProfileMenu(event)">
@@ -7706,9 +7736,12 @@ async function applyLoggedInUI(displayName, photoURL) {
     if (homeMenu) homeMenu.style.display = "block";
     if (gameArena) gameArena.style.display = "none";
 
-    document.getElementById("user-name-display").innerText = safeName;
-    document.getElementById("user-name").innerText = safeName;
-    document.getElementById("user-photo").src = safePhoto;
+document.getElementById("user-name-display").innerText = safeName;
+document.getElementById("user-name").innerText = safeName;
+document.getElementById("user-photo").src = safePhoto;
+
+const menuAvatarPhoto = document.getElementById("menu-avatar-photo");
+if (menuAvatarPhoto) menuAvatarPhoto.src = safePhoto;
 
     localStorage.setItem("user-name-display", safeName);
     localStorage.setItem("user-photo", safePhoto);
@@ -12848,14 +12881,16 @@ async function loadWalletBalance() {
             if (userName) userName.innerText = data.name;
         }
         
-        if (data.photo) {
-            localStorage.setItem("user-photo", data.photo);
-            const userPhoto = document.getElementById("user-photo");
-            const editUserPhoto = document.getElementById("edit-user-photo");
-            if (userPhoto) userPhoto.src = data.photo;
-            if (editUserPhoto) editUserPhoto.src = data.photo;
-        }
+if (data.photo) {
+    localStorage.setItem("user-photo", data.photo);
+    const userPhoto = document.getElementById("user-photo");
+    const editUserPhoto = document.getElementById("edit-user-photo");
+    const menuAvatarPhoto = document.getElementById("menu-avatar-photo");
 
+    if (userPhoto) userPhoto.src = data.photo;
+    if (editUserPhoto) editUserPhoto.src = data.photo;
+    if (menuAvatarPhoto) menuAvatarPhoto.src = data.photo;
+}
         // Cập nhật Firebase bằng tên gốc của Database
         await walletRef().update({
             updatedAt: firebase.database.ServerValue.TIMESTAMP,
@@ -13095,7 +13130,10 @@ function ensureAvatarFrameShell(imgEl) {
         imgEl.classList.contains("player-avatar-outside");
 
     const isShopAvatar = imgEl.classList.contains("avatar-shop-preview");
-    const isMenuAvatar = imgEl.id === "user-photo" || imgEl.id === "edit-user-photo";
+    const isMenuAvatar =
+    imgEl.id === "user-photo" ||
+    imgEl.id === "edit-user-photo" ||
+    imgEl.id === "menu-avatar-photo";
 
     let shell = imgEl.parentElement;
 
@@ -13233,6 +13271,7 @@ function refreshOwnAvatarSkinUI() {
 
     applyAvatarSkinToElement(document.getElementById("user-photo"), skinId);
     applyAvatarSkinToElement(document.getElementById("edit-user-photo"), skinId);
+    applyAvatarSkinToElement(document.getElementById("menu-avatar-photo"), skinId);
 
     renderAvatarSkinShop();
 }
@@ -15014,10 +15053,14 @@ function saveProfile() {
     }
 
     // 1. Đổi giao diện
-    document.getElementById("user-name-display").innerText = newName;
-    document.getElementById("user-name").innerText = newName;
-    document.getElementById("user-photo").src = newPhoto;
-    refreshOwnAvatarSkinUI();
+document.getElementById("user-name-display").innerText = newName;
+document.getElementById("user-name").innerText = newName;
+document.getElementById("user-photo").src = newPhoto;
+
+const menuAvatarPhoto = document.getElementById("menu-avatar-photo");
+if (menuAvatarPhoto) menuAvatarPhoto.src = newPhoto;
+
+refreshOwnAvatarSkinUI();
 
     // 2. Chặn đổi tên liên tục 30 ngày
     const oldName = localStorage.getItem("currentUsername") || "ĐẦU TIÊN TV";
