@@ -8266,10 +8266,14 @@ function startBotWaitingTimer() {
     clearInterval(botWaitInterval);
     botWaitInterval = setInterval(() => {
         // Nếu có thằng thật nhảy vào, hoặc đéo phải phòng chờ nữa thì hủy đếm
-        if (currentRoomStatus !== "waiting" || (window.__lastBoundRoom && window.__lastBoundRoom.players?.den)) {
-            cancelBotWaiting();
-            return;
-        }
+        const boundRoomId = String(window.__lastBoundRoomId || "");
+const sameBoundRoom = boundRoomId && currentRoomId && boundRoomId === String(currentRoomId);
+const hasDenInThisRoom = sameBoundRoom && !!window.__lastBoundRoom?.players?.den;
+
+if (currentRoomStatus !== "waiting" || hasDenInThisRoom) {
+    cancelBotWaiting();
+    return;
+}
 
         botWaitSeconds--;
         if (botSecEl) botSecEl.innerText = botWaitSeconds;
@@ -12716,13 +12720,37 @@ async function createAndPublishWaitingRoom(me, mode, stakePMC, bucket) {
     });
 
     mySide = "do";
-    currentRoomId = newRoomId;
-    currentRoomMode = mode;
-    currentRoomStakePMC = stakePMC;
+viewSide = "do";
+currentRoomId = newRoomId;
+currentRoomMode = mode;
+currentRoomStakePMC = stakePMC;
+currentRoomBucket = bucket;
+currentRoomStatus = "waiting";
 
-    saveActiveMatchSnapshot({ roomId: newRoomId, mode, side: "do" });
-    bindRoom(newRoomId);
-    return true;
+window.__lastBoundRoomId = newRoomId;
+window.__lastBoundRoom = {
+    mode,
+    stakePMC,
+    roomBucket: bucket,
+    status: "waiting",
+    lobbyOpen: true,
+    players: {
+        do: me,
+        den: null
+    },
+    ready: {
+        do: false,
+        den: false
+    },
+    winner: null
+};
+
+await setPlayerPresence("arena").catch(() => {});
+await touchCurrentLobbyHeartbeat().catch(() => {});
+
+saveActiveMatchSnapshot({ roomId: newRoomId, mode, side: "do" });
+bindRoom(newRoomId);
+return true;
 }
 async function joinOrCreateRealtimeMatch(mode, stakePMC = 0) {
     if (await tryResumeRealtimeMatch(mode)) return;
@@ -17527,7 +17555,11 @@ async function joinRoomFromLobby(roomId) {
 
         const roomSnap = await db.ref("matches/" + roomId).once("value");
         const room = roomSnap.val();
-if (room && await isPlayerAwayFromThisRoomByPresence(roomId, room?.players?.do || {})) {
+if (
+    room &&
+    !isFreshOpenWaitingRoom(room) &&
+    await isPlayerAwayFromThisRoomByPresence(roomId, room?.players?.do || {})
+) {
     await cleanupGhostLobbyRoom(roomId, room).catch(() => {});
     alert("Bàn này chủ phòng đã rời, đã dọn khỏi danh sách.");
     bindLobbyRoomList();
@@ -17939,20 +17971,72 @@ function shouldShowLobbyRoom(room = {}) {
 
     return hasDo && !hasDen && status === "waiting" && !room.winner;
 }
+function isFreshOpenWaitingRoom(room = {}) {
+    if (!room) return false;
+    if (room.status !== "waiting") return false;
+    if (room.lobbyOpen !== true) return false;
+    if (room.winner) return false;
+    if (!room.players?.do) return false;
+    if (room.players?.den) return false;
 
+    if (
+        isPendingServerTimestamp(room.createdAt) ||
+        isPendingServerTimestamp(room.lobbyUpdatedAt) ||
+        isPendingServerTimestamp(room.lobbyHeartbeatAt)
+    ) {
+        return true;
+    }
+
+    const t =
+        readRoomTimeValue(room.createdAt) ||
+        readRoomTimeValue(room.lobbyUpdatedAt) ||
+        readRoomTimeValue(room.lobbyHeartbeatAt) ||
+        0;
+
+    if (!t) return true;
+
+    return Date.now() - t < 30000; // phòng mới tạo 30s đầu tuyệt đối không dọn
+}
+
+function shouldCheckOpenWaitingRoomByPresence(room = {}) {
+    if (!room) return false;
+    if (room.status !== "waiting") return false;
+    if (room.lobbyOpen !== true) return false;
+    if (room.winner) return false;
+    if (!room.players?.do) return false;
+    if (room.players?.den) return false;
+
+    if (isFreshOpenWaitingRoom(room)) return false;
+
+    const aliveAt = getLobbyAliveTimeMs(room);
+    const aliveAge = aliveAt ? Date.now() - aliveAt : 999999999;
+
+    // Chỉ check presence khi tim lobby chết lâu rồi
+    return aliveAge > 45000;
+}
 async function cleanupGhostLobbyRoom(roomId, room = {}) {
     try {
         if (!roomId) return;
 
-        const bucket = getRoomBucketSafe(room);
-        const hostGone = await isPlayerAwayFromThisRoomByPresence(roomId, room?.players?.do || {});
+        // Phòng mới tạo / vừa bơm tim thì không được dọn.
+        if (isFreshOpenWaitingRoom(room)) return;
 
-        if (!isGhostLobbyRoom(room) && !hostGone) return;
+        const bucket = getRoomBucketSafe(room);
+        const ghost = isGhostLobbyRoom(room);
+
+        let hostGone = false;
+        if (!ghost && shouldCheckOpenWaitingRoomByPresence(room)) {
+            hostGone = await isPlayerAwayFromThisRoomByPresence(roomId, room?.players?.do || {});
+        }
+
+        if (!ghost && !hostGone) return;
 
         const updates = {};
 
         updates[`matches/${roomId}/lobbyOpen`] = false;
-        updates[`matches/${roomId}/lobbyClosedReason`] = hostGone ? "host_not_in_room" : (room.winner ? "finished" : "ghost_or_stale");
+        updates[`matches/${roomId}/lobbyClosedReason`] =
+            hostGone ? "host_not_in_room" : (room.winner ? "finished" : "ghost_or_stale");
+
         updates[`matches/${roomId}/lobbyClosedAt`] = firebase.database.ServerValue.TIMESTAMP;
         updates[`matches/${roomId}/lobbyUpdatedAt`] = firebase.database.ServerValue.TIMESTAMP;
 
@@ -17987,14 +18071,9 @@ async function cleanupGhostLobbyRoomsOnce() {
         const jobs = [];
         snap.forEach(child => {
             const room = child.val() || {};
-            if (
+if (
     isGhostLobbyRoom(room) ||
-    (
-        room.status === "waiting" &&
-        room.lobbyOpen === true &&
-        room.players?.do &&
-        !room.players?.den
-    )
+    shouldCheckOpenWaitingRoomByPresence(room)
 ) {
     jobs.push(cleanupGhostLobbyRoom(child.key, room));
 }
