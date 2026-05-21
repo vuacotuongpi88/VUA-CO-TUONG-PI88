@@ -7910,7 +7910,7 @@ function showLoginChoices() {
     const isPi = !!window.Pi;
 
     if (piBtn) piBtn.style.display = isPi ? "inline-flex" : "none";
-    if (googleBtn) googleBtn.style.display = "none"; // Tạm khóa đăng nhập Google
+    if (googleBtn) googleBtn.style.display = "inline-flex";
     if (piNote) piNote.style.display = isPi ? "none" : "block";
 
     if (oldPiBtn) oldPiBtn.style.display = "none";
@@ -7933,9 +7933,57 @@ function isRealPiBrowser() {
     const ua = navigator.userAgent || "";
     return !!window.Pi && /pibrowser|pi browser|minepi/i.test(ua);
 }
+function requirePiBrowserForPiMoney(actionText = "nạp/rút Pi") {
+    if (isRealPiBrowser()) return true;
+
+    const gameLink = location.href;
+
+    alert(
+        "⚠️ " + actionText + " chỉ dùng được trong Pi Browser.\n\n" +
+        "Bạn vẫn có thể đăng nhập Google để test game, chơi thử, đánh cờ, xem tính năng.\n\n" +
+        "Khi muốn nạp hoặc rút Pi:\n" +
+        "1) Mở app Pi Browser\n" +
+        "2) Dán link game này vào\n" +
+        "3) Đăng nhập Pi rồi thao tác nạp/rút\n\n" +
+        gameLink
+    );
+
+    try {
+        navigator.clipboard?.writeText(gameLink);
+    } catch (_) {}
+
+    return false;
+}
 function loginGoogle() {
-    alert("Đăng nhập Google đang tạm khóa trong giai đoạn testnet. Vui lòng đăng nhập bằng Pi Browser.");
-    return;
+    localStorage.removeItem("pi-user-name");
+    localStorage.removeItem("pi-user-photo");
+
+    auth.signInWithPopup(provider)
+        .then((result) => {
+            const user = result.user;
+            if (!user) return;
+
+            const displayName = user.displayName || "Người chơi";
+            const photoURL = user.photoURL || "images/do_tuong.png";
+
+            localStorage.setItem("user-name-display", displayName);
+            localStorage.setItem("user-photo", photoURL);
+            localStorage.setItem("login-method", "google");
+
+            applyLoggedInUI(displayName, photoURL);
+
+            if (typeof ensureFriendProfileSynced === "function") {
+                ensureFriendProfileSynced()
+                    .then(() => {
+                        if (typeof bindFriendSystem === "function") bindFriendSystem();
+                    })
+                    .catch(err => console.error("Lỗi sync bạn bè sau login Google:", err));
+            }
+        })
+        .catch((err) => {
+            console.error("Lỗi đăng nhập Google:", err);
+            alert("Đăng nhập Google lỗi: " + (err.message || err.code || err));
+        });
 }
 function logout() {
     document.querySelectorAll(".profile-menu").forEach(m => m.classList.remove("show"));
@@ -15167,6 +15215,9 @@ try {
 async function openWallet(type) {
     if (typeof closeProfileMenu === "function") closeProfileMenu();
     document.getElementById("profile-dropdown")?.classList.remove("show");
+
+    if (type === "nap" && !requirePiBrowserForPiMoney("Nạp Pi")) return;
+    if (type === "rut" && !requirePiBrowserForPiMoney("Rút Pi")) return;
 
     if (type === "nap") {
         const amount = await openDepositAmount();
