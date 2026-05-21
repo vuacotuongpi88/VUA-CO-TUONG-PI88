@@ -7708,67 +7708,6 @@ currentRoomBucket = room.roomBucket || makeStakeBucket(currentRoomMode, currentR
 provider.setCustomParameters({
     prompt: 'select_account'
 });
-function getEquippedAvatarPhoto(fallbackPhoto) {
-    return (
-        localStorage.getItem("equippedSkin") ||
-        localStorage.getItem("avatarSkin") ||
-        localStorage.getItem("user-photo") ||
-        fallbackPhoto ||
-        "images/do_tuong.png"
-    );
-}
-
-function applyAvatarSkinInstant(skinImage) {
-    if (!skinImage) return;
-
-    skinImage = String(skinImage).trim();
-    if (!skinImage) return;
-
-    window.currentAvatarSkin = skinImage;
-    window.currentUserPhoto = skinImage;
-
-    localStorage.setItem("user-photo", skinImage);
-    localStorage.setItem("equippedSkin", skinImage);
-    localStorage.setItem("avatarSkin", skinImage);
-
-    const finalSrc = skinImage + "?v=" + Date.now();
-
-    const selectors = [
-        "#user-avatar",
-        "#menu-avatar",
-        "#profile-avatar",
-        "#avatar-img",
-        "#player-avatar",
-        "#top-user-avatar",
-        "#home-avatar",
-        ".user-avatar",
-        ".player-avatar",
-        ".avatar-img",
-        ".profile-avatar",
-        ".menu-avatar"
-    ];
-
-    selectors.forEach(sel => {
-        document.querySelectorAll(sel).forEach(el => {
-            if (!el) return;
-
-            if (el.tagName === "IMG") {
-                el.src = finalSrc;
-            } else {
-                el.style.backgroundImage = `url('${finalSrc}')`;
-                el.style.backgroundSize = "cover";
-                el.style.backgroundPosition = "center";
-            }
-        });
-    });
-
-    // Nếu trong game có các hàm render lại UI thì gọi liền
-    if (typeof updatePlayerInfoUI === "function") updatePlayerInfoUI();
-    if (typeof updateRoomPlayersUI === "function") updateRoomPlayersUI();
-    if (typeof renderPlayerCards === "function") renderPlayerCards();
-    if (typeof renderLobby === "function") renderLobby();
-    if (typeof updateAvatarUI === "function") updateAvatarUI();
-}
 async function applyLoggedInUI(displayName, photoURL) {
     const user = auth.currentUser;
     if (!user) return;
