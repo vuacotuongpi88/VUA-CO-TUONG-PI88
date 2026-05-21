@@ -7933,6 +7933,82 @@ function isRealPiBrowser() {
     const ua = navigator.userAgent || "";
     return !!window.Pi && /pibrowser|pi browser|minepi/i.test(ua);
 }
+function isPiBrowserReady() {
+    try {
+        if (typeof isRealPiBrowser === "function") return isRealPiBrowser();
+        return !!window.Pi;
+    } catch (_) {
+        return !!window.Pi;
+    }
+}
+
+function isGoogleTrialMode() {
+    const method = localStorage.getItem("login-method");
+    return method === "google" && !isPiBrowserReady();
+}
+
+let __piOnlyNoticeLastAt = 0;
+
+function showPiOnlyNotice(actionText = "Tính năng này") {
+    const now = Date.now();
+
+    // Chống hiện 1 đống popup liên tục
+    if (now - __piOnlyNoticeLastAt < 1200) return;
+    __piOnlyNoticeLastAt = now;
+
+    const gameLink = location.origin + location.pathname;
+
+    const msg =
+        "🔐 " + actionText + " chỉ dùng trong Pi Browser.\n\n" +
+        "Bạn đang đăng nhập Google để chơi thử nhanh.\n\n" +
+        "Muốn nhận quà, mua gói, nạp/rút Pi hoặc chơi PMC thật:\n" +
+        "1) Mở app Pi Browser\n" +
+        "2) Dán link game này vào\n" +
+        "3) Đăng nhập Pi để xác minh tài khoản\n\n" +
+        "Google chỉ dùng để chơi thử miễn phí bằng vé.";
+
+    try {
+        navigator.clipboard?.writeText(gameLink);
+    } catch (_) {}
+
+    if (typeof customAlert === "function") {
+        customAlert(msg);
+    } else if (typeof showAlert === "function") {
+        showAlert(msg);
+    } else if (typeof showToast === "function") {
+        showToast("🔐 " + actionText + " chỉ dùng trong Pi Browser.");
+    } else {
+        alert(msg);
+    }
+}
+
+function requirePiBrowserFeature(actionText = "Tính năng này") {
+    if (isPiBrowserReady()) return true;
+
+    showPiOnlyNotice(actionText);
+    return false;
+}
+
+function handlePiPermissionError(err, actionText = "Tính năng này") {
+    const text = String(
+        err?.message ||
+        err?.code ||
+        err?.error ||
+        err ||
+        ""
+    ).toLowerCase();
+
+    if (
+        text.includes("permission_denied") ||
+        text.includes("permission denied") ||
+        text.includes("permission-denied")
+    ) {
+        showPiOnlyNotice(actionText);
+        return true;
+    }
+
+    return false;
+}
 function requirePiBrowserForPiMoney(actionText = "nạp/rút Pi") {
     if (isRealPiBrowser()) return true;
 
@@ -13735,6 +13811,7 @@ list.innerHTML = expPackages.map(pkg => {
 };
 
 window.buyExpDirectly = async function(pkgId, expAmount, pmcCost, bonusTickets) {
+        if (!requirePiBrowserFeature("Mua gói EXP")) return;
     if (window.isBuyingExp) return;
 
     const currentPmc = getPmcBalance();
@@ -13978,6 +14055,7 @@ function getSkinBuyerWalletKey() {
 let isBuyingAvatarSkin = false;
 
 async function buyAvatarSkin(skinId) {
+     if (!requirePiBrowserFeature("Mua skin / quà")) return;
     if (isBuyingAvatarSkin) return;
     isBuyingAvatarSkin = true;
 
@@ -14222,39 +14300,56 @@ async function chargeStakeForReady(roomId, side) {
         }
 
         let result = await callChargeStake(useTicket);
-        let res = result.res;
-        let data = result.data;
+let res = result.res;
+let data = result.data;
 
-        // Nếu vé trên máy bị lệch, server báo không đủ vé thì hỏi chuyển sang trừ PMC
-        if ((!res.ok || !data.ok) && useTicket) {
-            const msg = String(data.error || "").toLowerCase();
+if (data && data.code === "NO_FREE_TICKETS_NEED_PI_LINK") {
+    showPiOnlyNotice("Bạn đã hết vé chơi thử");
+    return {
+        ok: false,
+        error: data.error || "Bạn đã hết vé chơi thử. Hãy qua Pi Browser để liên kết hoặc nạp Pi."
+    };
+}
 
-            if (
-                msg.includes("lượt miễn phí") ||
-                msg.includes("mien phi") ||
-                msg.includes("ticket") ||
-                msg.includes("free")
-            ) {
-await loadWalletBalance().catch(() => {});
-                const payByPmc = confirm(
-                    "Vé trên máy bị lệch với server hoặc vừa hết vé.\n" +
-                    "Bấm OK để chuyển sang trừ PMC vào trận.\n" +
-                    "Bấm Cancel để hủy SS."
-                );
+// Nếu vé trên máy bị lệch, server báo không đủ vé thì hỏi chuyển sang trừ PMC
+if ((!res.ok || !data.ok) && useTicket) {
 
-                if (!payByPmc) {
-                    return {
-                        ok: false,
-                        error: "Đã hủy SS vì server báo không đủ lượt miễn phí."
-                    };
-                }
+    if (data && data.code === "NO_FREE_TICKETS_NEED_PI_LINK") {
+        showPiOnlyNotice("Bạn đã hết vé chơi thử");
+        return {
+            ok: false,
+            error: data.error || "Bạn đã hết vé chơi thử."
+        };
+    }
 
-                result = await callChargeStake(false);
-                res = result.res;
-                data = result.data;
-            }
+    const msg = String(data.error || "").toLowerCase();
+
+    if (
+        msg.includes("lượt miễn phí") ||
+        msg.includes("mien phi") ||
+        msg.includes("ticket") ||
+        msg.includes("free")
+    ) {
+        await loadWalletBalance().catch(() => {});
+
+        const payByPmc = confirm(
+            "Vé trên máy bị lệch với server hoặc vừa hết vé.\n" +
+            "Bấm OK để chuyển sang trừ PMC vào trận.\n" +
+            "Bấm Cancel để hủy SS."
+        );
+
+        if (!payByPmc) {
+            return {
+                ok: false,
+                error: "Đã hủy SS vì server báo không đủ lượt miễn phí."
+            };
         }
 
+        result = await callChargeStake(false);
+        res = result.res;
+        data = result.data;
+    }
+}
         if (!res.ok || !data.ok) {
             return {
                 ok: false,
@@ -20385,6 +20480,7 @@ switchMissionTab(MISSION_UI_STATE.activeTab || 'day');
   };
 
   window.claimMissionReward = function (missionId, btnElement) {
+    if (!requirePiBrowserFeature("Nhận thưởng nhiệm vụ")) return;
     if (MISSION_UI_STATE.claiming) return;
     MISSION_UI_STATE.claiming = true;
 
@@ -20772,6 +20868,7 @@ async function renderLevelRewards() {
     }).join("");
 }
 async function claimLevelChest(targetLevel, btnElement) {
+        if (!requirePiBrowserFeature("Mở rương cấp độ")) return;
     if (btnElement) {
         btnElement.disabled = true;
         btnElement.innerText = "ĐANG MỞ...";
@@ -21060,6 +21157,7 @@ window.showExpSummary = function(currentLevel) {
 };
 
 window.buyBackExp = async function() {
+        if (!requirePiBrowserFeature("Mua lại EXP")) return;
     clearInterval(window.expSummaryTimerInt); 
     const costPMC = Math.abs(window.pendingSessionEXP);
     
@@ -21558,6 +21656,8 @@ function shareRefToFB() {
 }
 // 4. CHỨC NĂNG NHẬP MÃ - BỌC THÉP 100% CẢ SERVER LẪN GIAO DIỆN
 async function submitReferralCode() {
+    if (!requirePiBrowserFeature("Nhập mã mời nhận quà")) return;
+
     const inputEl = document.getElementById("input-ref-code");
     const code = String(inputEl?.value || "").trim().toUpperCase();
 
