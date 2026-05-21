@@ -7929,22 +7929,71 @@ function savePiUser(userName) {
     localStorage.setItem("pi-user-name", userName || "Pi User");
     localStorage.setItem("pi-user-photo", "images/do_tuong.png");
 }
-function isRealPiBrowser() {
-    const ua = navigator.userAgent || "";
-    return !!window.Pi && /pibrowser|pi browser|minepi/i.test(ua);
-}
-function isPiBrowserReady() {
+function hasPiSdkReady() {
     try {
-        if (typeof isRealPiBrowser === "function") return isRealPiBrowser();
-        return !!window.Pi;
+        return !!(window.Pi && typeof window.Pi.authenticate === "function");
     } catch (_) {
-        return !!window.Pi;
+        return false;
     }
 }
 
+// Cái này chỉ dùng cho NẠP/RÚT PI thật, cần Pi SDK thật.
+function isRealPiBrowser() {
+    return hasPiSdkReady();
+}
+
+function getLoginMethodSafe() {
+    try {
+        return String(localStorage.getItem("login-method") || "").trim().toLowerCase();
+    } catch (_) {
+        return "";
+    }
+}
+
+function getWalletKeySafe() {
+    try {
+        if (typeof makeWalletDbKey === "function") {
+            return String(makeWalletDbKey() || "").trim();
+        }
+    } catch (_) {}
+
+    try {
+        return String(
+            localStorage.getItem("walletKey") ||
+            localStorage.getItem("wallet-key") ||
+            localStorage.getItem("pi-wallet-key") ||
+            ""
+        ).trim();
+    } catch (_) {
+        return "";
+    }
+}
+
+// Tài khoản Pi: cho mua EXP, nhận quà, nhập mã, mở rương...
+function isPiAccountMode() {
+    const method = getLoginMethodSafe();
+    const walletKey = getWalletKeySafe();
+
+    return (
+        method === "pi" ||
+        walletKey.startsWith("pi_")
+    );
+}
+
+// Tài khoản Google: chỉ chơi thử bằng vé, không nhận/mua/nạp/rút.
 function isGoogleTrialMode() {
-    const method = localStorage.getItem("login-method");
-    return method === "google" && !isPiBrowserReady();
+    const method = getLoginMethodSafe();
+    const walletKey = getWalletKeySafe();
+
+    return (
+        method === "google" ||
+        walletKey.startsWith("google_")
+    );
+}
+
+// Feature thường chỉ cần là acc Pi, hoặc đang có Pi SDK.
+function isPiBrowserReady() {
+    return hasPiSdkReady() || isPiAccountMode();
 }
 
 let __piOnlyNoticeLastAt = 0;
@@ -7952,20 +8001,19 @@ let __piOnlyNoticeLastAt = 0;
 function showPiOnlyNotice(actionText = "Tính năng này") {
     const now = Date.now();
 
-    // Chống hiện 1 đống popup liên tục
     if (now - __piOnlyNoticeLastAt < 1200) return;
     __piOnlyNoticeLastAt = now;
 
     const gameLink = location.origin + location.pathname;
 
     const msg =
-        "🔐 " + actionText + " chỉ dùng trong Pi Browser.\n\n" +
-        "Bạn đang đăng nhập Google để chơi thử nhanh.\n\n" +
+        "🔐 " + actionText + " không dùng cho tài khoản Google.\n\n" +
+        "Google chỉ dùng để chơi thử nhanh bằng vé miễn phí.\n\n" +
         "Muốn nhận quà, mua gói, nạp/rút Pi hoặc chơi PMC thật:\n" +
         "1) Mở app Pi Browser\n" +
         "2) Dán link game này vào\n" +
-        "3) Đăng nhập Pi để xác minh tài khoản\n\n" +
-        "Google chỉ dùng để chơi thử miễn phí bằng vé.";
+        "3) Đăng nhập bằng Pi\n\n" +
+        "Link đã được copy nếu trình duyệt cho phép.";
 
     try {
         navigator.clipboard?.writeText(gameLink);
@@ -7976,17 +8024,21 @@ function showPiOnlyNotice(actionText = "Tính năng này") {
     } else if (typeof showAlert === "function") {
         showAlert(msg);
     } else if (typeof showToast === "function") {
-        showToast("🔐 " + actionText + " chỉ dùng trong Pi Browser.");
+        showToast("🔐 " + actionText + " không dùng cho tài khoản Google.");
     } else {
         alert(msg);
     }
 }
 
+// CHỐT: chỉ chặn khi đang là Google trial.
+// Không chặn chỉ vì user-agent Pi Browser không nhận ra.
 function requirePiBrowserFeature(actionText = "Tính năng này") {
-    if (isPiBrowserReady()) return true;
+    if (isGoogleTrialMode()) {
+        showPiOnlyNotice(actionText);
+        return false;
+    }
 
-    showPiOnlyNotice(actionText);
-    return false;
+    return true;
 }
 
 function handlePiPermissionError(err, actionText = "Tính năng này") {
@@ -7999,9 +8051,12 @@ function handlePiPermissionError(err, actionText = "Tính năng này") {
     ).toLowerCase();
 
     if (
-        text.includes("permission_denied") ||
-        text.includes("permission denied") ||
-        text.includes("permission-denied")
+        isGoogleTrialMode() &&
+        (
+            text.includes("permission_denied") ||
+            text.includes("permission denied") ||
+            text.includes("permission-denied")
+        )
     ) {
         showPiOnlyNotice(actionText);
         return true;
