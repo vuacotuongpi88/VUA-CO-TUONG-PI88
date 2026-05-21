@@ -33,30 +33,6 @@ function runTx(ref, updater) {
   });
 }
 
-function isGoogleWalletKey(walletKey) {
-  return String(walletKey || "").startsWith("google_");
-}
-
-function isPiLinkedWallet(wallet = {}) {
-  return wallet.piVerified === true && !!wallet.piUid;
-}
-
-function noTicketPayload(isGoogleOnly) {
-  if (isGoogleOnly) {
-    return {
-      ok: false,
-      code: "NO_FREE_TICKETS_NEED_PI_LINK",
-      error: "Bạn đã hết vé chơi thử. Hãy mở Pi Browser để liên kết Pi hoặc nạp Pi để chơi tiếp."
-    };
-  }
-
-  return {
-    ok: false,
-    code: "NO_FREE_TICKETS",
-    error: "Không đủ lượt miễn phí"
-  };
-}
-
 module.exports = async function handler(req, res) {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
 
@@ -125,8 +101,10 @@ module.exports = async function handler(req, res) {
       });
     }
 
+    // FIX QUAN TRỌNG:
+    // Không dùng Math.floor ở đây nữa.
+    // Nếu stake/PMC có số lẻ thì giữ lại, tránh 4.80 bị ép thành 4.
     const stake = normalizePmc(room.stakePMC || room.stakePmc || 0);
-    const googleOnly = isGoogleWalletKey(walletKey) && !isPiLinkedWallet(wallet);
 
     await roomRef.child(`players/${side}`).update({
       walletKey,
@@ -146,31 +124,19 @@ module.exports = async function handler(req, res) {
     }
 
     const lockedSnap = await roomRef.child(`stakeLocked/${side}`).once("value");
-    const lockedVal = lockedSnap.val();
-
-    if (lockedVal && lockedVal.done) {
+    if (lockedSnap.exists() && lockedSnap.val()) {
       await roomRef.child(`ready/${side}`).set(true);
-
       return res.status(200).json({
         ok: true,
         stage: "already_locked",
-        paid: normalizePmc(wallet.pmcBalance || 0),
-        usedTicket: lockedVal.isTicketUsed === true,
-        freeTickets: Math.max(0, Math.floor(Number(wallet.freeTickets || 0))),
-        freeTicketLocked: Math.max(0, Math.floor(Number(wallet.freeTicketLocked || 0)))
+        paid: normalizePmc(wallet.pmcBalance || 0)
       });
     }
 
-    // GOOGLE CHƯA LIÊN KẾT PI:
-    // Không được trừ PMC thật. Chỉ được dùng vé chơi thử.
-    const shouldUseTicket = googleOnly || useTicket;
-
-    if (shouldUseTicket) {
+    if (useTicket && stake <= 10000) {
       let ticketLeft = null;
-      let ticketLocked = null;
       let paidPmc = null;
       let beforeTickets = null;
-      let beforeLocked = null;
 
       console.log("CHARGE_TICKET_DEBUG_BEFORE", {
         roomId,
@@ -178,14 +144,13 @@ module.exports = async function handler(req, res) {
         uid,
         walletKey,
         stake,
-        googleOnly,
         walletUid: wallet.uid,
         walletName: wallet.name,
         walletFreeTickets: wallet.freeTickets,
-        walletFreeTicketLocked: wallet.freeTicketLocked,
         walletPmcBalance: wallet.pmcBalance
       });
 
+      // Transaction nguyên ví, không transaction riêng child freeTickets.
       const ticketTx = await runTx(walletRef, (current) => {
         const base =
           current && typeof current === "object"
@@ -206,20 +171,23 @@ module.exports = async function handler(req, res) {
         }
 
         beforeTickets = Math.max(0, Math.floor(Number(base.freeTickets || 0) || 0));
-        beforeLocked = Math.max(0, Math.floor(Number(base.freeTicketLocked || 0) || 0));
+
+        console.log("CHARGE_TICKET_TX_WALLET", {
+          walletKey,
+          beforeTickets,
+          stake,
+          rawFreeTickets: base.freeTickets
+        });
 
         if (beforeTickets <= 0) return;
 
         ticketLeft = beforeTickets - 1;
-        ticketLocked = beforeLocked + 1;
         paidPmc = normalizePmc(base.pmcBalance || 0);
 
         return {
           ...base,
           freeTickets: ticketLeft,
-          freeTicketLocked: ticketLocked,
           pmcBalance: paidPmc,
-          lastTicketLockedAt: Date.now(),
           updatedAt: Date.now()
         };
       });
@@ -234,27 +202,23 @@ module.exports = async function handler(req, res) {
           uid,
           walletKey,
           stake,
-          googleOnly,
           beforeTickets,
-          beforeLocked,
           liveFreeTickets: liveWallet.freeTickets,
-          liveFreeTicketLocked: liveWallet.freeTicketLocked,
           livePmcBalance: liveWallet.pmcBalance,
           liveUid: liveWallet.uid,
           liveName: liveWallet.name
         });
 
-        return res.status(409).json({
-          ...noTicketPayload(googleOnly),
+        return res.status(400).json({
+          ok: false,
+          error: "Không đủ lượt miễn phí",
           debug: {
             roomId,
             side,
             walletKey,
             stake,
             beforeTickets,
-            beforeLocked,
             liveFreeTickets: liveWallet.freeTickets,
-            liveFreeTicketLocked: liveWallet.freeTicketLocked,
             livePmcBalance: liveWallet.pmcBalance,
             liveUid: liveWallet.uid,
             liveName: liveWallet.name
@@ -266,7 +230,6 @@ module.exports = async function handler(req, res) {
         walletKey,
         uid,
         freeTickets: ticketLeft,
-        freeTicketLocked: ticketLocked,
         pmcBalance: paidPmc,
         updatedAt: Date.now()
       });
@@ -281,32 +244,15 @@ module.exports = async function handler(req, res) {
         at: Date.now()
       });
 
-      await roomRef.child(`ticketStakes/${side}`).set({
-        type: googleOnly ? "google_free_ticket" : "free_ticket",
-        walletKey,
-        uid,
-        stake,
-        locked: 1,
-        status: "locked",
-        lockedAt: Date.now()
-      });
-
       await roomRef.child(`ready/${side}`).set(true);
 
       return res.status(200).json({
         ok: true,
-        stage: "ticket_locked",
+        stage: "ticket_used",
         paid: paidPmc,
         usedTicket: true,
-        googleTrial: googleOnly,
-        freeTickets: ticketLeft,
-        freeTicketLocked: ticketLocked
+        freeTickets: ticketLeft
       });
-    }
-
-    // Google chưa liên kết Pi mà không còn vé thì tuyệt đối không cho rơi xuống trừ PMC.
-    if (googleOnly) {
-      return res.status(409).json(noTicketPayload(true));
     }
 
     let nextPmc = null;
@@ -326,6 +272,9 @@ module.exports = async function handler(req, res) {
       walletFreeTickets: wallet.freeTickets
     });
 
+    // FIX QUAN TRỌNG:
+    // Không Math.floor pmcBalance nữa.
+    // Ví dụ 4.80 - 1 = 3.80, không bị thành 3.
     const pmcTx = await runTx(walletRef, (current) => {
       const base =
         current && typeof current === "object"
@@ -384,7 +333,6 @@ module.exports = async function handler(req, res) {
 
       return res.status(400).json({
         ok: false,
-        code: "NOT_ENOUGH_PMC",
         error: `Số dư PMC không đủ để trừ ${stake} PMC`,
         debug: {
           roomId,
