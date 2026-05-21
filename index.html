@@ -13134,12 +13134,13 @@ if (data.photo) {
     if (menuAvatarPhoto) menuAvatarPhoto.src = data.photo;
 }
         // Cập nhật Firebase bằng tên gốc của Database
-        await walletRef().update({
-            updatedAt: firebase.database.ServerValue.TIMESTAMP,
-            name: nameToSave,
-            photo: photoToSave
-        });
-        // 👆👆 KẾT THÚC FIX LỖI 👆👆
+        walletRef().update({
+    updatedAt: firebase.database.ServerValue.TIMESTAMP,
+    name: nameToSave,
+    photo: photoToSave
+}).catch(err => {
+    console.warn("WALLET_META_UPDATE_SKIP:", err);
+});👆 KẾT THÚC FIX LỖI 👆👆
 
         // Cập nhật UI với số tiền CHUẨN 100% TỪ FIREBASE
         updateBalanceUI(currentWalletBalance);
@@ -14184,7 +14185,7 @@ async function chargeStakeForReady(roomId, side) {
             }
         }
 
-        const token = await user.getIdToken();
+        const token = await user.getIdToken(true);
 
         async function callChargeStake(wantUseTicket) {
             const res = await fetch("/api/pmc/charge-stake?v=" + Date.now(), {
