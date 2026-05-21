@@ -7957,18 +7957,30 @@ function requirePiBrowserForPiMoney(actionText = "nạp/rút Pi") {
 function loginGoogle() {
     localStorage.removeItem("pi-user-name");
     localStorage.removeItem("pi-user-photo");
+    localStorage.removeItem("walletKey");
 
     auth.signInWithPopup(provider)
-        .then((result) => {
+        .then(async (result) => {
             const user = result.user;
             if (!user) return;
 
             const displayName = user.displayName || "Người chơi";
             const photoURL = user.photoURL || "images/do_tuong.png";
+            const googleWalletKey = ("google_" + user.uid).replace(/[.#$\[\]\/]/g, "_");
 
             localStorage.setItem("user-name-display", displayName);
             localStorage.setItem("user-photo", photoURL);
             localStorage.setItem("login-method", "google");
+            localStorage.setItem("walletKey", googleWalletKey);
+
+            await db.ref("wallets/" + googleWalletKey).update({
+                uid: user.uid,
+                googleUid: user.uid,
+                loginMethod: "google",
+                name: displayName,
+                photo: photoURL,
+                updatedAt: firebase.database.ServerValue.TIMESTAMP
+            }).catch(err => console.warn("Lỗi tạo ví Google:", err));
 
             applyLoggedInUI(displayName, photoURL);
 
@@ -20092,16 +20104,25 @@ document.addEventListener("click", function(e) {
 
   function missionWalletKey() {
     try {
-      return String(
-        (typeof getCurrentWalletKeyForPi === 'function' && getCurrentWalletKeyForPi()) ||
-        localStorage.getItem('walletKey') ||
-        (typeof makeWalletDbKey === 'function' && makeWalletDbKey()) ||
-        ''
-      ).trim();
+        const piName = localStorage.getItem("pi-user-name");
+        if (piName) {
+            return ("pi_" + piName.trim().toLowerCase()).replace(/[.#$\[\]\/]/g, "_");
+        }
+
+        const user = firebase.auth().currentUser || auth.currentUser;
+        if (user && user.isAnonymous === false) {
+            return ("google_" + user.uid).replace(/[.#$\[\]\/]/g, "_");
+        }
+
+        if (typeof makeWalletDbKey === "function") {
+            return String(makeWalletDbKey() || "").trim();
+        }
+
+        return "";
     } catch (_) {
-      return '';
+        return "";
     }
-  }
+}
 
  function ensureMissionHubMounted() {
   const oldMenuItem = document.getElementById('menu-mission-hub');
