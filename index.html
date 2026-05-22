@@ -12172,13 +12172,16 @@ function runBotThinkNow(room, delayMs = 80, source = "") {
                 return;
             }
 
-            ensureBotWorkerHtml().postMessage({
-                action: "think",
-                boardState: boardForBot,
-                botSide: botSide,
-                isCoUp: !!room.isCoUp,
-                recentHistory: typeof botMoveHistory !== "undefined" ? botMoveHistory : []
-            });
+            const botLevel = Number(room.botLevel || localStorage.getItem("botLevel") || 6);
+
+ensureBotWorkerHtml().postMessage({
+    action: "think",
+    boardState: boardForBot,
+    botSide: botSide,
+    isCoUp: !!room.isCoUp,
+    botLevel: botLevel,
+    recentHistory: typeof botMoveHistory !== "undefined" ? botMoveHistory : []
+});
         }, delayMs);
     } catch (err) {
         window.__isBotThinking = false;
@@ -12202,13 +12205,16 @@ function startBotPonderIfHumanTurn(room) {
         // Chỉ máy người thật đối diện bot mới chạy.
         if (mySide !== humanSide) return;
 
-        ensureBotWorkerHtml().postMessage({
-            action: "ponder",
-            boardState: room.board,
-            botSide: botSide,
-            isCoUp: !!room.isCoUp,
-            recentHistory: typeof botMoveHistory !== "undefined" ? botMoveHistory : []
-        });
+       const botLevel = Number(room.botLevel || localStorage.getItem("botLevel") || 6);
+
+ensureBotWorkerHtml().postMessage({
+    action: "ponder",
+    boardState: room.board,
+    botSide: botSide,
+    isCoUp: !!room.isCoUp,
+    botLevel: botLevel,
+    recentHistory: typeof botMoveHistory !== "undefined" ? botMoveHistory : []
+});
     } catch (err) {
         console.warn("BOT_PONDER_FAIL:", err);
     }

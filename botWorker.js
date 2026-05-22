@@ -11,7 +11,55 @@ let ponderBusy = false;
 
 const MAX_TRANS_TABLE = 80000;
 const MAX_PONDER_TABLE = 300;
+let BOT_SEARCH_DEADLINE = 0;
+let BOT_SEARCH_TIMED_OUT = false;
+let BOT_NODE_COUNT = 0;
 
+function clampBotLevel(level) {
+    level = Number(level || 6);
+    if (!Number.isFinite(level)) level = 6;
+    return Math.max(1, Math.min(10, Math.floor(level)));
+}
+
+function getBotLevelConfig(level, pieceCount, isCoUp) {
+    level = clampBotLevel(level);
+
+    const table = {
+        1:  { maxDepth: 1, maxMs: 120,  rootLimit: 8,   cloud: false, cloudMs: 0,   blunder: 0.45 },
+        2:  { maxDepth: 2, maxMs: 180,  rootLimit: 10,  cloud: false, cloudMs: 0,   blunder: 0.35 },
+        3:  { maxDepth: 2, maxMs: 260,  rootLimit: 14,  cloud: false, cloudMs: 0,   blunder: 0.25 },
+        4:  { maxDepth: 3, maxMs: 380,  rootLimit: 18,  cloud: false, cloudMs: 0,   blunder: 0.16 },
+        5:  { maxDepth: 3, maxMs: 520,  rootLimit: 24,  cloud: false, cloudMs: 0,   blunder: 0.10 },
+        6:  { maxDepth: 4, maxMs: 720,  rootLimit: 32,  cloud: false, cloudMs: 0,   blunder: 0.05 },
+        7:  { maxDepth: 4, maxMs: 950,  rootLimit: 40,  cloud: true,  cloudMs: 250, blunder: 0.02 },
+        8:  { maxDepth: 5, maxMs: 1250, rootLimit: 52,  cloud: true,  cloudMs: 320, blunder: 0.00 },
+        9:  { maxDepth: 6, maxMs: 1650, rootLimit: 70,  cloud: true,  cloudMs: 420, blunder: 0.00 },
+        10: { maxDepth: 7, maxMs: 2200, rootLimit: 999, cloud: true,  cloudMs: 500, blunder: 0.00 }
+    };
+
+    const cfg = { level, ...table[level] };
+
+    // Ít quân thì cho tính sâu hơn nhưng vẫn bị giới hạn thời gian.
+    if (pieceCount <= 12 && level >= 6) cfg.maxDepth += 1;
+    if (pieceCount <= 7 && level >= 7) cfg.maxDepth += 1;
+
+    // Cờ úp khó đoán hơn, giảm nhẹ để đỡ chậm.
+    if (isCoUp && cfg.maxDepth > 3) cfg.maxDepth -= 1;
+
+    return cfg;
+}
+
+function botTimeUp() {
+    BOT_NODE_COUNT++;
+    if ((BOT_NODE_COUNT & 1023) !== 0) return false;
+
+    if (BOT_SEARCH_DEADLINE && Date.now() >= BOT_SEARCH_DEADLINE) {
+        BOT_SEARCH_TIMED_OUT = true;
+        return true;
+    }
+
+    return false;
+}
 function boardArrayHash(boardArray, botSide, isCoUp) {
     return getBoardHash(buildMatrix(boardArray)) + "|" + botSide + "|" + (isCoUp ? "up" : "normal");
 }
@@ -325,6 +373,8 @@ function generateAllMoves(mt, side, isCoUp, depth, onlyCaptures = false) {
 
 // BÙA TĨNH TÂM (Chống chết ngu do tầm nhìn ngắn)
 function quiesce(mt, alpha, beta, isMaximizing, botSide, isCoUp, qDepth) {
+    if (botTimeUp()) return evaluateBoard(mt, botSide);
+
     let stand_pat = evaluateBoard(mt, botSide);
     if (qDepth > 5) return stand_pat; 
 
@@ -369,6 +419,7 @@ function quiesce(mt, alpha, beta, isMaximizing, botSide, isCoUp, qDepth) {
 }
 
 function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp, isNullMove = false) {
+    if (botTimeUp()) return evaluateBoard(mt, botSide);
     if (depth <= 0) return quiesce(mt, alpha, beta, isMaximizing, botSide, isCoUp, 0);
     const originalAlpha = alpha;
     const originalBeta = beta;
@@ -464,52 +515,117 @@ function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp, isNullMo
 }
 
 // BỘ MÁY FALLBACK: CHẠY BẰNG RAM CỦA KHÁCH
-function calculateLocalMove(boardArray, botSide, isCoUp, forceDepth = null) {
-    killerMoves = Array(100).fill(null).map(() => []); // Reset sổ tay
+function calculateLocalMove(boardArray, botSide, isCoUp, forceDepth = null, botLevel = 6, maxMsOverride = null) {
+    killerMoves = Array(100).fill(null).map(() => []);
+
     let mt = buildMatrix(boardArray);
     let moves = generateAllMoves(mt, botSide, isCoUp, 10, false);
     if (moves.length === 0) return null;
 
-    let pieceCount = boardArray.length;
-    let DEPTH = 4; 
+    const pieceCount = boardArray.length;
 
-    // Bờm Null Move Pruning giúp máy tính nhàn hơn, tao TĂNG DEPTH LÊN 1 BẬC SO VỚI BẢN TRƯỚC
-    if (pieceCount <= 6) DEPTH = 8; 
-    else if (pieceCount <= 12) DEPTH = 6;
-    else if (pieceCount <= 20) DEPTH = 5;
-        if (forceDepth) DEPTH = forceDepth; // Khai cuộc vẫn giữ mượt mà
+    let cfg = getBotLevelConfig(botLevel, pieceCount, isCoUp);
 
+    // Dùng cho ponder hoặc ép depth riêng.
+    if (forceDepth) {
+        cfg.maxDepth = forceDepth;
+        cfg.rootLimit = Math.min(cfg.rootLimit, 18);
+        cfg.blunder = 0;
+    }
+
+    if (maxMsOverride) {
+        cfg.maxMs = maxMsOverride;
+    }
+
+    moves = moves.slice(0, cfg.rootLimit);
+
+    BOT_SEARCH_DEADLINE = Date.now() + cfg.maxMs;
+    BOT_SEARCH_TIMED_OUT = false;
+    BOT_NODE_COUNT = 0;
+
+    let bestMove = moves[0];
     let bestScore = -Infinity;
-    let bestMoves = [];
+    let bestMoves = [moves[0]];
+    let completedDepth = 0;
 
-    for (let move of moves) {
-        let target = mt[move.to.r][move.to.c];
-        mt[move.to.r][move.to.c] = mt[move.from.r][move.from.c];
-        mt[move.from.r][move.from.c] = null;
+    // Iterative deepening: tính tầng 1, tầng 2, tầng 3...
+    // Hết giờ thì lấy tầng tốt nhất đã hoàn thành, không đứng chờ.
+    for (let depth = 1; depth <= cfg.maxDepth; depth++) {
+        if (botTimeUp()) break;
 
-        let currentHash = getBoardHash(mt);
-        let oppSide = botSide === 'do' ? 'den' : 'do';
-        let isChecking = laBiChieuWorker(oppSide, mt, isCoUp);
-        let repeatCount = positionHistory.filter(h => h.hash === currentHash && h.isCheck).length;
+        let depthBestScore = -Infinity;
+        let depthBestMoves = [];
 
-        let score = 0;
-        if (isChecking && repeatCount >= 3) {
-            score = -100000; 
-        } else {
-            score = minimax(mt, DEPTH - 1, -Infinity, Infinity, false, botSide, isCoUp, false);
+        for (let move of moves) {
+            if (botTimeUp()) break;
+
+            let target = mt[move.to.r][move.to.c];
+            mt[move.to.r][move.to.c] = mt[move.from.r][move.from.c];
+            mt[move.from.r][move.from.c] = null;
+
+            let currentHash = getBoardHash(mt);
+            let oppSide = botSide === "do" ? "den" : "do";
+            let isChecking = laBiChieuWorker(oppSide, mt, isCoUp);
+            let repeatCount = positionHistory.filter(h => h.hash === currentHash && h.isCheck).length;
+
+            let score = 0;
+
+            if (isChecking && repeatCount >= 3) {
+                score = -100000;
+            } else {
+                score = minimax(mt, depth - 1, -Infinity, Infinity, false, botSide, isCoUp, false);
+            }
+
+            mt[move.from.r][move.from.c] = mt[move.to.r][move.to.c];
+            mt[move.to.r][move.to.c] = target;
+
+            if (BOT_SEARCH_TIMED_OUT) break;
+
+            move.__lastScore = score;
+
+            if (score > depthBestScore) {
+                depthBestScore = score;
+                depthBestMoves = [move];
+            } else if (score === depthBestScore) {
+                depthBestMoves.push(move);
+            }
         }
 
-        mt[move.from.r][move.from.c] = mt[move.to.r][move.to.c];
-        mt[move.to.r][move.to.c] = target;
+        // Chỉ nhận kết quả nếu tầng này tính xong.
+        if (!BOT_SEARCH_TIMED_OUT && depthBestMoves.length) {
+            completedDepth = depth;
+            bestScore = depthBestScore;
+            bestMoves = depthBestMoves;
+            bestMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
 
-        if (score > bestScore) {
-            bestScore = score;
-            bestMoves = [move];
-        } else if (score === bestScore) {
-            bestMoves.push(move);
+            // Đẩy nước tốt lên đầu để tầng sau cắt nhánh nhanh hơn.
+            moves.sort((a, b) => {
+                if (a === bestMove) return -1;
+                if (b === bestMove) return 1;
+                return (b.__lastScore || b.score || 0) - (a.__lastScore || a.score || 0);
+            });
+        } else {
+            break;
         }
     }
-    return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+
+    BOT_SEARCH_DEADLINE = 0;
+
+    // Level thấp cố ý đi lệch một chút cho giống người mới.
+    if (!forceDepth && cfg.blunder > 0 && Math.random() < cfg.blunder && moves.length > 1) {
+        const poolSize = Math.min(moves.length, Math.max(2, 7 - cfg.level));
+        const pool = moves.slice(1, poolSize);
+        if (pool.length) {
+            bestMove = pool[Math.floor(Math.random() * pool.length)];
+        }
+    }
+
+    bestMove.__botLevel = cfg.level;
+    bestMove.__searchDepth = completedDepth;
+    bestMove.__searchMs = cfg.maxMs;
+    bestMove.__score = bestScore;
+
+    return bestMove;
 }
 function applyMoveToBoardArray(boardArray, move, isCoUp, side) {
     const moving = boardArray.find(p => p.c === move.from.c && p.r === move.from.r);
@@ -615,12 +731,12 @@ function parseUCIMove(uci) {
     };
 }
 
-async function fetchCloudMove(fen) {
+async function fetchCloudMove(fen, timeoutMs = 450) {
     const url = `https://www.chessdb.cn/cdb.php?action=queryall&board=${encodeURIComponent(fen)}`;
 
     try {
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 1200);
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
 
         const res = await fetch(url, { signal: controller.signal });
         clearTimeout(timer);
@@ -652,7 +768,11 @@ self.onmessage = async function(e) {
 
             // Sinh các nước người chơi có thể đi.
             // generateAllMoves đã tự sort nước ăn quân lên trước.
-            const humanMoves = generateAllMoves(mt, humanSide, data.isCoUp, 1, false).slice(0, 10);
+            const botLevel = clampBotLevel(data.botLevel || data.level || 6);
+const ponderCfg = getBotLevelConfig(botLevel, data.boardState.length, data.isCoUp);
+
+const humanMoves = generateAllMoves(mt, humanSide, data.isCoUp, 1, false)
+    .slice(0, Math.min(4, ponderCfg.rootLimit));
 
             for (const humanMove of humanMoves) {
                 const afterHumanBoard = applyMoveToBoardArray(
@@ -667,7 +787,14 @@ self.onmessage = async function(e) {
                 if (ponderTable.has(key)) continue;
 
                 // Tính trước phản đòn của bot. Depth 3-4 cho nhẹ.
-                const reply = calculateLocalMove(afterHumanBoard, data.botSide, data.isCoUp, 4);
+                const reply = calculateLocalMove(
+    afterHumanBoard,
+    data.botSide,
+    data.isCoUp,
+    Math.min(3, ponderCfg.maxDepth),
+    botLevel,
+    Math.min(260, ponderCfg.maxMs)
+);
 
                 if (reply) {
                     const payload = buildFinalMovePayload(
@@ -691,6 +818,8 @@ self.onmessage = async function(e) {
     }
     if (data.action === "think") {
         if (data.recentHistory) positionHistory = data.recentHistory;
+        const botLevel = clampBotLevel(data.botLevel || data.level || 6);
+const botCfg = getBotLevelConfig(botLevel, data.boardState.length, data.isCoUp);
         const readyKey = boardArrayHash(data.boardState, data.botSide, data.isCoUp);
         const readyMove = ponderTable.get(readyKey);
 
@@ -755,10 +884,9 @@ self.onmessage = async function(e) {
         // ==========================================
 
         // NẾU HẾT 3 NƯỚC ĐẦU (HOẶC KHÔNG CÓ TRONG SÁCH) THÌ DÙNG CHESSDB CLOUD
-        if (!bestMoveObject && !data.isCoUp) {
-            let fen = boardToFEN(mt, data.botSide);
-            const cloudMove = await fetchCloudMove(fen);
-            
+        if (!bestMoveObject && !data.isCoUp && botCfg.cloud) {
+    let fen = boardToFEN(mt, data.botSide);
+    const cloudMove = await fetchCloudMove(fen, botCfg.cloudMs);
             if (cloudMove) {
                 let p = mt[cloudMove.from.r][cloudMove.from.c];
                 if (p && p.side === data.botSide && checkLuatWorker(p.type, data.botSide, cloudMove.from.c, cloudMove.from.r, cloudMove.to.c, cloudMove.to.r, mt, false)) {
@@ -773,7 +901,7 @@ self.onmessage = async function(e) {
 
         // TỰ ĐỘNG KÍCH HOẠT NÃO BỘ TÍNH TOÁN (TỪ NƯỚC THỨ 4 TRỞ ĐI)
         if (!bestMoveObject) {
-            bestMoveObject = calculateLocalMove(data.boardState, data.botSide, data.isCoUp);
+            bestMoveObject = calculateLocalMove(data.boardState, data.botSide, data.isCoUp, null, botLevel, botCfg.maxMs);
         }
 
         // TRẢ KẾT QUẢ VỀ CHO MÀN HÌNH CHÍNH
