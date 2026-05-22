@@ -3004,11 +3004,26 @@ color: transparent;
     position: absolute;
     left: 12px;
     right: 12px;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 36px);
-    display: flex;
-    gap: 12px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 60px);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+#mobile-game-row .mobile-game-card {
+    min-width: 0;
+    padding: 10px 6px;
 }
 
+#mobile-game-row .mobile-game-card img {
+    width: 58px;
+    height: 58px;
+}
+
+#mobile-game-row .mobile-game-card span {
+    font-size: 11px;
+    padding: 8px 10px;
+    white-space: nowrap;
+}
     .mobile-ad-banner {
         width: 88%;
         height: 220px; /* Fix chết chiều cao luôn, không cho nó giãn nữa */
@@ -7118,23 +7133,24 @@ console.log("Đang chạy trên môi trường:", currentNetwork.toUpperCase());
 </div>
 
 <div id="mobile-game-row">
-<!-- ... ĐOẠN NÀY LÀ CÁC NÚT VÀO GAME CỦA MẦY GIỮ NGUYÊN ... -->
-            <div class="mobile-game-card" onclick="batDauTranDau('tong')">
-                <img src="images/co_tuong_new.png" alt="Cờ Tướng">
-                <span>CỜ TƯỚNG</span>
-            </div>
+    <div class="mobile-game-card" onclick="batDauTranDau('tong')">
+        <img src="images/co_tuong_new.png" alt="Cờ Tướng">
+        <span>CỜ TƯỚNG</span>
+    </div>
 
-            <div class="mobile-game-card" onclick="batDauTranDau('up')">
-                <img src="images/co_up_new.png" alt="Cờ Úp">
-                <span>CỜ ÚP</span>
-            </div>
-        </div>
+    <div class="mobile-game-card" onclick="batDauTranDau('up')">
+        <img src="images/co_up_new.png" alt="Cờ Úp">
+        <span>CỜ ÚP</span>
+    </div>
+
+    <div class="mobile-game-card" onclick="openPuzzleMenu()">
+        <img src="images/co_tuong_new.png" alt="Cờ Thế">
+        <span>CỜ THẾ</span>
     </div>
 </div>
-<div class="mobile-game-card" onclick="openPuzzleMenu()">
-    <img src="images/co_tuong_new.png" alt="Cờ Thế">
-    <span>CỜ THẾ</span>
+    </div>
 </div>
+
 <div id="puzzle-modal" class="puzzle-modal">
     <div class="puzzle-box">
         <div class="puzzle-header">
