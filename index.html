@@ -7675,14 +7675,17 @@ async function tryResumeRealtimeMatch(preferredMode = null) {
 
     const isDo = room.players?.do?.uid === me.uid;
     const isDen = room.players?.den?.uid === me.uid;
-    const hasBothPlayers = !!room.players?.do && !!room.players?.den;
+    const isEmptyWaitingRoom =
+    room.status === "waiting" &&
+    !room.winner &&
+    !!room.players?.do &&
+    !room.players?.den &&
+    !Array.isArray(room.board);
 
 const canResume =
     !room.winner &&
-    (
-        room.status === "playing" ||
-        (room.status === "waiting" && hasBothPlayers)
-    );
+    room.status === "playing" &&
+    !isEmptyWaitingRoom;
     if (!canResume || (!isDo && !isDen)) {
         clearActiveMatchSnapshot(saved.roomId);
         return false;
