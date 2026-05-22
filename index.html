@@ -10526,6 +10526,18 @@ let puzzleStep = 0;
 let puzzleTimer = null;
 let puzzleSecondsLeft = 0;
 
+const PUZZLE_DEFAULT_SECONDS = 30 * 60; // 30 phút
+
+function getPuzzleSeconds(puzzle) {
+    return Math.max(60, Number(puzzle?.seconds || PUZZLE_DEFAULT_SECONDS) || PUZZLE_DEFAULT_SECONDS);
+}
+
+function formatPuzzleTime(seconds) {
+    const s = Math.max(0, Math.floor(Number(seconds) || 0));
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
+}
 const CHESS_PUZZLES = [
     {
         id: "easy_001",
@@ -10533,7 +10545,7 @@ const CHESS_PUZZLES = [
         diff: "Dễ",
         feePmc: 1,
         rewardPmc: 1.6,
-        seconds: 30,
+        seconds: 30 * 60,
         desc: "Đỏ đi 1 nước chính xác để phá thế.",
         pieces: [
             { c: 4, r: 0, type: "將" },
@@ -10550,7 +10562,7 @@ const CHESS_PUZZLES = [
         diff: "Dễ",
         feePmc: 1,
         rewardPmc: 1.8,
-        seconds: 35,
+        seconds: 30 * 60,
         desc: "Một nước xe chuẩn, đi sai là mất phí.",
         pieces: [
             { c: 4, r: 0, type: "將" },
@@ -10569,7 +10581,7 @@ const CHESS_PUZZLES = [
         diff: "Vừa",
         feePmc: 2,
         rewardPmc: 3.6,
-        seconds: 45,
+        seconds: 30 * 60,
         desc: "Tìm nước pháo quyết định.",
         pieces: [
             { c: 4, r: 0, type: "將" },
@@ -10598,7 +10610,7 @@ function openPuzzleMenu() {
             </div>
             <div class="puzzle-desc">${p.desc}</div>
             <div class="puzzle-money">
-                Phí: ${formatPMC(p.feePmc)} · Thưởng: ${formatPMC(p.rewardPmc)} · ${p.seconds}s
+                Phí: ${formatPMC(p.feePmc)} · Thưởng: ${formatPMC(p.rewardPmc)} · ${Math.round(getPuzzleSeconds(p) / 60)} phút
             </div>
             <button class="puzzle-play-btn" onclick="startPuzzleChallenge('${p.id}')">
                 VÀO PHÁ THẾ
@@ -10717,19 +10729,21 @@ function startPuzzleBoard(puzzle) {
     puzzle.pieces.forEach(p => createPuzzlePiece(p.c, p.r, p.type));
 
     turnBox.innerText = "CỜ THẾ: ĐỎ ĐI";
-    timerDoEl.innerText = puzzle.seconds + "s";
-    timerDenEl.innerText = "THƯỞNG";
-    timerDoEl.className = "timer-box timer-inline active-do";
-    timerDenEl.className = "timer-box timer-inline";
+    const puzzleTotalSeconds = getPuzzleSeconds(puzzle);
 
-    startPuzzleTimer(puzzle.seconds);
+timerDoEl.innerText = formatPuzzleTime(puzzleTotalSeconds);
+timerDenEl.innerText = "THƯỞNG";
+timerDoEl.className = "timer-box timer-inline active-do";
+timerDenEl.className = "timer-box timer-inline";
+
+startPuzzleTimer(puzzleTotalSeconds);
 }
 
 function startPuzzleTimer(seconds) {
     clearInterval(puzzleTimer);
-    puzzleSecondsLeft = Number(seconds || 30);
 
-    timerDoEl.innerText = puzzleSecondsLeft + "s";
+    puzzleSecondsLeft = Math.max(1, Number(seconds || PUZZLE_DEFAULT_SECONDS) || PUZZLE_DEFAULT_SECONDS);
+    timerDoEl.innerText = formatPuzzleTime(puzzleSecondsLeft);
 
     puzzleTimer = setInterval(() => {
         if (!isPuzzleMode || isGameOver) {
@@ -10738,7 +10752,13 @@ function startPuzzleTimer(seconds) {
         }
 
         puzzleSecondsLeft--;
-        timerDoEl.innerText = puzzleSecondsLeft + "s";
+        timerDoEl.innerText = formatPuzzleTime(puzzleSecondsLeft);
+
+        if (puzzleSecondsLeft <= 30) {
+            timerDoEl.classList.add("danger-time");
+        } else {
+            timerDoEl.classList.remove("danger-time");
+        }
 
         if (puzzleSecondsLeft <= 0) {
             finishPuzzle(false, "Hết thời gian phá thế.");
