@@ -10252,60 +10252,16 @@ refreshTimerRings();
 
     syncRoomFromBoard();
         
-        // --- ÉP CPU MÁY KHÁCH TÍNH TOÁN CHO BOT (DỰA VÀO UID, KHÔNG DỰA VÀO TÊN) ---
-        const currentRoom = window.__lastBoundRoom || {};
-        const oppPlayer = currentRoom.players?.den;
-        const isBotTurn = oppPlayer && (oppPlayer.uid === "bot_master_100" || oppPlayer.isBot);
-        
-        if (isBotTurn && !window.__isBotThinking) {
-            window.__isBotThinking = true;
-            if (!window.botWorker) {
-                window.botWorker = new Worker("botWorker.js");
-            }
-            
-            setTimeout(() => {
-                window.botWorker.postMessage({
-                    action: "think",
-                    boardState: exportBoardState(),
-                    botSide: "den",
-                    isCoUp: isCoUp,
-                    recentHistory: botMoveHistory // Ném cái sổ bộ nhớ cho não Bot nó đọc
-                });
+        const movedRoomForBot = {
+    ...(window.__lastBoundRoom || {}),
+    status: "playing",
+    turn: luotDi,
+    board: exportBoardState(),
+    isCoUp: isCoUp,
+    players: (window.__lastBoundRoom || {}).players || {}
+};
 
-                window.botWorker.onmessage = function(e) {
-                    const result = e.data;
-                    
-                    if (result.action === "done") {
-                        window.__isBotThinking = false;
-                        if (!result.move) {
-                            db.ref("matches/" + currentRoomId).update({
-                                winner: "do",
-                                winReason: "checkmate",
-                                finishedAt: firebase.database.ServerValue.TIMESTAMP,
-                                updatedAt: firebase.database.ServerValue.TIMESTAMP
-                            });
-                            return;
-                        }
-
-                        // Ghi nước cờ vào sổ tay chống nhây
-                        botMoveHistory.push({ hash: result.move.hash, isCheck: result.move.isCheck });
-                        if (botMoveHistory.length > 10) botMoveHistory.shift(); // Chỉ nhớ 10 bước gần nhất
-
-                        db.ref("matches/" + currentRoomId).update({
-                            board: result.move.newBoard,
-                            turn: "do",
-                            timeDo: timeDo, // Lưu lại đồng hồ phe Đỏ
-                            timeDen: timeDen, // Lưu lại đồng hồ phe Đen
-                            turnStartedAt: firebase.database.ServerValue.TIMESTAMP, // Ghim giờ bắt đầu cho phe Đỏ
-                            lastMoveFrom: result.move.from,
-                            lastMoveTo: result.move.to,
-                            moveCount: firebase.database.ServerValue.increment(1),
-                            updatedAt: firebase.database.ServerValue.TIMESTAMP
-                        });
-                    }
-                };
-            }, Number(window.CHESS_MOVE_ANIM_MS || 700) + 150);
-        }
+runBotThinkNow(movedRoomForBot, 80, "after-human-move");
     }
 }; // Kết thúc board.onclick
 
@@ -12104,6 +12060,159 @@ function appendMatchChatMessage(msg) {
     content.appendChild(row);
     content.scrollTop = content.scrollHeight;
 }
+function isBotPlayerForHtml(p) {
+    return !!p && (
+        p.uid === "bot_master_100" ||
+        p.isBot === true ||
+        String(p.name || "").includes("Lão Tẩu")
+    );
+}
+
+function getBotSideFromRoomHtml(room) {
+    if (isBotPlayerForHtml(room?.players?.do)) return "do";
+    if (isBotPlayerForHtml(room?.players?.den)) return "den";
+    return null;
+}
+
+function ensureBotWorkerHtml() {
+    if (!window.botWorker) {
+        window.botWorker = new Worker("botWorker.js");
+    }
+
+    if (window.__botWorkerHtmlBound) return window.botWorker;
+    window.__botWorkerHtmlBound = true;
+
+    window.botWorker.onmessage = async function(e) {
+        const result = e.data || {};
+        if (result.action !== "done") return;
+
+        window.__isBotThinking = false;
+
+        const roomId = window.__botThinkRoomId || currentRoomId;
+        if (!roomId || roomId !== currentRoomId) return;
+
+        const room = window.__lastBoundRoom || {};
+        const botSide = window.__botThinkSide || getBotSideFromRoomHtml(room) || "den";
+        const humanSide = botSide === "do" ? "den" : "do";
+
+        if (!result.move) {
+            await db.ref("matches/" + roomId).update({
+                winner: humanSide,
+                winReason: "checkmate",
+                finishedAt: firebase.database.ServerValue.TIMESTAMP,
+                updatedAt: firebase.database.ServerValue.TIMESTAMP
+            });
+            return;
+        }
+
+        if (typeof botMoveHistory !== "undefined") {
+            botMoveHistory.push({
+                hash: result.move.hash,
+                isCheck: result.move.isCheck
+            });
+            if (botMoveHistory.length > 10) botMoveHistory.shift();
+        }
+
+        await db.ref("matches/" + roomId).update({
+            board: result.move.newBoard,
+            turn: humanSide,
+            timeDo: timeDo,
+            timeDen: timeDen,
+            turnStartedAt: firebase.database.ServerValue.TIMESTAMP,
+            lastMoveFrom: result.move.from,
+            lastMoveTo: result.move.to,
+            moveCount: firebase.database.ServerValue.increment(1),
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+
+        // Sau khi bot đi xong, tới lượt người thật thì cho bot nghĩ trước tiếp.
+        setTimeout(() => {
+            const nextRoom = {
+                ...(window.__lastBoundRoom || {}),
+                board: result.move.newBoard,
+                turn: humanSide,
+                status: "playing",
+                winner: null
+            };
+            startBotPonderIfHumanTurn(nextRoom);
+        }, 120);
+    };
+
+    return window.botWorker;
+}
+
+function runBotThinkNow(room, delayMs = 80, source = "") {
+    try {
+        if (!room || room.status !== "playing" || room.winner) return;
+
+        const botSide = getBotSideFromRoomHtml(room);
+        if (!botSide) return;
+
+        if (room.turn !== botSide) return;
+
+        const humanSide = botSide === "do" ? "den" : "do";
+
+        // Chỉ máy của người thật đối diện bot mới được chạy não bot.
+        if (mySide !== humanSide) return;
+
+        if (window.__isBotThinking) return;
+
+        window.__isBotThinking = true;
+        window.__botThinkRoomId = currentRoomId;
+        window.__botThinkSide = botSide;
+
+        const boardForBot =
+            Array.isArray(room.board) && room.board.length
+                ? room.board
+                : exportBoardState();
+
+        setTimeout(() => {
+            if (!currentRoomId || currentRoomId !== window.__botThinkRoomId) {
+                window.__isBotThinking = false;
+                return;
+            }
+
+            ensureBotWorkerHtml().postMessage({
+                action: "think",
+                boardState: boardForBot,
+                botSide: botSide,
+                isCoUp: !!room.isCoUp,
+                recentHistory: typeof botMoveHistory !== "undefined" ? botMoveHistory : []
+            });
+        }, delayMs);
+    } catch (err) {
+        window.__isBotThinking = false;
+        console.error("RUN_BOT_THINK_FAIL:", source, err);
+    }
+}
+
+function startBotPonderIfHumanTurn(room) {
+    try {
+        if (!room || room.status !== "playing" || room.winner) return;
+        if (!Array.isArray(room.board) || !room.board.length) return;
+
+        const botSide = getBotSideFromRoomHtml(room);
+        if (!botSide) return;
+
+        const humanSide = botSide === "do" ? "den" : "do";
+
+        // Chỉ nghĩ trước khi đang tới lượt người thật.
+        if (room.turn !== humanSide) return;
+
+        // Chỉ máy người thật đối diện bot mới chạy.
+        if (mySide !== humanSide) return;
+
+        ensureBotWorkerHtml().postMessage({
+            action: "ponder",
+            boardState: room.board,
+            botSide: botSide,
+            isCoUp: !!room.isCoUp,
+            recentHistory: typeof botMoveHistory !== "undefined" ? botMoveHistory : []
+        });
+    } catch (err) {
+        console.warn("BOT_PONDER_FAIL:", err);
+    }
+}
 function bindRoom(roomId, skipInitialCleanup = false) {
     if (skipInitialCleanup) {
         if (roomValueRef) roomValueRef.off();
@@ -12540,54 +12649,8 @@ if (!isMyLocalVisualUpdate) {
                  }
              }, 400);
              // -------------------------------------------------------------------
-        // --- BÙA ĐÁNH THỨC BOT KHI NGƯỜI CHƠI F5 HOẶC RỚT MẠNG VÀO LẠI ---
-         if (room.status === "playing" && room.turn === "den" && !room.winner) {
-             const oppP = room.players?.den;
-             if (oppP && (oppP.uid === "bot_master_100" || oppP.isBot)) {
-                 // Chỉ máy chủ phòng (Phe Đỏ) mới được quyền bắt CPU chạy ngầm cho Bot
-                 if (mySide === "do" && !window.__isBotThinking) {
-                     window.__isBotThinking = true;
-                     if (!window.botWorker) window.botWorker = new Worker("botWorker.js");
-                     
-                     setTimeout(() => {
-                         window.botWorker.postMessage({
-                             action: "think",
-                             boardState: room.board,
-                             botSide: "den",
-                             isCoUp: !!room.isCoUp,
-                             recentHistory: typeof botMoveHistory !== 'undefined' ? botMoveHistory : []
-                         });
-
-                         window.botWorker.onmessage = function(e) {
-                             window.__isBotThinking = false;
-                             const result = e.data;
-                             if (result.action === "done") {
-                                 if (!result.move) {
-                                     db.ref("matches/" + currentRoomId).update({
-                                         winner: "do", winReason: "checkmate",
-                                         finishedAt: firebase.database.ServerValue.TIMESTAMP,
-                                         updatedAt: firebase.database.ServerValue.TIMESTAMP
-                                     });
-                                     return;
-                                 }
-                                 if(typeof botMoveHistory !== 'undefined') {
-                                     botMoveHistory.push({ hash: result.move.hash, isCheck: result.move.isCheck });
-                                     if (botMoveHistory.length > 10) botMoveHistory.shift();
-                                 }
-                                 db.ref("matches/" + currentRoomId).update({
-                                     board: result.move.newBoard, turn: "do",
-                                     timeDo: timeDo, timeDen: timeDen, turnStartedAt: firebase.database.ServerValue.TIMESTAMP,
-                                     lastMoveFrom: result.move.from, lastMoveTo: result.move.to,
-                                     moveCount: firebase.database.ServerValue.increment(1),
-                                     updatedAt: firebase.database.ServerValue.TIMESTAMP
-                                 });
-                             }
-                         };
-                     }, 1000); // Chờ 1 giây cho giao diện load mượt rồi mới bắt CPU gánh
-                 }
-             }
-         }
-         // -------------------------------------------------------------
+        startBotPonderIfHumanTurn(room);
+runBotThinkNow(room, 80, "room-listener");
     }
 }
 

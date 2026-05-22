@@ -5,7 +5,31 @@
 
 let positionHistory = []; 
 let killerMoves = Array(100).fill(null).map(() => []); // Sổ tay ghi nhớ đòn sát thủ
+let transTable = new Map();      // cache điểm minimax
+let ponderTable = new Map();     // cache nước bot đã tính trước
+let ponderBusy = false;
 
+const MAX_TRANS_TABLE = 80000;
+const MAX_PONDER_TABLE = 300;
+
+function boardArrayHash(boardArray, botSide, isCoUp) {
+    return getBoardHash(buildMatrix(boardArray)) + "|" + botSide + "|" + (isCoUp ? "up" : "normal");
+}
+
+function trimBigMap(map, maxSize) {
+    if (map.size <= maxSize) return;
+    const removeCount = Math.floor(maxSize * 0.25);
+    let i = 0;
+    for (const key of map.keys()) {
+        map.delete(key);
+        i++;
+        if (i >= removeCount) break;
+    }
+}
+
+function moveKey(m) {
+    return `${m.from.c},${m.from.r}-${m.to.c},${m.to.r}`;
+}
 const PIECE_VALUES = {
     '帥': 1000000, '將': 1000000,
     '俥': 1200, '車': 1200, // Tăng giá xe lên xíu
@@ -346,7 +370,18 @@ function quiesce(mt, alpha, beta, isMaximizing, botSide, isCoUp, qDepth) {
 
 function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp, isNullMove = false) {
     if (depth <= 0) return quiesce(mt, alpha, beta, isMaximizing, botSide, isCoUp, 0);
+    const originalAlpha = alpha;
+    const originalBeta = beta;
+    const currentSideForKey = isMaximizing ? botSide : (botSide === "do" ? "den" : "do");
+    const ttKey = getBoardHash(mt) + "|" + currentSideForKey + "|" + depth + "|" + (isMaximizing ? "max" : "min") + "|" + (isCoUp ? "up" : "normal");
 
+    const cached = transTable.get(ttKey);
+    if (cached && cached.depth >= depth) {
+        if (cached.flag === "EXACT") return cached.value;
+        if (cached.flag === "LOWER") alpha = Math.max(alpha, cached.value);
+        if (cached.flag === "UPPER") beta = Math.min(beta, cached.value);
+        if (alpha >= beta) return cached.value;
+    }
     let currentSide = isMaximizing ? botSide : (botSide === 'do' ? 'den' : 'do');
     
     // --- LĂNG BA VI BỘ (NULL MOVE PRUNING) ---
@@ -386,6 +421,13 @@ function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp, isNullMo
                 break; 
             }
         }
+                let flag = "EXACT";
+        if (maxEval <= originalAlpha) flag = "UPPER";
+        else if (maxEval >= originalBeta) flag = "LOWER";
+
+        transTable.set(ttKey, { depth, value: maxEval, flag });
+        trimBigMap(transTable, MAX_TRANS_TABLE);
+
         return maxEval;
     } else {
         let minEval = Infinity;
@@ -410,12 +452,19 @@ function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp, isNullMo
                 break;
             }
         }
+                let flag = "EXACT";
+        if (minEval <= originalAlpha) flag = "UPPER";
+        else if (minEval >= originalBeta) flag = "LOWER";
+
+        transTable.set(ttKey, { depth, value: minEval, flag });
+        trimBigMap(transTable, MAX_TRANS_TABLE);
+
         return minEval;
     }
 }
 
 // BỘ MÁY FALLBACK: CHẠY BẰNG RAM CỦA KHÁCH
-function calculateLocalMove(boardArray, botSide, isCoUp) {
+function calculateLocalMove(boardArray, botSide, isCoUp, forceDepth = null) {
     killerMoves = Array(100).fill(null).map(() => []); // Reset sổ tay
     let mt = buildMatrix(boardArray);
     let moves = generateAllMoves(mt, botSide, isCoUp, 10, false);
@@ -428,7 +477,7 @@ function calculateLocalMove(boardArray, botSide, isCoUp) {
     if (pieceCount <= 6) DEPTH = 8; 
     else if (pieceCount <= 12) DEPTH = 6;
     else if (pieceCount <= 20) DEPTH = 5;
-    else DEPTH = 4; // Khai cuộc vẫn giữ mượt mà
+        if (forceDepth) DEPTH = forceDepth; // Khai cuộc vẫn giữ mượt mà
 
     let bestScore = -Infinity;
     let bestMoves = [];
@@ -462,7 +511,70 @@ function calculateLocalMove(boardArray, botSide, isCoUp) {
     }
     return bestMoves[Math.floor(Math.random() * bestMoves.length)];
 }
+function applyMoveToBoardArray(boardArray, move, isCoUp, side) {
+    const moving = boardArray.find(p => p.c === move.from.c && p.r === move.from.r);
+    if (!moving) return boardArray;
 
+    let movedPiece = {
+        ...moving,
+        c: move.to.c,
+        r: move.to.r
+    };
+
+    if (isCoUp && movedPiece.isUp) {
+        movedPiece.isUp = false;
+        const names = {
+            '車':'xe','馬':'ma','象':'tuong','士':'si','將':'tuong_soai','砲':'phao','卒':'tot',
+            '俥':'xe','傌':'ma','相':'tuong','仕':'si','帥':'tuong_soai','炮':'phao','兵':'tot'
+        };
+        if (names[movedPiece.type]) movedPiece.src = `images/${side}_${names[movedPiece.type]}.png`;
+    }
+
+    const newBoardArray = boardArray.filter(p => {
+        if (p.c === move.from.c && p.r === move.from.r) return false;
+        if (p.c === move.to.c && p.r === move.to.r) return false;
+        return true;
+    });
+
+    newBoardArray.push(movedPiece);
+    return newBoardArray;
+}
+
+function buildFinalMovePayload(boardArray, bestMoveObject, botSide, isCoUp) {
+    let movedPiece = {
+        ...bestMoveObject.pieceObj,
+        c: bestMoveObject.to.c,
+        r: bestMoveObject.to.r
+    };
+
+    if (isCoUp && movedPiece.isUp) {
+        movedPiece.isUp = false;
+        const names = {
+            '車':'xe','馬':'ma','象':'tuong','士':'si','將':'tuong_soai','砲':'phao','卒':'tot',
+            '俥':'xe','傌':'ma','相':'tuong','仕':'si','帥':'tuong_soai','炮':'phao','兵':'tot'
+        };
+        if (names[movedPiece.type]) movedPiece.src = `images/${botSide}_${names[movedPiece.type]}.png`;
+    }
+
+    let newBoardArray = boardArray.filter(p => {
+        if (p.c === bestMoveObject.from.c && p.r === bestMoveObject.from.r) return false;
+        if (p.c === bestMoveObject.to.c && p.r === bestMoveObject.to.r) return false;
+        return true;
+    });
+
+    newBoardArray.push(movedPiece);
+
+    let tempMt = buildMatrix(newBoardArray);
+    let oppSide = botSide === "do" ? "den" : "do";
+
+    return {
+        from: bestMoveObject.from,
+        to: bestMoveObject.to,
+        newBoard: newBoardArray,
+        hash: getBoardHash(tempMt),
+        isCheck: laBiChieuWorker(oppSide, tempMt, isCoUp)
+    };
+}
 // ==========================================
 // KHO ĐỘNG CƠ CƯỚP BIỂN: DỊCH FEN VÀ GỌI CHESSDB
 // ==========================================
@@ -529,9 +641,64 @@ async function fetchCloudMove(fen) {
 // ==========================================
 self.onmessage = async function(e) {
     const data = e.data;
+        if (data.action === "ponder") {
+        if (ponderBusy) return;
+
+        ponderBusy = true;
+
+        try {
+            const humanSide = data.botSide === "do" ? "den" : "do";
+            const mt = buildMatrix(data.boardState);
+
+            // Sinh các nước người chơi có thể đi.
+            // generateAllMoves đã tự sort nước ăn quân lên trước.
+            const humanMoves = generateAllMoves(mt, humanSide, data.isCoUp, 1, false).slice(0, 10);
+
+            for (const humanMove of humanMoves) {
+                const afterHumanBoard = applyMoveToBoardArray(
+                    data.boardState,
+                    humanMove,
+                    data.isCoUp,
+                    humanSide
+                );
+
+                const key = boardArrayHash(afterHumanBoard, data.botSide, data.isCoUp);
+
+                if (ponderTable.has(key)) continue;
+
+                // Tính trước phản đòn của bot. Depth 3-4 cho nhẹ.
+                const reply = calculateLocalMove(afterHumanBoard, data.botSide, data.isCoUp, 4);
+
+                if (reply) {
+                    const payload = buildFinalMovePayload(
+                        afterHumanBoard,
+                        reply,
+                        data.botSide,
+                        data.isCoUp
+                    );
+
+                    ponderTable.set(key, payload);
+                    trimBigMap(ponderTable, MAX_PONDER_TABLE);
+                }
+            }
+        } catch (err) {
+            // Không cần báo lỗi ra UI, ponder lỗi thì tới lượt thật vẫn tính lại.
+        } finally {
+            ponderBusy = false;
+        }
+
+        return;
+    }
     if (data.action === "think") {
         if (data.recentHistory) positionHistory = data.recentHistory;
+        const readyKey = boardArrayHash(data.boardState, data.botSide, data.isCoUp);
+        const readyMove = ponderTable.get(readyKey);
 
+        if (readyMove) {
+            ponderTable.delete(readyKey);
+            postMessage({ action: "done", move: readyMove, fromPonder: true });
+            return;
+        }
         let bestMoveObject = null;
         let mt = buildMatrix(data.boardState);
 
