@@ -9754,6 +9754,18 @@ function playNextMatch() {
 
 // Xử lý Giao diện tức thì (chạy sau khi đếm xong, lúc này Firebase đã sạch bách)
 async function executePlayNextMatch() {
+    if (isPuzzleMode) {
+    const wrap = document.getElementById("victory-wrap");
+    if (wrap) wrap.style.transform = "translate(-50%, -50%) scale(0)";
+
+    executeBackToMenu();
+
+    setTimeout(() => {
+        openPuzzleMenu();
+    }, 250);
+
+    return;
+}
     clearInterval(interval);
     clearInterval(readyInterval);
 clearInterval(puzzleTimer);
@@ -10547,7 +10559,9 @@ if (haiTuongDoiMat(mt)) {
         alert("Hai Tướng không được nhìn mặt nhau!");
         return;
     }
-
+if (isPuzzleMode) {
+    puzzleBoardBeforeMove = clonePuzzleBoardState(exportBoardState());
+}
     if (target) {
     target.remove();
     try {
@@ -10659,7 +10673,78 @@ let currentPuzzle = null;
 let puzzleStep = 0;
 let puzzleTimer = null;
 let puzzleSecondsLeft = 0;
+const PUZZLE_MAX_WRONG = 7;
+let puzzleWrongCount = 0;
+let puzzleBoardBeforeMove = null;
 
+function clonePuzzleBoardState(state) {
+    return JSON.parse(JSON.stringify(state || []));
+}
+
+function updatePuzzleAttemptUI() {
+    if (!isPuzzleMode) return;
+
+    const left = Math.max(0, PUZZLE_MAX_WRONG - puzzleWrongCount);
+
+    if (timerDenEl) {
+        timerDenEl.innerText = `SAI ${puzzleWrongCount}/${PUZZLE_MAX_WRONG}`;
+    }
+
+    if (turnBox) {
+        turnBox.innerText = `CỜ THẾ: ĐỎ ĐI · CÒN ${left} LẦN SAI`;
+    }
+}
+
+function showPuzzleWrongNotice(text) {
+    let box = document.getElementById("puzzle-wrong-toast");
+
+    if (!box) {
+        box = document.createElement("div");
+        box.id = "puzzle-wrong-toast";
+        box.style.cssText = `
+            position: fixed;
+            left: 50%;
+            top: 18%;
+            transform: translateX(-50%);
+            z-index: 999999;
+            max-width: min(88vw, 360px);
+            padding: 12px 16px;
+            border-radius: 14px;
+            background: rgba(10, 10, 10, 0.94);
+            border: 2px solid #ff7675;
+            color: #fff;
+            font-weight: 900;
+            font-size: 13px;
+            text-align: center;
+            box-shadow: 0 0 18px rgba(255, 118, 117, 0.35);
+            pointer-events: none;
+        `;
+        document.body.appendChild(box);
+    }
+
+    box.innerText = text;
+    box.style.display = "block";
+
+    clearTimeout(window.__puzzleWrongToastTimer);
+    window.__puzzleWrongToastTimer = setTimeout(() => {
+        box.style.display = "none";
+    }, 1700);
+}
+
+function restorePuzzleBoardAfterWrong() {
+    if (!puzzleBoardBeforeMove) return;
+
+    applyBoardStateFromRoom(clonePuzzleBoardState(puzzleBoardBeforeMove));
+
+    selectedPiece = null;
+    clearMoveHints();
+    clearLastMoveMarks();
+
+    luotDi = "do";
+    isGameOver = false;
+
+    updatePuzzleAttemptUI();
+}
 const PUZZLE_DEFAULT_SECONDS = 30 * 60; // 30 phút
 
 function getPuzzleSeconds(puzzle) {
@@ -10892,9 +10977,11 @@ async function startPuzzleChallenge(puzzleId) {
 }
 
 function startPuzzleBoard(puzzle) {
-    isPuzzleMode = true;
-    currentPuzzle = puzzle;
-    puzzleStep = 0;
+isPuzzleMode = true;
+currentPuzzle = puzzle;
+puzzleStep = 0;
+puzzleWrongCount = 0;
+puzzleBoardBeforeMove = null;
 
     cleanupRoomListeners();
     clearActiveMatchSnapshot();
@@ -10926,11 +11013,12 @@ function startPuzzleBoard(puzzle) {
     const puzzleTotalSeconds = getPuzzleSeconds(puzzle);
 
 timerDoEl.innerText = formatPuzzleTime(puzzleTotalSeconds);
-timerDenEl.innerText = "THƯỞNG";
+timerDenEl.innerText = `SAI 0/${PUZZLE_MAX_WRONG}`;
 timerDoEl.className = "timer-box timer-inline active-do";
 timerDenEl.className = "timer-box timer-inline";
 
 startPuzzleTimer(puzzleTotalSeconds);
+updatePuzzleAttemptUI();
 }
 
 function startPuzzleTimer(seconds) {
@@ -10977,12 +11065,27 @@ async function handlePuzzleAfterMove(c1, r1, c2, r2) {
         to: { c: c2, r: r2 }
     };
 
+    // Đi sai: KHÔNG THUA LIỀN, chỉ trừ lượt sai rồi trả bàn về nước trước đó
     if (!samePuzzleMove(actual, expected)) {
-        finishPuzzle(false, "Đi sai nước, phá thế thất bại.");
+        puzzleWrongCount++;
+
+        if (puzzleWrongCount >= PUZZLE_MAX_WRONG) {
+            restorePuzzleBoardAfterWrong();
+            await finishPuzzle(false, `Sai quá ${PUZZLE_MAX_WRONG} lần, phá thế thất bại.`);
+            return;
+        }
+
+        restorePuzzleBoardAfterWrong();
+
+        const left = PUZZLE_MAX_WRONG - puzzleWrongCount;
+        showPuzzleWrongNotice(`Đi sai nước! Còn ${left} lần thử.`);
+
         return;
     }
 
+    // Đi đúng
     puzzleStep++;
+    puzzleBoardBeforeMove = clonePuzzleBoardState(exportBoardState());
 
     if (puzzleStep >= currentPuzzle.solution.length) {
         await finishPuzzle(true, "Phá giải thành công.");
@@ -10990,9 +11093,8 @@ async function handlePuzzleAfterMove(c1, r1, c2, r2) {
     }
 
     luotDi = "do";
-    turnBox.innerText = "CỜ THẾ: ĐỎ ĐI";
+    updatePuzzleAttemptUI();
 }
-
 async function finishPuzzle(win, reason) {
     if (!isPuzzleMode || !currentPuzzle) return;
 
