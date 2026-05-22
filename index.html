@@ -7675,8 +7675,14 @@ async function tryResumeRealtimeMatch(preferredMode = null) {
 
     const isDo = room.players?.do?.uid === me.uid;
     const isDen = room.players?.den?.uid === me.uid;
-    const canResume = !room.winner && (room.status === "playing" || room.status === "waiting");
+    const hasBothPlayers = !!room.players?.do && !!room.players?.den;
 
+const canResume =
+    !room.winner &&
+    (
+        room.status === "playing" ||
+        (room.status === "waiting" && hasBothPlayers)
+    );
     if (!canResume || (!isDo && !isDen)) {
         clearActiveMatchSnapshot(saved.roomId);
         return false;
@@ -8243,10 +8249,19 @@ function selectGame(mode) {
 let botWaitInterval = null;
 let botWaitSeconds = 15; // <-- Đổi thành 15
 let isBotTimerRunning = false;
+window.__blockBotInviteUntil = window.__blockBotInviteUntil || 0;
 
+function blockBotInviteFor(ms = 20000) {
+    window.__blockBotInviteUntil = Date.now() + Number(ms || 20000);
+    if (typeof cancelBotWaiting === "function") cancelBotWaiting();
+}
 function startBotWaitingTimer() {
     // 🛑 CHỐT CHẶN MỚI: Cả cờ tướng lẫn cờ úp, hễ cược > 3 PMC là Lão Tẩu nghỉ khỏe, chỉ chờ người thật!
     if (currentRoomStakePMC > 3) {
+        if (Date.now() < Number(window.__blockBotInviteUntil || 0)) {
+    cancelBotWaiting();
+    return;
+}
         console.log("Phòng cược > 3 PMC, Lão Tẩu không dám vào, chỉ chờ người thật!");
         cancelBotWaiting();
         return;
@@ -9270,7 +9285,26 @@ async function preloadNextMatchData() {
         // 2. Tiền đã vào túi -> Đẩy lệnh dọn sạch bàn trên Firebase (không để UI phải đợi)
         const snap2 = await db.ref("matches/" + roomId).once("value");
         const room2 = snap2.val() || {};
+const hasBotInFinishedRoom =
+    (typeof isBotPlayerObj === "function" && (
+        isBotPlayerObj(room2.players?.do) ||
+        isBotPlayerObj(room2.players?.den)
+    ));
 
+if ((room2.winner || room2.status === "finished") && hasBotInFinishedRoom) {
+    // Chặn Lão Tẩu chui lại ngay sau khi vừa đá ra.
+    if (typeof blockBotInviteFor === "function") blockBotInviteFor(20000);
+
+    // Hàm này đã có sẵn trong file: giữ người thật làm Đỏ, đá bot ra Đen,
+    // reset board/winner/ready/stakeLocked và gắn lại waitingRooms.
+    const cleaned = await forceCleanupFinishedBotRoomAfterPaid(room2, roomId, 0);
+
+    // Nếu chưa paid xong thì hàm trên tự retry, KHÔNG được reset winner/settlement bằng code cũ.
+    if (!cleaned) return;
+
+    await loadWalletBalance().catch(() => {});
+    return;
+}
         if (room2.winner || room2.status === "finished") {
             const rootUpdates = {};
             
@@ -9438,9 +9472,10 @@ function playNextMatch() {
 }
 
 // Xử lý Giao diện tức thì (chạy sau khi đếm xong, lúc này Firebase đã sạch bách)
-function executePlayNextMatch() {
+async function executePlayNextMatch() {
     clearInterval(interval);
     clearInterval(readyInterval);
+
     readyOverlayWaitingShown = false;
     readyOverlayRoomKey = "";
     readyOverlayOpeningLock = false;
@@ -9450,16 +9485,76 @@ function executePlayNextMatch() {
     if (sounds.bgm) sounds.bgm.pause();
     if (sounds.heartbeat) sounds.heartbeat.pause();
 
-    clearRealtimeBoardVisualOnly(); // Xóa rác bàn cờ UI
+    clearRealtimeBoardVisualOnly();
 
     readyDo = false;
     readyDen = false;
     isGameOver = false;
     selectedPiece = null;
 
-    showReadyOverlay(currentRoomMode || "co-tuong", true);
-}
+    const roomId = currentRoomId;
+    if (!roomId) {
+        closeReadyOverlay();
+        showHomeUI();
+        return;
+    }
 
+    let freshRoom = null;
+    try {
+        const snap = await db.ref("matches/" + roomId).once("value");
+        freshRoom = snap.val() || null;
+    } catch (err) {
+        console.warn("READ_ROOM_AFTER_CONTINUE_FAIL:", err);
+    }
+
+    if (!freshRoom) {
+        closeReadyOverlay();
+        clearActiveMatchSnapshot(roomId);
+        cleanupRoomListeners();
+        currentRoomId = null;
+        mySide = null;
+        showHomeUI();
+        return;
+    }
+
+    const hasDo = !!freshRoom.players?.do;
+    const hasDen = !!freshRoom.players?.den;
+    const denIsBot = typeof isBotPlayerObj === "function" && isBotPlayerObj(freshRoom.players?.den);
+
+    // Nếu sau khi dọn vẫn còn bot thì ép dọn lại, không cho hiện SS.
+    if (denIsBot && typeof forceCleanupFinishedBotRoomAfterPaid === "function") {
+        if (typeof blockBotInviteFor === "function") blockBotInviteFor(20000);
+        await forceCleanupFinishedBotRoomAfterPaid(freshRoom, roomId, 0).catch(() => {});
+        closeReadyOverlay();
+        return;
+    }
+
+    // Chỉ hiện bảng SS khi thật sự có đủ 2 người thật.
+    if (
+        freshRoom.status === "waiting" &&
+        hasDo &&
+        hasDen &&
+        !freshRoom.winner
+    ) {
+        showReadyOverlay(freshRoom.mode || currentRoomMode || "co-tuong", true);
+        return;
+    }
+
+    // Ghế Đen trống thì trả về phòng chờ trống, không hiện SS.
+    closeReadyOverlay();
+    hideVictoryPopup();
+
+    currentRoomStatus = "waiting";
+    currentRoomMode = freshRoom.mode || currentRoomMode || "co-tuong";
+    currentRoomStakePMC = Math.max(0, Math.floor(Number(freshRoom.stakePMC || currentRoomStakePMC || 0) || 0));
+    currentRoomBucket = freshRoom.roomBucket || currentRoomBucket || makeStakeBucket(currentRoomMode, currentRoomStakePMC);
+
+    if (typeof renderPlayersFromRoom === "function") renderPlayersFromRoom(freshRoom);
+    if (typeof renderTimerUI === "function") renderTimerUI();
+
+    // Không gọi bot liền. Chờ người thật trước.
+    if (typeof blockBotInviteFor === "function") blockBotInviteFor(20000);
+}
 // ----------------------------------------------------
 // NÚT BẤM THOÁT TRẬN 
 async function backToMenu() {
