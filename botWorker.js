@@ -505,8 +505,14 @@ function parseUCIMove(uci) {
 
 async function fetchCloudMove(fen) {
     const url = `https://www.chessdb.cn/cdb.php?action=queryall&board=${encodeURIComponent(fen)}`;
+
     try {
-        const res = await fetch(url);
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 1200);
+
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timer);
+
         const text = await res.text();
         if (text.startsWith("move:")) {
             const bestMoveUCI = text.split(",")[0].split(":")[1];
@@ -515,9 +521,9 @@ async function fetchCloudMove(fen) {
     } catch(e) {
         return null;
     }
+
     return null;
 }
-
 // ==========================================
 // TỔNG TRẠM ĐIỀU PHỐI (CHẠY KHI ĐƯỢC GỌI)
 // ==========================================
