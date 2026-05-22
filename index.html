@@ -8259,17 +8259,18 @@ function blockBotInviteFor(ms = 20000) {
     if (typeof cancelBotWaiting === "function") cancelBotWaiting();
 }
 function startBotWaitingTimer() {
-    // 🛑 CHỐT CHẶN MỚI: Cả cờ tướng lẫn cờ úp, hễ cược > 3 PMC là Lão Tẩu nghỉ khỏe, chỉ chờ người thật!
-    if (currentRoomStakePMC > 3) {
-        if (Date.now() < Number(window.__blockBotInviteUntil || 0)) {
-    cancelBotWaiting();
-    return;
-}
-        console.log("Phòng cược > 3 PMC, Lão Tẩu không dám vào, chỉ chờ người thật!");
+    // Vừa đá bot xong thì chặn bot chui lại một lúc, kể cả phòng 1 PMC.
+    if (Date.now() < Number(window.__blockBotInviteUntil || 0)) {
         cancelBotWaiting();
         return;
     }
 
+    // Cược > 3 PMC thì không gọi bot.
+    if (currentRoomStakePMC > 3) {
+        console.log("Phòng cược > 3 PMC, Lão Tẩu không vào, chỉ chờ người thật!");
+        cancelBotWaiting();
+        return;
+    }
     // Nếu đang đếm rồi thì thôi
     if (isBotTimerRunning) return;
 
@@ -12881,7 +12882,7 @@ function makeInviteCodeFromRoomId(roomId = "") {
 
 // HÀM DỌN PHÒNG CHỜ CŨ CỦA MÌNH
 // Đã fix lỗi: Tuyệt đối không được đóng cái phòng mà mình đang ngồi bên trong!
-async function closeMyOtherOpenWaitingRooms(keepRoomId = null) {
+async function closeMyOtherOpenWaitingRooms(keepRoomId = null, options = {}) {
     try {
         const me = getCurrentPlayerProfile();
         const myUid = String(me?.uid || "");
@@ -12890,7 +12891,7 @@ async function closeMyOtherOpenWaitingRooms(keepRoomId = null) {
         if (!myUid && !myWalletKey) return;
 
         // Ép lấy thêm cái currentRoomId hiện tại để bảo vệ phòng đang ngồi
-        const safeKeepRoomId = keepRoomId || currentRoomId || null;
+       const safeKeepRoomId = options.forceCloseCurrent ? (keepRoomId || null) : (keepRoomId || currentRoomId || null);
 
         const snap = await db.ref("matches")
             .orderByChild("createdAt")
@@ -12910,8 +12911,13 @@ async function closeMyOtherOpenWaitingRooms(keepRoomId = null) {
 
             if (room.winner || room.status !== "waiting" || room.lobbyOpen !== true) return;
 
-            // Phòng đã có khách thì không động vào, tránh phá phòng đang chuẩn bị SS.
-            if (room.players?.den) return;
+            // Phòng có người thật thì không động vào.
+// Nhưng nếu ghế Đen là bot bị kẹt thì vẫn cho đóng phòng cũ.
+const denIsBot =
+    typeof isBotPlayerObj === "function" &&
+    isBotPlayerObj(room.players?.den);
+
+if (room.players?.den && !denIsBot) return;
 
             const host = room.players?.do || {};
             const ownerUid = String(room.lobbyOwnerUid || host.uid || "");
@@ -13099,9 +13105,32 @@ readyDen = false;
 }
 
 async function createAndPublishWaitingRoom(me, mode, stakePMC, bucket) {
-    // Mỗi tài khoản chỉ được mở 1 phòng chờ công khai.
-    // Tạo phòng mới thì đóng các phòng chờ cũ để không sinh phòng ảo.
-    await closeMyOtherOpenWaitingRooms().catch(err => console.error("Dọn phòng cũ trước khi tạo phòng mới lỗi:", err));
+    // Bấm tạo phòng mới thì cắt sạch dây local với phòng cũ trước.
+    const oldRoomId = currentRoomId;
+
+    cleanupRoomListeners();
+    clearActiveMatchSnapshot();
+
+    currentRoomId = null;
+    mySide = null;
+    viewSide = "do";
+    currentRoomMode = null;
+    currentRoomStakePMC = 0;
+    currentRoomBucket = null;
+    currentRoomStatus = null;
+
+    readyDo = false;
+    readyDen = false;
+    readyDeadlineAt = 0;
+    readyTime = 30;
+
+    closeReadyOverlay();
+    hideVictoryPopup();
+
+    // Tạo phòng mới thì được phép đóng cả phòng cũ của chính mình.
+    // Không dọn quá tay: chỉ đóng phòng chờ của mình, phòng có người thật thì giữ.
+    await closeMyOtherOpenWaitingRooms(null, { forceCloseCurrent: true })
+        .catch(err => console.error("Dọn phòng cũ trước khi tạo phòng mới lỗi:", err));
 
     const newRoomRef = db.ref("matches").push();
     const newRoomId = newRoomRef.key;
@@ -13191,7 +13220,10 @@ bindRoom(newRoomId);
 return true;
 }
 async function joinOrCreateRealtimeMatch(mode, stakePMC = 0) {
-    if (await tryResumeRealtimeMatch(mode)) return;
+    // Bấm tạo/vào phòng mới là KHÔNG được tự resume phòng cũ nữa.
+    // Resume chỉ dùng lúc app vừa mở lại, không dùng khi người chơi chủ động tạo phòng.
+    clearActiveMatchSnapshot();
+
     if (!(await ensureTestnetGateBeforeAction())) return;
 
     const safeStake = Math.max(0, Math.floor(Number(stakePMC) || 0));
