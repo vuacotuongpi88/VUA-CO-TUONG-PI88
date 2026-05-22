@@ -6657,6 +6657,138 @@ margin-bottom: 14px;
     color: #fff8d6 !important;
     font-weight: 900 !important;
 }
+.puzzle-room-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.puzzle-room-card {
+    background: rgba(12,18,12,0.88);
+    border: 2px solid rgba(85,239,196,0.22);
+    border-radius: 18px;
+    padding: 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: 0.2s ease;
+}
+
+.puzzle-room-card:hover {
+    transform: translateY(-2px);
+    border-color: #55efc4;
+}
+
+.puzzle-room-card.active {
+    border-color: #55efc4;
+    box-shadow: 0 0 16px rgba(85,239,196,0.25);
+    background: rgba(10,30,20,0.95);
+}
+
+.puzzle-room-card img {
+    width: 70px;
+    height: 70px;
+    object-fit: cover;
+    border-radius: 14px;
+}
+
+.puzzle-room-name {
+    margin-top: 8px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 900;
+}
+
+.puzzle-room-diff {
+    margin-top: 5px;
+    font-size: 11px;
+    color: #55efc4;
+    font-weight: 800;
+}
+
+.puzzle-preview-box {
+    margin-top: 18px;
+    padding: 18px;
+    border-radius: 18px;
+    background: rgba(8,12,8,0.92);
+    border: 2px solid rgba(85,239,196,0.25);
+}
+
+.puzzle-preview-title {
+    font-size: 20px;
+    color: #55efc4;
+    font-weight: 900;
+    text-align: center;
+}
+
+.puzzle-preview-desc {
+    margin-top: 10px;
+    color: #dfe6e9;
+    text-align: center;
+    line-height: 1.5;
+    font-size: 13px;
+}
+
+.puzzle-preview-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-top: 18px;
+}
+
+.puzzle-preview-item {
+    background: rgba(255,255,255,0.05);
+    border-radius: 14px;
+    padding: 12px;
+    text-align: center;
+}
+
+.puzzle-preview-item span {
+    display: block;
+    color: #b2bec3;
+    font-size: 11px;
+    margin-bottom: 6px;
+}
+
+.puzzle-preview-item strong {
+    color: #7dffb3;
+    font-size: 14px;
+}
+
+.puzzle-enter-btn {
+    width: 100%;
+    margin-top: 18px;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #7b2ff7, #4d1d95);
+    color: #fff;
+    font-weight: 900;
+    font-size: 15px;
+    padding: 14px;
+}
+
+@media (max-width: 600px) {
+    .puzzle-room-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
+
+    .puzzle-room-card {
+        padding: 8px;
+    }
+
+    .puzzle-room-card img {
+        width: 54px;
+        height: 54px;
+    }
+
+    .puzzle-room-name {
+        font-size: 10px;
+    }
+
+    .puzzle-preview-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -7162,7 +7294,9 @@ console.log("Đang chạy trên môi trường:", currentNetwork.toUpperCase());
             Chọn một thế cờ, trả phí vào ải. Đi sai hoặc hết giờ là thất bại.
         </div>
 
-        <div id="puzzle-list"></div>
+        <div id="puzzle-list" class="puzzle-room-grid"></div>
+
+<div id="puzzle-preview" class="puzzle-preview-box"></div>
     </div>
 </div>
 <div id="ranking-modal" class="rank-modal">
@@ -10597,28 +10731,88 @@ const CHESS_PUZZLES = [
     }
 ];
 
+let selectedPuzzleId = null;
+
+function renderPuzzlePreview(puzzle) {
+    const preview = document.getElementById("puzzle-preview");
+    if (!preview || !puzzle) return;
+
+    preview.innerHTML = `
+        <div class="puzzle-preview-title">${puzzle.name}</div>
+
+        <div class="puzzle-preview-desc">
+            ${puzzle.desc}
+        </div>
+
+        <div class="puzzle-preview-grid">
+            <div class="puzzle-preview-item">
+                <span>ĐỘ KHÓ</span>
+                <strong>${puzzle.diff}</strong>
+            </div>
+
+            <div class="puzzle-preview-item">
+                <span>PHÍ BÀN</span>
+                <strong>${formatPMC(puzzle.feePmc)} PMC</strong>
+            </div>
+
+            <div class="puzzle-preview-item">
+                <span>THƯỞNG</span>
+                <strong>${formatPMC(puzzle.rewardPmc)} PMC</strong>
+            </div>
+
+            <div class="puzzle-preview-item">
+                <span>THỜI GIAN</span>
+                <strong>${Math.round(getPuzzleSeconds(puzzle) / 60)} PHÚT</strong>
+            </div>
+        </div>
+
+        <button class="puzzle-enter-btn"
+            onclick="startPuzzleChallenge('${puzzle.id}')">
+            VÀO PHÁ THẾ
+        </button>
+    `;
+}
+
+function selectPuzzleRoom(id, el) {
+    selectedPuzzleId = id;
+
+    document.querySelectorAll(".puzzle-room-card")
+        .forEach(x => x.classList.remove("active"));
+
+    if (el) el.classList.add("active");
+
+    const puzzle = CHESS_PUZZLES.find(x => x.id === id);
+    renderPuzzlePreview(puzzle);
+}
+
 function openPuzzleMenu() {
     const modal = document.getElementById("puzzle-modal");
     const list = document.getElementById("puzzle-list");
+
     if (!modal || !list) return;
 
-    list.innerHTML = CHESS_PUZZLES.map(p => `
-        <div class="puzzle-row">
-            <div class="puzzle-row-top">
-                <div class="puzzle-title">${p.name}</div>
-                <div class="puzzle-diff">${p.diff}</div>
+    list.innerHTML = CHESS_PUZZLES.map((p, index) => `
+        <div class="puzzle-room-card ${index === 0 ? "active" : ""}"
+            onclick="selectPuzzleRoom('${p.id}', this)">
+
+            <img src="images/co_tuong_new.png">
+
+            <div class="puzzle-room-name">
+                ${p.name}
             </div>
-            <div class="puzzle-desc">${p.desc}</div>
-            <div class="puzzle-money">
-                Phí: ${formatPMC(p.feePmc)} · Thưởng: ${formatPMC(p.rewardPmc)} · ${Math.round(getPuzzleSeconds(p) / 60)} phút
+
+            <div class="puzzle-room-diff">
+                ${p.diff}
             </div>
-            <button class="puzzle-play-btn" onclick="startPuzzleChallenge('${p.id}')">
-                VÀO PHÁ THẾ
-            </button>
         </div>
     `).join("");
 
     modal.classList.add("show");
+
+    if (CHESS_PUZZLES.length) {
+        selectedPuzzleId = CHESS_PUZZLES[0].id;
+        renderPuzzlePreview(CHESS_PUZZLES[0]);
+    }
 }
 
 function closePuzzleMenu() {
