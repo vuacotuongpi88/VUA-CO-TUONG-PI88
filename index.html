@@ -12172,7 +12172,7 @@ function runBotThinkNow(room, delayMs = 80, source = "") {
                 return;
             }
 
-            const botLevel = Number(room.botLevel || localStorage.getItem("botLevel") || 6);
+            const botLevel = Number(room.botLevel || localStorage.getItem("botLevel") || 9);
 
 ensureBotWorkerHtml().postMessage({
     action: "think",
@@ -12205,7 +12205,7 @@ function startBotPonderIfHumanTurn(room) {
         // Chỉ máy người thật đối diện bot mới chạy.
         if (mySide !== humanSide) return;
 
-       const botLevel = Number(room.botLevel || localStorage.getItem("botLevel") || 6);
+       const botLevel = Number(room.botLevel || localStorage.getItem("botLevel") || 9);
 
 ensureBotWorkerHtml().postMessage({
     action: "ponder",
