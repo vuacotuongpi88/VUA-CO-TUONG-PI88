@@ -6532,6 +6532,116 @@ margin-bottom: 14px;
     border: 1px solid rgba(255, 234, 167, 0.45) !important;
     box-shadow: none !important;
 }
+/* ===== CỜ THẾ ===== */
+.puzzle-modal {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 36000;
+    background: rgba(0,0,0,0.82);
+    padding: 12px;
+    box-sizing: border-box;
+}
+
+.puzzle-modal.show {
+    display: flex;
+}
+
+.puzzle-box {
+    width: min(94vw, 520px);
+    max-height: 86vh;
+    overflow: hidden;
+    background: rgba(10, 12, 16, 0.98);
+    border: 2px solid #55efc4;
+    border-radius: 18px;
+    box-shadow: 0 0 24px rgba(85,239,196,0.22);
+}
+
+.puzzle-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 16px;
+    background: linear-gradient(90deg, #2d0b59, #00b894);
+    color: #fff8d6;
+    font-weight: 900;
+    font-size: 16px;
+}
+
+.puzzle-close {
+    cursor: pointer;
+    font-size: 18px;
+}
+
+.puzzle-note {
+    padding: 10px 14px;
+    color: #dfe6e9;
+    font-size: 12px;
+    line-height: 1.5;
+    border-bottom: 1px solid rgba(85,239,196,0.18);
+}
+
+#puzzle-list {
+    max-height: calc(86vh - 96px);
+    overflow-y: auto;
+    padding: 12px;
+}
+
+.puzzle-row {
+    background: rgba(5, 22, 16, 0.9);
+    border: 1px solid rgba(85,239,196,0.32);
+    border-radius: 14px;
+    padding: 12px;
+    margin-bottom: 10px;
+}
+
+.puzzle-row-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.puzzle-title {
+    color: #fff;
+    font-size: 14px;
+    font-weight: 900;
+}
+
+.puzzle-diff {
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: rgba(255,209,102,0.14);
+    color: #ffd166;
+    font-size: 10px;
+    font-weight: 900;
+    white-space: nowrap;
+}
+
+.puzzle-desc {
+    margin-top: 6px;
+    color: #b2bec3;
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.puzzle-money {
+    margin-top: 8px;
+    color: #7dffb3;
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.puzzle-play-btn {
+    width: 100%;
+    margin-top: 10px;
+    border-radius: 12px !important;
+    background: linear-gradient(180deg, #7b2ff7, #4d1d95) !important;
+    color: #fff8d6 !important;
+    font-weight: 900 !important;
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -6864,11 +6974,11 @@ console.log("Đang chạy trên môi trường:", currentNetwork.toUpperCase());
         <div class="game-note">Chế độ hiện đang mở</div>
     </div>
 
-    <div class="desktop-game-card placeholder">
-        <img src="" alt="Game dự kiến 1">
-        <p>GAME DỰ KIẾN 01</p>
-        <div class="game-note">Để sẵn ô chờ ý tưởng mới của mầy</div>
-    </div>
+    <div class="desktop-game-card" onclick="openPuzzleMenu()">
+    <img src="images/co_tuong_new.png" alt="Cờ Thế">
+    <p>CỜ THẾ</p>
+    <div class="game-note">Phá thế ăn thưởng PMC nội bộ</div>
+</div>
 
     <div class="desktop-game-card placeholder">
         <img src="" alt="Game dự kiến 2">
@@ -7021,7 +7131,24 @@ console.log("Đang chạy trên môi trường:", currentNetwork.toUpperCase());
         </div>
     </div>
 </div>
+<div class="mobile-game-card" onclick="openPuzzleMenu()">
+    <img src="images/co_tuong_new.png" alt="Cờ Thế">
+    <span>CỜ THẾ</span>
+</div>
+<div id="puzzle-modal" class="puzzle-modal">
+    <div class="puzzle-box">
+        <div class="puzzle-header">
+            <span>🧩 CỜ THẾ GIANG HỒ</span>
+            <span class="puzzle-close" onclick="closePuzzleMenu()">✖</span>
+        </div>
 
+        <div class="puzzle-note">
+            Chọn một thế cờ, trả phí vào ải. Đi sai hoặc hết giờ là thất bại.
+        </div>
+
+        <div id="puzzle-list"></div>
+    </div>
+</div>
 <div id="ranking-modal" class="rank-modal">
     <div class="rank-modal-box">
         <div class="rank-modal-header">
@@ -9479,7 +9606,10 @@ function playNextMatch() {
 async function executePlayNextMatch() {
     clearInterval(interval);
     clearInterval(readyInterval);
-
+clearInterval(puzzleTimer);
+isPuzzleMode = false;
+currentPuzzle = null;
+puzzleStep = 0;
     readyOverlayWaitingShown = false;
     readyOverlayRoomKey = "";
     readyOverlayOpeningLock = false;
@@ -10227,7 +10357,7 @@ if (isOwnTurnPiece) {
     if (target && target.dataset.side === luotDi) {
         selectedPiece = target;
         selectedPiece.classList.add("selected");
-        showMoveHints(selectedPiece);
+        if (!isPuzzleMode) showMoveHints(selectedPiece);
         playSnd('click');
     }
     return;
@@ -10243,7 +10373,7 @@ if (isOwnTurnPiece) {
     selectedPiece.classList.remove("selected");
     selectedPiece = target;
     selectedPiece.classList.add("selected");
-    showMoveHints(selectedPiece);
+    if (!isPuzzleMode) showMoveHints(selectedPiece);
     playSnd('click');
     return;
 }
@@ -10319,10 +10449,17 @@ movingPiece.style.top = rows[newViewPos.r] + "%";
 refreshTimerRings();
 
     selectedPiece = null;
-    clearMoveHints();
-    drawLastMoveMarks();
+clearMoveHints();
+drawLastMoveMarks();
 
-    // (Bên trong board.onclick) ...
+if (isPuzzleMode) {
+    setTimeout(() => {
+        handlePuzzleAfterMove(c1, r1, c2, r2);
+    }, Number(window.CHESS_MOVE_ANIM_MS || 700) + 80);
+    return;
+}
+
+// (Bên trong board.onclick) ...
     // Xóa sạch cái setTimeout cũ đi và dán đoạn này vào:
     setTimeout(() => {
         // Kiểm tra Chiếu Bí (Checkmate)
@@ -10363,7 +10500,282 @@ refreshTimerRings();
 runBotThinkNow(movedRoomForBot, 80, "after-human-move");
     }
 }; // Kết thúc board.onclick
+// ===================== CỜ THẾ V1 =====================
+// CHÚ Ý: true chỉ để test giao diện. Khi lên thật phải đổi false và nối API server.
+const PUZZLE_TEST_MODE = true;
 
+let isPuzzleMode = false;
+let currentPuzzle = null;
+let puzzleStep = 0;
+let puzzleTimer = null;
+let puzzleSecondsLeft = 0;
+
+const CHESS_PUZZLES = [
+    {
+        id: "easy_001",
+        name: "Đơn Xa Sát Cung",
+        diff: "Dễ",
+        feePmc: 1,
+        rewardPmc: 1.6,
+        seconds: 30,
+        desc: "Đỏ đi 1 nước chính xác để phá thế.",
+        pieces: [
+            { c: 4, r: 0, type: "將" },
+            { c: 4, r: 9, type: "帥" },
+            { c: 4, r: 5, type: "俥" }
+        ],
+        solution: [
+            { from: { c: 4, r: 5 }, to: { c: 4, r: 1 } }
+        ]
+    },
+    {
+        id: "easy_002",
+        name: "Xe Ngang Khóa Tướng",
+        diff: "Dễ",
+        feePmc: 1,
+        rewardPmc: 1.8,
+        seconds: 35,
+        desc: "Một nước xe chuẩn, đi sai là mất phí.",
+        pieces: [
+            { c: 4, r: 0, type: "將" },
+            { c: 4, r: 9, type: "帥" },
+            { c: 0, r: 1, type: "俥" },
+            { c: 3, r: 2, type: "士" },
+            { c: 5, r: 2, type: "士" }
+        ],
+        solution: [
+            { from: { c: 0, r: 1 }, to: { c: 4, r: 1 } }
+        ]
+    },
+    {
+        id: "normal_001",
+        name: "Pháo Đầu Định Giang Sơn",
+        diff: "Vừa",
+        feePmc: 2,
+        rewardPmc: 3.6,
+        seconds: 45,
+        desc: "Tìm nước pháo quyết định.",
+        pieces: [
+            { c: 4, r: 0, type: "將" },
+            { c: 4, r: 9, type: "帥" },
+            { c: 4, r: 5, type: "炮" },
+            { c: 4, r: 2, type: "兵" },
+            { c: 3, r: 0, type: "士" },
+            { c: 5, r: 0, type: "士" }
+        ],
+        solution: [
+            { from: { c: 4, r: 5 }, to: { c: 4, r: 1 } }
+        ]
+    }
+];
+
+function openPuzzleMenu() {
+    const modal = document.getElementById("puzzle-modal");
+    const list = document.getElementById("puzzle-list");
+    if (!modal || !list) return;
+
+    list.innerHTML = CHESS_PUZZLES.map(p => `
+        <div class="puzzle-row">
+            <div class="puzzle-row-top">
+                <div class="puzzle-title">${p.name}</div>
+                <div class="puzzle-diff">${p.diff}</div>
+            </div>
+            <div class="puzzle-desc">${p.desc}</div>
+            <div class="puzzle-money">
+                Phí: ${formatPMC(p.feePmc)} · Thưởng: ${formatPMC(p.rewardPmc)} · ${p.seconds}s
+            </div>
+            <button class="puzzle-play-btn" onclick="startPuzzleChallenge('${p.id}')">
+                VÀO PHÁ THẾ
+            </button>
+        </div>
+    `).join("");
+
+    modal.classList.add("show");
+}
+
+function closePuzzleMenu() {
+    const modal = document.getElementById("puzzle-modal");
+    if (modal) modal.classList.remove("show");
+}
+
+function puzzlePieceSrc(side, type) {
+    const names = {
+        "車": "xe", "馬": "ma", "象": "tuong", "士": "si", "將": "tuong_soai", "砲": "phao", "卒": "tot",
+        "俥": "xe", "傌": "ma", "相": "tuong", "仕": "si", "帥": "tuong_soai", "炮": "phao", "兵": "tot"
+    };
+    return `images/${side}_${names[type] || "tot"}.png`;
+}
+
+function createPuzzlePiece(c, r, type) {
+    const side = ["帥", "俥", "傌", "相", "仕", "炮", "兵"].includes(type) ? "do" : "den";
+    const img = document.createElement("img");
+
+    img.className = "piece";
+    img.dataset.side = side;
+    img.dataset.type = type;
+    img.dataset.isUp = "false";
+    img.src = puzzlePieceSrc(side, type);
+
+    const viewPos = mapBoardToView(c, r);
+    img.style.left = columns[viewPos.c] + "%";
+    img.style.top = rows[viewPos.r] + "%";
+
+    board.appendChild(img);
+}
+
+async function puzzleChargeEntry(puzzle) {
+    const fee = Number(puzzle.feePmc || 0);
+
+    if (PUZZLE_TEST_MODE) {
+        const nowPmc = Number(getPmcBalance() || 0);
+        if (nowPmc < fee) {
+            alert("PMC không đủ để vào cờ thế này.");
+            return false;
+        }
+
+        currentPmcBalance = Math.max(0, nowPmc - fee);
+        localStorage.setItem(getPmcCacheKey(), String(currentPmcBalance));
+        updatePmcUI(currentPmcBalance);
+        return true;
+    }
+
+    // Bản thật sẽ nối API server ở đây.
+    alert("Cờ thế chưa nối API trừ PMC server.");
+    return false;
+}
+
+async function puzzlePayReward(puzzle) {
+    const reward = Number(puzzle.rewardPmc || 0);
+
+    if (PUZZLE_TEST_MODE) {
+        currentPmcBalance = Number(getPmcBalance() || 0) + reward;
+        localStorage.setItem(getPmcCacheKey(), String(currentPmcBalance));
+        updatePmcUI(currentPmcBalance);
+        return true;
+    }
+
+    // Bản thật sẽ nối API server ở đây.
+    return false;
+}
+
+async function startPuzzleChallenge(puzzleId) {
+    const puzzle = CHESS_PUZZLES.find(x => x.id === puzzleId);
+    if (!puzzle) return;
+
+    const ok = await puzzleChargeEntry(puzzle);
+    if (!ok) return;
+
+    closePuzzleMenu();
+    startPuzzleBoard(puzzle);
+}
+
+function startPuzzleBoard(puzzle) {
+    isPuzzleMode = true;
+    currentPuzzle = puzzle;
+    puzzleStep = 0;
+
+    cleanupRoomListeners();
+    clearActiveMatchSnapshot();
+
+    currentRoomId = null;
+    currentRoomMode = "co-the";
+    currentRoomStatus = "puzzle";
+    currentRoomStakePMC = Number(puzzle.feePmc || 0);
+    mySide = "do";
+    viewSide = "do";
+    isCoUp = false;
+    isGameOver = false;
+    luotDi = "do";
+    selectedPiece = null;
+    lastMoveFrom = null;
+    lastMoveTo = null;
+
+    hideHomeUI();
+    document.getElementById("game-arena").style.display = "block";
+    document.getElementById("victory-wrap").style.transform = "translate(-50%, -50%) scale(0)";
+
+    board.querySelectorAll(":scope > .piece").forEach(p => p.remove());
+    clearMoveHints();
+    clearLastMoveMarks();
+
+    puzzle.pieces.forEach(p => createPuzzlePiece(p.c, p.r, p.type));
+
+    turnBox.innerText = "CỜ THẾ: ĐỎ ĐI";
+    timerDoEl.innerText = puzzle.seconds + "s";
+    timerDenEl.innerText = "THƯỞNG";
+    timerDoEl.className = "timer-box timer-inline active-do";
+    timerDenEl.className = "timer-box timer-inline";
+
+    startPuzzleTimer(puzzle.seconds);
+}
+
+function startPuzzleTimer(seconds) {
+    clearInterval(puzzleTimer);
+    puzzleSecondsLeft = Number(seconds || 30);
+
+    timerDoEl.innerText = puzzleSecondsLeft + "s";
+
+    puzzleTimer = setInterval(() => {
+        if (!isPuzzleMode || isGameOver) {
+            clearInterval(puzzleTimer);
+            return;
+        }
+
+        puzzleSecondsLeft--;
+        timerDoEl.innerText = puzzleSecondsLeft + "s";
+
+        if (puzzleSecondsLeft <= 0) {
+            finishPuzzle(false, "Hết thời gian phá thế.");
+        }
+    }, 1000);
+}
+
+function samePuzzleMove(a, b) {
+    return !!a && !!b &&
+        Number(a.from.c) === Number(b.from.c) &&
+        Number(a.from.r) === Number(b.from.r) &&
+        Number(a.to.c) === Number(b.to.c) &&
+        Number(a.to.r) === Number(b.to.r);
+}
+
+async function handlePuzzleAfterMove(c1, r1, c2, r2) {
+    if (!isPuzzleMode || !currentPuzzle || isGameOver) return;
+
+    const expected = currentPuzzle.solution[puzzleStep];
+    const actual = {
+        from: { c: c1, r: r1 },
+        to: { c: c2, r: r2 }
+    };
+
+    if (!samePuzzleMove(actual, expected)) {
+        finishPuzzle(false, "Đi sai nước, phá thế thất bại.");
+        return;
+    }
+
+    puzzleStep++;
+
+    if (puzzleStep >= currentPuzzle.solution.length) {
+        await finishPuzzle(true, "Phá giải thành công.");
+        return;
+    }
+
+    luotDi = "do";
+    turnBox.innerText = "CỜ THẾ: ĐỎ ĐI";
+}
+
+async function finishPuzzle(win, reason) {
+    if (!isPuzzleMode || !currentPuzzle) return;
+
+    clearInterval(puzzleTimer);
+    isGameOver = true;
+
+    if (win) {
+        await puzzlePayReward(currentPuzzle);
+        endGame("PHÁ THẾ THÀNH CÔNG", `Nhận ${formatPMC(currentPuzzle.rewardPmc)}`);
+    } else {
+        endGame("PHÁ THẾ THẤT BẠI", reason || "Không giải được thế cờ.");
+    }
+}
 function resetToStartup() {
 clearInterval(interval);
 playSnd('welcome'); playSnd('bgm');
