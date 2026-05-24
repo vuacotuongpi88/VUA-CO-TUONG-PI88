@@ -6789,6 +6789,65 @@ margin-bottom: 14px;
         grid-template-columns: 1fr 1fr;
     }
 }
+.puzzle-current-panel {
+    padding: 14px;
+}
+
+.puzzle-stage-card {
+    text-align: center;
+    background: rgba(5, 18, 14, 0.94);
+    border: 2px solid rgba(85, 239, 196, 0.35);
+    border-radius: 20px;
+    padding: 18px;
+    box-shadow: 0 0 22px rgba(85, 239, 196, 0.12);
+}
+
+.puzzle-stage-badge {
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #7b2ff7, #4d1d95);
+    color: #fff8d6;
+    font-weight: 900;
+    font-size: 14px;
+    margin-bottom: 12px;
+    border: 1px solid rgba(255,255,255,0.18);
+}
+
+.puzzle-stage-img {
+    width: 86px;
+    height: 86px;
+    object-fit: cover;
+    border-radius: 18px;
+    margin: 4px auto 12px;
+    display: block;
+    box-shadow: 0 0 18px rgba(85,239,196,0.18);
+}
+
+.puzzle-current-title {
+    color: #55efc4;
+    font-size: 22px;
+    font-weight: 900;
+    margin-bottom: 8px;
+}
+
+.puzzle-current-desc {
+    color: #dfe6e9;
+    font-size: 13px;
+    line-height: 1.5;
+    margin-bottom: 14px;
+}
+
+.puzzle-current-empty {
+    text-align: center;
+    padding: 20px;
+    color: #fff;
+}
+
+.puzzle-enter-btn:disabled {
+    opacity: 0.45;
+    filter: grayscale(1);
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -7294,9 +7353,7 @@ console.log("Đang chạy trên môi trường:", currentNetwork.toUpperCase());
             Chọn một thế cờ, trả phí vào ải. Đi sai hoặc hết giờ là thất bại.
         </div>
 
-        <div id="puzzle-list" class="puzzle-room-grid"></div>
-
-<div id="puzzle-preview" class="puzzle-preview-box"></div>
+        <div id="puzzle-current-panel" class="puzzle-current-panel"></div>
     </div>
 </div>
 <div id="ranking-modal" class="rank-modal">
@@ -9754,7 +9811,8 @@ function playNextMatch() {
 
 // Xử lý Giao diện tức thì (chạy sau khi đếm xong, lúc này Firebase đã sạch bách)
 async function executePlayNextMatch() {
-    if (isPuzzleMode) {
+    
+    if (isPuzzleMode || lastPuzzleResult?.mode === "puzzle") {
     const wrap = document.getElementById("victory-wrap");
     if (wrap) wrap.style.transform = "translate(-50%, -50%) scale(0)";
 
@@ -10759,13 +10817,14 @@ function formatPuzzleTime(seconds) {
 }
 const CHESS_PUZZLES = [
     {
-        id: "easy_001",
+        level: 1,
+        id: "level_001",
         name: "Đơn Xa Sát Cung",
         diff: "Dễ",
         feePmc: 1,
         rewardPmc: 1.6,
         seconds: 30 * 60,
-        desc: "Đỏ đi 1 nước chính xác để phá thế.",
+        desc: "Đỏ đi nước chính xác để phá thế.",
         pieces: [
             { c: 4, r: 0, type: "將" },
             { c: 4, r: 9, type: "帥" },
@@ -10776,13 +10835,14 @@ const CHESS_PUZZLES = [
         ]
     },
     {
-        id: "easy_002",
+        level: 2,
+        id: "level_002",
         name: "Xe Ngang Khóa Tướng",
         diff: "Dễ",
         feePmc: 1,
         rewardPmc: 1.8,
         seconds: 30 * 60,
-        desc: "Một nước xe chuẩn, đi sai là mất phí.",
+        desc: "Dùng xe khóa cung tướng.",
         pieces: [
             { c: 4, r: 0, type: "將" },
             { c: 4, r: 9, type: "帥" },
@@ -10793,113 +10853,147 @@ const CHESS_PUZZLES = [
         solution: [
             { from: { c: 0, r: 1 }, to: { c: 4, r: 1 } }
         ]
-    },
-    {
-        id: "normal_001",
-        name: "Pháo Đầu Định Giang Sơn",
-        diff: "Vừa",
-        feePmc: 2,
-        rewardPmc: 3.6,
-        seconds: 30 * 60,
-        desc: "Tìm nước pháo quyết định.",
-        pieces: [
-            { c: 4, r: 0, type: "將" },
-            { c: 4, r: 9, type: "帥" },
-            { c: 4, r: 5, type: "炮" },
-            { c: 4, r: 2, type: "兵" },
-            { c: 3, r: 0, type: "士" },
-            { c: 5, r: 0, type: "士" }
-        ],
-        solution: [
-            { from: { c: 4, r: 5 }, to: { c: 4, r: 1 } }
-        ]
     }
 ];
 
 let selectedPuzzleId = null;
 
-function renderPuzzlePreview(puzzle) {
-    const preview = document.getElementById("puzzle-preview");
-    if (!preview || !puzzle) return;
+const PUZZLE_MAX_LEVEL = 100;
+let lastPuzzleResult = null;
 
-    preview.innerHTML = `
-        <div class="puzzle-preview-title">${puzzle.name}</div>
+function getPuzzleProgressKey() {
+    const key =
+        (typeof walletKey !== "undefined" && walletKey) ||
+        (typeof myWalletKey !== "undefined" && myWalletKey) ||
+        (typeof myUid !== "undefined" && myUid) ||
+        localStorage.getItem("guestPuzzleKey") ||
+        "";
 
-        <div class="puzzle-preview-desc">
-            ${puzzle.desc}
-        </div>
+    if (!key) {
+        const guestKey = "guest_" + Math.random().toString(36).slice(2, 10);
+        localStorage.setItem("guestPuzzleKey", guestKey);
+        return "co_the_progress_v1_" + guestKey;
+    }
 
-        <div class="puzzle-preview-grid">
-            <div class="puzzle-preview-item">
-                <span>ĐỘ KHÓ</span>
-                <strong>${puzzle.diff}</strong>
-            </div>
-
-            <div class="puzzle-preview-item">
-                <span>PHÍ BÀN</span>
-                <strong>${formatPMC(puzzle.feePmc)} PMC</strong>
-            </div>
-
-            <div class="puzzle-preview-item">
-                <span>THƯỞNG</span>
-                <strong>${formatPMC(puzzle.rewardPmc)} PMC</strong>
-            </div>
-
-            <div class="puzzle-preview-item">
-                <span>THỜI GIAN</span>
-                <strong>${Math.round(getPuzzleSeconds(puzzle) / 60)} PHÚT</strong>
-            </div>
-        </div>
-
-        <button class="puzzle-enter-btn"
-            onclick="startPuzzleChallenge('${puzzle.id}')">
-            VÀO PHÁ THẾ
-        </button>
-    `;
+    return "co_the_progress_v1_" + key;
 }
 
-function selectPuzzleRoom(id, el) {
-    selectedPuzzleId = id;
+function getUnlockedPuzzleLevel() {
+    const lv = Number(localStorage.getItem(getPuzzleProgressKey()) || 1);
+    if (!Number.isFinite(lv)) return 1;
+    return Math.max(1, Math.min(PUZZLE_MAX_LEVEL, Math.floor(lv)));
+}
 
-    document.querySelectorAll(".puzzle-room-card")
-        .forEach(x => x.classList.remove("active"));
+function setUnlockedPuzzleLevel(level) {
+    const lv = Math.max(1, Math.min(PUZZLE_MAX_LEVEL, Math.floor(Number(level) || 1)));
+    localStorage.setItem(getPuzzleProgressKey(), String(lv));
+}
 
-    if (el) el.classList.add("active");
+function getPuzzleByLevel(level) {
+    const lv = Number(level || 1);
+    return CHESS_PUZZLES.find(p => Number(p.level) === lv) || null;
+}
 
-    const puzzle = CHESS_PUZZLES.find(x => x.id === id);
-    renderPuzzlePreview(puzzle);
+function getPuzzleFee(puzzle) {
+    if (puzzle && puzzle.feePmc !== undefined) return Number(puzzle.feePmc || 0);
+
+    const lv = Number(puzzle?.level || getUnlockedPuzzleLevel());
+    if (lv <= 10) return 1;
+    if (lv <= 30) return 2;
+    if (lv <= 60) return 3;
+    if (lv <= 80) return 5;
+    return 10;
+}
+
+function getPuzzleReward(puzzle) {
+    if (puzzle && puzzle.rewardPmc !== undefined) return Number(puzzle.rewardPmc || 0);
+
+    const fee = getPuzzleFee(puzzle);
+    const lv = Number(puzzle?.level || getUnlockedPuzzleLevel());
+    return Number((fee * (1.4 + Math.min(1.2, lv / 80))).toFixed(2));
+}
+
+function renderCurrentPuzzlePanel() {
+    const panel = document.getElementById("puzzle-current-panel");
+    if (!panel) return;
+
+    const level = getUnlockedPuzzleLevel();
+    const puzzle = getPuzzleByLevel(level);
+
+    if (!puzzle) {
+        panel.innerHTML = `
+            <div class="puzzle-current-empty">
+                <div class="puzzle-current-title">ẢI ${level}/${PUZZLE_MAX_LEVEL}</div>
+                <div class="puzzle-current-desc">
+                    Ải này chưa có dữ liệu. Thêm thế cờ level ${level} vào CHESS_PUZZLES.
+                </div>
+                <button class="puzzle-enter-btn" disabled>CHƯA MỞ</button>
+            </div>
+        `;
+        return;
+    }
+
+    const fee = getPuzzleFee(puzzle);
+    const reward = getPuzzleReward(puzzle);
+    const minutes = Math.round(getPuzzleSeconds(puzzle) / 60);
+
+    panel.innerHTML = `
+        <div class="puzzle-stage-card">
+            <div class="puzzle-stage-badge">ẢI ${level}/${PUZZLE_MAX_LEVEL}</div>
+
+            <img class="puzzle-stage-img" src="images/co_tuong_new.png" alt="Cờ thế">
+
+            <div class="puzzle-current-title">${puzzle.name}</div>
+            <div class="puzzle-current-desc">${puzzle.desc || "Phá thế để mở ải tiếp theo."}</div>
+
+            <div class="puzzle-preview-grid">
+                <div class="puzzle-preview-item">
+                    <span>ĐỘ KHÓ</span>
+                    <strong>${puzzle.diff || "Thường"}</strong>
+                </div>
+
+                <div class="puzzle-preview-item">
+                    <span>PHÍ BÀN</span>
+                    <strong>${formatPMC(fee)} PMC</strong>
+                </div>
+
+                <div class="puzzle-preview-item">
+                    <span>THƯỞNG</span>
+                    <strong>${formatPMC(reward)} PMC</strong>
+                </div>
+
+                <div class="puzzle-preview-item">
+                    <span>THỜI GIAN</span>
+                    <strong>${minutes} PHÚT</strong>
+                </div>
+            </div>
+
+            <button class="puzzle-enter-btn" onclick="startCurrentPuzzleLevel()">
+                VÀO PHÁ ẢI ${level}
+            </button>
+        </div>
+    `;
 }
 
 function openPuzzleMenu() {
     const modal = document.getElementById("puzzle-modal");
-    const list = document.getElementById("puzzle-list");
-
-    if (!modal || !list) return;
-
-    list.innerHTML = CHESS_PUZZLES.map((p, index) => `
-        <div class="puzzle-room-card ${index === 0 ? "active" : ""}"
-            onclick="selectPuzzleRoom('${p.id}', this)">
-
-            <img src="images/co_tuong_new.png">
-
-            <div class="puzzle-room-name">
-                ${p.name}
-            </div>
-
-            <div class="puzzle-room-diff">
-                ${p.diff}
-            </div>
-        </div>
-    `).join("");
+    if (!modal) return;
 
     modal.classList.add("show");
-
-    if (CHESS_PUZZLES.length) {
-        selectedPuzzleId = CHESS_PUZZLES[0].id;
-        renderPuzzlePreview(CHESS_PUZZLES[0]);
-    }
+    renderCurrentPuzzlePanel();
 }
 
+function startCurrentPuzzleLevel() {
+    const level = getUnlockedPuzzleLevel();
+    const puzzle = getPuzzleByLevel(level);
+
+    if (!puzzle) {
+        alert("Ải này chưa có dữ liệu.");
+        return;
+    }
+
+    startPuzzleChallenge(puzzle.id);
+}
 function closePuzzleMenu() {
     const modal = document.getElementById("puzzle-modal");
     if (modal) modal.classList.remove("show");
@@ -10931,7 +11025,7 @@ function createPuzzlePiece(c, r, type) {
 }
 
 async function puzzleChargeEntry(puzzle) {
-    const fee = Number(puzzle.feePmc || 0);
+    const fee = getPuzzleFee(puzzle);
 
     if (PUZZLE_TEST_MODE) {
         const nowPmc = Number(getPmcBalance() || 0);
@@ -10952,7 +11046,7 @@ async function puzzleChargeEntry(puzzle) {
 }
 
 async function puzzlePayReward(puzzle) {
-    const reward = Number(puzzle.rewardPmc || 0);
+    const reward = getPuzzleReward(puzzle);
 
     if (PUZZLE_TEST_MODE) {
         currentPmcBalance = Number(getPmcBalance() || 0) + reward;
@@ -11101,11 +11195,37 @@ async function finishPuzzle(win, reason) {
     clearInterval(puzzleTimer);
     isGameOver = true;
 
+    const currentLevel = Number(currentPuzzle.level || getUnlockedPuzzleLevel());
+
+    lastPuzzleResult = {
+        mode: "puzzle",
+        win: !!win,
+        level: currentLevel
+    };
+
     if (win) {
         await puzzlePayReward(currentPuzzle);
-        endGame("PHÁ THẾ THÀNH CÔNG", `Nhận ${formatPMC(currentPuzzle.rewardPmc)}`);
+
+        const unlockedNow = getUnlockedPuzzleLevel();
+        if (currentLevel >= unlockedNow) {
+            setUnlockedPuzzleLevel(Math.min(PUZZLE_MAX_LEVEL, currentLevel + 1));
+        }
+
+        const nextLevel = getUnlockedPuzzleLevel();
+
+        if (currentLevel >= PUZZLE_MAX_LEVEL) {
+            endGame("PHÁ HẾT 100 ẢI", `Nhận ${formatPMC(getPuzzleReward(currentPuzzle))} PMC`);
+        } else {
+            endGame(
+                "PHÁ THẾ THÀNH CÔNG",
+                `Nhận ${formatPMC(getPuzzleReward(currentPuzzle))} PMC · Đã mở Ải ${nextLevel}`
+            );
+        }
     } else {
-        endGame("PHÁ THẾ THẤT BẠI", reason || "Không giải được thế cờ.");
+        endGame(
+            "PHÁ THẾ THẤT BẠI",
+            `${reason || "Chưa phá được ải này."} · Vẫn ở Ải ${currentLevel}`
+        );
     }
 }
 function resetToStartup() {
