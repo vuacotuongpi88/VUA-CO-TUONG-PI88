@@ -11024,6 +11024,8 @@ async function savePuzzleTopStats(puzzle, solvedLevel) {
     const nextStats = {
         highestLevel: Math.max(oldHighest, openedLv),
         openedLevel: Math.max(oldHighest, openedLv),
+        unlockedLevel: Math.max(oldHighest, openedLv),
+        maxLevel: Math.max(oldHighest, openedLv),
         solvedHighestLevel: Math.max(oldSolvedHighest, solvedLv),
         solvedCount: oldSolved + 1,
         clearCount: oldSolved + 1,
@@ -11077,7 +11079,7 @@ async function savePuzzleTopStats(puzzle, solvedLevel) {
     const firebaseStats = Object.assign({}, nextStats, { updatedAt: serverNow });
     const firebaseTopRecord = Object.assign({}, topRecord, { updatedAt: serverNow });
 
-    // Tách từng đường dẫn để Rules có chặn chỗ này thì chỗ khác vẫn lưu được.
+    // Ghi cả nested lẫn field phẳng để bảng TOP đọc được dù database có nhiều ví / query bị giới hạn.
     await db.ref("wallets/" + walletKey + "/puzzleStats").update(firebaseStats).catch(err => {
         console.error("Lỗi lưu wallets/puzzleStats:", err);
     });
@@ -11090,20 +11092,109 @@ async function savePuzzleTopStats(puzzle, solvedLevel) {
         displayName: playerName,
         photo: playerPhoto,
         avatar: playerPhoto,
+        puzzleHighestLevel: firebaseStats.highestLevel,
+        puzzleOpenedLevel: firebaseStats.openedLevel,
+        puzzleSolvedCount: firebaseStats.solvedCount,
+        puzzleBestTimeSeconds: firebaseStats.bestTimeSeconds || 0,
+        puzzleBestLevel: firebaseStats.bestLevel || 0,
+        coTheHighestLevel: firebaseStats.highestLevel,
+        coTheOpenedLevel: firebaseStats.openedLevel,
+        coTheSolvedCount: firebaseStats.solvedCount,
+        coTheBestTimeSeconds: firebaseStats.bestTimeSeconds || 0,
+        coTheBestLevel: firebaseStats.bestLevel || 0,
         updatedAt: serverNow
-    }).catch(() => {});
+    }).catch(err => {
+        console.error("Lỗi lưu field TOP Cờ Thế ở ví:", err);
+    });
 
-    // Bảng TOP riêng để không bị hụt do wallets.limitToLast(250).
+    // Bảng TOP riêng để không bị hụt do wallets.limitToLast(250). Nếu Rules chặn, vẫn còn query theo wallets ở trên.
     await db.ref("puzzleTop/" + walletKey).update(firebaseTopRecord).catch(err => {
         console.error("Lỗi lưu puzzleTop:", err);
     });
 
-    // Tên cũ dự phòng, sau này đổi code vẫn đọc được.
     await db.ref("coTheTop/" + walletKey).update(firebaseTopRecord).catch(() => {});
+}
+
+async function ensurePuzzleTopSnapshotFromProgress() {
+    try {
+        const me = typeof getCurrentPlayerProfile === "function" ? getCurrentPlayerProfile() : {};
+        const walletKey = String(
+            me.walletKey ||
+            (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "") ||
+            me.uid ||
+            ""
+        ).trim();
+        if (!walletKey) return;
+
+        const openedLv = Math.max(1, Math.floor(Number(getUnlockedPuzzleLevel ? getUnlockedPuzzleLevel() : 1) || 1));
+        const maxLv = typeof PUZZLE_MAX_LEVEL !== "undefined" ? Number(PUZZLE_MAX_LEVEL || 100) : 100;
+        const solvedLv = Math.max(0, Math.min(maxLv, openedLv >= maxLv ? maxLv : openedLv - 1));
+        if (openedLv <= 1 && solvedLv <= 0) return;
+
+        const localKey = "coThePuzzleTop:" + walletKey;
+        let old = {};
+        try { old = JSON.parse(localStorage.getItem(localKey) || "{}") || {}; } catch (_) { old = {}; }
+
+        const playerName = me.name || localStorage.getItem("user-name-display") || "Người chơi";
+        const playerPhoto = me.photo || localStorage.getItem("user-photo") || "images/do_tuong.png";
+        const nowMs = Date.now();
+        const oldHighest = Math.max(0, Math.floor(Number(old.highestLevel || old.openedLevel || old.unlockedLevel || old.maxLevel || 0) || 0));
+        const oldSolved = Math.max(0, Math.floor(Number(old.solvedCount || old.clearCount || 0) || 0));
+
+        const stats = Object.assign({}, old, {
+            walletKey,
+            name: playerName,
+            displayName: playerName,
+            photo: playerPhoto,
+            avatar: playerPhoto,
+            highestLevel: Math.max(oldHighest, openedLv),
+            openedLevel: Math.max(oldHighest, openedLv),
+            unlockedLevel: Math.max(oldHighest, openedLv),
+            maxLevel: Math.max(oldHighest, openedLv),
+            solvedHighestLevel: Math.max(Number(old.solvedHighestLevel || 0) || 0, solvedLv),
+            solvedCount: Math.max(oldSolved, solvedLv),
+            clearCount: Math.max(oldSolved, solvedLv),
+            updatedAt: nowMs
+        });
+
+        try { localStorage.setItem(localKey, JSON.stringify(stats)); } catch (_) {}
+        if (typeof db === "undefined" || !db) return;
+
+        const serverNow = (typeof firebase !== "undefined" && firebase.database && firebase.database.ServerValue)
+            ? firebase.database.ServerValue.TIMESTAMP
+            : nowMs;
+        const firebaseStats = Object.assign({}, stats, { updatedAt: serverNow });
+
+        await db.ref("wallets/" + walletKey + "/puzzleStats").update(firebaseStats).catch(() => {});
+        await db.ref("wallets/" + walletKey + "/coTheStats").update(firebaseStats).catch(() => {});
+        await db.ref("wallets/" + walletKey).update({
+            walletKey,
+            name: playerName,
+            displayName: playerName,
+            photo: playerPhoto,
+            avatar: playerPhoto,
+            puzzleHighestLevel: firebaseStats.highestLevel,
+            puzzleOpenedLevel: firebaseStats.openedLevel,
+            puzzleSolvedCount: firebaseStats.solvedCount,
+            puzzleBestTimeSeconds: Number(firebaseStats.bestTimeSeconds || firebaseStats.fastestSeconds || 0) || 0,
+            puzzleBestLevel: Number(firebaseStats.bestLevel || 0) || 0,
+            coTheHighestLevel: firebaseStats.highestLevel,
+            coTheOpenedLevel: firebaseStats.openedLevel,
+            coTheSolvedCount: firebaseStats.solvedCount,
+            coTheBestTimeSeconds: Number(firebaseStats.bestTimeSeconds || firebaseStats.fastestSeconds || 0) || 0,
+            coTheBestLevel: Number(firebaseStats.bestLevel || 0) || 0,
+            updatedAt: serverNow
+        }).catch(() => {});
+        await db.ref("puzzleTop/" + walletKey).update(firebaseStats).catch(() => {});
+        await db.ref("coTheTop/" + walletKey).update(firebaseStats).catch(() => {});
+    } catch (err) {
+        console.warn("Không đồng bộ được TOP Cờ Thế từ tiến độ local:", err);
+    }
 }
 
 async function openPuzzleTopFromMenu(e) {
     if (e) e.stopPropagation();
+    await ensurePuzzleTopSnapshotFromProgress();
     closePuzzleMenu();
     arenaTopActiveTab = "puzzle-level";
     await openArenaTopModal(e);
@@ -11204,6 +11295,9 @@ function openPuzzleMenu() {
 
     modal.classList.add("show");
     renderCurrentPuzzlePanel();
+    if (typeof ensurePuzzleTopSnapshotFromProgress === "function") {
+        ensurePuzzleTopSnapshotFromProgress();
+    }
 }
 
 function startCurrentPuzzleLevel() {
@@ -18470,14 +18564,33 @@ function readPuzzleStatsRecord(wallet = {}) {
         : (wallet?.coTheStats && typeof wallet.coTheStats === "object" ? wallet.coTheStats : {});
 
     return {
-        highestLevel: Math.max(0, Math.floor(readTopNumber(stats.highestLevel ?? stats.openedLevel ?? stats.unlockedLevel ?? stats.maxLevel ?? stats.solvedHighestLevel ?? 0, 0))),
-        solvedCount: Math.max(0, Math.floor(readTopNumber(stats.solvedCount ?? stats.clearCount ?? 0, 0))),
-        bestTimeSeconds: Math.max(0, Math.floor(readTopNumber(stats.bestTimeSeconds ?? stats.fastestSeconds ?? 0, 0))),
-        bestLevel: Math.max(0, Math.floor(readTopNumber(stats.bestLevel ?? 0, 0))),
-        bestWrong: Math.max(0, Math.floor(readTopNumber(stats.bestWrong ?? 0, 0))),
-        totalWrong: Math.max(0, Math.floor(readTopNumber(stats.totalWrong ?? 0, 0))),
-        bestPuzzleName: stats.bestPuzzleName || stats.bestPuzzleId || "",
-        lastPuzzleName: stats.lastPuzzleName || ""
+        highestLevel: Math.max(0, Math.floor(readTopNumber(
+            stats.highestLevel ?? stats.openedLevel ?? stats.unlockedLevel ?? stats.maxLevel ?? stats.solvedHighestLevel ??
+            wallet.puzzleHighestLevel ?? wallet.coTheHighestLevel ?? wallet.puzzleOpenedLevel ?? wallet.coTheOpenedLevel ?? wallet.openedLevel ?? 0,
+            0
+        ))),
+        solvedCount: Math.max(0, Math.floor(readTopNumber(
+            stats.solvedCount ?? stats.clearCount ?? wallet.puzzleSolvedCount ?? wallet.coTheSolvedCount ?? wallet.clearCount ?? 0,
+            0
+        ))),
+        bestTimeSeconds: Math.max(0, Math.floor(readTopNumber(
+            stats.bestTimeSeconds ?? stats.fastestSeconds ?? wallet.puzzleBestTimeSeconds ?? wallet.coTheBestTimeSeconds ?? wallet.fastestSeconds ?? 0,
+            0
+        ))),
+        bestLevel: Math.max(0, Math.floor(readTopNumber(
+            stats.bestLevel ?? wallet.puzzleBestLevel ?? wallet.coTheBestLevel ?? 0,
+            0
+        ))),
+        bestWrong: Math.max(0, Math.floor(readTopNumber(
+            stats.bestWrong ?? wallet.puzzleBestWrong ?? wallet.coTheBestWrong ?? 0,
+            0
+        ))),
+        totalWrong: Math.max(0, Math.floor(readTopNumber(
+            stats.totalWrong ?? wallet.puzzleTotalWrong ?? wallet.coTheTotalWrong ?? 0,
+            0
+        ))),
+        bestPuzzleName: stats.bestPuzzleName || stats.bestPuzzleId || wallet.puzzleBestName || wallet.coTheBestName || "",
+        lastPuzzleName: stats.lastPuzzleName || wallet.puzzleLastName || wallet.coTheLastName || ""
     };
 }
 
@@ -18633,8 +18746,18 @@ function readLocalPuzzleTopForCurrentUser() {
         const walletKey = typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "";
         if (!walletKey) return null;
         const raw = JSON.parse(localStorage.getItem("coThePuzzleTop:" + walletKey) || "{}") || {};
+        const openedLv = typeof getUnlockedPuzzleLevel === "function" ? Number(getUnlockedPuzzleLevel() || 1) : 1;
+        if (openedLv > 1) {
+            raw.highestLevel = Math.max(Number(raw.highestLevel || raw.openedLevel || 0) || 0, openedLv);
+            raw.openedLevel = Math.max(Number(raw.openedLevel || 0) || 0, openedLv);
+            raw.unlockedLevel = Math.max(Number(raw.unlockedLevel || 0) || 0, openedLv);
+            raw.solvedCount = Math.max(Number(raw.solvedCount || raw.clearCount || 0) || 0, openedLv - 1);
+            raw.clearCount = Math.max(Number(raw.clearCount || 0) || 0, openedLv - 1);
+        }
         if (!raw || !Number(raw.highestLevel || raw.openedLevel || raw.bestTimeSeconds || 0)) return null;
         raw.walletKey = raw.walletKey || walletKey;
+        raw.name = raw.name || localStorage.getItem("user-name-display") || "Người chơi";
+        raw.photo = raw.photo || localStorage.getItem("user-photo") || "images/do_tuong.png";
         return raw;
     } catch (_) {
         return null;
@@ -18642,11 +18765,24 @@ function readLocalPuzzleTopForCurrentUser() {
 }
 
 async function loadArenaTopPlayers() {
-    const [walletSnap, stateSnap, puzzleTopSnap, coTheTopSnap] = await Promise.all([
-        db.ref("wallets").limitToLast(250).once("value"),
+    const [
+        walletSnap,
+        stateSnap,
+        puzzleTopSnap,
+        coTheTopSnap,
+        walletPuzzleHighSnap,
+        walletPuzzleOpenSnap,
+        walletCoTheHighSnap,
+        walletCoTheOpenSnap
+    ] = await Promise.all([
+        db.ref("wallets").limitToLast(250).once("value").catch(() => null),
         db.ref("social/playerState").once("value").catch(() => null),
         db.ref("puzzleTop").once("value").catch(() => null),
-        db.ref("coTheTop").once("value").catch(() => null)
+        db.ref("coTheTop").once("value").catch(() => null),
+        db.ref("wallets").orderByChild("puzzleStats/highestLevel").limitToLast(100).once("value").catch(() => null),
+        db.ref("wallets").orderByChild("puzzleOpenedLevel").limitToLast(100).once("value").catch(() => null),
+        db.ref("wallets").orderByChild("coTheStats/highestLevel").limitToLast(100).once("value").catch(() => null),
+        db.ref("wallets").orderByChild("coTheOpenedLevel").limitToLast(100).once("value").catch(() => null)
     ]);
 
     const stateMap = stateSnap && stateSnap.val ? (stateSnap.val() || {}) : {};
@@ -18672,7 +18808,19 @@ async function loadArenaTopPlayers() {
 
         const key = String(p.walletKey);
         if (playerMap[key]) {
-            if (rawPuzzleStats) applyPuzzleTopRecordToPlayer(playerMap[key], rawPuzzleStats);
+            const old = playerMap[key];
+            old.name = old.name || p.name;
+            old.photo = old.photo || p.photo;
+            old.level = Math.max(Number(old.level || 1), Number(p.level || 1));
+            old.exp = Math.max(Number(old.exp || 0), Number(p.exp || 0));
+            old.wins = Math.max(Number(old.wins || 0), Number(p.wins || 0));
+            old.losses = Math.max(Number(old.losses || 0), Number(p.losses || 0));
+            old.pmc = Math.max(Number(old.pmc || 0), Number(p.pmc || 0));
+            old.pi = Math.max(Number(old.pi || 0), Number(p.pi || 0));
+            old.skinCount = Math.max(Number(old.skinCount || 0), Number(p.skinCount || 0));
+            applyPuzzleTopRecordToPlayer(old, p);
+            if (rawPuzzleStats) applyPuzzleTopRecordToPlayer(old, rawPuzzleStats);
+            attachLiveState(old);
             return;
         }
 
@@ -18682,11 +18830,14 @@ async function loadArenaTopPlayers() {
         list.push(p);
     }
 
-    walletSnap.forEach(child => {
-        const wallet = child.val() || {};
-        if (isSystemTopWallet(child.key, wallet)) return;
-        addOrMergePlayer(normalizeTopWallet(child.key, wallet));
-    });
+    function mergeWalletSnapshot(snap) {
+        if (!snap || !snap.forEach) return;
+        snap.forEach(child => {
+            const wallet = child.val() || {};
+            if (isSystemTopWallet(child.key, wallet)) return;
+            addOrMergePlayer(normalizeTopWallet(child.key, wallet), wallet);
+        });
+    }
 
     function mergePuzzleTopSnapshot(snap) {
         if (!snap || !snap.forEach) return;
@@ -18698,9 +18849,9 @@ async function loadArenaTopPlayers() {
             if (isSystemTopWallet(key, raw)) return;
 
             const hasPuzzleData =
-                Number(raw.highestLevel || raw.openedLevel || raw.unlockedLevel || raw.maxLevel || 0) > 0 ||
-                Number(raw.bestTimeSeconds || raw.fastestSeconds || 0) > 0 ||
-                Number(raw.solvedCount || raw.clearCount || 0) > 0;
+                Number(raw.highestLevel || raw.openedLevel || raw.unlockedLevel || raw.maxLevel || raw.puzzleHighestLevel || raw.coTheHighestLevel || 0) > 0 ||
+                Number(raw.bestTimeSeconds || raw.fastestSeconds || raw.puzzleBestTimeSeconds || raw.coTheBestTimeSeconds || 0) > 0 ||
+                Number(raw.solvedCount || raw.clearCount || raw.puzzleSolvedCount || raw.coTheSolvedCount || 0) > 0;
 
             if (!hasPuzzleData) return;
 
@@ -18712,6 +18863,11 @@ async function loadArenaTopPlayers() {
         });
     }
 
+    mergeWalletSnapshot(walletSnap);
+    mergeWalletSnapshot(walletPuzzleHighSnap);
+    mergeWalletSnapshot(walletPuzzleOpenSnap);
+    mergeWalletSnapshot(walletCoTheHighSnap);
+    mergeWalletSnapshot(walletCoTheOpenSnap);
     mergePuzzleTopSnapshot(coTheTopSnap);
     mergePuzzleTopSnapshot(puzzleTopSnap);
 
@@ -18781,7 +18937,6 @@ async function loadArenaTopPlayers() {
             staleUpdates[`social/playerState/${p.walletKey}/state`] = "home";
             staleUpdates[`social/playerState/${p.walletKey}/roomId`] = null;
             staleUpdates[`social/playerState/${p.walletKey}/mode`] = null;
-            staleUpdates[`social/playerState/${p.walletKey}/updatedAt`] = Date.now();
         }
     });
 
@@ -18849,7 +19004,7 @@ function renderArenaTopList() {
     const myWalletKey = String(me?.walletKey || getCurrentPlayerProfile()?.walletKey || "");
     const list = getArenaTopSorted(arenaTopActiveTab).slice(0, 100);
     if (!list.length) {
-        listEl.innerHTML = '<div class="top-empty">Chưa có dữ liệu Top.</div>';
+        listEl.innerHTML = '<div class="top-empty">Chưa có dữ liệu Top. Hãy phá xong 1 ải hoặc bấm lại nút XEM TOP CỜ THẾ để đồng bộ.</div>';
         return;
     }
 
