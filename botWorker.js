@@ -1210,7 +1210,38 @@ async function fetchCloudMove(fen, timeoutMs = 450) {
 
     return null;
 }
+const VPS_ENGINE_URL = "http://171.244.63.167/bestmove";
 
+async function fetchVpsMove(fen, level = 8, timeoutMs = 6500) {
+    try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+        const res = await fetch(VPS_ENGINE_URL, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                fen,
+                level
+            }),
+            signal: controller.signal
+        });
+
+        clearTimeout(timer);
+
+        const data = await res.json();
+
+        if (data && data.ok && data.bestmove) {
+            return parseUCIMove(data.bestmove);
+        }
+    } catch (e) {
+        return null;
+    }
+
+    return null;
+}
 self.onmessage = async function(e) {
     const data = e.data;
 
@@ -1294,11 +1325,20 @@ self.onmessage = async function(e) {
         // ==========================================
         let botMoveCount = (data.recentHistory || []).filter(h => h && h.side === data.botSide).length;
         if (!botMoveCount) botMoveCount = Math.floor((data.recentHistory || []).length / 2);
+// Level cao + cờ thường: gọi não VPS Pikafish trước.
+// Cờ úp không gọi VPS vì Pikafish không biết luật quân úp.
+if (!bestMoveObject && !data.isCoUp && botCfg.cloud) {
+    const fen = boardToFEN(mt, data.botSide);
+    const vpsMove = await fetchVpsMove(fen, botLevel, 6500);
 
+    if (vpsMove) {
+        bestMoveObject = makePlanMove(mt, data.botSide, vpsMove.from, vpsMove.to, false);
+    }
+}
         // Nếu đối thủ vào Pháo đầu, ưu tiên Mã/Tượng/Sĩ đỡ trước.
-        if (botMoveCount < 8) {
-            bestMoveObject = chooseAntiHeadCannonMove(mt, data.botSide, data.isCoUp);
-        }
+        if (!bestMoveObject && botMoveCount < 8) {
+    bestMoveObject = chooseAntiHeadCannonMove(mt, data.botSide, data.isCoUp);
+}
 
         // Nếu không bị Pháo đầu ép thì đi khai cuộc lành mạnh.
         if (!bestMoveObject && botMoveCount < 4 && !data.isCoUp) {
