@@ -7414,7 +7414,6 @@ console.log("Đang chạy trên môi trường:", currentNetwork.toUpperCase());
             <button id="top-tab-pi" class="top-tab" onclick="switchArenaTopTab('pi')">TOP PI</button>
             <button id="top-tab-pmc" class="top-tab" onclick="switchArenaTopTab('pmc')">TOP PMC</button>
             <button id="top-tab-puzzle-level" class="top-tab" onclick="switchArenaTopTab('puzzle-level')">TOP ẢI CỜ THẾ</button>
-            <button id="top-tab-puzzle-fast" class="top-tab" onclick="switchArenaTopTab('puzzle-fast')">TOP NHANH CỜ THẾ</button>
         </div>
 
         <div id="arena-top-list">
@@ -19043,22 +19042,11 @@ function getArenaTopSorted(tab) {
                 (b.level - a.level)
             );
     }
-    if (tab === "puzzle-fast") {
-        return list
-            .filter(p => Number(p.puzzleBestTimeSeconds || p.puzzleLastTimeSeconds || p.puzzleHighestLevel || 0) > 0)
-            .sort((a, b) => {
-                const at = Number(a.puzzleBestTimeSeconds || a.puzzleLastTimeSeconds || 999999999);
-                const bt = Number(b.puzzleBestTimeSeconds || b.puzzleLastTimeSeconds || 999999999);
-                return (at - bt) ||
-                    (b.puzzleHighestLevel - a.puzzleHighestLevel) ||
-                    (b.puzzleSolvedCount - a.puzzleSolvedCount) ||
-                    (b.level - a.level);
-            });
-    }
     return list.sort((a, b) => (b.level - a.level) || (b.exp - a.exp) || (b.wins - a.wins));
 }
 
 function renderArenaTopList() {
+    if (arenaTopActiveTab === "puzzle-fast") arenaTopActiveTab = "puzzle-level";
     const listEl = document.getElementById("arena-top-list");
     if (!listEl) return;
 
@@ -19090,15 +19078,18 @@ listEl.innerHTML = list.map((p, i) => {
         } else if (arenaTopActiveTab === "pmc") {
             value = `${p.pmc.toLocaleString("vi-VN")} PMC`;
         } else if (arenaTopActiveTab === "puzzle-level") {
-            value = `Mở Ải ${Number(p.puzzleHighestLevel || 0)}/${typeof PUZZLE_MAX_LEVEL !== "undefined" ? PUZZLE_MAX_LEVEL : 100}`;
-            sub = `Cờ thế • đã phá ${Number(p.puzzleSolvedCount || 0)} ải`;
-            if (p.puzzleBestTimeSeconds) sub += ` • nhanh nhất ${formatTopPuzzleTime(p.puzzleBestTimeSeconds)}`;
-        } else if (arenaTopActiveTab === "puzzle-fast") {
+            const maxPuzzleLevel = typeof PUZZLE_MAX_LEVEL !== "undefined" ? PUZZLE_MAX_LEVEL : 100;
+            const openedLevel = Number(p.puzzleHighestLevel || 0);
             const fastSeconds = Number(p.puzzleBestTimeSeconds || p.puzzleLastTimeSeconds || 0);
-            value = fastSeconds > 0 ? formatTopPuzzleTime(fastSeconds) : `Mở Ải ${Number(p.puzzleHighestLevel || 0)}`;
-            sub = fastSeconds > 0
-                ? `Cờ thế • nhanh nhất ở Ải ${Number(p.puzzleBestLevel || p.puzzleLastLevel || p.puzzleHighestLevel || 0)}`
-                : `Cờ thế • đã phá ${Number(p.puzzleSolvedCount || 0)} ải • chưa đo thời gian`;
+            value = `Mở Ải ${openedLevel}/${maxPuzzleLevel}`;
+            sub = `Cờ thế • đã phá ${Number(p.puzzleSolvedCount || 0)} ải`;
+            if (fastSeconds > 0) {
+                sub += ` • nhanh nhất ${formatTopPuzzleTime(fastSeconds)}`;
+                const fastLevel = Number(p.puzzleBestLevel || p.puzzleLastLevel || openedLevel || 0);
+                if (fastLevel > 0) sub += ` ở Ải ${fastLevel}`;
+            } else {
+                sub += ` • chưa có thời gian nhanh`;
+            }
             if (p.puzzleBestName) sub += ` • ${escapeTopHtml(p.puzzleBestName)}`;
             if (Number(p.puzzleBestWrong || 0) > 0) sub += ` • sai ${Number(p.puzzleBestWrong || 0)} lần`;
         } else {
@@ -19443,7 +19434,7 @@ async function safeFetchAndRenderTop() {
     
     isFetchingTop = true;
     try {
-        if ((arenaTopActiveTab === "puzzle-level" || arenaTopActiveTab === "puzzle-fast") && typeof ensurePuzzleTopSnapshotFromProgress === "function") {
+        if ((arenaTopActiveTab === "puzzle-level") && typeof ensurePuzzleTopSnapshotFromProgress === "function") {
             await ensurePuzzleTopSnapshotFromProgress();
         }
         await loadArenaTopPlayers(); // Hàm kéo data từ Firebase của mày
@@ -19504,9 +19495,9 @@ function closeArenaTopModal() {
 }
 
 function switchArenaTopTab(tab) {
-    arenaTopActiveTab = ["level", "skin", "record", "pi", "pmc", "puzzle-level", "puzzle-fast"].includes(tab) ? tab : "level";
+    arenaTopActiveTab = ["level", "skin", "record", "pi", "pmc", "puzzle-level"].includes(tab) ? tab : "level";
     renderArenaTopList();
-    if ((arenaTopActiveTab === "puzzle-level" || arenaTopActiveTab === "puzzle-fast") && typeof safeFetchAndRenderTop === "function") {
+    if ((arenaTopActiveTab === "puzzle-level") && typeof safeFetchAndRenderTop === "function") {
         safeFetchAndRenderTop();
     }
 }
