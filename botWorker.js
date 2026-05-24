@@ -1210,7 +1210,7 @@ async function fetchCloudMove(fen, timeoutMs = 450) {
 
     return null;
 }
-const VPS_ENGINE_URL = "http://171.244.63.167/bestmove";
+const VPS_ENGINE_URL = "https://171.244.63.167.nip.io/bestmove";
 
 async function fetchVpsMove(fen, level = 8, timeoutMs = 6500) {
     try {
