@@ -1021,7 +1021,7 @@ body.in-match #arena-top-btn {
 
 .top-tabs {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
     gap: 7px;
     padding: 10px;
     background: rgba(0,0,0,0.24);
@@ -1336,7 +1336,7 @@ body.spectator-mode #ready-main-btn {
     }
 
     .top-tabs {
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(2, 1fr);
     }
 
     .top-player-row {
@@ -7408,11 +7408,13 @@ console.log("Đang chạy trên môi trường:", currentNetwork.toUpperCase());
         </div>
 
         <div class="top-tabs">
-            <button id="top-tab-level" class="top-tab active" onclick="switchArenaTopTab('level')">TOP LEVER</button>
+            <button id="top-tab-level" class="top-tab active" onclick="switchArenaTopTab('level')">TOP LEVEL</button>
             <button id="top-tab-skin" class="top-tab" onclick="switchArenaTopTab('skin')">TOP SKIN</button>
             <button id="top-tab-record" class="top-tab" onclick="switchArenaTopTab('record')">TOP THẮNG/THUA</button>
             <button id="top-tab-pi" class="top-tab" onclick="switchArenaTopTab('pi')">TOP PI</button>
             <button id="top-tab-pmc" class="top-tab" onclick="switchArenaTopTab('pmc')">TOP PMC</button>
+            <button id="top-tab-puzzle-level" class="top-tab" onclick="switchArenaTopTab('puzzle-level')">TOP ẢI CỜ THẾ</button>
+            <button id="top-tab-puzzle-fast" class="top-tab" onclick="switchArenaTopTab('puzzle-fast')">TOP NHANH CỜ THẾ</button>
         </div>
 
         <div id="arena-top-list">
@@ -10860,6 +10862,7 @@ let selectedPuzzleId = null;
 
 const PUZZLE_MAX_LEVEL = 100;
 let lastPuzzleResult = null;
+let puzzleStartedAtMs = 0;
 
 function getPuzzleProgressKey() {
     const key =
@@ -10887,6 +10890,83 @@ function getUnlockedPuzzleLevel() {
 function setUnlockedPuzzleLevel(level) {
     const lv = Math.max(1, Math.min(PUZZLE_MAX_LEVEL, Math.floor(Number(level) || 1)));
     localStorage.setItem(getPuzzleProgressKey(), String(lv));
+}
+
+function getPuzzleClearSeconds(puzzle) {
+    const total = getPuzzleSeconds(puzzle);
+    const left = Math.max(0, Math.floor(Number(puzzleSecondsLeft || 0) || 0));
+    const byTimer = Math.max(1, total - left);
+
+    if (puzzleStartedAtMs) {
+        const byClock = Math.max(1, Math.floor((Date.now() - puzzleStartedAtMs) / 1000));
+        return Math.max(1, Math.min(total, byClock, byTimer || total));
+    }
+
+    return byTimer;
+}
+
+async function savePuzzleTopStats(puzzle, solvedLevel) {
+    try {
+        if (!puzzle || typeof db === "undefined" || !db || typeof firebase === "undefined") return;
+
+        const me = typeof getCurrentPlayerProfile === "function" ? getCurrentPlayerProfile() : {};
+        const walletKey = String(
+            me.walletKey ||
+            (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "") ||
+            me.uid ||
+            ""
+        ).trim();
+
+        if (!walletKey) return;
+
+        const clearSeconds = getPuzzleClearSeconds(puzzle);
+        const wrongCount = Math.max(0, Math.floor(Number(puzzleWrongCount || 0) || 0));
+        const level = Math.max(1, Math.floor(Number(solvedLevel || puzzle.level || 1) || 1));
+        const nowMs = Date.now();
+
+        const oldSnap = await db.ref("wallets/" + walletKey + "/puzzleStats").once("value").catch(() => null);
+        const old = oldSnap?.val?.() || {};
+
+        const oldHighest = Math.max(0, Math.floor(Number(old.highestLevel || 0) || 0));
+        const oldSolved = Math.max(0, Math.floor(Number(old.solvedCount || 0) || 0));
+        const oldWrong = Math.max(0, Math.floor(Number(old.totalWrong || 0) || 0));
+        const oldBest = Math.max(0, Math.floor(Number(old.bestTimeSeconds || 0) || 0));
+        const bestImproved = !oldBest || clearSeconds < oldBest;
+
+        const updates = {
+            [`wallets/${walletKey}/name`]: me.name || localStorage.getItem("user-name-display") || "Người chơi",
+            [`wallets/${walletKey}/photo`]: me.photo || localStorage.getItem("user-photo") || "images/do_tuong.png",
+            [`wallets/${walletKey}/puzzleStats/highestLevel`]: Math.max(oldHighest, level),
+            [`wallets/${walletKey}/puzzleStats/solvedCount`]: oldSolved + 1,
+            [`wallets/${walletKey}/puzzleStats/totalWrong`]: oldWrong + wrongCount,
+            [`wallets/${walletKey}/puzzleStats/lastLevel`]: level,
+            [`wallets/${walletKey}/puzzleStats/lastTimeSeconds`]: clearSeconds,
+            [`wallets/${walletKey}/puzzleStats/lastWrong`]: wrongCount,
+            [`wallets/${walletKey}/puzzleStats/lastPuzzleId`]: puzzle.id || "",
+            [`wallets/${walletKey}/puzzleStats/lastPuzzleName`]: puzzle.name || "Cờ thế",
+            [`wallets/${walletKey}/puzzleStats/updatedAt`]: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        if (bestImproved) {
+            updates[`wallets/${walletKey}/puzzleStats/bestTimeSeconds`] = clearSeconds;
+            updates[`wallets/${walletKey}/puzzleStats/bestLevel`] = level;
+            updates[`wallets/${walletKey}/puzzleStats/bestPuzzleId`] = puzzle.id || "";
+            updates[`wallets/${walletKey}/puzzleStats/bestPuzzleName`] = puzzle.name || "Cờ thế";
+            updates[`wallets/${walletKey}/puzzleStats/bestWrong`] = wrongCount;
+            updates[`wallets/${walletKey}/puzzleStats/bestAt`] = nowMs;
+        }
+
+        await db.ref().update(updates);
+    } catch (err) {
+        console.error("Lỗi lưu bảng TOP Cờ Thế:", err);
+    }
+}
+
+async function openPuzzleTopFromMenu(e) {
+    if (e) e.stopPropagation();
+    closePuzzleMenu();
+    arenaTopActiveTab = "puzzle-level";
+    await openArenaTopModal(e);
 }
 
 function getPuzzleByLevel(level) {
@@ -10970,6 +11050,9 @@ function renderCurrentPuzzlePanel() {
 
             <button class="puzzle-enter-btn" onclick="startCurrentPuzzleLevel()">
                 VÀO PHÁ ẢI ${level}
+            </button>
+            <button class="puzzle-enter-btn puzzle-top-btn" onclick="openPuzzleTopFromMenu(event)">
+                🏆 XEM TOP CỜ THẾ
             </button>
         </div>
     `;
@@ -11076,6 +11159,7 @@ currentPuzzle = puzzle;
 puzzleStep = 0;
 puzzleWrongCount = 0;
 puzzleBoardBeforeMove = null;
+puzzleStartedAtMs = Date.now();
 
     cleanupRoomListeners();
     clearActiveMatchSnapshot();
@@ -11205,6 +11289,7 @@ async function finishPuzzle(win, reason) {
 
     if (win) {
         await puzzlePayReward(currentPuzzle);
+        await savePuzzleTopStats(currentPuzzle, currentLevel);
 
         const unlockedNow = getUnlockedPuzzleLevel();
         if (currentLevel >= unlockedNow) {
@@ -18235,6 +18320,31 @@ function readStatsV2Record(wallet = {}) {
     };
 }
 
+function readPuzzleStatsRecord(wallet = {}) {
+    const stats = wallet?.puzzleStats && typeof wallet.puzzleStats === "object"
+        ? wallet.puzzleStats
+        : (wallet?.coTheStats && typeof wallet.coTheStats === "object" ? wallet.coTheStats : {});
+
+    return {
+        highestLevel: Math.max(0, Math.floor(readTopNumber(stats.highestLevel ?? stats.maxLevel ?? 0, 0))),
+        solvedCount: Math.max(0, Math.floor(readTopNumber(stats.solvedCount ?? stats.clearCount ?? 0, 0))),
+        bestTimeSeconds: Math.max(0, Math.floor(readTopNumber(stats.bestTimeSeconds ?? stats.fastestSeconds ?? 0, 0))),
+        bestLevel: Math.max(0, Math.floor(readTopNumber(stats.bestLevel ?? 0, 0))),
+        bestWrong: Math.max(0, Math.floor(readTopNumber(stats.bestWrong ?? 0, 0))),
+        totalWrong: Math.max(0, Math.floor(readTopNumber(stats.totalWrong ?? 0, 0))),
+        bestPuzzleName: stats.bestPuzzleName || stats.bestPuzzleId || "",
+        lastPuzzleName: stats.lastPuzzleName || ""
+    };
+}
+
+function formatTopPuzzleTime(seconds) {
+    const s = Math.max(0, Math.floor(Number(seconds || 0) || 0));
+    if (!s) return "--:--";
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
+}
+
 
 function countOwnedTopSkins(wallet = {}) {
     const owned = wallet.ownedAvatarSkins || wallet.avatarSkins || wallet.skins || {};
@@ -18275,6 +18385,7 @@ function normalizeTopWallet(walletKey, wallet = {}) {
     ));
 
     const skinCount = countOwnedTopSkins(wallet);
+    const puzzleStats = readPuzzleStatsRecord(wallet);
 
     return {
         walletKey,
@@ -18288,6 +18399,14 @@ function normalizeTopWallet(walletKey, wallet = {}) {
         pmc,
         pi,
         skinCount,
+        puzzleHighestLevel: puzzleStats.highestLevel,
+        puzzleSolvedCount: puzzleStats.solvedCount,
+        puzzleBestTimeSeconds: puzzleStats.bestTimeSeconds,
+        puzzleBestLevel: puzzleStats.bestLevel,
+        puzzleBestWrong: puzzleStats.bestWrong,
+        puzzleTotalWrong: puzzleStats.totalWrong,
+        puzzleBestName: puzzleStats.bestPuzzleName,
+        puzzleLastName: puzzleStats.lastPuzzleName,
         equippedSkin: wallet.avatarSkin || "none"
     };
 }
@@ -18409,6 +18528,26 @@ function getArenaTopSorted(tab) {
     if (tab === "pmc") {
         return list.sort((a, b) => (b.pmc - a.pmc) || (b.level - a.level));
     }
+    if (tab === "puzzle-level") {
+        return list
+            .filter(p => Number(p.puzzleHighestLevel || 0) > 0)
+            .sort((a, b) =>
+                (b.puzzleHighestLevel - a.puzzleHighestLevel) ||
+                (b.puzzleSolvedCount - a.puzzleSolvedCount) ||
+                ((a.puzzleBestTimeSeconds || 999999) - (b.puzzleBestTimeSeconds || 999999)) ||
+                (b.level - a.level)
+            );
+    }
+    if (tab === "puzzle-fast") {
+        return list
+            .filter(p => Number(p.puzzleBestTimeSeconds || 0) > 0)
+            .sort((a, b) =>
+                (a.puzzleBestTimeSeconds - b.puzzleBestTimeSeconds) ||
+                (b.puzzleHighestLevel - a.puzzleHighestLevel) ||
+                (b.puzzleSolvedCount - a.puzzleSolvedCount) ||
+                (b.level - a.level)
+            );
+    }
     return list.sort((a, b) => (b.level - a.level) || (b.exp - a.exp) || (b.wins - a.wins));
 }
 
@@ -18443,6 +18582,15 @@ listEl.innerHTML = list.map((p, i) => {
             value = `${p.pi.toLocaleString("vi-VN", { maximumFractionDigits: 4 })} π`;
         } else if (arenaTopActiveTab === "pmc") {
             value = `${p.pmc.toLocaleString("vi-VN")} PMC`;
+        } else if (arenaTopActiveTab === "puzzle-level") {
+            value = `Ải ${Number(p.puzzleHighestLevel || 0)}/${typeof PUZZLE_MAX_LEVEL !== "undefined" ? PUZZLE_MAX_LEVEL : 100}`;
+            sub = `Cờ thế • đã phá ${Number(p.puzzleSolvedCount || 0)} ải`;
+            if (p.puzzleBestTimeSeconds) sub += ` • nhanh nhất ${formatTopPuzzleTime(p.puzzleBestTimeSeconds)}`;
+        } else if (arenaTopActiveTab === "puzzle-fast") {
+            value = formatTopPuzzleTime(p.puzzleBestTimeSeconds);
+            sub = `Cờ thế • nhanh nhất ở Ải ${Number(p.puzzleBestLevel || p.puzzleHighestLevel || 0)}`;
+            if (p.puzzleBestName) sub += ` • ${escapeTopHtml(p.puzzleBestName)}`;
+            if (Number(p.puzzleBestWrong || 0) > 0) sub += ` • sai ${Number(p.puzzleBestWrong || 0)} lần`;
         } else {
             value = `Lever ${p.level}`;
             sub += ` • EXP ${p.exp.toLocaleString("vi-VN")}`;
@@ -18843,7 +18991,7 @@ function closeArenaTopModal() {
 }
 
 function switchArenaTopTab(tab) {
-    arenaTopActiveTab = ["level", "skin", "record", "pi", "pmc"].includes(tab) ? tab : "level";
+    arenaTopActiveTab = ["level", "skin", "record", "pi", "pmc", "puzzle-level", "puzzle-fast"].includes(tab) ? tab : "level";
     renderArenaTopList();
 }
 
