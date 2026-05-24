@@ -11095,13 +11095,21 @@ async function savePuzzleTopStats(puzzle, solvedLevel) {
         puzzleHighestLevel: firebaseStats.highestLevel,
         puzzleOpenedLevel: firebaseStats.openedLevel,
         puzzleSolvedCount: firebaseStats.solvedCount,
-        puzzleBestTimeSeconds: firebaseStats.bestTimeSeconds || 0,
-        puzzleBestLevel: firebaseStats.bestLevel || 0,
+        puzzleBestTimeSeconds: Number(firebaseStats.bestTimeSeconds || firebaseStats.fastestSeconds || 0) || 0,
+        puzzleBestLevel: Number(firebaseStats.bestLevel || 0) || 0,
+        puzzleLastTimeSeconds: Number(firebaseStats.lastTimeSeconds || 0) || 0,
+        puzzleLastLevel: Number(firebaseStats.lastLevel || 0) || 0,
+        puzzleBestWrong: Number(firebaseStats.bestWrong || 0) || 0,
+        puzzleTotalWrong: Number(firebaseStats.totalWrong || 0) || 0,
         coTheHighestLevel: firebaseStats.highestLevel,
         coTheOpenedLevel: firebaseStats.openedLevel,
         coTheSolvedCount: firebaseStats.solvedCount,
-        coTheBestTimeSeconds: firebaseStats.bestTimeSeconds || 0,
-        coTheBestLevel: firebaseStats.bestLevel || 0,
+        coTheBestTimeSeconds: Number(firebaseStats.bestTimeSeconds || firebaseStats.fastestSeconds || 0) || 0,
+        coTheBestLevel: Number(firebaseStats.bestLevel || 0) || 0,
+        coTheLastTimeSeconds: Number(firebaseStats.lastTimeSeconds || 0) || 0,
+        coTheLastLevel: Number(firebaseStats.lastLevel || 0) || 0,
+        coTheBestWrong: Number(firebaseStats.bestWrong || 0) || 0,
+        coTheTotalWrong: Number(firebaseStats.totalWrong || 0) || 0,
         updatedAt: serverNow
     }).catch(err => {
         console.error("Lỗi lưu field TOP Cờ Thế ở ví:", err);
@@ -11113,6 +11121,8 @@ async function savePuzzleTopStats(puzzle, solvedLevel) {
     });
 
     await db.ref("coTheTop/" + walletKey).update(firebaseTopRecord).catch(() => {});
+    await db.ref("social/puzzleTop/" + walletKey).update(firebaseTopRecord).catch(() => {});
+    await db.ref("social/coTheTop/" + walletKey).update(firebaseTopRecord).catch(() => {});
 }
 
 async function ensurePuzzleTopSnapshotFromProgress() {
@@ -11178,15 +11188,25 @@ async function ensurePuzzleTopSnapshotFromProgress() {
             puzzleSolvedCount: firebaseStats.solvedCount,
             puzzleBestTimeSeconds: Number(firebaseStats.bestTimeSeconds || firebaseStats.fastestSeconds || 0) || 0,
             puzzleBestLevel: Number(firebaseStats.bestLevel || 0) || 0,
+            puzzleLastTimeSeconds: Number(firebaseStats.lastTimeSeconds || 0) || 0,
+            puzzleLastLevel: Number(firebaseStats.lastLevel || 0) || 0,
+            puzzleBestWrong: Number(firebaseStats.bestWrong || 0) || 0,
+            puzzleTotalWrong: Number(firebaseStats.totalWrong || 0) || 0,
             coTheHighestLevel: firebaseStats.highestLevel,
             coTheOpenedLevel: firebaseStats.openedLevel,
             coTheSolvedCount: firebaseStats.solvedCount,
             coTheBestTimeSeconds: Number(firebaseStats.bestTimeSeconds || firebaseStats.fastestSeconds || 0) || 0,
             coTheBestLevel: Number(firebaseStats.bestLevel || 0) || 0,
+            coTheLastTimeSeconds: Number(firebaseStats.lastTimeSeconds || 0) || 0,
+            coTheLastLevel: Number(firebaseStats.lastLevel || 0) || 0,
+            coTheBestWrong: Number(firebaseStats.bestWrong || 0) || 0,
+            coTheTotalWrong: Number(firebaseStats.totalWrong || 0) || 0,
             updatedAt: serverNow
         }).catch(() => {});
         await db.ref("puzzleTop/" + walletKey).update(firebaseStats).catch(() => {});
         await db.ref("coTheTop/" + walletKey).update(firebaseStats).catch(() => {});
+        await db.ref("social/puzzleTop/" + walletKey).update(firebaseStats).catch(() => {});
+        await db.ref("social/coTheTop/" + walletKey).update(firebaseStats).catch(() => {});
     } catch (err) {
         console.warn("Không đồng bộ được TOP Cờ Thế từ tiến độ local:", err);
     }
@@ -18563,12 +18583,21 @@ function readPuzzleStatsRecord(wallet = {}) {
         ? wallet.puzzleStats
         : (wallet?.coTheStats && typeof wallet.coTheStats === "object" ? wallet.coTheStats : {});
 
+    const openedLevel = Math.max(0, Math.floor(readTopNumber(
+        stats.openedLevel ?? stats.unlockedLevel ?? stats.maxLevel ??
+        wallet.puzzleOpenedLevel ?? wallet.coTheOpenedLevel ?? wallet.openedLevel ?? wallet.unlockedLevel ?? 0,
+        0
+    )));
+
+    const highestLevel = Math.max(0, Math.floor(readTopNumber(
+        stats.highestLevel ?? stats.solvedHighestLevel ?? openedLevel ??
+        wallet.puzzleHighestLevel ?? wallet.coTheHighestLevel ?? wallet.puzzleOpenedLevel ?? wallet.coTheOpenedLevel ?? wallet.openedLevel ?? 0,
+        0
+    )));
+
     return {
-        highestLevel: Math.max(0, Math.floor(readTopNumber(
-            stats.highestLevel ?? stats.openedLevel ?? stats.unlockedLevel ?? stats.maxLevel ?? stats.solvedHighestLevel ??
-            wallet.puzzleHighestLevel ?? wallet.coTheHighestLevel ?? wallet.puzzleOpenedLevel ?? wallet.coTheOpenedLevel ?? wallet.openedLevel ?? 0,
-            0
-        ))),
+        highestLevel: Math.max(highestLevel, openedLevel),
+        openedLevel,
         solvedCount: Math.max(0, Math.floor(readTopNumber(
             stats.solvedCount ?? stats.clearCount ?? wallet.puzzleSolvedCount ?? wallet.coTheSolvedCount ?? wallet.clearCount ?? 0,
             0
@@ -18577,8 +18606,16 @@ function readPuzzleStatsRecord(wallet = {}) {
             stats.bestTimeSeconds ?? stats.fastestSeconds ?? wallet.puzzleBestTimeSeconds ?? wallet.coTheBestTimeSeconds ?? wallet.fastestSeconds ?? 0,
             0
         ))),
+        lastTimeSeconds: Math.max(0, Math.floor(readTopNumber(
+            stats.lastTimeSeconds ?? wallet.puzzleLastTimeSeconds ?? wallet.coTheLastTimeSeconds ?? wallet.lastTimeSeconds ?? 0,
+            0
+        ))),
         bestLevel: Math.max(0, Math.floor(readTopNumber(
             stats.bestLevel ?? wallet.puzzleBestLevel ?? wallet.coTheBestLevel ?? 0,
+            0
+        ))),
+        lastLevel: Math.max(0, Math.floor(readTopNumber(
+            stats.lastLevel ?? wallet.puzzleLastLevel ?? wallet.coTheLastLevel ?? 0,
             0
         ))),
         bestWrong: Math.max(0, Math.floor(readTopNumber(
@@ -18658,11 +18695,13 @@ function normalizeTopWallet(walletKey, wallet = {}) {
         skinCount,
         puzzleHighestLevel: puzzleStats.highestLevel,
         puzzleSolvedCount: puzzleStats.solvedCount,
-        puzzleBestTimeSeconds: puzzleStats.bestTimeSeconds,
-        puzzleBestLevel: puzzleStats.bestLevel,
+        puzzleBestTimeSeconds: puzzleStats.bestTimeSeconds || puzzleStats.lastTimeSeconds,
+        puzzleLastTimeSeconds: puzzleStats.lastTimeSeconds,
+        puzzleBestLevel: puzzleStats.bestLevel || puzzleStats.lastLevel,
+        puzzleLastLevel: puzzleStats.lastLevel,
         puzzleBestWrong: puzzleStats.bestWrong,
         puzzleTotalWrong: puzzleStats.totalWrong,
-        puzzleBestName: puzzleStats.bestPuzzleName,
+        puzzleBestName: puzzleStats.bestPuzzleName || puzzleStats.lastPuzzleName,
         puzzleLastName: puzzleStats.lastPuzzleName,
         equippedSkin: wallet.avatarSkin || "none"
     };
@@ -18682,21 +18721,23 @@ function applyPuzzleTopRecordToPlayer(p, raw = {}) {
 
     p.name = raw.name || raw.displayName || raw.username || p.name || p.walletKey || "Người chơi";
     p.photo = raw.photo || raw.avatar || p.photo || "images/do_tuong.png";
-    p.puzzleHighestLevel = Math.max(Number(p.puzzleHighestLevel || 0), stats.highestLevel);
+    p.puzzleHighestLevel = Math.max(Number(p.puzzleHighestLevel || 0), stats.highestLevel, stats.openedLevel || 0);
     p.puzzleSolvedCount = Math.max(Number(p.puzzleSolvedCount || 0), stats.solvedCount);
+    p.puzzleLastTimeSeconds = Math.max(Number(p.puzzleLastTimeSeconds || 0), Number(stats.lastTimeSeconds || 0));
+    p.puzzleLastLevel = Math.max(Number(p.puzzleLastLevel || 0), Number(stats.lastLevel || 0));
 
     const oldBest = Number(p.puzzleBestTimeSeconds || 0);
-    const newBest = Number(stats.bestTimeSeconds || 0);
+    const newBest = Number(stats.bestTimeSeconds || stats.lastTimeSeconds || 0);
     if (newBest > 0 && (!oldBest || newBest < oldBest)) {
         p.puzzleBestTimeSeconds = newBest;
-        p.puzzleBestLevel = stats.bestLevel;
+        p.puzzleBestLevel = stats.bestLevel || stats.lastLevel || stats.highestLevel;
         p.puzzleBestWrong = stats.bestWrong;
-        p.puzzleBestName = stats.bestPuzzleName;
+        p.puzzleBestName = stats.bestPuzzleName || stats.lastPuzzleName;
     } else if (!oldBest && newBest > 0) {
         p.puzzleBestTimeSeconds = newBest;
-        p.puzzleBestLevel = stats.bestLevel;
+        p.puzzleBestLevel = stats.bestLevel || stats.lastLevel || stats.highestLevel;
         p.puzzleBestWrong = stats.bestWrong;
-        p.puzzleBestName = stats.bestPuzzleName;
+        p.puzzleBestName = stats.bestPuzzleName || stats.lastPuzzleName;
     }
 
     p.puzzleTotalWrong = Math.max(Number(p.puzzleTotalWrong || 0), stats.totalWrong);
@@ -18723,11 +18764,13 @@ function makePuzzleOnlyTopPlayer(walletKey, raw = {}, stateMap = {}) {
         skinCount: 0,
         puzzleHighestLevel: stats.highestLevel,
         puzzleSolvedCount: stats.solvedCount,
-        puzzleBestTimeSeconds: stats.bestTimeSeconds,
-        puzzleBestLevel: stats.bestLevel,
+        puzzleBestTimeSeconds: stats.bestTimeSeconds || stats.lastTimeSeconds,
+        puzzleLastTimeSeconds: stats.lastTimeSeconds,
+        puzzleBestLevel: stats.bestLevel || stats.lastLevel,
+        puzzleLastLevel: stats.lastLevel,
         puzzleBestWrong: stats.bestWrong,
         puzzleTotalWrong: stats.totalWrong,
-        puzzleBestName: stats.bestPuzzleName,
+        puzzleBestName: stats.bestPuzzleName || stats.lastPuzzleName,
         puzzleLastName: stats.lastPuzzleName,
         equippedSkin: "none",
         liveState: state.state || "home",
@@ -18767,22 +18810,36 @@ function readLocalPuzzleTopForCurrentUser() {
 async function loadArenaTopPlayers() {
     const [
         walletSnap,
+        walletRecentSnap,
         stateSnap,
         puzzleTopSnap,
         coTheTopSnap,
         walletPuzzleHighSnap,
         walletPuzzleOpenSnap,
+        walletPuzzleBestSnap,
+        walletPuzzleNestedBestSnap,
         walletCoTheHighSnap,
-        walletCoTheOpenSnap
+        walletCoTheOpenSnap,
+        walletCoTheBestSnap,
+        walletCoTheNestedBestSnap,
+        socialPuzzleTopSnap,
+        socialCoTheTopSnap
     ] = await Promise.all([
         db.ref("wallets").limitToLast(250).once("value").catch(() => null),
+        db.ref("wallets").orderByChild("updatedAt").limitToLast(600).once("value").catch(() => null),
         db.ref("social/playerState").once("value").catch(() => null),
         db.ref("puzzleTop").once("value").catch(() => null),
         db.ref("coTheTop").once("value").catch(() => null),
-        db.ref("wallets").orderByChild("puzzleStats/highestLevel").limitToLast(100).once("value").catch(() => null),
-        db.ref("wallets").orderByChild("puzzleOpenedLevel").limitToLast(100).once("value").catch(() => null),
-        db.ref("wallets").orderByChild("coTheStats/highestLevel").limitToLast(100).once("value").catch(() => null),
-        db.ref("wallets").orderByChild("coTheOpenedLevel").limitToLast(100).once("value").catch(() => null)
+        db.ref("wallets").orderByChild("puzzleStats/highestLevel").limitToLast(200).once("value").catch(() => null),
+        db.ref("wallets").orderByChild("puzzleOpenedLevel").limitToLast(200).once("value").catch(() => null),
+        db.ref("wallets").orderByChild("puzzleBestTimeSeconds").limitToLast(200).once("value").catch(() => null),
+        db.ref("wallets").orderByChild("puzzleStats/bestTimeSeconds").limitToLast(200).once("value").catch(() => null),
+        db.ref("wallets").orderByChild("coTheStats/highestLevel").limitToLast(200).once("value").catch(() => null),
+        db.ref("wallets").orderByChild("coTheOpenedLevel").limitToLast(200).once("value").catch(() => null),
+        db.ref("wallets").orderByChild("coTheBestTimeSeconds").limitToLast(200).once("value").catch(() => null),
+        db.ref("wallets").orderByChild("coTheStats/bestTimeSeconds").limitToLast(200).once("value").catch(() => null),
+        db.ref("social/puzzleTop").once("value").catch(() => null),
+        db.ref("social/coTheTop").once("value").catch(() => null)
     ]);
 
     const stateMap = stateSnap && stateSnap.val ? (stateSnap.val() || {}) : {};
@@ -18864,12 +18921,19 @@ async function loadArenaTopPlayers() {
     }
 
     mergeWalletSnapshot(walletSnap);
+    mergeWalletSnapshot(walletRecentSnap);
     mergeWalletSnapshot(walletPuzzleHighSnap);
     mergeWalletSnapshot(walletPuzzleOpenSnap);
+    mergeWalletSnapshot(walletPuzzleBestSnap);
+    mergeWalletSnapshot(walletPuzzleNestedBestSnap);
     mergeWalletSnapshot(walletCoTheHighSnap);
     mergeWalletSnapshot(walletCoTheOpenSnap);
+    mergeWalletSnapshot(walletCoTheBestSnap);
+    mergeWalletSnapshot(walletCoTheNestedBestSnap);
     mergePuzzleTopSnapshot(coTheTopSnap);
     mergePuzzleTopSnapshot(puzzleTopSnap);
+    mergePuzzleTopSnapshot(socialCoTheTopSnap);
+    mergePuzzleTopSnapshot(socialPuzzleTopSnap);
 
     const localPuzzleTop = readLocalPuzzleTopForCurrentUser();
     if (localPuzzleTop) {
@@ -18981,13 +19045,15 @@ function getArenaTopSorted(tab) {
     }
     if (tab === "puzzle-fast") {
         return list
-            .filter(p => Number(p.puzzleBestTimeSeconds || 0) > 0)
-            .sort((a, b) =>
-                (a.puzzleBestTimeSeconds - b.puzzleBestTimeSeconds) ||
-                (b.puzzleHighestLevel - a.puzzleHighestLevel) ||
-                (b.puzzleSolvedCount - a.puzzleSolvedCount) ||
-                (b.level - a.level)
-            );
+            .filter(p => Number(p.puzzleBestTimeSeconds || p.puzzleLastTimeSeconds || p.puzzleHighestLevel || 0) > 0)
+            .sort((a, b) => {
+                const at = Number(a.puzzleBestTimeSeconds || a.puzzleLastTimeSeconds || 999999999);
+                const bt = Number(b.puzzleBestTimeSeconds || b.puzzleLastTimeSeconds || 999999999);
+                return (at - bt) ||
+                    (b.puzzleHighestLevel - a.puzzleHighestLevel) ||
+                    (b.puzzleSolvedCount - a.puzzleSolvedCount) ||
+                    (b.level - a.level);
+            });
     }
     return list.sort((a, b) => (b.level - a.level) || (b.exp - a.exp) || (b.wins - a.wins));
 }
@@ -19028,8 +19094,11 @@ listEl.innerHTML = list.map((p, i) => {
             sub = `Cờ thế • đã phá ${Number(p.puzzleSolvedCount || 0)} ải`;
             if (p.puzzleBestTimeSeconds) sub += ` • nhanh nhất ${formatTopPuzzleTime(p.puzzleBestTimeSeconds)}`;
         } else if (arenaTopActiveTab === "puzzle-fast") {
-            value = formatTopPuzzleTime(p.puzzleBestTimeSeconds);
-            sub = `Cờ thế • nhanh nhất ở Ải ${Number(p.puzzleBestLevel || p.puzzleHighestLevel || 0)}`;
+            const fastSeconds = Number(p.puzzleBestTimeSeconds || p.puzzleLastTimeSeconds || 0);
+            value = fastSeconds > 0 ? formatTopPuzzleTime(fastSeconds) : `Mở Ải ${Number(p.puzzleHighestLevel || 0)}`;
+            sub = fastSeconds > 0
+                ? `Cờ thế • nhanh nhất ở Ải ${Number(p.puzzleBestLevel || p.puzzleLastLevel || p.puzzleHighestLevel || 0)}`
+                : `Cờ thế • đã phá ${Number(p.puzzleSolvedCount || 0)} ải • chưa đo thời gian`;
             if (p.puzzleBestName) sub += ` • ${escapeTopHtml(p.puzzleBestName)}`;
             if (Number(p.puzzleBestWrong || 0) > 0) sub += ` • sai ${Number(p.puzzleBestWrong || 0)} lần`;
         } else {
@@ -19374,6 +19443,9 @@ async function safeFetchAndRenderTop() {
     
     isFetchingTop = true;
     try {
+        if ((arenaTopActiveTab === "puzzle-level" || arenaTopActiveTab === "puzzle-fast") && typeof ensurePuzzleTopSnapshotFromProgress === "function") {
+            await ensurePuzzleTopSnapshotFromProgress();
+        }
         await loadArenaTopPlayers(); // Hàm kéo data từ Firebase của mày
         lastTopFetchTime = Date.now(); // Lưu lại mốc thời gian vừa kéo xong
         renderArenaTopList(); 
@@ -19434,6 +19506,9 @@ function closeArenaTopModal() {
 function switchArenaTopTab(tab) {
     arenaTopActiveTab = ["level", "skin", "record", "pi", "pmc", "puzzle-level", "puzzle-fast"].includes(tab) ? tab : "level";
     renderArenaTopList();
+    if ((arenaTopActiveTab === "puzzle-level" || arenaTopActiveTab === "puzzle-fast") && typeof safeFetchAndRenderTop === "function") {
+        safeFetchAndRenderTop();
+    }
 }
 
 function openRankingModal(e) {
