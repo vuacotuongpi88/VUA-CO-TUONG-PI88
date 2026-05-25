@@ -380,12 +380,225 @@ module.exports = async function handler(req, res) {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
     const action = body.action; // Biến này để phân luồng
 
-    const walletKeyRaw = String(req.headers["x-wallet-key"] || body.walletKey || "").trim().toLowerCase();
+    const walletKeyRaw = String(req.headers["x-wallet-key"] || body.walletKey || "").trim();
     const safeWalletKey = safeKey(walletKeyRaw);
 
     if (!safeWalletKey) {
         return res.status(401).json({ ok: false, error: "Thiếu định danh ví." });
     }
+    // ==========================================
+// GOOGLE <-> PI LINK CODE - SERVER ADMIN XỬ LÝ
+// ==========================================
+function makePiLinkCode() {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let code = "";
+    for (let i = 0; i < 6; i++) {
+        code += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return code;
+}
+
+if (action === "create_pi_link_code") {
+    const now = Date.now();
+
+    const googleWalletKey = safeKey(
+        body.googleWalletKey ||
+        body.walletKey ||
+        walletKeyRaw
+    );
+
+    if (!googleWalletKey || !googleWalletKey.startsWith("google_")) {
+        return res.status(400).json({
+            ok: false,
+            error: "Tài khoản tạo mã phải là ví Google."
+        });
+    }
+
+    const googleUid = cleanText(
+        body.googleUid ||
+        googleWalletKey.replace(/^google_/, "")
+    );
+
+    const name = cleanText(body.name || body.displayName || "Người chơi");
+    const photo = cleanText(body.photo || "images/do_tuong.png");
+
+    const walletRef = db.ref("wallets/" + googleWalletKey);
+    const oldSnap = await walletRef.once("value");
+    const old = oldSnap.val() || {};
+
+    const updates = {
+        walletKey: googleWalletKey,
+        uid: old.uid || googleUid,
+        name: old.name || name,
+        username: old.username || name,
+        usernameNorm: String(old.usernameNorm || name || "nguoi choi").toLowerCase(),
+        photo: old.photo || photo,
+        loginType: "google",
+        updatedAt: now
+    };
+
+    if (old.createdAt == null) updates.createdAt = now;
+    if (old.pmcBalance == null) updates.pmcBalance = 0;
+    if (old.piBalance == null && old.balance == null) {
+        updates.piBalance = 0;
+        updates.balance = 0;
+    }
+
+    await walletRef.update(updates);
+
+    let code = "";
+    let codeRef = null;
+
+    for (let i = 0; i < 12; i++) {
+        code = makePiLinkCode();
+        codeRef = db.ref("accountLinkCodes/" + code);
+        const exists = await codeRef.once("value");
+        if (!exists.exists()) break;
+        code = "";
+        codeRef = null;
+    }
+
+    if (!code || !codeRef) {
+        return res.status(500).json({
+            ok: false,
+            error: "Không tạo được mã liên kết, thử lại."
+        });
+    }
+
+    await codeRef.set({
+        code,
+        status: "pending",
+        googleWalletKey,
+        googleUid,
+        name,
+        photo,
+        createdAt: now,
+        expiresAt: now + 10 * 60 * 1000
+    });
+
+    return res.status(200).json({
+        ok: true,
+        code,
+        expiresAt: now + 10 * 60 * 1000,
+        googleWalletKey
+    });
+}
+
+if (action === "claim_pi_link_code") {
+    const now = Date.now();
+
+    const code = cleanText(body.code || "")
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, "");
+
+    const piUid = cleanText(body.piUid || body.uid || "");
+    const piUsername = cleanText(body.piUsername || body.username || "");
+    const piWalletAddress = cleanText(body.piWalletAddress || "");
+
+    if (!code) {
+        return res.status(400).json({ ok: false, error: "Thiếu mã liên kết." });
+    }
+
+    if (!piUid || !piUsername) {
+        return res.status(400).json({
+            ok: false,
+            error: "Thiếu Pi UID hoặc Pi username."
+        });
+    }
+
+    const codeRef = db.ref("accountLinkCodes/" + code);
+    const codeSnap = await codeRef.once("value");
+    const link = codeSnap.val() || null;
+
+    if (!link) {
+        return res.status(404).json({
+            ok: false,
+            error: "Mã liên kết không tồn tại."
+        });
+    }
+
+    if (String(link.status || "pending") !== "pending") {
+        return res.status(400).json({
+            ok: false,
+            error: "Mã này đã được dùng rồi."
+        });
+    }
+
+    if (Number(link.expiresAt || 0) < now) {
+        await codeRef.update({ status: "expired", expiredAt: now });
+        return res.status(400).json({
+            ok: false,
+            error: "Mã đã hết hạn, hãy tạo mã mới."
+        });
+    }
+
+    const googleWalletKey = safeKey(link.googleWalletKey || "");
+    const piWalletKey = safeKey("pi_" + piUsername.toLowerCase());
+
+    if (!googleWalletKey || !googleWalletKey.startsWith("google_")) {
+        return res.status(400).json({
+            ok: false,
+            error: "Mã liên kết bị lỗi ví Google."
+        });
+    }
+
+    await db.ref().update({
+        ["wallets/" + googleWalletKey + "/linkedPiWalletKey"]: piWalletKey,
+        ["wallets/" + googleWalletKey + "/piUid"]: piUid,
+        ["wallets/" + googleWalletKey + "/piUsername"]: piUsername,
+        ["wallets/" + googleWalletKey + "/piWalletAddress"]: piWalletAddress,
+        ["wallets/" + googleWalletKey + "/piVerified"]: true,
+        ["wallets/" + googleWalletKey + "/verifiedAt"]: now,
+        ["wallets/" + googleWalletKey + "/updatedAt"]: now,
+
+        ["wallets/" + piWalletKey + "/masterWalletKey"]: googleWalletKey,
+        ["wallets/" + piWalletKey + "/linkedGoogleWalletKey"]: googleWalletKey,
+        ["wallets/" + piWalletKey + "/piUid"]: piUid,
+        ["wallets/" + piWalletKey + "/piUsername"]: piUsername,
+        ["wallets/" + piWalletKey + "/piWalletAddress"]: piWalletAddress,
+        ["wallets/" + piWalletKey + "/loginType"]: "pi",
+        ["wallets/" + piWalletKey + "/updatedAt"]: now,
+
+        ["accountLinks/piUid/" + safeKey(piUid)]: googleWalletKey,
+        ["accountLinks/piUsername/" + safeKey(piUsername.toLowerCase())]: googleWalletKey
+    });
+
+    await codeRef.update({
+        status: "used",
+        usedAt: now,
+        piUid,
+        piUsername,
+        piWalletKey
+    });
+
+    return res.status(200).json({
+        ok: true,
+        masterWalletKey: googleWalletKey,
+        piWalletKey,
+        message: "Liên kết Pi với Google thành công."
+    });
+}
+
+if (action === "resolve_master_wallet") {
+    const piUid = cleanText(body.piUid || "");
+
+    let masterWalletKey = "";
+
+    if (piUid) {
+        const s = await db.ref("accountLinks/piUid/" + safeKey(piUid)).once("value");
+        masterWalletKey = String(s.val() || "");
+    }
+
+    if (!masterWalletKey) {
+        const s = await db.ref("wallets/" + safeWalletKey + "/masterWalletKey").once("value");
+        masterWalletKey = String(s.val() || "");
+    }
+
+    return res.status(200).json({
+        ok: true,
+        masterWalletKey: masterWalletKey || safeWalletKey
+    });
+}
     // ==========================================
 // TESTNET GATE - KHÓA / GIỚI HẠN NGƯỜI CHƠI
 // ==========================================

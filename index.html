@@ -33126,7 +33126,7 @@ window.createPiAccountLinkCode = async function() {
 
         const rawWalletKey = ("google_" + user.uid).replace(/[.#$\[\]\/]/g, "_");
 
-        // Ép lưu lại thông tin Google để game nhận đúng ví chính
+        // Xóa dấu Pi để web Google nhận đúng ví Google
         localStorage.removeItem("pi-user-name");
         localStorage.removeItem("pi-user-photo");
         localStorage.removeItem("pi-user-uid");
@@ -33136,25 +33136,13 @@ window.createPiAccountLinkCode = async function() {
         localStorage.setItem("user-name-display", user.displayName || "Người chơi");
         localStorage.setItem("user-photo", user.photoURL || "images/do_tuong.png");
 
-        // Tự tạo ví Google nếu Firebase chưa có
-        const walletRef = db.ref("wallets/" + rawWalletKey);
-        const snap = await walletRef.once("value");
-        const old = snap.val() || {};
-
-        await walletRef.update({
-            name: old.name || user.displayName || "Người chơi",
-            username: old.username || user.displayName || "Người chơi",
-            usernameNorm: String(old.usernameNorm || user.displayName || "nguoi choi").toLowerCase(),
-            photo: old.photo || user.photoURL || "images/do_tuong.png",
-            uid: user.uid,
-            walletKey: rawWalletKey,
-            loginType: "google",
-            updatedAt: firebase.database.ServerValue.TIMESTAMP,
-            piBalance: Number(old.piBalance || 0),
-            pmcBalance: Number(old.pmcBalance || 0)
-        });
-
-        const data = await financePost("create_pi_link_code", {}, rawWalletKey);
+        // Chỉ gọi API server, không ghi Firebase trực tiếp nữa
+        const data = await financePost("create_pi_link_code", {
+            googleUid: user.uid,
+            googleWalletKey: rawWalletKey,
+            name: user.displayName || "Người chơi",
+            photo: user.photoURL || "images/do_tuong.png"
+        }, rawWalletKey);
 
         alert(
             "MÃ LIÊN KẾT PI CỦA MẦY:\n\n" +
