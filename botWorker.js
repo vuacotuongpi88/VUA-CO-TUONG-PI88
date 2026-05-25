@@ -1470,23 +1470,19 @@ self.onmessage = async function(e) {
         if (data.recentHistory) positionHistory = data.recentHistory;
 
         const botLevel = clampBotLevel(data.botLevel || data.level || 6);
-        let botCfg = getBotLevelConfig(botLevel, data.boardState.length, data.isCoUp);
+let botCfg = getBotLevelConfig(botLevel, data.boardState.length, data.isCoUp);
 let mt = buildMatrix(data.boardState);
 
-BOT_STRATEGY_PROFILE = buildStrategyProfile(data, mt, data.botSide, data.isCoUp);
-botCfg = applyStrategyToConfig(botCfg, BOT_STRATEGY_PROFILE, data.isCoUp);
+const readyKey = boardArrayHash(data.boardState, data.botSide, data.isCoUp);
+const readyMove = ponderTable.get(readyKey);
 
-        const readyKey = boardArrayHash(data.boardState, data.botSide, data.isCoUp);
-        const readyMove = ponderTable.get(readyKey);
+if (readyMove) {
+    ponderTable.delete(readyKey);
+    postMessage({ action: "done", move: readyMove, fromPonder: true });
+    return;
+}
 
-        if (readyMove) {
-            ponderTable.delete(readyKey);
-            postMessage({ action: "done", move: readyMove, fromPonder: true });
-            return;
-        }
-
-        let bestMoveObject = null;
-        let mt = buildMatrix(data.boardState);
+let bestMoveObject = null;
 
         // ==========================================
         // KHAI CUỘC + CHỐNG PHÁO ĐẦU

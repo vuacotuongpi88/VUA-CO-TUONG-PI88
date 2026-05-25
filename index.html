@@ -31773,7 +31773,7 @@ function getBotSideFromRoomHtml(room) {
 
 function ensureBotWorkerHtml() {
     if (!window.botWorker) {
-        window.botWorker = new Worker("botWorker.js");
+        window.botWorker = new Worker("botWorker.js?v=20260525_1");
     }
 
     if (window.__botWorkerHtmlBound) return window.botWorker;
@@ -31834,7 +31834,17 @@ function ensureBotWorkerHtml() {
             startBotPonderIfHumanTurn(nextRoom);
         }, 120);
     };
+window.botWorker.onerror = function(err) {
+    window.__isBotThinking = false;
+    console.error("BOT_WORKER_DIE:", err);
 
+    try {
+        window.botWorker.terminate();
+    } catch (e) {}
+
+    window.botWorker = null;
+    window.__botWorkerHtmlBound = false;
+};
     return window.botWorker;
 }
 
