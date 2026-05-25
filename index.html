@@ -8253,9 +8253,11 @@ function showLoginChoices() {
 
     const isPi = !!window.Pi;
 
-    if (piBtn) piBtn.style.display = isPi ? "inline-flex" : "none";
-    if (googleBtn) googleBtn.style.display = "none"; // Tạm khóa đăng nhập Google
-    if (piNote) piNote.style.display = isPi ? "none" : "block";
+// Web thường: hiện Google.
+// Pi Browser: hiện cả Google và Pi để còn test xác nhập.
+if (googleBtn) googleBtn.style.display = "inline-flex";
+if (piBtn) piBtn.style.display = isPi ? "inline-flex" : "none";
+if (piNote) piNote.style.display = "none";
 
     if (oldPiBtn) oldPiBtn.style.display = "none";
     if (oldGoogleBtn) oldGoogleBtn.style.display = "none";
@@ -8278,8 +8280,44 @@ function isRealPiBrowser() {
     return !!window.Pi && /pibrowser|pi browser|minepi/i.test(ua);
 }
 function loginGoogle() {
-    alert("Đăng nhập Google đang tạm khóa trong giai đoạn testnet. Vui lòng đăng nhập bằng Pi Browser.");
-    return;
+    try {
+        localStorage.removeItem("pi-user-name");
+        localStorage.removeItem("pi-user-photo");
+        localStorage.removeItem("pi-user-uid");
+        localStorage.removeItem("pi-uid");
+        localStorage.removeItem("piUid");
+
+        auth.signInWithPopup(provider)
+            .then((result) => {
+                const user = result.user;
+                if (user) {
+                    localStorage.setItem("user-name-display", user.displayName || "Người chơi");
+                    localStorage.setItem("user-photo", user.photoURL || "images/do_tuong.png");
+                }
+                location.reload();
+            })
+            .catch((err) => {
+                console.error("Lỗi đăng nhập Google popup:", err);
+
+                if (
+                    err &&
+                    (
+                        err.code === "auth/popup-blocked" ||
+                        err.code === "auth/popup-closed-by-user" ||
+                        err.code === "auth/cancelled-popup-request"
+                    )
+                ) {
+                    auth.signInWithRedirect(provider);
+                    return;
+                }
+
+                alert("Đăng nhập Google bị lỗi: " + (err.message || err.code || err));
+            });
+
+    } catch (err) {
+        console.error("LOGIN_GOOGLE_FAIL:", err);
+        alert("Đăng nhập Google bị lỗi: " + (err.message || err));
+    }
 }
 function logout() {
     document.querySelectorAll(".profile-menu").forEach(m => m.classList.remove("show"));
@@ -33024,17 +33062,14 @@ let currentRoomBucket = null;
 let isJoiningStakeRoom = false;
 
 function getAccountKey() {
-    // 1. ƯU TIÊN CAO NHẤT: Tài khoản Pi Browser thật
     const piName = localStorage.getItem("pi-user-name");
     if (piName) return `pi_${piName.trim().toLowerCase()}`;
 
-    // 2. ƯU TIÊN THỨ HAI: Tài khoản Google thật (Bỏ qua bọn ẩn danh)
     const user = auth.currentUser;
     if (user && user.isAnonymous === false) {
         return `google_${user.uid}`;
     }
 
-    // 3. CUỐI CÙNG: Tài khoản Khách test
     const guestName =
         localStorage.getItem("currentUsername") ||
         localStorage.getItem("user-name-display") ||
@@ -33043,10 +33078,139 @@ function getAccountKey() {
     return `guest_${guestName.trim().toLowerCase().replace(/\s+/g, "_")}`;
 }
 
-function makeWalletDbKey() {
+function getRawWalletDbKey() {
     return getAccountKey().replace(/[.#$\[\]\/]/g, "_");
 }
 
+function makeWalletDbKey() {
+    const master = localStorage.getItem("mc_master_wallet_key") || "";
+    if (master) return master.replace(/[.#$\[\]\/]/g, "_");
+
+    return getRawWalletDbKey();
+}
+async function financePost(action, body = {}, walletKeyOverride = "") {
+    const walletKey =
+        walletKeyOverride ||
+        (typeof getRawWalletDbKey === "function" ? getRawWalletDbKey() : makeWalletDbKey());
+
+    const res = await fetch("/api/finance?v=" + Date.now(), {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "x-wallet-key": walletKey
+        },
+        body: JSON.stringify({
+            action,
+            walletKey,
+            ...body
+        })
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data.ok) {
+        throw new Error(data.error || "API lỗi.");
+    }
+
+    return data;
+}
+
+window.createPiAccountLinkCode = async function() {
+    try {
+        const rawWalletKey = getRawWalletDbKey();
+
+        if (!rawWalletKey.startsWith("google_")) {
+            alert("Muốn tạo mã liên kết thì phải đăng nhập bằng Google ở web ngoài trước.");
+            return;
+        }
+
+        const data = await financePost("create_pi_link_code", {}, rawWalletKey);
+
+        alert(
+            "MÃ LIÊN KẾT PI CỦA MẦY:\n\n" +
+            data.code +
+            "\n\nMở Pi Browser, đăng nhập Pi rồi nhập mã này. Mã hết hạn sau 10 phút."
+        );
+
+        return data.code;
+    } catch (err) {
+        alert("Lỗi tạo mã liên kết: " + (err.message || err));
+    }
+};
+
+window.claimPiAccountLinkCode = async function() {
+    try {
+        const code = prompt("Nhập mã liên kết từ tài khoản Google:");
+        if (!code) return;
+
+        const piUid =
+            localStorage.getItem("pi-user-uid") ||
+            localStorage.getItem("pi-uid") ||
+            localStorage.getItem("piUid") ||
+            "";
+
+        const piUsername =
+            localStorage.getItem("pi-user-name") ||
+            localStorage.getItem("pi-username") ||
+            localStorage.getItem("piUsername") ||
+            "";
+
+        const piWalletAddress =
+            localStorage.getItem("pi-wallet-address") ||
+            localStorage.getItem("piWalletAddress") ||
+            "";
+
+        if (!piUid || !piUsername) {
+            alert("Chưa có Pi UID/username. Hãy đăng nhập Pi Browser trước rồi thử lại.");
+            return;
+        }
+
+        const rawWalletKey = getRawWalletDbKey();
+
+        const data = await financePost("claim_pi_link_code", {
+            code,
+            piUid,
+            piUsername,
+            piWalletAddress
+        }, rawWalletKey);
+
+        localStorage.setItem("mc_master_wallet_key", data.masterWalletKey);
+
+        alert(data.message || "Liên kết thành công.");
+
+        if (typeof loadWalletBalance === "function") await loadWalletBalance();
+        if (typeof updatePmcUI === "function") updatePmcUI();
+
+        location.reload();
+    } catch (err) {
+        alert("Lỗi xác nhập Pi: " + (err.message || err));
+    }
+};
+
+window.resolveMasterWalletNow = async function() {
+    try {
+        const rawWalletKey = getRawWalletDbKey();
+
+        const piUid =
+            localStorage.getItem("pi-user-uid") ||
+            localStorage.getItem("pi-uid") ||
+            localStorage.getItem("piUid") ||
+            "";
+
+        const data = await financePost("resolve_master_wallet", {
+            piUid
+        }, rawWalletKey);
+
+        if (data.masterWalletKey && data.masterWalletKey !== rawWalletKey) {
+            localStorage.setItem("mc_master_wallet_key", data.masterWalletKey);
+        }
+
+        return data.masterWalletKey || rawWalletKey;
+    } catch (err) {
+        console.warn("resolveMasterWalletNow lỗi:", err);
+        return makeWalletDbKey();
+    }
+};
 function scopedKey(base) {
     return `${base}:${getAccountKey()}`;
 }

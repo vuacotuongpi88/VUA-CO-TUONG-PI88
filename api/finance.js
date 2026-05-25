@@ -1302,6 +1302,293 @@ for (const r of cosmeticLogs) {
         items: finalItems
     });
 }
+// ==========================================
+// XÁC NHẬP GOOGLE ↔ PI: TẠO MÃ LIÊN KẾT
+// Google web gọi action này để tạo mã
+// ==========================================
+if (action === "create_pi_link_code") {
+    const masterWalletKey = safeWalletKey;
+    const now = Date.now();
+
+    if (!masterWalletKey.startsWith("google_")) {
+        return res.status(400).json({
+            ok: false,
+            error: "Phải đăng nhập bằng Google ở web ngoài trước rồi mới tạo mã liên kết Pi."
+        });
+    }
+
+    const walletSnap = await db.ref(`wallets/${masterWalletKey}`).once("value");
+    if (!walletSnap.exists()) {
+        return res.status(404).json({
+            ok: false,
+            error: "Không tìm thấy ví Google chính. Hãy đăng nhập game lại trước."
+        });
+    }
+
+    let code = "";
+    let codeRef = null;
+
+    for (let i = 0; i < 10; i++) {
+        code = Math.random().toString(36).slice(2, 8).toUpperCase().replace(/[^A-Z0-9]/g, "X");
+        code = (code + "XXXXXX").slice(0, 6);
+
+        codeRef = db.ref(`piAccountLinkCodes/${code}`);
+        const oldSnap = await codeRef.once("value");
+
+        if (!oldSnap.exists()) break;
+    }
+
+    const expiresAt = now + 10 * 60 * 1000;
+
+    await codeRef.set({
+        code,
+        masterWalletKey,
+        createdByWalletKey: masterWalletKey,
+        createdAt: now,
+        expiresAt,
+        status: "pending"
+    });
+
+    await db.ref(`wallets/${masterWalletKey}`).update({
+        lastPiLinkCode: code,
+        lastPiLinkCodeAt: now,
+        updatedAt: now
+    }).catch(() => {});
+
+    return res.status(200).json({
+        ok: true,
+        code,
+        expiresAt,
+        masterWalletKey,
+        message: `Mã liên kết Pi của bạn là ${code}. Mã có hiệu lực 10 phút.`
+    });
+}
+
+// ==========================================
+// XÁC NHẬP GOOGLE ↔ PI: PI BROWSER NHẬP MÃ
+// Pi Browser gọi action này sau khi đăng nhập Pi
+// ==========================================
+if (action === "claim_pi_link_code") {
+    const code = String(body.code || "")
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, "");
+
+    const piUid = cleanText(body.piUid || body.uid || "");
+    const piUsername = cleanText(body.piUsername || body.username || "");
+    const piWalletAddress = normalizePiAddress(
+        body.piWalletAddress ||
+        body.walletAddress ||
+        body.linkedWalletAddress ||
+        ""
+    );
+
+    const piWalletKey = safeWalletKey;
+    const now = Date.now();
+
+    if (!code) {
+        return res.status(400).json({ ok: false, error: "Thiếu mã liên kết." });
+    }
+
+    if (!piUid) {
+        return res.status(400).json({ ok: false, error: "Thiếu Pi UID. Phải đăng nhập Pi Browser trước." });
+    }
+
+    if (!piUsername) {
+        return res.status(400).json({ ok: false, error: "Thiếu username Pi." });
+    }
+
+    if (piWalletAddress && !isValidPiAddress(piWalletAddress)) {
+        return res.status(400).json({
+            ok: false,
+            error: "Địa chỉ ví Pi không hợp lệ."
+        });
+    }
+
+    const codeRef = db.ref(`piAccountLinkCodes/${code}`);
+    const codeSnap = await codeRef.once("value");
+    const linkCode = codeSnap.val() || null;
+
+    if (!linkCode) {
+        return res.status(404).json({ ok: false, error: "Mã liên kết không tồn tại." });
+    }
+
+    if (String(linkCode.status || "pending") !== "pending") {
+        return res.status(400).json({ ok: false, error: "Mã liên kết này đã được dùng hoặc đã hết hiệu lực." });
+    }
+
+    if (Number(linkCode.expiresAt || 0) && now > Number(linkCode.expiresAt || 0)) {
+        await codeRef.update({
+            status: "expired",
+            expiredAt: now
+        }).catch(() => {});
+
+        return res.status(400).json({ ok: false, error: "Mã liên kết đã hết hạn. Hãy tạo mã mới." });
+    }
+
+    const masterWalletKey = safeKey(linkCode.masterWalletKey || "");
+    if (!masterWalletKey || !masterWalletKey.startsWith("google_")) {
+        return res.status(400).json({ ok: false, error: "Mã liên kết không có ví Google hợp lệ." });
+    }
+
+    const masterSnap = await db.ref(`wallets/${masterWalletKey}`).once("value");
+    if (!masterSnap.exists()) {
+        return res.status(404).json({ ok: false, error: "Ví Google chính không còn tồn tại." });
+    }
+
+    const piUidKey = safeKey(piUid.toLowerCase());
+
+    const oldPiLinkSnap = await db.ref(`accountLinks/pi/${piUidKey}/masterWalletKey`).once("value");
+    const oldMaster = oldPiLinkSnap.val();
+
+    if (oldMaster && oldMaster !== masterWalletKey) {
+        return res.status(409).json({
+            ok: false,
+            error: "Tài khoản Pi này đã liên kết với một tài khoản Google khác."
+        });
+    }
+
+    const oldMasterPiSnap = await db.ref(`wallets/${masterWalletKey}/linkedPi/piUid`).once("value");
+    const oldMasterPiUid = oldMasterPiSnap.val();
+
+    if (oldMasterPiUid && String(oldMasterPiUid) !== String(piUid)) {
+        return res.status(409).json({
+            ok: false,
+            error: "Ví Google này đã liên kết với một tài khoản Pi khác."
+        });
+    }
+
+    const updates = {};
+
+    updates[`accountLinks/pi/${piUidKey}`] = {
+        masterWalletKey,
+        piWalletKey,
+        piUid,
+        piUsername,
+        piWalletAddress: piWalletAddress || "",
+        linkedAt: now,
+        status: "active"
+    };
+
+    updates[`accountLinks/wallet/${piWalletKey}`] = {
+        masterWalletKey,
+        aliasWalletKey: piWalletKey,
+        type: "pi",
+        piUid,
+        piUsername,
+        linkedAt: now,
+        status: "active"
+    };
+
+    updates[`wallets/${masterWalletKey}/masterWalletKey`] = masterWalletKey;
+    updates[`wallets/${masterWalletKey}/piUid`] = piUid;
+    updates[`wallets/${masterWalletKey}/piUsername`] = piUsername;
+    updates[`wallets/${masterWalletKey}/piVerified`] = true;
+    updates[`wallets/${masterWalletKey}/verifiedAt`] = now;
+    updates[`wallets/${masterWalletKey}/linkedPi`] = {
+        piWalletKey,
+        piUid,
+        piUsername,
+        piWalletAddress: piWalletAddress || "",
+        linkedAt: now,
+        status: "active"
+    };
+
+    if (piWalletAddress) {
+        updates[`wallets/${masterWalletKey}/piWalletAddress`] = piWalletAddress;
+        updates[`wallets/${masterWalletKey}/linkedWalletAddress`] = piWalletAddress;
+        updates[`wallets/${masterWalletKey}/piBrowserWalletAddress`] = piWalletAddress;
+        updates[`wallets/${masterWalletKey}/withdrawWalletAddress`] = piWalletAddress;
+        updates[`wallets/${masterWalletKey}/withdrawAddress`] = piWalletAddress;
+    }
+
+    updates[`wallets/${piWalletKey}/isAliasWallet`] = true;
+    updates[`wallets/${piWalletKey}/aliasType`] = "pi";
+    updates[`wallets/${piWalletKey}/linkedMasterWalletKey`] = masterWalletKey;
+    updates[`wallets/${piWalletKey}/masterWalletKey`] = masterWalletKey;
+    updates[`wallets/${piWalletKey}/piUid`] = piUid;
+    updates[`wallets/${piWalletKey}/piUsername`] = piUsername;
+    updates[`wallets/${piWalletKey}/piVerified`] = true;
+    updates[`wallets/${piWalletKey}/updatedAt`] = now;
+
+    updates[`piAccountLinkCodes/${code}/status`] = "claimed";
+    updates[`piAccountLinkCodes/${code}/claimedAt`] = now;
+    updates[`piAccountLinkCodes/${code}/piWalletKey`] = piWalletKey;
+    updates[`piAccountLinkCodes/${code}/piUid`] = piUid;
+    updates[`piAccountLinkCodes/${code}/piUsername`] = piUsername;
+
+    await db.ref().update(updates);
+
+    await db.ref("adminLedgerV1").push({
+        type: "account_link_pi_google",
+        title: `${masterWalletKey} liên kết Pi ${piUsername}`,
+        detail: `Pi ${piUsername} (${piUid}) đã trỏ về ví chính ${masterWalletKey}`,
+        walletKey: masterWalletKey,
+        piWalletKey,
+        piUid,
+        piUsername,
+        createdAt: now,
+        status: "done",
+        searchText: `${masterWalletKey} ${piWalletKey} ${piUid} ${piUsername} link pi google`.toLowerCase()
+    }).catch(() => {});
+
+    return res.status(200).json({
+        ok: true,
+        masterWalletKey,
+        piWalletKey,
+        piUid,
+        piUsername,
+        message: "Liên kết thành công. Từ giờ tài khoản Pi sẽ dùng chung ví Google chính."
+    });
+}
+
+// ==========================================
+// XÁC NHẬP GOOGLE ↔ PI: TÌM VÍ CHÍNH
+// Pi Browser/web gọi để biết nên dùng ví nào
+// ==========================================
+if (action === "resolve_master_wallet") {
+    const piUid = cleanText(body.piUid || body.uid || "");
+    let masterWalletKey = "";
+
+    const aliasSnap = await db.ref(`accountLinks/wallet/${safeWalletKey}/masterWalletKey`).once("value");
+    if (aliasSnap.exists()) {
+        masterWalletKey = safeKey(aliasSnap.val() || "");
+    }
+
+    if (!masterWalletKey && piUid) {
+        const piUidKey = safeKey(piUid.toLowerCase());
+        const piSnap = await db.ref(`accountLinks/pi/${piUidKey}/masterWalletKey`).once("value");
+
+        if (piSnap.exists()) {
+            masterWalletKey = safeKey(piSnap.val() || "");
+        }
+    }
+
+    if (!masterWalletKey) {
+        const walletMasterSnap = await db.ref(`wallets/${safeWalletKey}/masterWalletKey`).once("value");
+        if (walletMasterSnap.exists()) {
+            masterWalletKey = safeKey(walletMasterSnap.val() || "");
+        }
+    }
+
+    if (!masterWalletKey) {
+        const linkedMasterSnap = await db.ref(`wallets/${safeWalletKey}/linkedMasterWalletKey`).once("value");
+        if (linkedMasterSnap.exists()) {
+            masterWalletKey = safeKey(linkedMasterSnap.val() || "");
+        }
+    }
+
+    if (!masterWalletKey) {
+        masterWalletKey = safeWalletKey;
+    }
+
+    return res.status(200).json({
+        ok: true,
+        walletKey: safeWalletKey,
+        masterWalletKey,
+        isLinked: masterWalletKey !== safeWalletKey
+    });
+}
     // ==========================================
     // LUỒNG 0A: ĐỌC TRẠNG THÁI LIÊN KẾT VÍ PI
     // Không tạo thêm API route để né giới hạn 12 function của Vercel Hobby
