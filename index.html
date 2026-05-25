@@ -31877,7 +31877,17 @@ ensureBotWorkerHtml().postMessage({
     botSide: botSide,
     isCoUp: !!room.isCoUp,
     botLevel: botLevel,
-    recentHistory: typeof botMoveHistory !== "undefined" ? botMoveHistory : []
+    recentHistory: typeof botMoveHistory !== "undefined" ? botMoveHistory : [],
+    moveCount: Number(room.moveCount || 0),
+
+    // gửi thời gian để bot biết đang ở tầng nào
+    botTimeLeftSec: botSide === "do"
+        ? Number(room.timeDo ?? timeDo ?? 900)
+        : Number(room.timeDen ?? timeDen ?? 900),
+
+    enemyTimeLeftSec: botSide === "do"
+        ? Number(room.timeDen ?? timeDen ?? 900)
+        : Number(room.timeDo ?? timeDo ?? 900)
 });
         }, delayMs);
     } catch (err) {

@@ -1470,7 +1470,11 @@ self.onmessage = async function(e) {
         if (data.recentHistory) positionHistory = data.recentHistory;
 
         const botLevel = clampBotLevel(data.botLevel || data.level || 6);
-        const botCfg = getBotLevelConfig(botLevel, data.boardState.length, data.isCoUp);
+        let botCfg = getBotLevelConfig(botLevel, data.boardState.length, data.isCoUp);
+let mt = buildMatrix(data.boardState);
+
+BOT_STRATEGY_PROFILE = buildStrategyProfile(data, mt, data.botSide, data.isCoUp);
+botCfg = applyStrategyToConfig(botCfg, BOT_STRATEGY_PROFILE, data.isCoUp);
 
         const readyKey = boardArrayHash(data.boardState, data.botSide, data.isCoUp);
         const readyMove = ponderTable.get(readyKey);
@@ -1493,7 +1497,7 @@ self.onmessage = async function(e) {
 // Cờ úp không gọi VPS vì Pikafish không biết luật quân úp.
 if (!bestMoveObject && !data.isCoUp && botCfg.cloud) {
     const fen = boardToFEN(mt, data.botSide);
-    const vpsMove = await fetchVpsMove(fen, botLevel, 9000);
+    const vpsMove = await fetchVpsMove(fen, botLevel, botCfg.vpsMs || 6000);
 
     if (vpsMove) {
     const m = makePlanMove(mt, data.botSide, vpsMove.from, vpsMove.to, false);
