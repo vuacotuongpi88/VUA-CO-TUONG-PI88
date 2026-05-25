@@ -44597,6 +44597,231 @@ async function animateChessPieceMove(fromRow, fromCol, toRow, toCol) {
         </div>
     </div>
 </div>
+<style>
+.account-link-btn {
+    position: fixed;
+    left: 12px;
+    bottom: 92px;
+    z-index: 99999;
+    background: linear-gradient(135deg, #00ffc8, #7b2cff);
+    color: #fff;
+    border: 2px solid #fff;
+    border-radius: 999px;
+    padding: 10px 14px;
+    font-weight: 900;
+    font-size: 12px;
+    box-shadow: 0 0 15px #00ffc8;
+    cursor: pointer;
+}
 
+.account-link-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    background: rgba(0,0,0,.72);
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.account-link-box {
+    width: min(92vw, 420px);
+    background: linear-gradient(180deg, #18102d, #07070d);
+    border: 2px solid #00ffc8;
+    border-radius: 18px;
+    padding: 18px;
+    color: #fff;
+    text-align: center;
+    box-shadow: 0 0 25px #00ffc8;
+}
+
+.account-link-box h2 {
+    color: #ffd84d;
+    margin: 0 0 12px;
+    font-size: 22px;
+}
+
+.account-link-box p {
+    font-size: 14px;
+    line-height: 1.45;
+    color: #eee;
+}
+
+.account-link-code {
+    font-size: 34px;
+    font-weight: 900;
+    letter-spacing: 5px;
+    color: #00ff99;
+    text-shadow: 0 0 12px #00ff99;
+    margin: 12px 0;
+}
+
+.account-link-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 13px;
+    border-radius: 12px;
+    border: 2px solid #ffd84d;
+    background: #111;
+    color: #fff;
+    text-align: center;
+    font-size: 20px;
+    font-weight: 900;
+    letter-spacing: 3px;
+    outline: none;
+    margin: 10px 0;
+    text-transform: uppercase;
+}
+
+.account-link-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.account-link-actions button,
+.account-link-main-btn {
+    flex: 1;
+    border: none;
+    border-radius: 12px;
+    padding: 12px;
+    font-weight: 900;
+    cursor: pointer;
+    color: #fff;
+}
+
+.account-link-main-btn {
+    width: 100%;
+    background: linear-gradient(135deg, #00b894, #00cec9);
+    margin-top: 10px;
+}
+
+.account-link-close {
+    background: #636e72;
+}
+
+.account-link-confirm {
+    background: linear-gradient(135deg, #6c5ce7, #fd79a8);
+}
+</style>
+
+<button id="account-link-open-btn" class="account-link-btn" onclick="openAccountLinkModal()">
+    🔗 LIÊN KẾT PI
+</button>
+
+<div id="account-link-modal" class="account-link-modal">
+    <div class="account-link-box">
+        <h2>🔗 XÁC NHẬP GOOGLE ↔ PI</h2>
+
+        <div id="account-link-google-zone" style="display:none;">
+            <p>
+                Mầy đang đăng nhập Google. Bấm tạo mã rồi qua Pi Browser nhập mã này để nối tài khoản Pi vào ví Google.
+            </p>
+            <button class="account-link-main-btn" onclick="uiCreatePiLinkCode()">TẠO MÃ LIÊN KẾT PI</button>
+            <div id="account-link-code" class="account-link-code"></div>
+            <p id="account-link-note"></p>
+        </div>
+
+        <div id="account-link-pi-zone" style="display:none;">
+            <p>
+                Mầy đang ở Pi Browser. Nhập mã lấy từ tài khoản Google để nối Pi vào ví Google chính.
+            </p>
+            <input id="account-link-code-input" class="account-link-input" placeholder="NHẬP MÃ 6 KÝ TỰ">
+            <button class="account-link-main-btn" onclick="uiClaimPiLinkCode()">XÁC NHẬP NGAY</button>
+        </div>
+
+        <div id="account-link-unknown-zone" style="display:none;">
+            <p>
+                Hãy đăng nhập Google ở web ngoài để tạo mã, hoặc đăng nhập Pi trong Pi Browser để nhập mã.
+            </p>
+        </div>
+
+        <div class="account-link-actions">
+            <button class="account-link-close" onclick="closeAccountLinkModal()">ĐÓNG</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function openAccountLinkModal() {
+    const modal = document.getElementById("account-link-modal");
+    const googleZone = document.getElementById("account-link-google-zone");
+    const piZone = document.getElementById("account-link-pi-zone");
+    const unknownZone = document.getElementById("account-link-unknown-zone");
+
+    const rawWalletKey = typeof getRawWalletDbKey === "function"
+        ? getRawWalletDbKey()
+        : (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "");
+
+    const hasPi =
+        !!localStorage.getItem("pi-user-name") ||
+        !!localStorage.getItem("pi-user-uid") ||
+        !!localStorage.getItem("piUid");
+
+    const hasGoogle = rawWalletKey.startsWith("google_");
+
+    googleZone.style.display = "none";
+    piZone.style.display = "none";
+    unknownZone.style.display = "none";
+
+    if (hasGoogle && !hasPi) {
+        googleZone.style.display = "block";
+    } else if (hasPi) {
+        piZone.style.display = "block";
+    } else {
+        unknownZone.style.display = "block";
+    }
+
+    modal.style.display = "flex";
+}
+
+function closeAccountLinkModal() {
+    const modal = document.getElementById("account-link-modal");
+    if (modal) modal.style.display = "none";
+}
+
+async function uiCreatePiLinkCode() {
+    const codeEl = document.getElementById("account-link-code");
+    const noteEl = document.getElementById("account-link-note");
+
+    try {
+        if (codeEl) codeEl.innerText = "ĐANG TẠO...";
+        if (noteEl) noteEl.innerText = "";
+
+        const code = await createPiAccountLinkCode();
+
+        if (codeEl) codeEl.innerText = code || "";
+        if (noteEl) noteEl.innerText = "Qua Pi Browser, đăng nhập Pi rồi bấm LIÊN KẾT PI để nhập mã này.";
+    } catch (err) {
+        if (codeEl) codeEl.innerText = "";
+        alert("Lỗi tạo mã: " + (err.message || err));
+    }
+}
+
+async function uiClaimPiLinkCode() {
+    const input = document.getElementById("account-link-code-input");
+    const code = String(input?.value || "").trim().toUpperCase();
+
+    if (!code) {
+        alert("Nhập mã liên kết trước.");
+        return;
+    }
+
+    try {
+        window.__manualPiLinkCode = code;
+
+        const oldPrompt = window.prompt;
+        window.prompt = function() {
+            return window.__manualPiLinkCode || "";
+        };
+
+        await claimPiAccountLinkCode();
+
+        window.prompt = oldPrompt;
+    } catch (err) {
+        alert("Lỗi xác nhập: " + (err.message || err));
+    }
+}
+</script>
 </body>
 </html>
