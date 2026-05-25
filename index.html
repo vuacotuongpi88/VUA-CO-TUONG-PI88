@@ -42979,49 +42979,44 @@ window.claimPendingReferral = async function(ev, pendingId, walletKeyB) {
             btn.innerText = "ĐANG SOI...";
         }
 
-        const snapB = await db.ref(`wallets/${walletKeyB}`).once("value");
-        const dataB = snapB.val() || {};
+        const res = await fetch("/api/finance?v=" + Date.now(), {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "x-wallet-key": myWalletKey
+            },
+            body: JSON.stringify({
+                action: "claim_pending_referral",
+                walletKey: myWalletKey,
+                pendingId: pendingId,
+                walletKeyB: walletKeyB
+            })
+        });
 
-        const bLevel = Number(dataB.level) || 1;
-        const ownedSkins = dataB.ownedAvatarSkins || {};
-        const hasBoughtSkin = Object.keys(ownedSkins).some(skinId => skinId !== "none" && ownedSkins[skinId] === true);
+        const data = await res.json().catch(() => ({}));
 
-        const boughtExp = dataB.boughtExpPackages || {};
-        const hasBoughtExp = Object.keys(boughtExp).length > 0;
-
-        const updates = {};
-
-        if (bLevel >= 5 || hasBoughtSkin || hasBoughtExp) {
-            updates[`wallets/${myWalletKey}/pendingReferrals/${pendingId}/status`] = "claimed";
-            updates[`wallets/${myWalletKey}/pendingReferrals/${pendingId}/claimedAt`] = firebase.database.ServerValue.TIMESTAMP;
-            updates[`wallets/${myWalletKey}/pmcBalance`] = firebase.database.ServerValue.increment(5);
-
-            await db.ref().update(updates);
-
-            if (typeof loadWalletBalance === "function") await loadWalletBalance();
-            if (typeof bindReferralCount === "function") bindReferralCount();
-            if (typeof loadPendingReferrals === "function") loadPendingReferrals();
-
-            alert("🎉 ĐÃ NHẬN! Đã cộng 5 PMC vào ví.");
-        } else {
-            updates[`wallets/${myWalletKey}/pendingReferrals/${pendingId}/status`] = "revoked";
-            updates[`wallets/${myWalletKey}/pendingReferrals/${pendingId}/revokedAt`] = firebase.database.ServerValue.TIMESTAMP;
-            updates[`social/friends/${myWalletKey}/${walletKeyB}`] = null;
-            updates[`social/friends/${walletKeyB}/${myWalletKey}`] = null;
-
-            await db.ref().update(updates);
-
-            if (typeof loadPendingReferrals === "function") loadPendingReferrals();
-
-            alert(`❌ Nick này chưa đủ điều kiện. Cấp hiện tại: ${bLevel}. Đã hủy quà và xóa kết bạn.`);
+        if (!res.ok || !data.ok) {
+            throw new Error(data.error || "Không nhận được quà.");
         }
 
+        if (typeof loadWalletBalance === "function") {
+            await loadWalletBalance();
+        }
+
+        if (typeof bindReferralCount === "function") {
+            bindReferralCount();
+        }
+
+        if (typeof loadPendingReferrals === "function") {
+            loadPendingReferrals();
+        }
+
+        alert(data.message || "🎉 Đã xử lý quà mời bạn.");
+
     } catch (err) {
-        console.error("Lỗi duyệt mã mời:", err);
-
-        const msg = err?.message || String(err || "Không rõ lỗi");
-        alert("Lỗi nhận quà: " + msg);
-
+        console.error("Lỗi nhận quà qua API:", err);
+        alert("Lỗi nhận quà: " + (err.message || err));
+    } finally {
         if (btn) {
             btn.disabled = false;
             btn.innerText = "NHẬN";
