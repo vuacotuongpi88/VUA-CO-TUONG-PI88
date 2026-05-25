@@ -425,7 +425,16 @@ if (action === "create_pi_link_code") {
     const walletRef = db.ref("wallets/" + googleWalletKey);
     const oldSnap = await walletRef.once("value");
     const old = oldSnap.val() || {};
-if (old.piVerified || old.linkedPiWalletKey || old.piUid || old.piUsername) {
+if (
+    old.piVerified ||
+    old.linkedPiWalletKey ||
+    old.linkedGoogleWalletKey ||
+    old.masterWalletKey ||
+    old.linkedMasterWalletKey ||
+    old.piUid ||
+    old.piUsername ||
+    old.linkedPi
+) {
     return res.status(400).json({
         ok: false,
         error: "Tài khoản Google này đã liên kết Pi rồi, không thể tạo mã mới."
@@ -538,15 +547,47 @@ if (action === "claim_pi_link_code") {
     }
 
     const googleWalletKey = safeKey(link.googleWalletKey || "");
-    const piWalletKey = safeKey("pi_" + piUsername.toLowerCase());
-const googleWalletSnap = await db.ref("wallets/" + googleWalletKey).once("value");
+const piWalletKey = safeKey("pi_" + piUsername.toLowerCase());
+const piUidKey = safeKey(piUid.toLowerCase());
+const piUsernameKey = safeKey(piUsername.toLowerCase());
+
+if (!googleWalletKey || !googleWalletKey.startsWith("google_")) {
+    return res.status(400).json({
+        ok: false,
+        error: "Mã liên kết bị lỗi ví Google."
+    });
+}
+
+const [
+    googleWalletSnap,
+    oldPiUidLink,
+    oldPiUsernameLink,
+    oldPiLegacyLink,
+    oldPiWalletAliasLink,
+    oldPiWalletSnap
+] = await Promise.all([
+    db.ref("wallets/" + googleWalletKey).once("value"),
+    db.ref("accountLinks/piUid/" + safeKey(piUid)).once("value"),
+    db.ref("accountLinks/piUsername/" + piUsernameKey).once("value"),
+    db.ref("accountLinks/pi/" + piUidKey).once("value"),
+    db.ref("accountLinks/wallet/" + piWalletKey + "/masterWalletKey").once("value"),
+    db.ref("wallets/" + piWalletKey).once("value")
+]);
+
 const googleWallet = googleWalletSnap.val() || {};
+const oldPiWallet = oldPiWalletSnap.val() || {};
+const oldPiLegacy = oldPiLegacyLink.val() || {};
+const oldPiLegacyMaster = safeKey(oldPiLegacy.masterWalletKey || "");
+const oldPiWalletAliasMaster = safeKey(oldPiWalletAliasLink.val() || "");
 
 if (
     googleWallet.piVerified ||
     googleWallet.linkedPiWalletKey ||
+    googleWallet.linkedGoogleWalletKey ||
+    googleWallet.linkedMasterWalletKey ||
     googleWallet.piUid ||
-    googleWallet.piUsername
+    googleWallet.piUsername ||
+    googleWallet.linkedPi
 ) {
     return res.status(400).json({
         ok: false,
@@ -554,53 +595,82 @@ if (
     });
 }
 
-const oldPiUidLink = await db.ref("accountLinks/piUid/" + safeKey(piUid)).once("value");
-const oldPiUsernameLink = await db.ref("accountLinks/piUsername/" + safeKey(piUsername.toLowerCase())).once("value");
-
-if (oldPiUidLink.exists() || oldPiUsernameLink.exists()) {
+if (
+    oldPiUidLink.exists() ||
+    oldPiUsernameLink.exists() ||
+    oldPiLegacyMaster ||
+    oldPiWalletAliasMaster
+) {
     return res.status(400).json({
         ok: false,
         error: "Tài khoản Pi này đã liên kết với một ví Google khác rồi."
     });
 }
 
-const oldPiWalletSnap = await db.ref("wallets/" + piWalletKey).once("value");
-const oldPiWallet = oldPiWalletSnap.val() || {};
-
-if (oldPiWallet.masterWalletKey || oldPiWallet.linkedGoogleWalletKey) {
+if (
+    oldPiWallet.masterWalletKey ||
+    oldPiWallet.linkedGoogleWalletKey ||
+    oldPiWallet.linkedMasterWalletKey
+) {
     return res.status(400).json({
         ok: false,
         error: "Ví Pi này đã được liên kết rồi."
     });
 }
-    if (!googleWalletKey || !googleWalletKey.startsWith("google_")) {
-        return res.status(400).json({
-            ok: false,
-            error: "Mã liên kết bị lỗi ví Google."
-        });
-    }
 
     await db.ref().update({
-        ["wallets/" + googleWalletKey + "/linkedPiWalletKey"]: piWalletKey,
-        ["wallets/" + googleWalletKey + "/piUid"]: piUid,
-        ["wallets/" + googleWalletKey + "/piUsername"]: piUsername,
-        ["wallets/" + googleWalletKey + "/piWalletAddress"]: piWalletAddress,
-        ["wallets/" + googleWalletKey + "/piVerified"]: true,
-        ["wallets/" + googleWalletKey + "/verifiedAt"]: now,
-        ["wallets/" + googleWalletKey + "/updatedAt"]: now,
+    ["wallets/" + googleWalletKey + "/masterWalletKey"]: googleWalletKey,
+    ["wallets/" + googleWalletKey + "/linkedPiWalletKey"]: piWalletKey,
+    ["wallets/" + googleWalletKey + "/piUid"]: piUid,
+    ["wallets/" + googleWalletKey + "/piUsername"]: piUsername,
+    ["wallets/" + googleWalletKey + "/piWalletAddress"]: piWalletAddress,
+    ["wallets/" + googleWalletKey + "/piVerified"]: true,
+    ["wallets/" + googleWalletKey + "/verifiedAt"]: now,
+    ["wallets/" + googleWalletKey + "/updatedAt"]: now,
+    ["wallets/" + googleWalletKey + "/linkedPi"]: {
+        piWalletKey,
+        piUid,
+        piUsername,
+        piWalletAddress,
+        linkedAt: now,
+        status: "active"
+    },
 
-        ["wallets/" + piWalletKey + "/masterWalletKey"]: googleWalletKey,
-        ["wallets/" + piWalletKey + "/linkedGoogleWalletKey"]: googleWalletKey,
-        ["wallets/" + piWalletKey + "/piUid"]: piUid,
-        ["wallets/" + piWalletKey + "/piUsername"]: piUsername,
-        ["wallets/" + piWalletKey + "/piWalletAddress"]: piWalletAddress,
-        ["wallets/" + piWalletKey + "/loginType"]: "pi",
-        ["wallets/" + piWalletKey + "/updatedAt"]: now,
+    ["wallets/" + piWalletKey + "/isAliasWallet"]: true,
+    ["wallets/" + piWalletKey + "/aliasType"]: "pi",
+    ["wallets/" + piWalletKey + "/masterWalletKey"]: googleWalletKey,
+    ["wallets/" + piWalletKey + "/linkedMasterWalletKey"]: googleWalletKey,
+    ["wallets/" + piWalletKey + "/linkedGoogleWalletKey"]: googleWalletKey,
+    ["wallets/" + piWalletKey + "/piUid"]: piUid,
+    ["wallets/" + piWalletKey + "/piUsername"]: piUsername,
+    ["wallets/" + piWalletKey + "/piWalletAddress"]: piWalletAddress,
+    ["wallets/" + piWalletKey + "/loginType"]: "pi",
+    ["wallets/" + piWalletKey + "/piVerified"]: true,
+    ["wallets/" + piWalletKey + "/updatedAt"]: now,
 
-        ["accountLinks/piUid/" + safeKey(piUid)]: googleWalletKey,
-        ["accountLinks/piUsername/" + safeKey(piUsername.toLowerCase())]: googleWalletKey
-    });
+    ["accountLinks/piUid/" + safeKey(piUid)]: googleWalletKey,
+    ["accountLinks/piUsername/" + piUsernameKey]: googleWalletKey,
 
+    ["accountLinks/pi/" + piUidKey]: {
+        masterWalletKey: googleWalletKey,
+        piWalletKey,
+        piUid,
+        piUsername,
+        piWalletAddress,
+        linkedAt: now,
+        status: "active"
+    },
+
+    ["accountLinks/wallet/" + piWalletKey]: {
+        masterWalletKey: googleWalletKey,
+        aliasWalletKey: piWalletKey,
+        type: "pi",
+        piUid,
+        piUsername,
+        linkedAt: now,
+        status: "active"
+    }
+});
     await codeRef.update({
         status: "used",
         usedAt: now,
