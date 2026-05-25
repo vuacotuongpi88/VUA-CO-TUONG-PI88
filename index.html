@@ -9929,6 +9929,8 @@ async function backToMenu() {
 }
 // Xử lý Giao diện tức thì khi ra sảnh
 function executeBackToMenu() {
+    resetPuzzleModeState();
+lastPuzzleResult = null;
     document.getElementById("game-arena").style.display = "none";
     showHomeUI();
     closeArenaFriendBox();
@@ -10578,7 +10580,7 @@ if (isOwnTurnPiece) {
     if (target && target.dataset.side === luotDi) {
         selectedPiece = target;
         selectedPiece.classList.add("selected");
-        if (!isPuzzleMode) showMoveHints(selectedPiece);
+        if (!isActivePuzzleGame()) showMoveHints(selectedPiece);
         playSnd('click');
     }
     return;
@@ -10594,7 +10596,7 @@ if (isOwnTurnPiece) {
     selectedPiece.classList.remove("selected");
     selectedPiece = target;
     selectedPiece.classList.add("selected");
-    if (!isPuzzleMode) showMoveHints(selectedPiece);
+    if (!isActivePuzzleGame()) showMoveHints(selectedPiece);
     playSnd('click');
     return;
 }
@@ -10618,7 +10620,7 @@ if (haiTuongDoiMat(mt)) {
         alert("Hai Tướng không được nhìn mặt nhau!");
         return;
     }
-if (isPuzzleMode) {
+if (isActivePuzzleGame()) {
     puzzleBoardBeforeMove = clonePuzzleBoardState(exportBoardState());
 }
     if (target) {
@@ -10675,10 +10677,15 @@ refreshTimerRings();
 clearMoveHints();
 drawLastMoveMarks();
 
-if (isPuzzleMode) {
-    setTimeout(() => {
-        handlePuzzleAfterMove(c1, r1, c2, r2);
+if (isActivePuzzleGame()) {
+    clearTimeout(puzzleMoveCheckTimer);
+
+    puzzleMoveCheckTimer = setTimeout(() => {
+        if (isActivePuzzleGame()) {
+            handlePuzzleAfterMove(c1, r1, c2, r2);
+        }
     }, Number(window.CHESS_MOVE_ANIM_MS || 700) + 80);
+
     return;
 }
 
@@ -10735,7 +10742,39 @@ let puzzleSecondsLeft = 0;
 const PUZZLE_MAX_WRONG = 7;
 let puzzleWrongCount = 0;
 let puzzleBoardBeforeMove = null;
+let puzzleMoveCheckTimer = null;
 
+function isActivePuzzleGame() {
+    return !!(
+        isPuzzleMode &&
+        currentRoomMode === "co-the" &&
+        currentRoomStatus === "puzzle" &&
+        currentPuzzle &&
+        !currentRoomId
+    );
+}
+
+function resetPuzzleModeState() {
+    clearInterval(puzzleTimer);
+    puzzleTimer = null;
+
+    clearTimeout(puzzleMoveCheckTimer);
+    puzzleMoveCheckTimer = null;
+
+    isPuzzleMode = false;
+    currentPuzzle = null;
+    puzzleStep = 0;
+    puzzleWrongCount = 0;
+    puzzleBoardBeforeMove = null;
+    puzzleSecondsLeft = 0;
+    puzzleStartedAtMs = 0;
+
+    const toast = document.getElementById("puzzle-wrong-toast");
+    if (toast) toast.style.display = "none";
+
+    if (timerDoEl) timerDoEl.classList.remove("danger-time");
+    if (timerDenEl) timerDenEl.classList.remove("danger-time");
+}
 function clonePuzzleBoardState(state) {
     return JSON.parse(JSON.stringify(state || []));
 }
@@ -29756,6 +29795,8 @@ async function startPuzzleChallenge(puzzleId) {
 }
 
 function startPuzzleBoard(puzzle) {
+resetPuzzleModeState();
+
 isPuzzleMode = true;
 currentPuzzle = puzzle;
 puzzleStep = 0;
@@ -29922,6 +29963,7 @@ async function finishPuzzle(win, reason) {
 }
 function resetToStartup() {
 clearInterval(interval);
+resetPuzzleModeState();
 playSnd('welcome'); playSnd('bgm');
 isGameOver = false; luotDi = 'do'; timeDo = 900; timeDen = 900;
 document.getElementById("victory-wrap").style.transform = "translate(-50%, -50%) scale(0)";
@@ -36289,6 +36331,9 @@ function ensureReadyOverlayForWaitingRoom(room = {}, roomId = currentRoomId) {
 }
 
 async function batDauTranDau(loai) {
+    resetPuzzleModeState();
+    lastPuzzleResult = null;
+
     const mode = loai === "up" ? "co-up" : "co-tuong";
     openStakeRoomModal(mode);
 }
