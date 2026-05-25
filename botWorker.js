@@ -481,7 +481,7 @@ function scoreThreatsCreatedByPiece(mt, side, c, r, isCoUp) {
             const defenders = countSquareControls(mt, enemy, tc, tr, isCoUp);
             const attackers = countSquareControls(mt, side, tc, tr, isCoUp);
 
-            if (isKingPiece(target.type)) score += 9000;
+            if (isKingPiece(target.type)) score += 2200;
             else score += Math.min(2600, targetVal * 2);
 
             // Gài thế: quân địch bị mình đánh nhiều hơn nó đỡ.
@@ -500,6 +500,11 @@ function scoreStrategicMove(mt, move, side, isCoUp, depth) {
     const enemy = otherSide(side);
     const movingPiece = mt[move.from.r][move.from.c];
     if (!movingPiece) return -999999;
+
+    // Cấm từ vòng chấm điểm: Xe/Pháo/Mã tự lao đi ăn quân nhỏ rồi mất lại.
+    if (isBigPieceSelfSacrifice(mt, move, side, isCoUp)) {
+        return -888888;
+    }
 
     const tempState = doTempMove(mt, move.from, move.to);
 
@@ -632,61 +637,98 @@ function chooseSafeRootMove(mt, moves, side, isCoUp, currentBest) {
 
     return currentBest;
 }
+function sideHasAnyLegalMoveRaw(mt, side, isCoUp) {
+    for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 9; c++) {
+            const p = mt[r][c];
+            if (!p || p.side !== side) continue;
+
+            for (let tr = 0; tr < 10; tr++) {
+                for (let tc = 0; tc < 9; tc++) {
+                    if (!checkLuatWorker(p.type, side, c, r, tc, tr, mt, isCoUp)) continue;
+
+                    const st = doTempMove(mt, { c, r }, { c: tc, r: tr });
+                    const ok = !laBiChieuWorker(side, mt, isCoUp) && !haiTuongDoiMat(mt);
+                    undoTempMove(mt, { c, r }, { c: tc, r: tr }, st);
+
+                    if (ok) return true;
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
+function enemyCanLegallyCaptureSquare(mt, enemySide, tc, tr, isCoUp) {
+    for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 9; c++) {
+            const p = mt[r][c];
+            if (!p || p.side !== enemySide) continue;
+
+            if (!checkLuatWorker(p.type, enemySide, c, r, tc, tr, mt, isCoUp)) continue;
+
+            const st = doTempMove(mt, { c, r }, { c: tc, r: tr });
+            const ok = !laBiChieuWorker(enemySide, mt, isCoUp) && !haiTuongDoiMat(mt);
+            undoTempMove(mt, { c, r }, { c: tc, r: tr }, st);
+
+            if (ok) return true;
+        }
+    }
+
+    return false;
+}
+
 function isBigPieceSelfSacrifice(mt, move, side, isCoUp) {
     if (!move) return false;
 
     const p = mt[move.from.r]?.[move.from.c];
     if (!p || isKingPiece(p.type)) return false;
 
+    if (!(isRookPiece(p.type) || isCannonPiece(p.type) || isHorsePiece(p.type))) {
+        return false;
+    }
+
     const captured = mt[move.to.r]?.[move.to.c] || null;
     const movedVal = getPieceBaseValue(p.type);
     const capturedVal = captured ? getPieceBaseValue(captured.type) : 0;
 
-    // Chỉ siết Xe / Pháo / Mã. Tốt, Sĩ, Tượng không cần siết nặng.
-    if (!(isRookPiece(p.type) || isCannonPiece(p.type) || isHorsePiece(p.type))) return false;
-
-    // Ăn ngang giá hoặc lời thì cho qua.
+    // Ăn quân ngang giá hoặc lời thì không xem là tự sát.
     if (capturedVal >= movedVal) return false;
 
     const lossGap = movedVal - capturedVal;
-
-    // Xe ăn Sĩ/Tượng/Tốt rồi bị bắt lại là lỗ rất nặng.
-    if (lossGap < 350) return false;
+    if (lossGap < 300) return false;
 
     const enemy = otherSide(side);
-    const state = doTempMove(mt, move.from, move.to);
+
+    const st = doTempMove(mt, move.from, move.to);
 
     const givesCheck = laBiChieuWorker(enemy, mt, isCoUp);
-    const enemyMoves = generateAllMoves(mt, enemy, isCoUp, 1, false);
+    const isMate = givesCheck && !sideHasAnyLegalMoveRaw(mt, enemy, isCoUp);
 
-    // Nếu là chiếu bí thật sự thì cho hy sinh.
-    if (givesCheck && enemyMoves.length === 0) {
-        undoTempMove(mt, move.from, move.to, state);
+    // Chiếu bí thật thì cho hy sinh.
+    if (isMate) {
+        undoTempMove(mt, move.from, move.to, st);
         return false;
     }
 
-    const canBeCapturedNext = enemyMoves.some(m =>
-        m.to.c === move.to.c &&
-        m.to.r === move.to.r &&
-        mt[m.from.r]?.[m.from.c]?.side === enemy
-    );
-
+    const canBeCapturedNext = enemyCanLegallyCaptureSquare(mt, enemy, move.to.c, move.to.r, isCoUp);
     const attackers = countSquareControls(mt, enemy, move.to.c, move.to.r, isCoUp);
     const defenders = countSquareControls(mt, side, move.to.c, move.to.r, isCoUp);
-    const threat = scoreThreatsCreatedByPiece(mt, side, move.to.c, move.to.r, isCoUp);
 
-    undoTempMove(mt, move.from, move.to, state);
+    undoTempMove(mt, move.from, move.to, st);
 
-    // Nếu tạo đòn cực mạnh thì cho qua, còn không thì cấm tự hiến quân lớn.
-    if (threat >= 4200) return false;
+    // Đây là chỗ siết mạnh: Xe/Pháo/Mã ăn Sĩ/Tượng/Tốt mà bị bắt lại là cấm.
+    if (canBeCapturedNext && lossGap >= 300) return true;
 
-    if (canBeCapturedNext) return true;
-    if (attackers > defenders && defenders === 0) return true;
-    if (attackers > defenders && lossGap >= 700) return true;
+    // Lao quân lớn vào ô địch kiểm soát nhiều hơn mình cũng cấm.
+    if (attackers > defenders && lossGap >= 350) return true;
+
+    // Ô không ai đỡ mà địch đánh tới là cấm.
+    if (attackers > 0 && defenders === 0 && lossGap >= 250) return true;
 
     return false;
 }
-
 function guardBotMove(mt, move, side, isCoUp) {
     if (!move) return null;
     if (isBigPieceSelfSacrifice(mt, move, side, isCoUp)) {
