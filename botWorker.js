@@ -25,16 +25,17 @@ function getBotLevelConfig(level, pieceCount, isCoUp) {
     level = clampBotLevel(level);
 
     const table = {
-        1:  { maxDepth: 1, maxMs: 120,  rootLimit: 8,   cloud: false, cloudMs: 0,   blunder: 0.45 },
-        2:  { maxDepth: 2, maxMs: 180,  rootLimit: 10,  cloud: false, cloudMs: 0,   blunder: 0.35 },
-        3:  { maxDepth: 2, maxMs: 260,  rootLimit: 14,  cloud: false, cloudMs: 0,   blunder: 0.25 },
-        4:  { maxDepth: 3, maxMs: 380,  rootLimit: 18,  cloud: false, cloudMs: 0,   blunder: 0.16 },
-        5:  { maxDepth: 3, maxMs: 520,  rootLimit: 24,  cloud: false, cloudMs: 0,   blunder: 0.10 },
-        6:  { maxDepth: 4, maxMs: 720,  rootLimit: 32,  cloud: false, cloudMs: 0,   blunder: 0.05 },
-        7:  { maxDepth: 4, maxMs: 950,  rootLimit: 40,  cloud: true,  cloudMs: 250, blunder: 0.02 },
-        8:  { maxDepth: 5, maxMs: 1250, rootLimit: 52,  cloud: true,  cloudMs: 320, blunder: 0.00 },
-        9:  { maxDepth: 6, maxMs: 1650, rootLimit: 70,  cloud: true,  cloudMs: 420, blunder: 0.00 },
-        10: { maxDepth: 7, maxMs: 2200, rootLimit: 999, cloud: true,  cloudMs: 500, blunder: 0.00 }
+        // BẢN KHÔN HƠN: level 5 trở lên bỏ đánh "ngu giả", tăng thời gian + số nhánh.
+        1:  { maxDepth: 1, maxMs: 120,  rootLimit: 8,   cloud: false, cloudMs: 0,    blunder: 0.40 },
+        2:  { maxDepth: 2, maxMs: 180,  rootLimit: 10,  cloud: false, cloudMs: 0,    blunder: 0.28 },
+        3:  { maxDepth: 2, maxMs: 280,  rootLimit: 16,  cloud: false, cloudMs: 0,    blunder: 0.18 },
+        4:  { maxDepth: 3, maxMs: 450,  rootLimit: 24,  cloud: false, cloudMs: 0,    blunder: 0.08 },
+        5:  { maxDepth: 4, maxMs: 750,  rootLimit: 36,  cloud: false, cloudMs: 0,    blunder: 0.00 },
+        6:  { maxDepth: 5, maxMs: 1150, rootLimit: 52,  cloud: false, cloudMs: 0,    blunder: 0.00 },
+        7:  { maxDepth: 5, maxMs: 1700, rootLimit: 72,  cloud: true,  cloudMs: 550,  blunder: 0.00 },
+        8:  { maxDepth: 6, maxMs: 2600, rootLimit: 100, cloud: true,  cloudMs: 800,  blunder: 0.00 },
+        9:  { maxDepth: 7, maxMs: 3800, rootLimit: 140, cloud: true,  cloudMs: 1100, blunder: 0.00 },
+        10: { maxDepth: 8, maxMs: 5200, rootLimit: 999, cloud: true,  cloudMs: 1400, blunder: 0.00 }
     };
 
     const cfg = { level, ...table[level] };
@@ -42,11 +43,18 @@ function getBotLevelConfig(level, pieceCount, isCoUp) {
     if (pieceCount <= 12 && level >= 6) cfg.maxDepth += 1;
     if (pieceCount <= 7 && level >= 7) cfg.maxDepth += 1;
 
-    if (isCoUp && cfg.maxDepth > 3) cfg.maxDepth -= 1;
+    if (isCoUp) {
+        // Cờ úp Pikafish không hiểu quân úp, nên giữ local nhưng cho nó ổn định:
+        // không random ngu, không đào quá sâu gây lag, ưu tiên tính chắc.
+        cfg.blunder = 0;
+        cfg.maxDepth = Math.min(cfg.maxDepth, level >= 9 ? 5 : 4);
+        cfg.rootLimit = Math.min(cfg.rootLimit, level >= 8 ? 72 : 52);
+        cfg.maxMs = Math.min(cfg.maxMs, level >= 9 ? 3200 : 2200);
+        cfg.cloud = false;
+    }
 
     return cfg;
 }
-
 function botTimeUp() {
     BOT_NODE_COUNT++;
     if ((BOT_NODE_COUNT & 1023) !== 0) return false;
@@ -577,7 +585,50 @@ function chooseBestPlanMove(mt, side, isCoUp, plans) {
 
     return best;
 }
+function isClearlyBadRootMove(mt, move, side, isCoUp) {
+    const p = mt[move.from.r]?.[move.from.c];
+    if (!p || isKingPiece(p.type)) return false;
 
+    const enemy = otherSide(side);
+    const captured = mt[move.to.r]?.[move.to.c] || null;
+    const movedVal = getPieceBaseValue(p.type);
+    const capturedVal = captured ? getPieceBaseValue(captured.type) : 0;
+
+    const state = doTempMove(mt, move.from, move.to);
+
+    const givesCheck = laBiChieuWorker(enemy, mt, isCoUp);
+    const attackers = countSquareControls(mt, enemy, move.to.c, move.to.r, isCoUp);
+    const defenders = countSquareControls(mt, side, move.to.c, move.to.r, isCoUp);
+    const createsThreat = scoreThreatsCreatedByPiece(mt, side, move.to.c, move.to.r, isCoUp);
+
+    undoTempMove(mt, move.from, move.to, state);
+
+    // Không cấm nước chiếu / ăn lời rõ / tạo đòn mạnh.
+    if (givesCheck) return false;
+    if (capturedVal >= movedVal) return false;
+    if (createsThreat >= 1800) return false;
+
+    // Cấm kiểu Xe/Mã/Pháo lao ra treo không ai đỡ.
+    if ((isRookPiece(p.type) || isCannonPiece(p.type) || isHorsePiece(p.type)) &&
+        attackers > defenders &&
+        movedVal - capturedVal >= 250) {
+        return true;
+    }
+
+    return false;
+}
+
+function chooseSafeRootMove(mt, moves, side, isCoUp, currentBest) {
+    if (!currentBest || moves.length <= 1) return currentBest;
+    if (!isClearlyBadRootMove(mt, currentBest, side, isCoUp)) return currentBest;
+
+    for (const m of moves) {
+        if (m === currentBest) continue;
+        if (!isClearlyBadRootMove(mt, m, side, isCoUp)) return m;
+    }
+
+    return currentBest;
+}
 function chooseAntiHeadCannonMove(mt, side, isCoUp) {
     if (isCoUp) return null;
 
@@ -881,9 +932,10 @@ function minimax(mt, depth, alpha, beta, isMaximizing, botSide, isCoUp, isNullMo
 
     let currentSide = isMaximizing ? botSide : otherSide(botSide);
     
-    // Null move pruning.
-    let R = 2;
-    if (depth >= 3 && !isNullMove && !laBiChieuWorker(currentSide, mt, isCoUp)) {
+    // Null move pruning chỉ dùng cho cờ thường và độ sâu đủ lớn.
+// Cờ úp / thế bí dễ bị null-move làm đánh ảo, nên tắt để bot bớt ngu bất thường.
+let R = 2;
+if (!isCoUp && depth >= 4 && !isNullMove && !laBiChieuWorker(currentSide, mt, isCoUp)) {
         let nmpScore = minimax(mt, depth - 1 - R, alpha, beta, !isMaximizing, botSide, isCoUp, true);
 
         if (isMaximizing && nmpScore >= beta) return beta;
@@ -1042,15 +1094,20 @@ function calculateLocalMove(boardArray, botSide, isCoUp, forceDepth = null, botL
     BOT_SEARCH_DEADLINE = 0;
 
     if (!forceDepth && cfg.blunder > 0 && Math.random() < cfg.blunder && moves.length > 1) {
-        const poolSize = Math.min(moves.length, Math.max(2, 7 - cfg.level));
-        const pool = moves.slice(1, poolSize);
+    const poolSize = Math.min(moves.length, Math.max(2, 7 - cfg.level));
+    const pool = moves.slice(1, poolSize);
 
-        if (pool.length) {
-            bestMove = pool[Math.floor(Math.random() * pool.length)];
-        }
+    if (pool.length) {
+        bestMove = pool[Math.floor(Math.random() * pool.length)];
     }
+}
 
-    bestMove.__botLevel = cfg.level;
+// Chốt nước cuối: nếu nước top bị treo quân lớn quá lộ liễu thì né sang nước an toàn hơn.
+if (!forceDepth && cfg.level >= 5) {
+    bestMove = chooseSafeRootMove(mt, moves, botSide, isCoUp, bestMove);
+}
+
+bestMove.__botLevel = cfg.level;
     bestMove.__searchDepth = completedDepth;
     bestMove.__searchMs = cfg.maxMs;
     bestMove.__score = bestScore;
@@ -1329,7 +1386,7 @@ self.onmessage = async function(e) {
 // Cờ úp không gọi VPS vì Pikafish không biết luật quân úp.
 if (!bestMoveObject && !data.isCoUp && botCfg.cloud) {
     const fen = boardToFEN(mt, data.botSide);
-    const vpsMove = await fetchVpsMove(fen, botLevel, 6500);
+    const vpsMove = await fetchVpsMove(fen, botLevel, 9000);
 
     if (vpsMove) {
         bestMoveObject = makePlanMove(mt, data.botSide, vpsMove.from, vpsMove.to, false);
