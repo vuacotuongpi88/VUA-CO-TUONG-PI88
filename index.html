@@ -44904,6 +44904,10 @@ function openAccountLinkModal() {
     const piZone = document.getElementById("account-link-pi-zone");
     const unknownZone = document.getElementById("account-link-unknown-zone");
 
+    const runtimePi = typeof isPiBrowserRuntime === "function"
+        ? isPiBrowserRuntime()
+        : (!!window.Pi || /PiBrowser|Pi Browser/i.test(navigator.userAgent || ""));
+
     const rawWalletKey = typeof getRawWalletDbKey === "function"
         ? getRawWalletDbKey()
         : (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "");
@@ -44913,23 +44917,22 @@ function openAccountLinkModal() {
         !!localStorage.getItem("pi-user-uid") ||
         !!localStorage.getItem("piUid");
 
-    const hasGoogle = rawWalletKey.startsWith("google_");
+    const hasGoogle = String(rawWalletKey || "").startsWith("google_");
 
     googleZone.style.display = "none";
     piZone.style.display = "none";
     unknownZone.style.display = "none";
 
-    if (hasGoogle && !hasPi) {
-        googleZone.style.display = "block";
-    } else if (hasPi) {
+    if (runtimePi || hasPi) {
         piZone.style.display = "block";
+    } else if (hasGoogle) {
+        googleZone.style.display = "block";
     } else {
         unknownZone.style.display = "block";
     }
 
     modal.style.display = "flex";
 }
-
 function closeAccountLinkModal() {
     const modal = document.getElementById("account-link-modal");
     if (modal) modal.style.display = "none";
@@ -44977,13 +44980,44 @@ async function uiClaimPiLinkCode() {
         alert("Lỗi xác nhập: " + (err.message || err));
     }
 }
+function getAccountLinkRawKey() {
+    const runtimePi = typeof isPiBrowserRuntime === "function"
+        ? isPiBrowserRuntime()
+        : (!!window.Pi || /PiBrowser|Pi Browser/i.test(navigator.userAgent || ""));
+
+    const piName =
+        localStorage.getItem("pi-user-name") ||
+        localStorage.getItem("pi-username") ||
+        localStorage.getItem("piUsername") ||
+        "";
+
+    // Trong Pi Browser mà chưa kịp lấy Pi username thì vẫn cho hiện nút để bấm lấy mã
+    if (runtimePi) {
+        if (piName) {
+            return ("pi_" + piName.trim().toLowerCase()).replace(/[.#$\[\]\/]/g, "_");
+        }
+        return "";
+    }
+
+    if (typeof getRawWalletDbKey === "function") {
+        return getRawWalletDbKey();
+    }
+
+    if (typeof makeWalletDbKey === "function") {
+        return makeWalletDbKey();
+    }
+
+    return "";
+}
 function isAccountLinkedLocal() {
-    const rawWalletKey = getRawWalletDbKey();
+    const rawWalletKey = getAccountLinkRawKey();
+
+    // Chưa biết Pi username thì đừng ẩn nút, để người chơi bấm vào lấy Pi SDK
+    if (!rawWalletKey) return false;
 
     return localStorage.getItem(getScopedLinkedKey(rawWalletKey)) === "1" ||
            !!localStorage.getItem(getScopedMasterKey(rawWalletKey));
 }
-
 function markAccountLinkedDone(masterWalletKey, rawWalletKey = "") {
     const raw = rawWalletKey || getRawWalletDbKey();
     setScopedMasterWallet(masterWalletKey, raw);
@@ -45028,25 +45062,10 @@ function updateAccountLinkButton() {
 }
 function getAccountLinkWatchKey() {
     try {
-        if (typeof getRawWalletDbKey === "function") return getRawWalletDbKey();
-        if (typeof makeWalletDbKey === "function") return makeWalletDbKey();
-
-        if (auth && auth.currentUser && !auth.currentUser.isAnonymous) {
-            return ("google_" + auth.currentUser.uid).replace(/[.#$\[\]\/]/g, "_");
-        }
-
-        const piName =
-            localStorage.getItem("pi-user-name") ||
-            localStorage.getItem("pi-username") ||
-            localStorage.getItem("piUsername") ||
-            "";
-
-        if (piName) {
-            return ("pi_" + piName.toLowerCase()).replace(/[.#$\[\]\/]/g, "_");
-        }
-    } catch (e) {}
-
-    return "";
+        return getAccountLinkRawKey();
+    } catch (e) {
+        return "";
+    }
 }
 
 window.__accountLinkWatchRef = null;
@@ -45077,23 +45096,28 @@ function startAccountLinkWatcher() {
                 w.masterWalletKey
             );
 
-            if (linked) {
-localStorage.setItem(getScopedLinkedKey(key), "1");
+if (linked) {
+    localStorage.setItem(getScopedLinkedKey(key), "1");
 
-if (w.masterWalletKey) {
-    setScopedMasterWallet(w.masterWalletKey, key);
+    if (w.masterWalletKey) {
+        setScopedMasterWallet(w.masterWalletKey, key);
+    }
+
+    if (w.linkedGoogleWalletKey) {
+        setScopedMasterWallet(w.linkedGoogleWalletKey, key);
+    }
+
+    if (w.linkedPiWalletKey) {
+        localStorage.setItem("linkedPiWalletKey__" + key, w.linkedPiWalletKey);
+    }
+} else {
+    // Nếu ví này chưa liên kết thì xóa dấu liên kết cũ của đúng ví đó
+    localStorage.removeItem(getScopedLinkedKey(key));
+    localStorage.removeItem(getScopedMasterKey(key));
+    localStorage.removeItem("linkedPiWalletKey__" + key);
 }
 
-if (w.linkedGoogleWalletKey) {
-    setScopedMasterWallet(w.linkedGoogleWalletKey, key);
-}
-
-if (w.linkedPiWalletKey) {
-    localStorage.setItem("linkedPiWalletKey__" + key, w.linkedPiWalletKey);
-}
-            }
-
-            updateAccountLinkButton();
+updateAccountLinkButton();
         });
     } catch (err) {
         console.warn("startAccountLinkWatcher fail:", err);
