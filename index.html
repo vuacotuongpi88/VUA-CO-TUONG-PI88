@@ -33161,41 +33161,111 @@ window.claimPiAccountLinkCode = async function() {
         const code = prompt("Nhập mã liên kết từ tài khoản Google:");
         if (!code) return;
 
-        const piUid =
+        let piUid =
             localStorage.getItem("pi-user-uid") ||
             localStorage.getItem("pi-uid") ||
             localStorage.getItem("piUid") ||
             "";
 
-        const piUsername =
+        let piUsername =
             localStorage.getItem("pi-user-name") ||
             localStorage.getItem("pi-username") ||
             localStorage.getItem("piUsername") ||
             "";
 
-        const piWalletAddress =
+        let piWalletAddress =
             localStorage.getItem("pi-wallet-address") ||
             localStorage.getItem("piWalletAddress") ||
             "";
 
+        // Nếu localStorage chưa có Pi UID/username thì gọi Pi SDK lấy ngay tại Pi Browser
+        if ((!piUid || !piUsername) && window.Pi) {
+            let PiObj = window.Pi;
+
+            if (typeof ensurePiSdkReady === "function") {
+                PiObj = await ensurePiSdkReady();
+            }
+
+            let authRes = null;
+
+            try {
+                authRes = await PiObj.authenticate(["username", "wallet_address"]);
+            } catch (e1) {
+                // Nếu wallet_address bị Pi chặn thì lấy username thôi vẫn đủ để xác nhập
+                authRes = await PiObj.authenticate(["username"]);
+            }
+
+            const u = authRes?.user || authRes || {};
+
+            piUid = String(
+                u.uid ||
+                authRes?.uid ||
+                localStorage.getItem("pi-user-uid") ||
+                localStorage.getItem("pi-uid") ||
+                localStorage.getItem("piUid") ||
+                ""
+            ).trim();
+
+            piUsername = String(
+                u.username ||
+                authRes?.username ||
+                localStorage.getItem("pi-user-name") ||
+                localStorage.getItem("pi-username") ||
+                localStorage.getItem("piUsername") ||
+                ""
+            ).trim();
+
+            piWalletAddress = String(
+                u.wallet?.address ||
+                u.wallet_address ||
+                u.walletAddress ||
+                u.payment_address ||
+                authRes?.wallet?.address ||
+                authRes?.wallet_address ||
+                authRes?.walletAddress ||
+                piWalletAddress ||
+                ""
+            ).trim().toUpperCase();
+
+            if (piUid) {
+                localStorage.setItem("pi-user-uid", piUid);
+                localStorage.setItem("pi-uid", piUid);
+                localStorage.setItem("piUid", piUid);
+            }
+
+            if (piUsername) {
+                localStorage.setItem("pi-user-name", piUsername);
+                localStorage.setItem("pi-username", piUsername);
+                localStorage.setItem("piUsername", piUsername);
+            }
+
+            if (piWalletAddress) {
+                localStorage.setItem("pi-wallet-address", piWalletAddress);
+                localStorage.setItem("piWalletAddress", piWalletAddress);
+            }
+        }
+
         if (!piUid || !piUsername) {
-            alert("Chưa có Pi UID/username. Hãy đăng nhập Pi Browser trước rồi thử lại.");
+            alert("Chưa lấy được Pi UID/username. Hãy mở đúng bằng Pi Browser, bấm đăng nhập Pi/Allow rồi thử lại.");
             return;
         }
 
-        const rawWalletKey = getRawWalletDbKey();
+        const piWalletKey = ("pi_" + piUsername.toLowerCase()).replace(/[.#$\[\]\/]/g, "_");
 
         const data = await financePost("claim_pi_link_code", {
-            code,
+            code: String(code).trim().toUpperCase(),
             piUid,
             piUsername,
             piWalletAddress
-        }, rawWalletKey);
+        }, piWalletKey);
 
         localStorage.setItem("mc_master_wallet_key", data.masterWalletKey);
+        localStorage.setItem("pi-user-uid", piUid);
+        localStorage.setItem("pi-user-name", piUsername);
 
-        alert(data.message || "Liên kết thành công.");
+        alert(data.message || "Liên kết Pi với Google thành công.");
 
+        if (typeof resolveMasterWalletNow === "function") await resolveMasterWalletNow();
         if (typeof loadWalletBalance === "function") await loadWalletBalance();
         if (typeof updatePmcUI === "function") updatePmcUI();
 
