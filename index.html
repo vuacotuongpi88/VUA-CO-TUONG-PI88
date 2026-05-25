@@ -42941,7 +42941,7 @@ function loadPendingReferrals() {
                 if (isReady) {
                     html += `<div style="display:flex; justify-content:space-between; align-items:center; padding:8px; border-bottom:1px solid #333; background:rgba(85,239,196,0.1);">
                         <span style="color:#55efc4;">⏳ ${item.nameB} (+5 PMC)</span>
-                        <button onclick="claimPendingReferral('${item.id}', '${item.walletKeyB}')" style="padding:4px 8px; font-size:10px; background:#00b894; color:white; border:none; border-radius:5px; cursor:pointer;">NHẬN</button>
+                       <button onclick="claimPendingReferral(event, '${item.id}', '${item.walletKeyB || ""}')" style="padding:4px 8px; font-size:10px; background:#00b894; color:white; border:none; border-radius:5px; cursor:pointer;">NHẬN</button>
                     </div>`;
                 } else {
                     html += `<div style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #333; color:#ffeaa7;">
@@ -42959,64 +42959,69 @@ function loadPendingReferrals() {
     });
 }
 // Hàm 2: Duyệt hồ sơ lúc bấm NHẬN (PHIÊN BẢN SÁT THỦ DIỆT CLONE + HOÀN VỐN + TỰ ĐỘNG XÓA BẠN)
-window.claimPendingReferral = async function(pendingId, walletKeyB) {
-    const myWalletKey = makeWalletDbKey();
-    
+window.claimPendingReferral = async function(ev, pendingId, walletKeyB) {
+    const myWalletKey = typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "";
+    const btn = ev?.currentTarget || null;
+
+    if (!myWalletKey) {
+        alert("Lỗi: Chưa có ví người nhận.");
+        return;
+    }
+
+    if (!pendingId || !walletKeyB || walletKeyB === "undefined" || walletKeyB === "null") {
+        alert("Lỗi: Thiếu dữ liệu người được mời. Không nhận được quà này.");
+        return;
+    }
+
     try {
-        const btn = event.currentTarget;
         if (btn) {
             btn.disabled = true;
             btn.innerText = "ĐANG SOI...";
         }
 
-        // Lấy toàn bộ hồ sơ gốc của thằng B lên soi
         const snapB = await db.ref(`wallets/${walletKeyB}`).once("value");
         const dataB = snapB.val() || {};
-        
-        // --- 3 TIÊU CHUẨN ĐÁNH GIÁ NGƯỜI CHƠI THẬT ---
+
         const bLevel = Number(dataB.level) || 1;
         const ownedSkins = dataB.ownedAvatarSkins || {};
-        const hasBoughtSkin = Object.keys(ownedSkins).some(skinId => skinId !== 'none' && ownedSkins[skinId] === true);
+        const hasBoughtSkin = Object.keys(ownedSkins).some(skinId => skinId !== "none" && ownedSkins[skinId] === true);
+
         const boughtExp = dataB.boughtExpPackages || {};
         const hasBoughtExp = Object.keys(boughtExp).length > 0;
 
         const updates = {};
-        
-        // TÒA TUYÊN ÁN
+
         if (bLevel >= 5 || hasBoughtSkin || hasBoughtExp) {
-            // KHÁCH XỊN -> Duyệt cho A nhận 5 PMC
             updates[`wallets/${myWalletKey}/pendingReferrals/${pendingId}/status`] = "claimed";
+            updates[`wallets/${myWalletKey}/pendingReferrals/${pendingId}/claimedAt`] = firebase.database.ServerValue.TIMESTAMP;
             updates[`wallets/${myWalletKey}/pmcBalance`] = firebase.database.ServerValue.increment(5);
-            
+
             await db.ref().update(updates);
-            alert(`🎉 ĐÃ DUYỆT! Lính của mày rất chất lượng. Đã cộng 5 PMC vào két sắt!`);
-            
+
+            if (typeof loadWalletBalance === "function") await loadWalletBalance();
+            if (typeof bindReferralCount === "function") bindReferralCount();
+            if (typeof loadPendingReferrals === "function") loadPendingReferrals();
+
+            alert("🎉 ĐÃ NHẬN! Đã cộng 5 PMC vào ví.");
         } else {
-            // CLONE -> Hủy của A, TRẢ LẠI 5 PMC CHO VÍ ADMIN (pi_admin_master)
             updates[`wallets/${myWalletKey}/pendingReferrals/${pendingId}/status`] = "revoked";
-            
-            // 🔥 TUYỆT KỸ LAO ĐAO: XÓA SẠCH BẠN BÈ KHỎI DANH BẠ 2 BÊN LUÔN 🔥
+            updates[`wallets/${myWalletKey}/pendingReferrals/${pendingId}/revokedAt`] = firebase.database.ServerValue.TIMESTAMP;
             updates[`social/friends/${myWalletKey}/${walletKeyB}`] = null;
             updates[`social/friends/${walletKeyB}/${myWalletKey}`] = null;
 
-            // Chạy 1 phát lên Firebase dính cả hủy tiền lẫn xóa bạn
             await db.ref().update(updates);
-            
-            // Ép Firebase dùng lệnh tăng ServerValue.increment để 100% cộng thành +5 
-            await db.ref("wallets/pi_admin_master/pmcBalance")
-                .set(firebase.database.ServerValue.increment(5))
-                .catch(e => console.warn("Lỗi hoàn vốn Admin:", e));
-            
-            alert(`❌ TẠCH! Phát hiện nick ảo (Cấp ${bLevel}, đéo mua đồ). Đã thu hồi 5 PMC trả về quỹ Admin và TỰ ĐỘNG XÓA KẾT BẠN!`);
+
+            if (typeof loadPendingReferrals === "function") loadPendingReferrals();
+
+            alert(`❌ Nick này chưa đủ điều kiện. Cấp hiện tại: ${bLevel}. Đã hủy quà và xóa kết bạn.`);
         }
 
-        // Ép hệ thống tải lại số dư
-        if (typeof loadWalletBalance === 'function') await loadWalletBalance();
-        
     } catch (err) {
         console.error("Lỗi duyệt mã mời:", err);
-        alert("Lỗi mạng, kiểm tra lại sau!");
-        const btn = event.currentTarget;
+
+        const msg = err?.message || String(err || "Không rõ lỗi");
+        alert("Lỗi nhận quà: " + msg);
+
         if (btn) {
             btn.disabled = false;
             btn.innerText = "NHẬN";
