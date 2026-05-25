@@ -679,6 +679,144 @@ if (action === "submit_referral_code") {
     });
 }
 // ==========================================
+// NHẬN QUÀ MÃ MỜI - SERVER XỬ LÝ, KHỎI PERMISSION_DENIED
+// ==========================================
+if (action === "claim_pending_referral") {
+    const myWalletKey = safeWalletKey;
+    const pendingId = safeKey(body.pendingId || "");
+    const walletKeyBFromBody = safeKey(body.walletKeyB || "");
+    const now = Date.now();
+
+    if (!pendingId) {
+        return res.status(400).json({
+            ok: false,
+            error: "Thiếu mã quà chờ duyệt."
+        });
+    }
+
+    const pendingRef = db.ref(`wallets/${myWalletKey}/pendingReferrals/${pendingId}`);
+    const pendingSnap = await pendingRef.once("value");
+    const pending = pendingSnap.val() || null;
+
+    if (!pending) {
+        return res.status(404).json({
+            ok: false,
+            error: "Không tìm thấy quà chờ duyệt."
+        });
+    }
+
+    if (String(pending.status || "pending") !== "pending") {
+        return res.status(400).json({
+            ok: false,
+            error: "Quà này đã xử lý rồi."
+        });
+    }
+
+    const unlockAt = Number(pending.unlockAt || 0);
+    if (unlockAt && now < unlockAt) {
+        return res.status(400).json({
+            ok: false,
+            error: "Chưa tới ngày nhận quà."
+        });
+    }
+
+    const walletKeyB = safeKey(pending.walletKeyB || walletKeyBFromBody || "");
+    if (!walletKeyB) {
+        return res.status(400).json({
+            ok: false,
+            error: "Thiếu ví người được mời."
+        });
+    }
+
+    const walletBSnap = await db.ref(`wallets/${walletKeyB}`).once("value");
+    const walletB = walletBSnap.val() || {};
+
+    const bLevel = Math.max(1, Math.floor(Number(walletB.level || 1) || 1));
+
+    const ownedSkins = walletB.ownedAvatarSkins || {};
+    const hasBoughtSkin = Object.keys(ownedSkins).some(id => {
+        return id !== "none" && ownedSkins[id] === true;
+    });
+
+    const boughtExp = walletB.boughtExpPackages || {};
+    const hasBoughtExp = Object.keys(boughtExp).length > 0;
+
+    const rewardPmc = Math.max(1, Number(pending.amount || 5) || 5);
+
+    // Điều kiện nhận: người được mời đạt cấp 5 hoặc có mua đồ/gói.
+    const isQualified = bLevel >= 5 || hasBoughtSkin || hasBoughtExp;
+
+    if (!isQualified) {
+        const updates = {};
+
+        updates[`wallets/${myWalletKey}/pendingReferrals/${pendingId}/status`] = "revoked";
+        updates[`wallets/${myWalletKey}/pendingReferrals/${pendingId}/revokedAt`] = now;
+        updates[`wallets/${myWalletKey}/pendingReferrals/${pendingId}/reason`] =
+            `Người được mời chưa đủ điều kiện. Level hiện tại: ${bLevel}`;
+
+        updates[`social/friends/${myWalletKey}/${walletKeyB}`] = null;
+        updates[`social/friends/${walletKeyB}/${myWalletKey}`] = null;
+
+        await db.ref().update(updates);
+
+        return res.status(200).json({
+            ok: true,
+            claimed: false,
+            revoked: true,
+            level: bLevel,
+            message: `Nick này chưa đủ điều kiện. Cấp hiện tại: ${bLevel}. Đã hủy quà và xóa kết bạn.`
+        });
+    }
+
+    let lockedPending = null;
+
+    const tx = await pendingRef.transaction(cur => {
+        if (!cur) return cur;
+        if (String(cur.status || "pending") !== "pending") return;
+
+        lockedPending = cur;
+
+        return {
+            ...cur,
+            status: "claimed",
+            claimedAt: now
+        };
+    });
+
+    if (!tx.committed) {
+        return res.status(400).json({
+            ok: false,
+            error: "Quà này vừa được xử lý rồi."
+        });
+    }
+
+    await db.ref(`wallets/${myWalletKey}/pmcBalance`).transaction(v => {
+        return histRound(Number(v || 0) + rewardPmc);
+    });
+
+    const ledgerKey = db.ref("adminLedgerV1").push().key;
+    await db.ref(`adminLedgerV1/${ledgerKey}`).set({
+        type: "referral_claim",
+        title: `${myWalletKey} nhận quà mời bạn`,
+        detail: `${myWalletKey} nhận +${rewardPmc} PMC từ quỹ chờ duyệt. Người được mời: ${walletKeyB}`,
+        amountPmc: rewardPmc,
+        walletKey: myWalletKey,
+        targetWalletKey: walletKeyB,
+        pendingId,
+        createdAt: now,
+        status: "done",
+        searchText: `${myWalletKey} ${walletKeyB} referral claim nhan qua`.toLowerCase()
+    }).catch(() => {});
+
+    return res.status(200).json({
+        ok: true,
+        claimed: true,
+        rewardPmc,
+        newStatus: "claimed",
+        message: `Đã nhận ${rewardPmc} PMC.`
+    });
+}
+// ==========================================
 // ĐÁNH DẤU THÔNG BÁO ĐÃ ĐỌC - SERVER XỬ LÝ
 // ==========================================
 if (action === "mark_notification_read") {
