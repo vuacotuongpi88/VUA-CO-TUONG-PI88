@@ -29655,6 +29655,58 @@ function createPuzzlePiece(c, r, type) {
     board.appendChild(img);
 }
 
+
+
+// ==========================================
+// FIX: CẬP NHẬT SỐ DƯ TRONG TRẬN CỜ THẾ
+// Cờ thế không chạy qua renderPlayersFromRoom nên phải ép UI thủ công.
+// ==========================================
+function refreshPuzzleMatchBalanceBoxesNow() {
+    const piAmount = (typeof getPiBalance === "function") ? getPiBalance() : (Number(currentWalletBalance) || 0);
+    const pmcAmount = (typeof getPmcBalance === "function") ? getPmcBalance() : (Number(currentPmcBalance) || 0);
+
+    const bottomPiBox = document.getElementById("player-do-pi-balance");
+    const bottomPmcBox = document.getElementById("player-do-pmc-balance");
+    const topPiBox = document.getElementById("player-den-pi-balance");
+    const topPmcBox = document.getElementById("player-den-pmc-balance");
+
+    // Cờ thế: ô dưới là người chơi thật
+    if (bottomPiBox) bottomPiBox.innerText = Math.max(0, Number(piAmount) || 0).toFixed(2) + " π";
+    if (bottomPmcBox) bottomPmcBox.innerText = formatPMC(pmcAmount);
+
+    // Ô trên là bên thế / máy, không phải ví thật
+    if (isPuzzleMode) {
+        if (topPiBox) topPiBox.innerText = "0.00 π";
+        if (topPmcBox) topPmcBox.innerText = "0 PMC";
+    }
+}
+
+function refreshPuzzleMatchPlayerInfoNow() {
+    const me = (typeof getCurrentPlayerProfile === "function") ? getCurrentPlayerProfile() : {};
+
+    const topName = document.getElementById("player-den-name");
+    const topRank = document.getElementById("player-den-rank");
+    const topAvatar = document.getElementById("player-den-avatar");
+    const topInvite = document.getElementById("player-den-invite");
+
+    const bottomName = document.getElementById("player-do-name");
+    const bottomRank = document.getElementById("player-do-rank");
+    const bottomAvatar = document.getElementById("player-do-avatar");
+    const bottomInvite = document.getElementById("player-do-invite");
+
+    if (topName) topName.innerText = "CỜ THẾ";
+    if (topRank) topRank.innerText = "BÊN ĐEN";
+    if (topAvatar) topAvatar.src = "images/den_tuong.png";
+    if (topInvite) topInvite.innerText = currentPuzzle ? ("ẢI " + (currentPuzzle.level || "")) : "";
+
+    if (bottomName) bottomName.innerText = me.name || "Người chơi";
+    if (bottomRank) bottomRank.innerText = "BÊN ĐỎ";
+    if (bottomAvatar) bottomAvatar.src = me.photo || "images/do_tuong.png";
+    if (bottomInvite) bottomInvite.innerText = currentPuzzle ? ("PHÍ " + formatPMC(getPuzzleFee(currentPuzzle)) + " · THƯỞNG " + formatPMC(getPuzzleReward(currentPuzzle))) : "";
+
+    refreshPuzzleMatchBalanceBoxesNow();
+}
+
 async function puzzleChargeEntry(puzzle) {
     const fee = getPuzzleFee(puzzle);
 
@@ -29668,6 +29720,7 @@ async function puzzleChargeEntry(puzzle) {
         currentPmcBalance = Math.max(0, nowPmc - fee);
         localStorage.setItem(getPmcCacheKey(), String(currentPmcBalance));
         updatePmcUI(currentPmcBalance);
+        refreshPuzzleMatchBalanceBoxesNow();
         return true;
     }
 
@@ -29683,6 +29736,7 @@ async function puzzlePayReward(puzzle) {
         currentPmcBalance = Number(getPmcBalance() || 0) + reward;
         localStorage.setItem(getPmcCacheKey(), String(currentPmcBalance));
         updatePmcUI(currentPmcBalance);
+        refreshPuzzleMatchBalanceBoxesNow();
         return true;
     }
 
@@ -29728,6 +29782,7 @@ puzzleStartedAtMs = Date.now();
     hideHomeUI();
     document.getElementById("game-arena").style.display = "block";
     document.getElementById("victory-wrap").style.transform = "translate(-50%, -50%) scale(0)";
+    refreshPuzzleMatchPlayerInfoNow();
 
     board.querySelectorAll(":scope > .piece").forEach(p => p.remove());
     clearMoveHints();
