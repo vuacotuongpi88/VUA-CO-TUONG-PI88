@@ -33062,7 +33062,8 @@ let currentRoomBucket = null;
 let isJoiningStakeRoom = false;
 
 function isPiBrowserRuntime() {
-    return !!window.Pi || /PiBrowser|Pi Browser/i.test(navigator.userAgent || "");
+    const ua = String(navigator.userAgent || "");
+    return /PiBrowser|Pi Browser|PiNetwork/i.test(ua);
 }
 
 function getAccountKey() {
@@ -44906,28 +44907,39 @@ function openAccountLinkModal() {
 
     const runtimePi = typeof isPiBrowserRuntime === "function"
         ? isPiBrowserRuntime()
-        : (!!window.Pi || /PiBrowser|Pi Browser/i.test(navigator.userAgent || ""));
+        : /PiBrowser|Pi Browser|PiNetwork/i.test(navigator.userAgent || "");
+
+    const user = (typeof auth !== "undefined" && auth.currentUser) ? auth.currentUser : null;
 
     const rawWalletKey = typeof getRawWalletDbKey === "function"
         ? getRawWalletDbKey()
         : (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "");
 
-    const hasPi =
-        !!localStorage.getItem("pi-user-name") ||
-        !!localStorage.getItem("pi-user-uid") ||
-        !!localStorage.getItem("piUid");
-
-    const hasGoogle = String(rawWalletKey || "").startsWith("google_");
+    const hasGoogle =
+        !!(user && !user.isAnonymous) ||
+        String(rawWalletKey || "").startsWith("google_");
 
     googleZone.style.display = "none";
     piZone.style.display = "none";
     unknownZone.style.display = "none";
 
-    if (runtimePi || hasPi) {
-        piZone.style.display = "block";
-    } else if (hasGoogle) {
+    // Web ngoài + đăng nhập Google => TẠO MÃ
+    if (!runtimePi && hasGoogle) {
         googleZone.style.display = "block";
-    } else {
+
+        // Dọn rác Pi cũ để lần sau khỏi nhận lộn
+        localStorage.removeItem("pi-user-name");
+        localStorage.removeItem("pi-user-photo");
+        localStorage.removeItem("pi-user-uid");
+        localStorage.removeItem("pi-uid");
+        localStorage.removeItem("piUid");
+    }
+    // Pi Browser => NHẬP MÃ
+    else if (runtimePi) {
+        piZone.style.display = "block";
+    }
+    // Chưa rõ đăng nhập kiểu gì
+    else {
         unknownZone.style.display = "block";
     }
 
