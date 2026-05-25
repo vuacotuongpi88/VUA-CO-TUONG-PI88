@@ -33259,9 +33259,16 @@ window.claimPiAccountLinkCode = async function() {
             piWalletAddress
         }, piWalletKey);
 
-        localStorage.setItem("mc_master_wallet_key", data.masterWalletKey);
-        localStorage.setItem("pi-user-uid", piUid);
-        localStorage.setItem("pi-user-name", piUsername);
+localStorage.setItem("mc_master_wallet_key", data.masterWalletKey);
+localStorage.setItem("pi-user-uid", piUid);
+localStorage.setItem("pi-user-name", piUsername);
+
+// Ẩn nút liên kết ngay sau khi xác nhập thành công
+if (typeof markAccountLinkedDone === "function") {
+    markAccountLinkedDone(data.masterWalletKey);
+} else {
+    localStorage.setItem("pi-google-linked", "1");
+}
 
         alert(data.message || "Liên kết Pi với Google thành công.");
 
@@ -44688,18 +44695,36 @@ async function animateChessPieceMove(fromRow, fromCol, toRow, toCol) {
 <style>
 .account-link-btn {
     position: fixed;
-    left: 12px;
-    bottom: 92px;
+    left: 10px;
+    top: 170px;
+    bottom: auto;
     z-index: 99999;
+    display: none;
+    align-items: center;
+    gap: 4px;
     background: linear-gradient(135deg, #00ffc8, #7b2cff);
     color: #fff;
-    border: 2px solid #fff;
+    border: 2px solid rgba(255,255,255,.75);
     border-radius: 999px;
-    padding: 10px 14px;
+    padding: 7px 10px;
     font-weight: 900;
-    font-size: 12px;
-    box-shadow: 0 0 15px #00ffc8;
+    font-size: 11px;
+    box-shadow: 0 0 12px #00ffc8;
     cursor: pointer;
+    opacity: .92;
+}
+
+.account-link-btn.show {
+    display: inline-flex !important;
+}
+
+@media (max-width: 600px) {
+    .account-link-btn {
+        left: 8px;
+        top: 165px;
+        font-size: 10px;
+        padding: 6px 9px;
+    }
 }
 
 .account-link-modal {
@@ -44909,6 +44934,132 @@ async function uiClaimPiLinkCode() {
     } catch (err) {
         alert("Lỗi xác nhập: " + (err.message || err));
     }
+}
+function isAccountLinkedLocal() {
+    return (
+        localStorage.getItem("pi-google-linked") === "1" ||
+        localStorage.getItem("mc_master_wallet_key") ||
+        localStorage.getItem("linkedPiWalletKey") ||
+        localStorage.getItem("linkedGoogleWalletKey")
+    );
+}
+
+function markAccountLinkedDone(masterWalletKey) {
+    localStorage.setItem("pi-google-linked", "1");
+    if (masterWalletKey) localStorage.setItem("mc_master_wallet_key", masterWalletKey);
+    updateAccountLinkButton();
+}
+
+function isInLobbyForAccountLink() {
+    if (typeof currentRoomId !== "undefined" && currentRoomId) return false;
+    if (typeof currentRoom !== "undefined" && currentRoom) return false;
+    if (typeof currentRoomStatus !== "undefined" && currentRoomStatus === "playing") return false;
+
+    const gameArea =
+        document.getElementById("game-area") ||
+        document.getElementById("match-screen") ||
+        document.getElementById("board-area");
+
+    if (gameArea && getComputedStyle(gameArea).display !== "none") {
+        return false;
+    }
+
+    return true;
+}
+
+function updateAccountLinkButton() {
+    const btn = document.getElementById("account-link-open-btn");
+    if (!btn) return;
+
+    if (isAccountLinkedLocal()) {
+        btn.classList.remove("show");
+        btn.style.display = "none";
+        return;
+    }
+
+    if (!isInLobbyForAccountLink()) {
+        btn.classList.remove("show");
+        btn.style.display = "none";
+        return;
+    }
+
+    btn.classList.add("show");
+}
+
+function getAccountLinkWatchKey() {
+    try {
+        if (typeof getRawWalletDbKey === "function") return getRawWalletDbKey();
+        if (typeof makeWalletDbKey === "function") return makeWalletDbKey();
+
+        if (auth && auth.currentUser && !auth.currentUser.isAnonymous) {
+            return ("google_" + auth.currentUser.uid).replace(/[.#$\[\]\/]/g, "_");
+        }
+
+        const piName =
+            localStorage.getItem("pi-user-name") ||
+            localStorage.getItem("pi-username") ||
+            localStorage.getItem("piUsername") ||
+            "";
+
+        if (piName) {
+            return ("pi_" + piName.toLowerCase()).replace(/[.#$\[\]\/]/g, "_");
+        }
+    } catch (e) {}
+
+    return "";
+}
+
+window.__accountLinkWatchRef = null;
+
+function startAccountLinkWatcher() {
+    try {
+        const key = getAccountLinkWatchKey();
+        if (!key || typeof db === "undefined") {
+            updateAccountLinkButton();
+            return;
+        }
+
+        if (window.__accountLinkWatchRef) {
+            window.__accountLinkWatchRef.off();
+            window.__accountLinkWatchRef = null;
+        }
+
+        const ref = db.ref("wallets/" + key);
+        window.__accountLinkWatchRef = ref;
+
+        ref.on("value", function(snap) {
+            const w = snap.val() || {};
+
+            const linked = !!(
+                w.piVerified ||
+                w.linkedPiWalletKey ||
+                w.linkedGoogleWalletKey ||
+                w.masterWalletKey
+            );
+
+            if (linked) {
+                localStorage.setItem("pi-google-linked", "1");
+
+                if (w.masterWalletKey) localStorage.setItem("mc_master_wallet_key", w.masterWalletKey);
+                if (w.linkedPiWalletKey) localStorage.setItem("linkedPiWalletKey", w.linkedPiWalletKey);
+                if (w.linkedGoogleWalletKey) localStorage.setItem("linkedGoogleWalletKey", w.linkedGoogleWalletKey);
+            }
+
+            updateAccountLinkButton();
+        });
+    } catch (err) {
+        console.warn("startAccountLinkWatcher fail:", err);
+        updateAccountLinkButton();
+    }
+}
+
+setTimeout(startAccountLinkWatcher, 1200);
+setInterval(updateAccountLinkButton, 2500);
+
+if (typeof auth !== "undefined" && auth.onAuthStateChanged) {
+    auth.onAuthStateChanged(function() {
+        setTimeout(startAccountLinkWatcher, 800);
+    });
 }
 </script>
 </body>
