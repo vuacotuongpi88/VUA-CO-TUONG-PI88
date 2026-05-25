@@ -44909,8 +44909,6 @@ function openAccountLinkModal() {
 
     // Không tự đoán Google/Pi nữa.
     // Mở lên là hiện cả 2 khu, người chơi tự chọn đúng thao tác.
-    if (googleZone) googleZone.style.display = "block";
-    if (piZone) piZone.style.display = "block";
     if (unknownZone) unknownZone.style.display = "none";
 
     modal.style.display = "flex";
@@ -45115,6 +45113,101 @@ if (typeof auth !== "undefined" && auth.onAuthStateChanged) {
     auth.onAuthStateChanged(function() {
         setTimeout(startAccountLinkWatcher, 800);
     });
+}
+// ===== FIX CỨNG GOOGLE ↔ PI LINK MODE =====
+function lockAccountLinkMode(mode) {
+    if (mode === "google" || mode === "pi") {
+        localStorage.setItem("mc_login_mode", mode);
+    }
+}
+
+(function bindAccountLinkModeButtons() {
+    try {
+        const googleBtn = document.getElementById("welcome-google-btn");
+        const piBtn = document.getElementById("welcome-pi-btn");
+
+        if (googleBtn && !googleBtn.dataset.linkModeBound) {
+            googleBtn.dataset.linkModeBound = "1";
+            googleBtn.addEventListener("click", function () {
+                lockAccountLinkMode("google");
+            }, true);
+        }
+
+        if (piBtn && !piBtn.dataset.linkModeBound) {
+            piBtn.dataset.linkModeBound = "1";
+            piBtn.addEventListener("click", function () {
+                lockAccountLinkMode("pi");
+            }, true);
+        }
+    } catch (e) {}
+})();
+
+function getAccountLinkModeStable() {
+    const savedMode = localStorage.getItem("mc_login_mode");
+
+    const user = (typeof auth !== "undefined" && auth.currentUser) ? auth.currentUser : null;
+
+    const rawWalletKey = typeof getRawWalletDbKey === "function"
+        ? getRawWalletDbKey()
+        : (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "");
+
+    const hasGoogle =
+        !!(user && !user.isAnonymous) ||
+        String(rawWalletKey || "").startsWith("google_");
+
+    const hasPi =
+        !!localStorage.getItem("pi-user-name") ||
+        !!localStorage.getItem("pi-username") ||
+        !!localStorage.getItem("piUsername") ||
+        !!localStorage.getItem("pi-user-uid") ||
+        !!localStorage.getItem("pi-uid") ||
+        !!localStorage.getItem("piUid");
+
+    const runtimePi =
+        !!window.Pi ||
+        /PiBrowser|Pi Browser|PiNetwork|MinePi/i.test(navigator.userAgent || "");
+
+    // Ưu tiên chế độ đã khóa bằng nút đăng nhập
+    if (savedMode === "google" && hasGoogle) return "google";
+    if (savedMode === "pi" && (hasPi || runtimePi)) return "pi";
+
+    // Fallback: Google thật thì tạo mã
+    if (hasGoogle && String(rawWalletKey || "").startsWith("google_")) {
+        return "google";
+    }
+
+    // Fallback: Pi Browser hoặc có Pi info thì nhập mã
+    if (runtimePi || hasPi) {
+        return "pi";
+    }
+
+    return "unknown";
+}
+
+// ĐÈ HÀM CŨ: mở modal chỉ 1 chế độ, không hiện cả 2 nữa
+function openAccountLinkModal() {
+    const modal = document.getElementById("account-link-modal");
+    const googleZone = document.getElementById("account-link-google-zone");
+    const piZone = document.getElementById("account-link-pi-zone");
+    const unknownZone = document.getElementById("account-link-unknown-zone");
+
+    if (!modal || !googleZone || !piZone || !unknownZone) return;
+
+    const mode = getAccountLinkModeStable();
+
+    googleZone.style.display = "none";
+    piZone.style.display = "none";
+    unknownZone.style.display = "none";
+
+    if (mode === "google") {
+        googleZone.style.display = "block";
+    } else if (mode === "pi") {
+        piZone.style.display = "block";
+    } else {
+        unknownZone.style.display = "block";
+    }
+
+    modal.style.display = "flex";
 }
 </script>
 </body>
