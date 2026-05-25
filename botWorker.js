@@ -510,7 +510,7 @@ function scoreStrategicMove(mt, move, side, isCoUp, depth) {
         score = -999999;
     } else {
         const givesCheck = laBiChieuWorker(enemy, mt, isCoUp);
-        if (givesCheck) score += 12000 + depth * 100;
+        if (givesCheck) score += 1800 + depth * 100;
 
         const defenders = countSquareControls(mt, side, move.to.c, move.to.r, isCoUp);
         const attackers = countSquareControls(mt, enemy, move.to.c, move.to.r, isCoUp);
@@ -603,8 +603,11 @@ function isClearlyBadRootMove(mt, move, side, isCoUp) {
 
     undoTempMove(mt, move.from, move.to, state);
 
-    // Không cấm nước chiếu / ăn lời rõ / tạo đòn mạnh.
-    if (givesCheck) return false;
+    // Nếu là Xe/Mã/Pháo tự lao ra ăn quân nhỏ rồi bị bắt lại thì vẫn cấm, kể cả có chiếu.
+if (isBigPieceSelfSacrifice(mt, move, side, isCoUp)) return true;
+
+// Không cấm nước chiếu nhỏ, ăn lời rõ, hoặc tạo đòn mạnh.
+if (givesCheck) return false;
     if (capturedVal >= movedVal) return false;
     if (createsThreat >= 1800) return false;
 
@@ -628,6 +631,68 @@ function chooseSafeRootMove(mt, moves, side, isCoUp, currentBest) {
     }
 
     return currentBest;
+}
+function isBigPieceSelfSacrifice(mt, move, side, isCoUp) {
+    if (!move) return false;
+
+    const p = mt[move.from.r]?.[move.from.c];
+    if (!p || isKingPiece(p.type)) return false;
+
+    const captured = mt[move.to.r]?.[move.to.c] || null;
+    const movedVal = getPieceBaseValue(p.type);
+    const capturedVal = captured ? getPieceBaseValue(captured.type) : 0;
+
+    // Chỉ siết Xe / Pháo / Mã. Tốt, Sĩ, Tượng không cần siết nặng.
+    if (!(isRookPiece(p.type) || isCannonPiece(p.type) || isHorsePiece(p.type))) return false;
+
+    // Ăn ngang giá hoặc lời thì cho qua.
+    if (capturedVal >= movedVal) return false;
+
+    const lossGap = movedVal - capturedVal;
+
+    // Xe ăn Sĩ/Tượng/Tốt rồi bị bắt lại là lỗ rất nặng.
+    if (lossGap < 350) return false;
+
+    const enemy = otherSide(side);
+    const state = doTempMove(mt, move.from, move.to);
+
+    const givesCheck = laBiChieuWorker(enemy, mt, isCoUp);
+    const enemyMoves = generateAllMoves(mt, enemy, isCoUp, 1, false);
+
+    // Nếu là chiếu bí thật sự thì cho hy sinh.
+    if (givesCheck && enemyMoves.length === 0) {
+        undoTempMove(mt, move.from, move.to, state);
+        return false;
+    }
+
+    const canBeCapturedNext = enemyMoves.some(m =>
+        m.to.c === move.to.c &&
+        m.to.r === move.to.r &&
+        mt[m.from.r]?.[m.from.c]?.side === enemy
+    );
+
+    const attackers = countSquareControls(mt, enemy, move.to.c, move.to.r, isCoUp);
+    const defenders = countSquareControls(mt, side, move.to.c, move.to.r, isCoUp);
+    const threat = scoreThreatsCreatedByPiece(mt, side, move.to.c, move.to.r, isCoUp);
+
+    undoTempMove(mt, move.from, move.to, state);
+
+    // Nếu tạo đòn cực mạnh thì cho qua, còn không thì cấm tự hiến quân lớn.
+    if (threat >= 4200) return false;
+
+    if (canBeCapturedNext) return true;
+    if (attackers > defenders && defenders === 0) return true;
+    if (attackers > defenders && lossGap >= 700) return true;
+
+    return false;
+}
+
+function guardBotMove(mt, move, side, isCoUp) {
+    if (!move) return null;
+    if (isBigPieceSelfSacrifice(mt, move, side, isCoUp)) {
+        return null;
+    }
+    return move;
 }
 function chooseAntiHeadCannonMove(mt, side, isCoUp) {
     if (isCoUp) return null;
@@ -698,7 +763,7 @@ function evaluateBoard(mt, botSide) {
     score -= evaluateKingSafety(mt, oppSide, isCoUp);
 
     if (laBiChieuWorker(botSide, mt, isCoUp)) score -= 22000;
-    if (laBiChieuWorker(oppSide, mt, isCoUp)) score += 12000;
+    if (laBiChieuWorker(oppSide, mt, isCoUp)) score += 1600;
 
     for (let r = 0; r < 10; r++) {
         for (let c = 0; c < 9; c++) {
@@ -1389,8 +1454,9 @@ if (!bestMoveObject && !data.isCoUp && botCfg.cloud) {
     const vpsMove = await fetchVpsMove(fen, botLevel, 9000);
 
     if (vpsMove) {
-        bestMoveObject = makePlanMove(mt, data.botSide, vpsMove.from, vpsMove.to, false);
-    }
+    const m = makePlanMove(mt, data.botSide, vpsMove.from, vpsMove.to, false);
+    bestMoveObject = guardBotMove(mt, m, data.botSide, false);
+}
 }
         // Nếu đối thủ vào Pháo đầu, ưu tiên Mã/Tượng/Sĩ đỡ trước.
         if (!bestMoveObject && botMoveCount < 8) {
@@ -1431,8 +1497,9 @@ if (!bestMoveObject && !data.isCoUp && botCfg.cloud) {
             const cloudMove = await fetchCloudMove(fen, botCfg.cloudMs);
 
             if (cloudMove) {
-                bestMoveObject = makePlanMove(mt, data.botSide, cloudMove.from, cloudMove.to, false);
-            }
+    const m = makePlanMove(mt, data.botSide, cloudMove.from, cloudMove.to, false);
+    bestMoveObject = guardBotMove(mt, m, data.botSide, false);
+}
         }
 
         if (!bestMoveObject) {
