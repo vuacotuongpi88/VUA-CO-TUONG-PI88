@@ -33117,12 +33117,42 @@ async function financePost(action, body = {}, walletKeyOverride = "") {
 
 window.createPiAccountLinkCode = async function() {
     try {
-        const rawWalletKey = getRawWalletDbKey();
+        const user = auth.currentUser;
 
-        if (!rawWalletKey.startsWith("google_")) {
-            alert("Muốn tạo mã liên kết thì phải đăng nhập bằng Google ở web ngoài trước.");
+        if (!user || user.isAnonymous) {
+            alert("Muốn tạo mã liên kết thì phải đăng nhập Google ở web ngoài trước.");
             return;
         }
+
+        const rawWalletKey = ("google_" + user.uid).replace(/[.#$\[\]\/]/g, "_");
+
+        // Ép lưu lại thông tin Google để game nhận đúng ví chính
+        localStorage.removeItem("pi-user-name");
+        localStorage.removeItem("pi-user-photo");
+        localStorage.removeItem("pi-user-uid");
+        localStorage.removeItem("pi-uid");
+        localStorage.removeItem("piUid");
+
+        localStorage.setItem("user-name-display", user.displayName || "Người chơi");
+        localStorage.setItem("user-photo", user.photoURL || "images/do_tuong.png");
+
+        // Tự tạo ví Google nếu Firebase chưa có
+        const walletRef = db.ref("wallets/" + rawWalletKey);
+        const snap = await walletRef.once("value");
+        const old = snap.val() || {};
+
+        await walletRef.update({
+            name: old.name || user.displayName || "Người chơi",
+            username: old.username || user.displayName || "Người chơi",
+            usernameNorm: String(old.usernameNorm || user.displayName || "nguoi choi").toLowerCase(),
+            photo: old.photo || user.photoURL || "images/do_tuong.png",
+            uid: user.uid,
+            walletKey: rawWalletKey,
+            loginType: "google",
+            updatedAt: firebase.database.ServerValue.TIMESTAMP,
+            piBalance: Number(old.piBalance || 0),
+            pmcBalance: Number(old.pmcBalance || 0)
+        });
 
         const data = await financePost("create_pi_link_code", {}, rawWalletKey);
 
