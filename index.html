@@ -45071,11 +45071,12 @@ function startAccountLinkWatcher() {
 
             const keyText = String(key || "");
 
-const linked = keyText.startsWith("google_")
-    ? !!(w.linkedPiWalletKey || w.masterWalletKey)
-    : keyText.startsWith("pi_")
-        ? !!(w.linkedGoogleWalletKey || w.masterWalletKey)
-        : !!(w.linkedPiWalletKey || w.linkedGoogleWalletKey || w.masterWalletKey);
+const linked = !!(
+    w.piVerified ||
+    w.linkedPiWalletKey ||
+    w.linkedGoogleWalletKey ||
+    w.masterWalletKey
+);
 
 if (linked) {
     localStorage.setItem(getScopedLinkedKey(key), "1");
@@ -45209,6 +45210,203 @@ function openAccountLinkModal() {
 
     modal.style.display = "flex";
 }
+// ===== CHỐT KHÓA LIÊN KẾT GOOGLE ↔ PI SAU KHI NHẬP MÃ =====
+function getPiLinkStoredUid() {
+    return (
+        localStorage.getItem("pi-user-uid") ||
+        localStorage.getItem("pi-uid") ||
+        localStorage.getItem("piUid") ||
+        ""
+    );
+}
+
+function hideAccountLinkDone(masterWalletKey = "", rawWalletKey = "") {
+    try {
+        const raw = String(rawWalletKey || getAccountLinkRawKey() || getRawWalletDbKey() || "").replace(/[.#$\[\]\/]/g, "_");
+        const master = String(masterWalletKey || raw || "").replace(/[.#$\[\]\/]/g, "_");
+
+        if (raw) {
+            localStorage.setItem(getScopedLinkedKey(raw), "1");
+            localStorage.setItem("pi-google-linked__" + raw, "1");
+        }
+
+        if (master && raw && typeof setScopedMasterWallet === "function") {
+            setScopedMasterWallet(master, raw);
+        }
+
+        localStorage.setItem("pi-google-linked", "1");
+
+        const modal = document.getElementById("account-link-modal");
+        if (modal) modal.style.display = "none";
+
+        if (typeof updateAccountLinkButton === "function") {
+            updateAccountLinkButton();
+        }
+    } catch (e) {
+        console.warn("hideAccountLinkDone lỗi:", e);
+    }
+}
+
+function isWalletLinkedObj(w) {
+    return !!(
+        w &&
+        (
+            w.piVerified ||
+            w.linkedPiWalletKey ||
+            w.linkedGoogleWalletKey ||
+            w.masterWalletKey
+        )
+    );
+}
+
+async function checkAccountLinkStatusNow(showSuccessAlert = false, forcedRawKey = "") {
+    const rawKey = String(forcedRawKey || getAccountLinkRawKey() || "").replace(/[.#$\[\]\/]/g, "_");
+    if (!rawKey) return false;
+
+    let linked = false;
+    let masterWalletKey = "";
+
+    // Cách 1: đọc Firebase ví hiện tại
+    try {
+        if (typeof db !== "undefined" && db) {
+            const snap = await db.ref("wallets/" + rawKey).once("value");
+            const w = snap.val() || {};
+
+            if (isWalletLinkedObj(w)) {
+                linked = true;
+                masterWalletKey =
+                    w.masterWalletKey ||
+                    w.linkedGoogleWalletKey ||
+                    rawKey;
+            }
+        }
+    } catch (e) {
+        console.warn("check link firebase lỗi:", e);
+    }
+
+    // Cách 2: hỏi API dự phòng, tránh trường hợp Firebase client bị rules/cache
+    if (!linked && typeof financePost === "function") {
+        try {
+            const data = await financePost("resolve_master_wallet", {
+                piUid: getPiLinkStoredUid()
+            }, rawKey);
+
+            if (
+                data &&
+                (
+                    data.linked ||
+                    data.piVerified ||
+                    data.linkedPiWalletKey ||
+                    data.linkedGoogleWalletKey ||
+                    (data.masterWalletKey && data.masterWalletKey !== rawKey)
+                )
+            ) {
+                linked = true;
+                masterWalletKey =
+                    data.masterWalletKey ||
+                    data.linkedGoogleWalletKey ||
+                    rawKey;
+            }
+        } catch (e) {}
+    }
+
+    if (!linked && typeof financePost === "function") {
+        try {
+            const data = await financePost("pi_link_status", {}, rawKey);
+
+            if (
+                data &&
+                (
+                    data.linked ||
+                    data.piVerified ||
+                    data.linkedPiWalletKey ||
+                    data.linkedGoogleWalletKey ||
+                    data.masterWalletKey
+                )
+            ) {
+                linked = true;
+                masterWalletKey =
+                    data.masterWalletKey ||
+                    data.linkedGoogleWalletKey ||
+                    rawKey;
+            }
+        } catch (e) {}
+    }
+
+    if (linked) {
+        hideAccountLinkDone(masterWalletKey || rawKey, rawKey);
+
+        if (showSuccessAlert && !window.__accountLinkDoneAlerted) {
+            window.__accountLinkDoneAlerted = true;
+            alert("Tài khoản Pi đã nhập mã thành công. Liên kết xong, nút liên kết đã được ẩn.");
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
+function startAccountLinkSuccessPolling(rawWalletKey = "") {
+    try {
+        if (window.__accountLinkPollTimer) {
+            clearInterval(window.__accountLinkPollTimer);
+            window.__accountLinkPollTimer = null;
+        }
+
+        let count = 0;
+        window.__accountLinkPollTimer = setInterval(async function() {
+            count++;
+
+            const ok = await checkAccountLinkStatusNow(true, rawWalletKey);
+
+            if (ok || count >= 180) {
+                clearInterval(window.__accountLinkPollTimer);
+                window.__accountLinkPollTimer = null;
+            }
+        }, 2000);
+    } catch (e) {}
+}
+
+// Chặn Google tạo mã mới nếu ví đã liên kết rồi
+if (typeof window.createPiAccountLinkCode === "function" && !window.__createPiLinkWrapped) {
+    window.__createPiLinkWrapped = true;
+
+    const oldCreatePiAccountLinkCode = window.createPiAccountLinkCode;
+
+    window.createPiAccountLinkCode = async function() {
+        const user = (typeof auth !== "undefined" && auth.currentUser) ? auth.currentUser : null;
+        const rawGoogleKey = user && !user.isAnonymous
+            ? ("google_" + user.uid).replace(/[.#$\[\]\/]/g, "_")
+            : "";
+
+        if (rawGoogleKey) {
+            const alreadyLinked = await checkAccountLinkStatusNow(false, rawGoogleKey);
+            if (alreadyLinked) {
+                alert("Ví Google này đã liên kết Pi rồi, không thể tạo mã mới.");
+                return "";
+            }
+        }
+
+        const code = await oldCreatePiAccountLinkCode.apply(this, arguments);
+
+        if (code && rawGoogleKey) {
+            startAccountLinkSuccessPolling(rawGoogleKey);
+        }
+
+        return code;
+    };
+}
+
+// Mỗi vài giây tự kiểm tra, để bên Google tự ẩn sau khi Pi nhập mã
+setInterval(function() {
+    try {
+        const btn = document.getElementById("account-link-open-btn");
+        if (btn && getComputedStyle(btn).display !== "none") {
+            checkAccountLinkStatusNow(false);
+        }
+    } catch (e) {}
+}, 5000);
 </script>
 </body>
 </html>
