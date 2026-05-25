@@ -45408,5 +45408,121 @@ setInterval(function() {
     } catch (e) {}
 }, 5000);
 </script>
+<script>
+// ===== CHẶN NÚT LIÊN KẾT PI CHỈ HIỆN TRONG SẢNH CHỜ =====
+function isVisibleBox(el) {
+    if (!el) return false;
+    const st = getComputedStyle(el);
+    return st.display !== "none" && st.visibility !== "hidden" && Number(st.opacity || 1) > 0;
+}
+
+function isAccountLinkAllowedScreen() {
+    // Chưa đăng nhập thì tuyệt đối không hiện
+    const user = (typeof auth !== "undefined" && auth && auth.currentUser) ? auth.currentUser : null;
+    if (!user) return false;
+
+    // Nếu đang hiện trang đăng nhập thì không hiện
+    const loginEls = [
+        document.getElementById("login-screen"),
+        document.getElementById("loginScreen"),
+        document.getElementById("auth-screen"),
+        document.getElementById("authScreen"),
+        document.getElementById("landing-screen"),
+        document.getElementById("welcome-screen")
+    ];
+
+    for (const el of loginEls) {
+        if (isVisibleBox(el)) return false;
+    }
+
+    // Nếu đang trong bàn cờ thì không hiện
+    const gameEls = [
+        document.getElementById("game-area"),
+        document.getElementById("gameArea"),
+        document.getElementById("board-wrap"),
+        document.getElementById("boardWrap"),
+        document.getElementById("chess-board"),
+        document.getElementById("game-screen")
+    ];
+
+    for (const el of gameEls) {
+        if (isVisibleBox(el)) return false;
+    }
+
+    // Chỉ hiện khi đã vào sảnh
+    const lobbyEls = [
+        document.getElementById("lobby"),
+        document.getElementById("lobby-screen"),
+        document.getElementById("lobbyScreen"),
+        document.getElementById("main-lobby"),
+        document.getElementById("home-screen")
+    ];
+
+    // Nếu tìm thấy sảnh và sảnh đang hiện thì cho hiện
+    for (const el of lobbyEls) {
+        if (isVisibleBox(el)) return true;
+    }
+
+    // Dự phòng: nếu đã đăng nhập, có nút Cờ Tướng / Cờ Úp / Cờ Thế thì coi như đang ở sảnh
+    const txt = document.body.innerText || "";
+    if (
+        txt.includes("SẢNH CHỜ") ||
+        txt.includes("CỜ TƯỚNG") ||
+        txt.includes("CỜ ÚP") ||
+        txt.includes("CỜ THẾ")
+    ) {
+        return true;
+    }
+
+    return false;
+}
+
+function forceAccountLinkButtonLobbyOnly() {
+    const btn = document.getElementById("account-link-open-btn");
+    if (!btn) return;
+
+    const allowed = isAccountLinkAllowedScreen();
+
+    if (!allowed) {
+        btn.style.display = "none";
+        return;
+    }
+
+    // Nếu đã liên kết rồi thì vẫn ẩn
+    const rawKey = typeof getAccountLinkRawKey === "function" ? getAccountLinkRawKey() : "";
+    const linkedKey = rawKey && typeof getScopedLinkedKey === "function"
+        ? localStorage.getItem(getScopedLinkedKey(rawKey))
+        : "";
+
+    const globalLinked = localStorage.getItem("pi-google-linked");
+
+    if (linkedKey === "1" || globalLinked === "1") {
+        btn.style.display = "none";
+        return;
+    }
+
+    btn.style.display = "block";
+}
+
+// Bọc lại updateAccountLinkButton cũ để nó không tự bật lung tung
+if (typeof window.updateAccountLinkButton === "function" && !window.__accountLinkLobbyOnlyWrapped) {
+    window.__accountLinkLobbyOnlyWrapped = true;
+    const oldUpdateAccountLinkButton = window.updateAccountLinkButton;
+
+    window.updateAccountLinkButton = function() {
+        try {
+            oldUpdateAccountLinkButton.apply(this, arguments);
+        } catch (e) {}
+
+        setTimeout(forceAccountLinkButtonLobbyOnly, 50);
+    };
+}
+
+// Chạy nhiều nhịp để chặn lúc trang vừa load / đổi màn hình
+setInterval(forceAccountLinkButtonLobbyOnly, 500);
+setTimeout(forceAccountLinkButtonLobbyOnly, 300);
+setTimeout(forceAccountLinkButtonLobbyOnly, 1000);
+setTimeout(forceAccountLinkButtonLobbyOnly, 2500);
+</script>
 </body>
 </html>
