@@ -45089,12 +45089,13 @@ function startAccountLinkWatcher() {
         ref.on("value", function(snap) {
             const w = snap.val() || {};
 
-            const linked = !!(
-                w.piVerified ||
-                w.linkedPiWalletKey ||
-                w.linkedGoogleWalletKey ||
-                w.masterWalletKey
-            );
+            const keyText = String(key || "");
+
+const linked = keyText.startsWith("google_")
+    ? !!(w.linkedPiWalletKey || w.masterWalletKey)
+    : keyText.startsWith("pi_")
+        ? !!(w.linkedGoogleWalletKey || w.masterWalletKey)
+        : !!(w.linkedPiWalletKey || w.linkedGoogleWalletKey || w.masterWalletKey);
 
 if (linked) {
     localStorage.setItem(getScopedLinkedKey(key), "1");
