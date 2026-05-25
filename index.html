@@ -33061,11 +33061,27 @@ let currentRoomStakePMC = 0;
 let currentRoomBucket = null;
 let isJoiningStakeRoom = false;
 
+function isPiBrowserRuntime() {
+    return !!window.Pi || /PiBrowser|Pi Browser/i.test(navigator.userAgent || "");
+}
+
 function getAccountKey() {
-    const piName = localStorage.getItem("pi-user-name");
+    const user = auth.currentUser;
+
+    // Ở web Google thì luôn ưu tiên Google, đừng để pi-user-name cũ đè lên
+    if (user && user.isAnonymous === false && !isPiBrowserRuntime()) {
+        return `google_${user.uid}`;
+    }
+
+    // Ở Pi Browser thì mới ưu tiên Pi
+    const piName =
+        localStorage.getItem("pi-user-name") ||
+        localStorage.getItem("pi-username") ||
+        localStorage.getItem("piUsername") ||
+        "";
+
     if (piName) return `pi_${piName.trim().toLowerCase()}`;
 
-    const user = auth.currentUser;
     if (user && user.isAnonymous === false) {
         return `google_${user.uid}`;
     }
@@ -33077,16 +33093,38 @@ function getAccountKey() {
 
     return `guest_${guestName.trim().toLowerCase().replace(/\s+/g, "_")}`;
 }
-
 function getRawWalletDbKey() {
     return getAccountKey().replace(/[.#$\[\]\/]/g, "_");
 }
 
+function getScopedMasterKey(rawWalletKey = "") {
+    const raw = String(rawWalletKey || getRawWalletDbKey()).replace(/[.#$\[\]\/]/g, "_");
+    return "mc_master_wallet_key__" + raw;
+}
+
+function getScopedLinkedKey(rawWalletKey = "") {
+    const raw = String(rawWalletKey || getRawWalletDbKey()).replace(/[.#$\[\]\/]/g, "_");
+    return "pi-google-linked__" + raw;
+}
+
+function setScopedMasterWallet(masterWalletKey, rawWalletKey = "") {
+    const raw = String(rawWalletKey || getRawWalletDbKey()).replace(/[.#$\[\]\/]/g, "_");
+    if (!masterWalletKey || !raw) return;
+
+    localStorage.setItem(getScopedMasterKey(raw), masterWalletKey);
+    localStorage.setItem(getScopedLinkedKey(raw), "1");
+
+    // Chỉ giữ key cũ cho tương thích, nhưng nút liên kết không được dựa vào key cũ nữa
+    localStorage.setItem("mc_master_wallet_key", masterWalletKey);
+}
+
 function makeWalletDbKey() {
-    const master = localStorage.getItem("mc_master_wallet_key") || "";
+    const rawWalletKey = getRawWalletDbKey();
+    const master = localStorage.getItem(getScopedMasterKey(rawWalletKey)) || "";
+
     if (master) return master.replace(/[.#$\[\]\/]/g, "_");
 
-    return getRawWalletDbKey();
+    return rawWalletKey;
 }
 async function financePost(action, body = {}, walletKeyOverride = "") {
     const walletKey =
@@ -33259,9 +33297,13 @@ window.claimPiAccountLinkCode = async function() {
             piWalletAddress
         }, piWalletKey);
 
-localStorage.setItem("mc_master_wallet_key", data.masterWalletKey);
+const currentPiWalletKey = ("pi_" + piUsername.toLowerCase()).replace(/[.#$\[\]\/]/g, "_");
+
+setScopedMasterWallet(data.masterWalletKey, currentPiWalletKey);
+
 localStorage.setItem("pi-user-uid", piUid);
 localStorage.setItem("pi-user-name", piUsername);
+localStorage.setItem("pi-google-linked", "1");
 
 // Ẩn nút liên kết ngay sau khi xác nhập thành công
 if (typeof markAccountLinkedDone === "function") {
@@ -44936,17 +44978,15 @@ async function uiClaimPiLinkCode() {
     }
 }
 function isAccountLinkedLocal() {
-    return (
-        localStorage.getItem("pi-google-linked") === "1" ||
-        localStorage.getItem("mc_master_wallet_key") ||
-        localStorage.getItem("linkedPiWalletKey") ||
-        localStorage.getItem("linkedGoogleWalletKey")
-    );
+    const rawWalletKey = getRawWalletDbKey();
+
+    return localStorage.getItem(getScopedLinkedKey(rawWalletKey)) === "1" ||
+           !!localStorage.getItem(getScopedMasterKey(rawWalletKey));
 }
 
-function markAccountLinkedDone(masterWalletKey) {
-    localStorage.setItem("pi-google-linked", "1");
-    if (masterWalletKey) localStorage.setItem("mc_master_wallet_key", masterWalletKey);
+function markAccountLinkedDone(masterWalletKey, rawWalletKey = "") {
+    const raw = rawWalletKey || getRawWalletDbKey();
+    setScopedMasterWallet(masterWalletKey, raw);
     updateAccountLinkButton();
 }
 
@@ -44983,9 +45023,9 @@ function updateAccountLinkButton() {
         return;
     }
 
+    btn.style.display = "inline-flex";
     btn.classList.add("show");
 }
-
 function getAccountLinkWatchKey() {
     try {
         if (typeof getRawWalletDbKey === "function") return getRawWalletDbKey();
@@ -45038,11 +45078,19 @@ function startAccountLinkWatcher() {
             );
 
             if (linked) {
-                localStorage.setItem("pi-google-linked", "1");
+localStorage.setItem(getScopedLinkedKey(key), "1");
 
-                if (w.masterWalletKey) localStorage.setItem("mc_master_wallet_key", w.masterWalletKey);
-                if (w.linkedPiWalletKey) localStorage.setItem("linkedPiWalletKey", w.linkedPiWalletKey);
-                if (w.linkedGoogleWalletKey) localStorage.setItem("linkedGoogleWalletKey", w.linkedGoogleWalletKey);
+if (w.masterWalletKey) {
+    setScopedMasterWallet(w.masterWalletKey, key);
+}
+
+if (w.linkedGoogleWalletKey) {
+    setScopedMasterWallet(w.linkedGoogleWalletKey, key);
+}
+
+if (w.linkedPiWalletKey) {
+    localStorage.setItem("linkedPiWalletKey__" + key, w.linkedPiWalletKey);
+}
             }
 
             updateAccountLinkButton();
