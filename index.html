@@ -8142,7 +8142,31 @@ function listenForNotifications() {
 
         localStorage.setItem(seenStorageKey, JSON.stringify(Object.fromEntries(entries)));
     }
+function isPiMoneyRequestNotification(notify = {}) {
+    const raw = [
+        notify.type,
+        notify.kind,
+        notify.category,
+        notify.requestType,
+        notify.title,
+        notify.text,
+        notify.message
+    ].join(" ").toLowerCase();
 
+    const rawNoMark = raw
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+
+    return (
+        raw.includes("pi_browser") ||
+        raw.includes("pi money") ||
+        raw.includes("money_request") ||
+        rawNoMark.includes("tai khoan google vua bam nap") ||
+        rawNoMark.includes("tai khoan google vua bam rut") ||
+        rawNoMark.includes("mo pi browser de nap") ||
+        rawNoMark.includes("mo pi browser de xac nhan rut")
+    );
+}
     async function markNotiRead(notificationId) {
         if (!notificationId) return;
 
@@ -8207,6 +8231,12 @@ function listenForNotifications() {
 
             if (!notiId) return;
             if (notify.status !== "unread") return;
+                // Chặn popup rác "CHÚC MỪNG" khi Google bấm Nạp/Rút.
+    // Luồng nạp/rút đã có popup riêng + Pi Browser tự poll rồi.
+    if (isPiMoneyRequestNotification(notify)) {
+        await markNotiRead(notiId);
+        return;
+    }
 
             const seenMap = getSeenNotiMap();
             if (seenMap[notiId]) {
