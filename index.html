@@ -45737,64 +45737,114 @@ setTimeout(forceAccountLinkButtonLobbyOnly, 2500);
 </style>
 
 <script>
-/* ===== CHỈ CHO 1 THIẾT BỊ ĐĂNG NHẬP 1 TÀI KHOẢN ===== */
+/* ===== CHỈ CHO 1 THIẾT BỊ / 1 TÀI KHOẢN - BẢN KHÓA THEO VÍ CHÍNH GOOGLE/PI ===== */
 (function () {
-    const DEVICE_ID_KEY = "mc_one_device_id_v1";
+    const DEVICE_ID_KEY = "mc_one_device_id_v2";
     const SESSION_ROOT = "loginSessions";
-    const HEARTBEAT_MS = 9000;
+    const HEARTBEAT_MS = 6000;
 
     let sessionRef = null;
     let sessionHandler = null;
     let heartbeatTimer = null;
     let isKickedByOtherDevice = false;
     let isClaimingSession = false;
+    let currentSessionKey = "";
+
+    function safeKey(v) {
+        return String(v || "").trim().replace(/[.#$\[\]\/]/g, "_");
+    }
 
     function makeRandomId() {
         try {
-            if (crypto && crypto.randomUUID) return crypto.randomUUID();
+            if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
         } catch (_) {}
-
         return "dev_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2);
     }
 
     function getOneDeviceId() {
         let id = localStorage.getItem(DEVICE_ID_KEY);
-
         if (!id) {
             id = makeRandomId();
             localStorage.setItem(DEVICE_ID_KEY, id);
         }
-
         return id;
     }
 
-    function getOneDeviceWalletKey() {
+    function getRawOneDeviceWalletKey() {
         try {
-            if (typeof makeWalletDbKey === "function") {
-                return String(makeWalletDbKey() || "").trim().replace(/[.#$\[\]\/]/g, "_");
+            if (typeof getRawWalletDbKey === "function") {
+                const k = safeKey(getRawWalletDbKey());
+                if (k) return k;
             }
         } catch (_) {}
 
         try {
-            if (typeof getRawWalletDbKey === "function") {
-                return String(getRawWalletDbKey() || "").trim().replace(/[.#$\[\]\/]/g, "_");
+            if (typeof makeWalletDbKey === "function") {
+                const k = safeKey(makeWalletDbKey());
+                if (k) return k;
             }
         } catch (_) {}
+
+        const piName =
+            localStorage.getItem("pi-user-name") ||
+            localStorage.getItem("pi-username") ||
+            localStorage.getItem("piUsername") ||
+            "";
+
+        if (piName) return safeKey("pi_" + piName.toLowerCase());
 
         const uid =
             localStorage.getItem("pi-user-uid") ||
             localStorage.getItem("pi-uid") ||
             localStorage.getItem("piUid") ||
-            localStorage.getItem("currentUsername") ||
             "";
 
-        return String(uid || "").trim().replace(/[.#$\[\]\/]/g, "_");
+        if (uid) return safeKey("pi_" + uid);
+
+        return "";
+    }
+
+    async function getOneDeviceSessionKey() {
+        const raw = getRawOneDeviceWalletKey();
+        if (!raw || typeof db === "undefined") return "";
+
+        let localMaster = "";
+        try {
+            if (typeof getScopedMasterKey === "function") {
+                localMaster = safeKey(localStorage.getItem(getScopedMasterKey(raw)));
+            }
+        } catch (_) {}
+
+        localMaster = localMaster || safeKey(localStorage.getItem("mc_master_wallet_key"));
+
+        let w = {};
+        try {
+            const snap = await db.ref("wallets/" + raw).once("value");
+            w = snap.val() || {};
+        } catch (e) {
+            console.warn("READ_WALLET_FOR_SESSION_FAIL:", e);
+        }
+
+        const linkedGoogle = safeKey(w.linkedGoogleWalletKey || localStorage.getItem("linkedGoogleWalletKey"));
+        const linkedPi = safeKey(w.linkedPiWalletKey || localStorage.getItem("linkedPiWalletKey"));
+        const master = safeKey(w.masterWalletKey || localMaster);
+
+        // CHỐT: nếu có Google thì lấy Google làm khóa chung.
+        // Google login dùng google_xxx, Pi đã liên kết cũng trỏ về google_xxx.
+        if (raw.startsWith("google_")) return raw;
+        if (linkedGoogle) return linkedGoogle;
+        if (master && master.startsWith("google_")) return master;
+        if (master) return master;
+        if (linkedPi && raw.startsWith("google_")) return raw;
+
+        return raw;
     }
 
     function getOneDevicePlayerName() {
         return String(
             localStorage.getItem("user-name-display") ||
             localStorage.getItem("pi-user-name") ||
+            localStorage.getItem("pi-username") ||
             document.getElementById("user-name-display")?.innerText ||
             "Người chơi"
         ).trim().slice(0, 100);
@@ -45830,7 +45880,6 @@ setTimeout(forceAccountLinkButtonLobbyOnly, 2500);
                 </div>
             </div>
         `;
-
         document.body.appendChild(overlay);
         return overlay;
     }
@@ -45844,15 +45893,12 @@ setTimeout(forceAccountLinkButtonLobbyOnly, 2500);
         const overlay = ensureKickOverlay();
         overlay.classList.add("show");
 
-        // Khóa thao tác game phía dưới
-        document.body.style.pointerEvents = "auto";
-
         try {
-            if (sounds && sounds.bgm) sounds.bgm.pause();
-            if (sounds && sounds.heartbeat) sounds.heartbeat.pause();
+            if (window.sounds && sounds.bgm) sounds.bgm.pause();
+            if (window.sounds && sounds.heartbeat) sounds.heartbeat.pause();
         } catch (_) {}
 
-        console.warn("ONE_DEVICE_LOCKED: tài khoản đã đăng nhập ở thiết bị khác");
+        console.warn("ONE_DEVICE_LOCKED: bị đá vì tài khoản đăng nhập ở thiết bị khác");
     }
 
     function stopOneDeviceWatcher() {
@@ -45870,8 +45916,7 @@ setTimeout(forceAccountLinkButtonLobbyOnly, 2500);
     }
 
     async function heartbeatOneDeviceSession() {
-        if (isKickedByOtherDevice) return;
-        if (!sessionRef) return;
+        if (isKickedByOtherDevice || !sessionRef) return;
 
         const deviceId = getOneDeviceId();
 
@@ -45879,7 +45924,6 @@ setTimeout(forceAccountLinkButtonLobbyOnly, 2500);
             const snap = await sessionRef.once("value");
             const data = snap.val() || {};
 
-            // Nếu Firebase đang là thiết bị khác thì tự văng
             if (data.deviceId && data.deviceId !== deviceId) {
                 showKickedOverlay();
                 return;
@@ -45887,7 +45931,7 @@ setTimeout(forceAccountLinkButtonLobbyOnly, 2500);
 
             await sessionRef.update({
                 deviceId,
-                uid: String(auth?.currentUser?.uid || ""),
+                uid: String(window.auth?.currentUser?.uid || ""),
                 name: getOneDevicePlayerName(),
                 deviceName: getDeviceName(),
                 updatedAt: firebase.database.ServerValue.TIMESTAMP,
@@ -45904,23 +45948,24 @@ setTimeout(forceAccountLinkButtonLobbyOnly, 2500);
 
         try {
             if (!window.firebase || !firebase.database || !window.db) return;
-            if (!window.auth || !auth.currentUser) return;
 
-            const walletKey = getOneDeviceWalletKey();
+            const walletKey = await getOneDeviceSessionKey();
             if (!walletKey) return;
 
             const deviceId = getOneDeviceId();
 
             stopOneDeviceWatcher();
 
+            currentSessionKey = walletKey;
             sessionRef = db.ref(SESSION_ROOT + "/" + walletKey);
 
-            // Thiết bị đăng nhập sau sẽ chiếm quyền ngay.
+            // Máy nào đăng nhập sau sẽ chiếm quyền.
             await sessionRef.update({
                 deviceId,
-                uid: String(auth.currentUser.uid || ""),
+                uid: String(window.auth?.currentUser?.uid || ""),
                 name: getOneDevicePlayerName(),
                 deviceName: getDeviceName(),
+                rawWalletKey: getRawOneDeviceWalletKey(),
                 updatedAt: firebase.database.ServerValue.TIMESTAMP,
                 lastAction: "claim"
             });
@@ -45953,7 +45998,6 @@ setTimeout(forceAccountLinkButtonLobbyOnly, 2500);
         if (overlay) overlay.classList.remove("show");
 
         isKickedByOtherDevice = false;
-
         await window.claimOneDeviceSession();
 
         alert("Đã kết nối lại. Nếu thiết bị kia còn mở, bên kia sẽ bị văng.");
@@ -45967,8 +46011,6 @@ setTimeout(forceAccountLinkButtonLobbyOnly, 2500);
             const snap = await sessionRef.once("value");
             const data = snap.val() || {};
 
-            // Chỉ thiết bị đang giữ quyền mới được đánh dấu logout.
-            // Không xóa bậy phiên của thiết bị khác.
             if (data.deviceId === deviceId) {
                 await sessionRef.update({
                     lastAction: "logout",
@@ -45980,8 +46022,25 @@ setTimeout(forceAccountLinkButtonLobbyOnly, 2500);
         stopOneDeviceWatcher();
     };
 
+    function bootOneDeviceLock() {
+        setTimeout(() => window.claimOneDeviceSession(), 800);
+        setTimeout(() => window.claimOneDeviceSession(), 2500);
+    }
+
+    // Google / Firebase login
+    if (window.auth && auth.onAuthStateChanged) {
+        auth.onAuthStateChanged(function(user) {
+            if (user) bootOneDeviceLock();
+        });
+    }
+
+    // Pi login hoặc login xong nhưng auth callback chạy trước
+    setTimeout(bootOneDeviceLock, 2500);
+    setInterval(function () {
+        if (!isKickedByOtherDevice) window.claimOneDeviceSession();
+    }, 15000);
+
     window.addEventListener("beforeunload", function () {
-        // Không remove session, vì remove có thể xóa nhầm phiên mới.
         try {
             if (sessionRef && !isKickedByOtherDevice) {
                 sessionRef.update({
