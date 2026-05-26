@@ -8096,7 +8096,9 @@ if (menuAvatarPhoto) menuAvatarPhoto.src = safePhoto;
 
     // 🔥 VỪA ĐĂNG NHẬP XONG LÀ ÉP NÓ ĐI HỎI THĂM SERVER VỤ NHIỆM VỤ NGAY LẬP TỨC
     if (typeof refreshMissionLobbyBadgeSilently === 'function') refreshMissionLobbyBadgeSilently();
-
+if (typeof claimOneDeviceSession === "function") {
+    await claimOneDeviceSession();
+}
     showHomeUI();
     setPlayerPresence("home");
     startPresenceHeartbeat();
@@ -8327,7 +8329,9 @@ function logout() {
     localStorage.removeItem("user-name-display");
     localStorage.removeItem("user-photo");
     localStorage.removeItem("currentUsername");
-
+if (typeof releaseOneDeviceSession === "function") {
+    releaseOneDeviceSession().catch(() => {});
+}
     auth.signOut()
         .then(() => location.reload())
         .catch(err => {
@@ -45655,6 +45659,338 @@ setTimeout(forceAccountLinkButtonLobbyOnly, 2500);
     setTimeout(enableDragAccountLinkBtn, 300);
     setTimeout(enableDragAccountLinkBtn, 1000);
     setInterval(enableDragAccountLinkBtn, 2000);
+})();
+</script>
+<style>
+/* ===== POPUP BỊ ĐÁ DO ĐĂNG NHẬP THIẾT BỊ KHÁC ===== */
+#single-device-kick-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483647;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.86);
+    backdrop-filter: blur(6px);
+    padding: 18px;
+    box-sizing: border-box;
+}
+
+#single-device-kick-overlay.show {
+    display: flex !important;
+}
+
+.single-device-kick-box {
+    width: min(92vw, 420px);
+    background: linear-gradient(180deg, #161616, #050505);
+    border: 2px solid #ff3b30;
+    border-radius: 20px;
+    box-shadow: 0 0 28px rgba(255, 59, 48, 0.42), 0 0 30px rgba(0,0,0,0.8);
+    padding: 22px 18px;
+    text-align: center;
+    color: #fff;
+    font-family: Arial Black, Arial, sans-serif;
+}
+
+.single-device-kick-icon {
+    font-size: 46px;
+    margin-bottom: 10px;
+}
+
+.single-device-kick-title {
+    color: #ff7675;
+    font-size: 24px;
+    font-weight: 900;
+    margin-bottom: 10px;
+}
+
+.single-device-kick-text {
+    color: #dfe6e9;
+    font-size: 14px;
+    line-height: 1.55;
+    margin-bottom: 18px;
+}
+
+.single-device-kick-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+}
+
+.single-device-reconnect-btn {
+    width: 100%;
+    border-radius: 14px !important;
+    background: linear-gradient(180deg, #00c38a, #008f67) !important;
+    color: #fff !important;
+    font-weight: 900 !important;
+    padding: 13px 14px !important;
+}
+
+.single-device-login-btn {
+    width: 100%;
+    border-radius: 14px !important;
+    background: linear-gradient(180deg, #636e72, #2d3436) !important;
+    color: #fff !important;
+    font-weight: 900 !important;
+    padding: 13px 14px !important;
+}
+</style>
+
+<script>
+/* ===== CHỈ CHO 1 THIẾT BỊ ĐĂNG NHẬP 1 TÀI KHOẢN ===== */
+(function () {
+    const DEVICE_ID_KEY = "mc_one_device_id_v1";
+    const SESSION_ROOT = "loginSessions";
+    const HEARTBEAT_MS = 9000;
+
+    let sessionRef = null;
+    let sessionHandler = null;
+    let heartbeatTimer = null;
+    let isKickedByOtherDevice = false;
+    let isClaimingSession = false;
+
+    function makeRandomId() {
+        try {
+            if (crypto && crypto.randomUUID) return crypto.randomUUID();
+        } catch (_) {}
+
+        return "dev_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2);
+    }
+
+    function getOneDeviceId() {
+        let id = localStorage.getItem(DEVICE_ID_KEY);
+
+        if (!id) {
+            id = makeRandomId();
+            localStorage.setItem(DEVICE_ID_KEY, id);
+        }
+
+        return id;
+    }
+
+    function getOneDeviceWalletKey() {
+        try {
+            if (typeof makeWalletDbKey === "function") {
+                return String(makeWalletDbKey() || "").trim().replace(/[.#$\[\]\/]/g, "_");
+            }
+        } catch (_) {}
+
+        try {
+            if (typeof getRawWalletDbKey === "function") {
+                return String(getRawWalletDbKey() || "").trim().replace(/[.#$\[\]\/]/g, "_");
+            }
+        } catch (_) {}
+
+        const uid =
+            localStorage.getItem("pi-user-uid") ||
+            localStorage.getItem("pi-uid") ||
+            localStorage.getItem("piUid") ||
+            localStorage.getItem("currentUsername") ||
+            "";
+
+        return String(uid || "").trim().replace(/[.#$\[\]\/]/g, "_");
+    }
+
+    function getOneDevicePlayerName() {
+        return String(
+            localStorage.getItem("user-name-display") ||
+            localStorage.getItem("pi-user-name") ||
+            document.getElementById("user-name-display")?.innerText ||
+            "Người chơi"
+        ).trim().slice(0, 100);
+    }
+
+    function getDeviceName() {
+        const ua = navigator.userAgent || "";
+        const isPi = !!window.Pi || /pibrowser|pi browser|minepi/i.test(ua);
+        const isMobile = /android|iphone|ipad|mobile/i.test(ua);
+
+        if (isPi) return isMobile ? "Pi Browser Mobile" : "Pi Browser";
+        if (isMobile) return "Web Mobile";
+        return "Web PC";
+    }
+
+    function ensureKickOverlay() {
+        let overlay = document.getElementById("single-device-kick-overlay");
+        if (overlay) return overlay;
+
+        overlay = document.createElement("div");
+        overlay.id = "single-device-kick-overlay";
+        overlay.innerHTML = `
+            <div class="single-device-kick-box">
+                <div class="single-device-kick-icon">⚠️</div>
+                <div class="single-device-kick-title">MẤT KẾT NỐI</div>
+                <div class="single-device-kick-text">
+                    Tài khoản này vừa đăng nhập ở thiết bị khác.<br>
+                    Thiết bị hiện tại đã bị ngắt để chống dùng chung acc.
+                </div>
+                <div class="single-device-kick-actions">
+                    <button class="single-device-reconnect-btn" onclick="reconnectOneDeviceSession()">KẾT NỐI LẠI</button>
+                    <button class="single-device-login-btn" onclick="location.reload()">TẢI LẠI GAME</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+        return overlay;
+    }
+
+    function showKickedOverlay() {
+        isKickedByOtherDevice = true;
+
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+
+        const overlay = ensureKickOverlay();
+        overlay.classList.add("show");
+
+        // Khóa thao tác game phía dưới
+        document.body.style.pointerEvents = "auto";
+
+        try {
+            if (sounds && sounds.bgm) sounds.bgm.pause();
+            if (sounds && sounds.heartbeat) sounds.heartbeat.pause();
+        } catch (_) {}
+
+        console.warn("ONE_DEVICE_LOCKED: tài khoản đã đăng nhập ở thiết bị khác");
+    }
+
+    function stopOneDeviceWatcher() {
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+
+        if (sessionRef && sessionHandler) {
+            try {
+                sessionRef.off("value", sessionHandler);
+            } catch (_) {}
+        }
+
+        sessionRef = null;
+        sessionHandler = null;
+    }
+
+    async function heartbeatOneDeviceSession() {
+        if (isKickedByOtherDevice) return;
+        if (!sessionRef) return;
+
+        const deviceId = getOneDeviceId();
+
+        try {
+            const snap = await sessionRef.once("value");
+            const data = snap.val() || {};
+
+            // Nếu Firebase đang là thiết bị khác thì tự văng
+            if (data.deviceId && data.deviceId !== deviceId) {
+                showKickedOverlay();
+                return;
+            }
+
+            await sessionRef.update({
+                deviceId,
+                uid: String(auth?.currentUser?.uid || ""),
+                name: getOneDevicePlayerName(),
+                deviceName: getDeviceName(),
+                updatedAt: firebase.database.ServerValue.TIMESTAMP,
+                lastAction: "heartbeat"
+            });
+        } catch (err) {
+            console.warn("ONE_DEVICE_HEARTBEAT_FAIL:", err);
+        }
+    }
+
+    window.claimOneDeviceSession = async function claimOneDeviceSession() {
+        if (isClaimingSession) return;
+        isClaimingSession = true;
+
+        try {
+            if (!window.firebase || !firebase.database || !window.db) return;
+            if (!window.auth || !auth.currentUser) return;
+
+            const walletKey = getOneDeviceWalletKey();
+            if (!walletKey) return;
+
+            const deviceId = getOneDeviceId();
+
+            stopOneDeviceWatcher();
+
+            sessionRef = db.ref(SESSION_ROOT + "/" + walletKey);
+
+            // Thiết bị đăng nhập sau sẽ chiếm quyền ngay.
+            await sessionRef.update({
+                deviceId,
+                uid: String(auth.currentUser.uid || ""),
+                name: getOneDevicePlayerName(),
+                deviceName: getDeviceName(),
+                updatedAt: firebase.database.ServerValue.TIMESTAMP,
+                lastAction: "claim"
+            });
+
+            sessionHandler = function (snap) {
+                const data = snap.val() || {};
+                if (!data.deviceId) return;
+
+                if (data.deviceId !== getOneDeviceId()) {
+                    showKickedOverlay();
+                }
+            };
+
+            sessionRef.on("value", sessionHandler);
+
+            clearInterval(heartbeatTimer);
+            heartbeatTimer = setInterval(heartbeatOneDeviceSession, HEARTBEAT_MS);
+            heartbeatOneDeviceSession();
+
+            console.log("ONE_DEVICE_SESSION_OK:", walletKey, deviceId);
+        } catch (err) {
+            console.error("ONE_DEVICE_SESSION_FAIL:", err);
+        } finally {
+            isClaimingSession = false;
+        }
+    };
+
+    window.reconnectOneDeviceSession = async function reconnectOneDeviceSession() {
+        const overlay = document.getElementById("single-device-kick-overlay");
+        if (overlay) overlay.classList.remove("show");
+
+        isKickedByOtherDevice = false;
+
+        await window.claimOneDeviceSession();
+
+        alert("Đã kết nối lại. Nếu thiết bị kia còn mở, bên kia sẽ bị văng.");
+    };
+
+    window.releaseOneDeviceSession = async function releaseOneDeviceSession() {
+        try {
+            if (!sessionRef) return;
+
+            const deviceId = getOneDeviceId();
+            const snap = await sessionRef.once("value");
+            const data = snap.val() || {};
+
+            // Chỉ thiết bị đang giữ quyền mới được đánh dấu logout.
+            // Không xóa bậy phiên của thiết bị khác.
+            if (data.deviceId === deviceId) {
+                await sessionRef.update({
+                    lastAction: "logout",
+                    updatedAt: firebase.database.ServerValue.TIMESTAMP
+                });
+            }
+        } catch (_) {}
+
+        stopOneDeviceWatcher();
+    };
+
+    window.addEventListener("beforeunload", function () {
+        // Không remove session, vì remove có thể xóa nhầm phiên mới.
+        try {
+            if (sessionRef && !isKickedByOtherDevice) {
+                sessionRef.update({
+                    lastAction: "close_tab",
+                    updatedAt: firebase.database.ServerValue.TIMESTAMP
+                });
+            }
+        } catch (_) {}
+    });
 })();
 </script>
 </body>
