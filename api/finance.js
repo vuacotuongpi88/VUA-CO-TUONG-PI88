@@ -2318,6 +2318,225 @@ if (action === "release_login_session") {
         walletKey: masterWalletKey
     });
 }
+// ==========================================
+// GOOGLE BẤM NẠP/RÚT -> GỬI YÊU CẦU QUA PI BROWSER
+// ==========================================
+if (action === "request_pi_browser_action") {
+    const now = Date.now();
+
+    const requestType = String(body.requestType || body.type || "")
+        .trim()
+        .toLowerCase();
+
+    if (!["deposit", "withdraw"].includes(requestType)) {
+        return res.status(400).json({
+            ok: false,
+            error: "Loại yêu cầu không hợp lệ."
+        });
+    }
+
+    let masterWalletKey = safeWalletKey;
+
+    const mySnap = await db.ref("wallets/" + safeWalletKey).once("value");
+    const myWallet = mySnap.val() || {};
+
+    if (myWallet.masterWalletKey) {
+        masterWalletKey = safeKey(myWallet.masterWalletKey);
+    }
+
+    if (myWallet.linkedMasterWalletKey) {
+        masterWalletKey = safeKey(myWallet.linkedMasterWalletKey);
+    }
+
+    if (!masterWalletKey) masterWalletKey = safeWalletKey;
+
+    if (!masterWalletKey.startsWith("google_")) {
+        return res.status(400).json({
+            ok: false,
+            error: "Chức năng này dùng cho tài khoản Google đã liên kết Pi."
+        });
+    }
+
+    const masterSnap = await db.ref("wallets/" + masterWalletKey).once("value");
+    const masterWallet = masterSnap.val() || {};
+
+    const piWalletKey = safeKey(
+        masterWallet.linkedPiWalletKey ||
+        masterWallet.linkedPi?.piWalletKey ||
+        ""
+    );
+
+    if (!piWalletKey) {
+        return res.status(400).json({
+            ok: false,
+            error: "Tài khoản Google này chưa liên kết Pi Browser."
+        });
+    }
+
+    const requestId = db.ref().push().key;
+
+    const title =
+        requestType === "deposit"
+            ? "Yêu cầu nạp Pi từ Google"
+            : "Yêu cầu rút Pi từ Google";
+
+    const text =
+        requestType === "deposit"
+            ? "Tài khoản Google vừa bấm NẠP. Hãy mở Pi Browser để nạp Pi."
+            : "Tài khoản Google vừa bấm RÚT. Hãy mở Pi Browser để xác nhận rút Pi.";
+
+    const item = {
+        id: requestId,
+        type: requestType,
+        title,
+        text,
+        status: "pending",
+        masterWalletKey,
+        piWalletKey,
+        fromWalletKey: safeWalletKey,
+        createdAt: now,
+        expiresAt: now + 15 * 60 * 1000
+    };
+
+    const updates = {};
+
+    // Ghi cả 2 nhánh để Pi Browser dùng ví pi_ hoặc master google_ đều bắt được
+    updates[`piBrowserRequests/${piWalletKey}/${requestId}`] = item;
+    updates[`piBrowserRequests/${masterWalletKey}/${requestId}`] = item;
+
+    // Ghi thêm notification để sau này hiện trong chuông thông báo cũng được
+    updates[`notifications/${piWalletKey}/${requestId}`] = {
+        type: "pi_browser_action",
+        actionType: requestType,
+        title,
+        text,
+        status: "unread",
+        at: now
+    };
+
+    updates[`notifications/${masterWalletKey}/${requestId}`] = {
+        type: "pi_browser_action",
+        actionType: requestType,
+        title,
+        text,
+        status: "unread",
+        at: now
+    };
+
+    await db.ref().update(updates);
+
+    return res.status(200).json({
+        ok: true,
+        requestId,
+        requestType,
+        masterWalletKey,
+        piWalletKey,
+        message:
+            requestType === "deposit"
+                ? "Đã gửi thông báo nạp qua Pi Browser."
+                : "Đã gửi thông báo rút qua Pi Browser."
+    });
+}
+
+// ==========================================
+// PI BROWSER HỎI SERVER CÓ YÊU CẦU NẠP/RÚT MỚI KHÔNG
+// ==========================================
+if (action === "poll_pi_browser_action") {
+    const now = Date.now();
+
+    const keys = new Set();
+    keys.add(safeWalletKey);
+
+    const walletSnap = await db.ref("wallets/" + safeWalletKey).once("value");
+    const wallet = walletSnap.val() || {};
+
+    if (wallet.masterWalletKey) keys.add(safeKey(wallet.masterWalletKey));
+    if (wallet.linkedMasterWalletKey) keys.add(safeKey(wallet.linkedMasterWalletKey));
+    if (wallet.linkedPiWalletKey) keys.add(safeKey(wallet.linkedPiWalletKey));
+    if (wallet.linkedPi?.piWalletKey) keys.add(safeKey(wallet.linkedPi.piWalletKey));
+
+    const aliasSnap = await db.ref(`accountLinks/wallet/${safeWalletKey}/masterWalletKey`).once("value");
+    if (aliasSnap.exists()) {
+        keys.add(safeKey(aliasSnap.val() || ""));
+    }
+
+    const rows = [];
+
+    for (const key of Array.from(keys).filter(Boolean)) {
+        const snap = await db.ref(`piBrowserRequests/${key}`).limitToLast(10).once("value");
+
+        snap.forEach(child => {
+            const v = child.val() || {};
+            if (
+                String(v.status || "") === "pending" &&
+                Number(v.expiresAt || 0) > now
+            ) {
+                rows.push({
+                    id: child.key,
+                    ...v
+                });
+            }
+        });
+    }
+
+    rows.sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+
+    return res.status(200).json({
+        ok: true,
+        request: rows[0] || null
+    });
+}
+
+// ==========================================
+// PI BROWSER ĐÁNH DẤU ĐÃ XỬ LÝ YÊU CẦU
+// ==========================================
+if (action === "mark_pi_browser_action") {
+    const requestId = safeKey(body.requestId || body.id || "");
+    const status = String(body.status || "seen").trim().toLowerCase();
+
+    if (!requestId) {
+        return res.status(400).json({
+            ok: false,
+            error: "Thiếu requestId."
+        });
+    }
+
+    const allowed = ["seen", "accepted", "closed", "expired"];
+    const finalStatus = allowed.includes(status) ? status : "seen";
+
+    const now = Date.now();
+
+    const keys = new Set();
+    keys.add(safeWalletKey);
+
+    if (body.masterWalletKey) keys.add(safeKey(body.masterWalletKey));
+    if (body.piWalletKey) keys.add(safeKey(body.piWalletKey));
+
+    const walletSnap = await db.ref("wallets/" + safeWalletKey).once("value");
+    const wallet = walletSnap.val() || {};
+
+    if (wallet.masterWalletKey) keys.add(safeKey(wallet.masterWalletKey));
+    if (wallet.linkedMasterWalletKey) keys.add(safeKey(wallet.linkedMasterWalletKey));
+    if (wallet.linkedPiWalletKey) keys.add(safeKey(wallet.linkedPiWalletKey));
+    if (wallet.linkedPi?.piWalletKey) keys.add(safeKey(wallet.linkedPi.piWalletKey));
+
+    const updates = {};
+
+    for (const key of Array.from(keys).filter(Boolean)) {
+        updates[`piBrowserRequests/${key}/${requestId}/status`] = finalStatus;
+        updates[`piBrowserRequests/${key}/${requestId}/handledAt`] = now;
+        updates[`notifications/${key}/${requestId}/status`] = "read";
+        updates[`notifications/${key}/${requestId}/readAt`] = now;
+    }
+
+    await db.ref().update(updates);
+
+    return res.status(200).json({
+        ok: true,
+        requestId,
+        status: finalStatus
+    });
+}
     return res.status(400).json({ ok: false, error: "Hành động không hợp lệ." });
 
   } catch (err) {

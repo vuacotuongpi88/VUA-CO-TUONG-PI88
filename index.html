@@ -33158,7 +33158,129 @@ async function financePost(action, body = {}, walletKeyOverride = "") {
 
     return data;
 }
+function isPiBrowserRuntime() {
+    return !!window.Pi || /PiBrowser|Pi Browser|PiNetwork|MinePi/i.test(navigator.userAgent || "");
+}
 
+async function requestPiBrowserMoneyAction(type) {
+    try {
+        // Ở Pi Browser thì cho chạy nạp/rút bình thường, không gửi vòng lại
+        if (isPiBrowserRuntime()) return false;
+
+        const rawWalletKey = String(
+            typeof getRawWalletDbKey === "function"
+                ? getRawWalletDbKey()
+                : makeWalletDbKey()
+        ).replace(/[.#$\[\]\/]/g, "_");
+
+        // Chỉ chặn tài khoản Google. Acc Pi hoặc kiểu khác thì cho chạy bình thường.
+        if (!rawWalletKey || !rawWalletKey.startsWith("google_")) {
+            return false;
+        }
+
+        const requestType = type === "nap" ? "deposit" : "withdraw";
+        let amountPi = 0;
+
+        // Google bấm nạp thì cho nhập số Pi muốn nạp trước, rồi gửi qua Pi Browser
+        if (requestType === "deposit") {
+            const amount = await openDepositAmount();
+            if (amount === null) return true;
+
+            if (!Number.isFinite(amount) || amount <= 0) {
+                alert("Số Pi nạp không hợp lệ.");
+                return true;
+            }
+
+            amountPi = amount;
+        }
+
+        const data = await financePost("request_pi_browser_action", {
+            requestType,
+            amountPi
+        }, rawWalletKey);
+
+        alert(
+            requestType === "deposit"
+                ? `Đã gửi yêu cầu NẠP ${amountPi} Pi qua Pi Browser. Mở Pi Browser để xác nhận.`
+                : "Đã gửi yêu cầu RÚT qua Pi Browser. Mở Pi Browser để xác nhận."
+        );
+
+        return true;
+    } catch (err) {
+        alert("Lỗi gửi qua Pi Browser: " + (err.message || err));
+        return true;
+    }
+}
+
+async function pollPiBrowserMoneyAction() {
+    try {
+        if (!isPiBrowserRuntime()) return;
+        if (window.__pollPiMoneyBusy) return;
+
+        const rawWalletKey = String(
+            typeof getRawWalletDbKey === "function"
+                ? getRawWalletDbKey()
+                : makeWalletDbKey()
+        ).replace(/[.#$\[\]\/]/g, "_");
+
+        if (!rawWalletKey) return;
+
+        window.__pollPiMoneyBusy = true;
+
+        const data = await financePost("poll_pi_browser_action", {}, rawWalletKey);
+        const req = data.request;
+
+        if (!req || !req.id) return;
+
+        const localKey = "pi_money_request_seen_" + req.id;
+        if (localStorage.getItem(localKey) === "1") return;
+        localStorage.setItem(localKey, "1");
+
+        const isDeposit = req.type === "deposit";
+        const amountPi = Number(req.amountPi || req.amount || 0);
+
+        const msg = isDeposit
+            ? `Tài khoản Google vừa yêu cầu NẠP ${amountPi || ""} Pi.\n\nBấm ĐỒNG Ý để mở nạp trong Pi Browser.`
+            : "Tài khoản Google vừa yêu cầu RÚT Pi.\n\nBấm ĐỒNG Ý để mở rút trong Pi Browser.";
+
+        const ok = typeof customConfirm === "function"
+            ? await customConfirm(msg)
+            : window.confirm(msg);
+
+        await financePost("mark_pi_browser_action", {
+            requestId: req.id,
+            status: ok ? "accepted" : "seen",
+            masterWalletKey: req.masterWalletKey || "",
+            piWalletKey: req.piWalletKey || ""
+        }, rawWalletKey);
+
+        if (!ok) return;
+
+        if (isDeposit) {
+            if (amountPi > 0 && typeof startPiDeposit === "function") {
+                await startPiDeposit(amountPi);
+
+                if (document.getElementById("pi-deposit-history-panel")?.classList.contains("show")) {
+                    loadPiHistory("deposit");
+                }
+            } else {
+                await openWallet("nap");
+            }
+        } else {
+            await openWallet("rut");
+        }
+    } catch (err) {
+        console.warn("pollPiBrowserMoneyAction lỗi:", err);
+    } finally {
+        window.__pollPiMoneyBusy = false;
+    }
+}
+
+if (!window.__piMoneyPollStarted) {
+    window.__piMoneyPollStarted = true;
+    setTimeout(pollPiBrowserMoneyAction, 2500);
+    setInterval(pollPiBrowserMoneyAction, 4000);
+}
 window.createPiAccountLinkCode = async function() {
     try {
         const user = auth.currentUser;
@@ -35562,6 +35684,13 @@ try {
 async function openWallet(type) {
     if (typeof closeProfileMenu === "function") closeProfileMenu();
     document.getElementById("profile-dropdown")?.classList.remove("show");
+
+    // Nếu là tài khoản Google ngoài web thì KHÔNG nạp/rút trực tiếp.
+    // Nó chỉ gửi yêu cầu qua Pi Browser.
+    if (type === "nap" || type === "rut") {
+        const sentToPi = await requestPiBrowserMoneyAction(type);
+        if (sentToPi) return;
+    }
 
     if (type === "nap") {
         const amount = await openDepositAmount();
