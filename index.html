@@ -45737,152 +45737,37 @@ setTimeout(forceAccountLinkButtonLobbyOnly, 2500);
 }
 </style>
 <script>
-/* ===== KHÓA 1 THIẾT BỊ / 1 TÀI KHOẢN - BẮT NHIỀU KEY, THIẾT BỊ MỚI LUÔN THẮNG ===== */
+/* ===== KHÓA 1 THIẾT BỊ BẰNG API ADMIN - THIẾT BỊ MỚI ĐÁ THIẾT BỊ CŨ ===== */
 (function () {
-    const SESSION_ROOT = "loginSessions";
-    const SESSION_ID_KEY = "mc_one_device_session_id_v5";
-    const HEARTBEAT_MS = 4500;
-
-    let sessionRefs = [];
-    let heartbeatTimer = null;
+    const SESSION_ID_KEY = "mc_one_device_api_session_id_v1";
+    const DEVICE_ID_KEY = "mc_one_device_api_device_id_v1";
+    let checkTimer = null;
     let isKickedByOtherDevice = false;
-    let isClaimingSession = false;
+    let hasClaimed = false;
 
-    function safeKey(v) {
-        return String(v || "").trim().replace(/[.#$\[\]\/]/g, "_");
-    }
-
-    function makeRandomId() {
+    function makeId(prefix) {
         try {
-            if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+            if (window.crypto && crypto.randomUUID) return prefix + "_" + crypto.randomUUID();
         } catch (_) {}
-        return "sess_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2);
+        return prefix + "_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2);
     }
 
     function getSessionId() {
         let id = sessionStorage.getItem(SESSION_ID_KEY);
         if (!id) {
-            id = makeRandomId();
+            id = makeId("sess");
             sessionStorage.setItem(SESSION_ID_KEY, id);
         }
         return id;
     }
 
-    function isLoginScreenVisible() {
-        const el = document.getElementById("login-screen");
-        if (!el) return false;
-        const st = getComputedStyle(el);
-        return st.display !== "none" && st.visibility !== "hidden" && st.opacity !== "0";
-    }
-
-    function addKey(arr, key) {
-        key = safeKey(key);
-        if (!key) return;
-        if (key === "guest_guest") return;
-        if (key.startsWith("guest_")) return;
-        if (!arr.includes(key)) arr.push(key);
-    }
-
-    function getPlayerNameKey() {
-        const name = String(
-            localStorage.getItem("user-name-display") ||
-            localStorage.getItem("pi-user-name") ||
-            localStorage.getItem("pi-username") ||
-            localStorage.getItem("piUsername") ||
-            document.getElementById("user-name-display")?.innerText ||
-            ""
-        ).trim().toLowerCase();
-
-        if (!name) return "";
-        if (name === "người chơi" || name === "nguoi choi" || name === "guest") return "";
-        return "name_" + name.replace(/\s+/g, "_");
-    }
-
-    function getRawOneDeviceWalletKey() {
-        try {
-            if (typeof getRawWalletDbKey === "function") return safeKey(getRawWalletDbKey());
-        } catch (_) {}
-
-        try {
-            const user = window.auth && auth.currentUser;
-            if (user && !user.isAnonymous && user.uid) return safeKey("google_" + user.uid);
-        } catch (_) {}
-
-        const piName =
-            localStorage.getItem("pi-user-name") ||
-            localStorage.getItem("pi-username") ||
-            localStorage.getItem("piUsername") ||
-            "";
-
-        if (piName) return safeKey("pi_" + piName.toLowerCase());
-
-        return "";
-    }
-
-    async function getOneDeviceSessionKeys() {
-        if (isLoginScreenVisible()) return [];
-        if (typeof db === "undefined" || !db) return [];
-
-        const keys = [];
-
-        const raw = getRawOneDeviceWalletKey();
-        addKey(keys, raw);
-
-        try {
-            if (typeof makeWalletDbKey === "function") addKey(keys, makeWalletDbKey());
-        } catch (_) {}
-
-        try {
-            const user = window.auth && auth.currentUser;
-            if (user && !user.isAnonymous && user.uid) addKey(keys, "google_" + user.uid);
-        } catch (_) {}
-
-        const piName =
-            localStorage.getItem("pi-user-name") ||
-            localStorage.getItem("pi-username") ||
-            localStorage.getItem("piUsername") ||
-            "";
-
-        if (piName) addKey(keys, "pi_" + piName.toLowerCase());
-
-        addKey(keys, localStorage.getItem("mc_master_wallet_key"));
-        addKey(keys, localStorage.getItem("linkedGoogleWalletKey"));
-        addKey(keys, localStorage.getItem("linkedPiWalletKey"));
-
-        try {
-            if (raw && typeof getScopedMasterKey === "function") {
-                addKey(keys, localStorage.getItem(getScopedMasterKey(raw)));
-            }
-        } catch (_) {}
-
-        try {
-            if (raw) {
-                const snap = await db.ref("wallets/" + raw).once("value");
-                const w = snap.val() || {};
-                addKey(keys, w.masterWalletKey);
-                addKey(keys, w.linkedGoogleWalletKey);
-                addKey(keys, w.linkedPiWalletKey);
-                addKey(keys, w.walletKey);
-                addKey(keys, w.uid ? "google_" + w.uid : "");
-                addKey(keys, w.piUsername ? "pi_" + String(w.piUsername).toLowerCase() : "");
-            }
-        } catch (e) {
-            console.warn("READ_WALLET_FOR_SESSION_FAIL:", e);
+    function getDeviceId() {
+        let id = localStorage.getItem(DEVICE_ID_KEY);
+        if (!id) {
+            id = makeId("dev");
+            localStorage.setItem(DEVICE_ID_KEY, id);
         }
-
-        addKey(keys, getPlayerNameKey());
-
-        return keys;
-    }
-
-    function getOneDevicePlayerName() {
-        return String(
-            localStorage.getItem("user-name-display") ||
-            localStorage.getItem("pi-user-name") ||
-            localStorage.getItem("pi-username") ||
-            document.getElementById("user-name-display")?.innerText ||
-            "Người chơi"
-        ).trim().slice(0, 100);
+        return id;
     }
 
     function getDeviceName() {
@@ -45893,6 +45778,45 @@ setTimeout(forceAccountLinkButtonLobbyOnly, 2500);
         if (isPi) return isMobile ? "Pi Browser Mobile" : "Pi Browser";
         if (isMobile) return "Web Mobile";
         return "Web PC";
+    }
+
+    function getPlayerName() {
+        return String(
+            localStorage.getItem("user-name-display") ||
+            localStorage.getItem("pi-user-name") ||
+            localStorage.getItem("pi-username") ||
+            localStorage.getItem("piUsername") ||
+            document.getElementById("user-name-display")?.innerText ||
+            "Người chơi"
+        ).trim();
+    }
+
+    function getWalletKeyForSession() {
+        try {
+            if (localStorage.getItem("mc_master_wallet_key")) {
+                return localStorage.getItem("mc_master_wallet_key");
+            }
+
+            if (typeof getRawWalletDbKey === "function") {
+                return getRawWalletDbKey();
+            }
+
+            if (typeof makeWalletDbKey === "function") {
+                return makeWalletDbKey();
+            }
+        } catch (_) {}
+
+        return "";
+    }
+
+    function isLoggedInLobby() {
+        const login = document.getElementById("login-screen");
+        if (!login) return true;
+
+        const st = getComputedStyle(login);
+        const hidden = st.display === "none" || st.visibility === "hidden" || st.opacity === "0";
+
+        return hidden;
     }
 
     function ensureKickOverlay() {
@@ -45910,7 +45834,7 @@ setTimeout(forceAccountLinkButtonLobbyOnly, 2500);
                     Thiết bị hiện tại đã bị ngắt để chống dùng chung acc.
                 </div>
                 <div class="single-device-kick-actions">
-                    <button class="single-device-reconnect-btn" onclick="reconnectOneDeviceSession()">KẾT NỐI LẠI</button>
+                    <button class="single-device-reconnect-btn" onclick="claimOneDeviceSession(true)">KẾT NỐI LẠI</button>
                     <button class="single-device-login-btn" onclick="location.reload()">TẢI LẠI GAME</button>
                 </div>
             </div>
@@ -45919,183 +45843,120 @@ setTimeout(forceAccountLinkButtonLobbyOnly, 2500);
         return overlay;
     }
 
-    function hideKickedOverlay() {
-        const overlay = document.getElementById("single-device-kick-overlay");
-        if (overlay) overlay.classList.remove("show");
-    }
-
-    function showKickedOverlay() {
+    function showKickOverlay() {
         if (isKickedByOtherDevice) return;
 
         isKickedByOtherDevice = true;
-        clearInterval(heartbeatTimer);
-        heartbeatTimer = null;
+        clearInterval(checkTimer);
+        checkTimer = null;
 
-        stopOneDeviceWatcher(false);
-
-        const overlay = ensureKickOverlay();
-        overlay.classList.add("show");
+        ensureKickOverlay().classList.add("show");
 
         try {
             if (window.sounds && sounds.bgm) sounds.bgm.pause();
             if (window.sounds && sounds.heartbeat) sounds.heartbeat.pause();
         } catch (_) {}
 
-        console.warn("ONE_DEVICE_LOCKED: bị đá vì tài khoản đăng nhập ở thiết bị khác");
+        console.warn("ONE_DEVICE_API_LOCKED: tài khoản đã đăng nhập ở thiết bị khác");
     }
 
-    function stopOneDeviceWatcher(clearList = true) {
-        sessionRefs.forEach(item => {
-            try {
-                item.ref.off("value", item.handler);
-            } catch (_) {}
-        });
-
-        if (clearList) sessionRefs = [];
+    function hideKickOverlay() {
+        const overlay = document.getElementById("single-device-kick-overlay");
+        if (overlay) overlay.classList.remove("show");
     }
 
-    async function writeAllSessionRefs(lastAction) {
-        const mySessionId = getSessionId();
+    async function sessionPost(action, extra) {
+        const walletKey = getWalletKeyForSession();
+        if (!walletKey) throw new Error("NO_WALLET_KEY");
 
-        const payload = {
-            sessionId: mySessionId,
-            uid: String(window.auth?.currentUser?.uid || ""),
-            name: getOneDevicePlayerName(),
-            deviceName: getDeviceName(),
-            rawWalletKey: getRawOneDeviceWalletKey(),
-            nameKey: getPlayerNameKey(),
-            userAgent: String(navigator.userAgent || "").slice(0, 180),
-            updatedAt: firebase.database.ServerValue.TIMESTAMP,
-            lastAction: lastAction || "claim"
-        };
-
-        for (const item of sessionRefs) {
-            await item.ref.set(payload);
+        if (typeof financePost !== "function") {
+            throw new Error("NO_FINANCE_POST");
         }
+
+        return await financePost(action, Object.assign({
+            walletKey,
+            sessionId: getSessionId(),
+            deviceId: getDeviceId(),
+            deviceName: getDeviceName(),
+            playerName: getPlayerName(),
+            userAgent: navigator.userAgent || "",
+            platform: !!window.Pi ? "pi_browser" : "web"
+        }, extra || {}), walletKey);
     }
 
-    async function heartbeatOneDeviceSession() {
-        if (isKickedByOtherDevice || !sessionRefs.length) return;
-
-        const mySessionId = getSessionId();
+    async function checkOneDeviceSession() {
+        if (isKickedByOtherDevice || !hasClaimed || !isLoggedInLobby()) return;
 
         try {
-            for (const item of sessionRefs) {
-                const snap = await item.ref.once("value");
-                const data = snap.val() || {};
+            const data = await sessionPost("check_login_session");
 
-                if (data.sessionId && data.sessionId !== mySessionId) {
-                    showKickedOverlay();
-                    return;
-                }
-            }
-
-            for (const item of sessionRefs) {
-                await item.ref.update({
-                    sessionId: mySessionId,
-                    uid: String(window.auth?.currentUser?.uid || ""),
-                    name: getOneDevicePlayerName(),
-                    deviceName: getDeviceName(),
-                    updatedAt: firebase.database.ServerValue.TIMESTAMP,
-                    lastAction: "heartbeat"
-                });
+            if (data && data.kicked) {
+                showKickOverlay();
             }
         } catch (err) {
-            console.warn("ONE_DEVICE_HEARTBEAT_FAIL:", err);
+            console.warn("ONE_DEVICE_API_CHECK_FAIL:", err);
         }
     }
 
     window.claimOneDeviceSession = async function claimOneDeviceSession(forceReconnect) {
-        if (isClaimingSession) return;
-        isClaimingSession = true;
-
         try {
-            if (!window.firebase || !firebase.database || typeof db === "undefined" || !db) return;
+            if (!isLoggedInLobby()) return;
 
-            const keys = await getOneDeviceSessionKeys();
-            if (!keys.length) return;
-
-            stopOneDeviceWatcher(true);
             isKickedByOtherDevice = false;
-            hideKickedOverlay();
+            hideKickOverlay();
 
-            const mySessionId = getSessionId();
-
-            sessionRefs = keys.map(key => {
-                const ref = db.ref(SESSION_ROOT + "/" + key);
-                const handler = function (snap) {
-                    const data = snap.val() || {};
-                    if (!data.sessionId) return;
-
-                    if (data.sessionId !== mySessionId) {
-                        showKickedOverlay();
-                    }
-                };
-
-                ref.on("value", handler);
-                return { key, ref, handler };
+            const data = await sessionPost("claim_login_session", {
+                forceReconnect: !!forceReconnect
             });
 
-            await writeAllSessionRefs(forceReconnect ? "reconnect" : "claim");
+            hasClaimed = true;
 
-            clearInterval(heartbeatTimer);
-            heartbeatTimer = setInterval(heartbeatOneDeviceSession, HEARTBEAT_MS);
-            heartbeatOneDeviceSession();
+            clearInterval(checkTimer);
+            checkTimer = setInterval(checkOneDeviceSession, 3500);
 
-            console.log("ONE_DEVICE_SESSION_OK_KEYS:", keys, mySessionId);
+            setTimeout(checkOneDeviceSession, 700);
+
+            console.log("ONE_DEVICE_API_SESSION_OK:", data);
         } catch (err) {
-            console.error("ONE_DEVICE_SESSION_FAIL:", err);
-        } finally {
-            isClaimingSession = false;
+            console.error("ONE_DEVICE_API_SESSION_FAIL:", err);
         }
     };
 
-    window.reconnectOneDeviceSession = async function reconnectOneDeviceSession() {
-        await window.claimOneDeviceSession(true);
-        alert("Đã kết nối lại. Thiết bị khác sẽ bị văng.");
-    };
-
     window.releaseOneDeviceSession = async function releaseOneDeviceSession() {
-        const mySessionId = getSessionId();
-
         try {
-            for (const item of sessionRefs) {
-                const snap = await item.ref.once("value");
-                const data = snap.val() || {};
-                if (data.sessionId === mySessionId) {
-                    await item.ref.remove();
-                }
-            }
+            await sessionPost("release_login_session");
         } catch (_) {}
 
-        stopOneDeviceWatcher(true);
+        clearInterval(checkTimer);
+        checkTimer = null;
+        hasClaimed = false;
         isKickedByOtherDevice = false;
-        hideKickedOverlay();
+        hideKickOverlay();
     };
 
-    function bootOneDeviceLock() {
-        setTimeout(() => window.claimOneDeviceSession(false), 700);
-        setTimeout(() => window.claimOneDeviceSession(false), 2200);
-        setTimeout(() => window.claimOneDeviceSession(false), 5000);
+    function bootOneDeviceApiLock() {
+        setTimeout(() => window.claimOneDeviceSession(false), 1200);
+        setTimeout(() => window.claimOneDeviceSession(false), 3500);
+        setTimeout(() => window.claimOneDeviceSession(false), 7000);
     }
 
     if (window.auth && auth.onAuthStateChanged) {
         auth.onAuthStateChanged(function(user) {
             if (user) {
-                bootOneDeviceLock();
+                bootOneDeviceApiLock();
             } else {
                 window.releaseOneDeviceSession();
             }
         });
     }
 
-    setTimeout(bootOneDeviceLock, 3000);
+    setTimeout(bootOneDeviceApiLock, 3000);
 
-    setInterval(function () {
-        if (!isKickedByOtherDevice && !sessionRefs.length) {
-            window.claimOneDeviceSession(false);
-        }
-    }, 5000);
+    window.addEventListener("beforeunload", function () {
+        try {
+            window.releaseOneDeviceSession();
+        } catch (_) {}
+    });
 })();
 </script>
 </body>

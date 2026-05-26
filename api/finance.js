@@ -2192,6 +2192,132 @@ await walletRef.update(finalWallet);
             newPiBalance: exchangeResult.newPiBalance, newPmcBalance: exchangeResult.newPmcBalance 
         });
     }
+    // ==========================================
+// KHÓA 1 THIẾT BỊ / 1 TÀI KHOẢN - API ADMIN
+// Thiết bị đăng nhập sau đè thiết bị cũ
+// ==========================================
+if (action === "claim_login_session") {
+    const now = Date.now();
+
+    const sessionId = cleanText(body.sessionId || "");
+    const deviceId = cleanText(body.deviceId || "");
+    const deviceName = cleanText(body.deviceName || "Thiết bị").slice(0, 180);
+    const playerName = cleanText(body.playerName || body.name || "Người chơi").slice(0, 120);
+
+    if (!sessionId || !deviceId) {
+        return res.status(400).json({
+            ok: false,
+            error: "Thiếu sessionId/deviceId."
+        });
+    }
+
+    let masterWalletKey = safeWalletKey;
+
+    try {
+        const aliasSnap = await db.ref(`accountLinks/wallet/${safeWalletKey}/masterWalletKey`).once("value");
+        if (aliasSnap.exists()) masterWalletKey = safeKey(aliasSnap.val() || safeWalletKey);
+    } catch (_) {}
+
+    try {
+        const walletMasterSnap = await db.ref(`wallets/${safeWalletKey}/masterWalletKey`).once("value");
+        if (walletMasterSnap.exists()) masterWalletKey = safeKey(walletMasterSnap.val() || masterWalletKey);
+    } catch (_) {}
+
+    if (!masterWalletKey) masterWalletKey = safeWalletKey;
+
+    const ref = db.ref("loginSessions/" + masterWalletKey);
+    const oldSnap = await ref.once("value");
+    const old = oldSnap.val() || {};
+
+    await ref.set({
+        walletKey: masterWalletKey,
+        rawWalletKey: safeWalletKey,
+        sessionId,
+        deviceId,
+        deviceName,
+        playerName,
+        userAgent: String(body.userAgent || "").slice(0, 220),
+        platform: String(body.platform || "").slice(0, 80),
+        lastAction: body.forceReconnect ? "reconnect" : "claim",
+        createdAt: old.createdAt || now,
+        updatedAt: now
+    });
+
+    return res.status(200).json({
+        ok: true,
+        walletKey: masterWalletKey,
+        rawWalletKey: safeWalletKey,
+        sessionId,
+        oldSessionId: old.sessionId || "",
+        oldDeviceId: old.deviceId || ""
+    });
+}
+
+if (action === "check_login_session") {
+    const sessionId = cleanText(body.sessionId || "");
+
+    let masterWalletKey = safeWalletKey;
+
+    try {
+        const aliasSnap = await db.ref(`accountLinks/wallet/${safeWalletKey}/masterWalletKey`).once("value");
+        if (aliasSnap.exists()) masterWalletKey = safeKey(aliasSnap.val() || safeWalletKey);
+    } catch (_) {}
+
+    try {
+        const walletMasterSnap = await db.ref(`wallets/${safeWalletKey}/masterWalletKey`).once("value");
+        if (walletMasterSnap.exists()) masterWalletKey = safeKey(walletMasterSnap.val() || masterWalletKey);
+    } catch (_) {}
+
+    if (!masterWalletKey) masterWalletKey = safeWalletKey;
+
+    const snap = await db.ref("loginSessions/" + masterWalletKey).once("value");
+    const data = snap.val() || {};
+
+    return res.status(200).json({
+        ok: true,
+        walletKey: masterWalletKey,
+        rawWalletKey: safeWalletKey,
+        activeSessionId: data.sessionId || "",
+        activeDeviceId: data.deviceId || "",
+        activeDeviceName: data.deviceName || "",
+        kicked: !!(data.sessionId && sessionId && data.sessionId !== sessionId),
+        data
+    });
+}
+
+if (action === "release_login_session") {
+    const sessionId = cleanText(body.sessionId || "");
+
+    let masterWalletKey = safeWalletKey;
+
+    try {
+        const aliasSnap = await db.ref(`accountLinks/wallet/${safeWalletKey}/masterWalletKey`).once("value");
+        if (aliasSnap.exists()) masterWalletKey = safeKey(aliasSnap.val() || safeWalletKey);
+    } catch (_) {}
+
+    try {
+        const walletMasterSnap = await db.ref(`wallets/${safeWalletKey}/masterWalletKey`).once("value");
+        if (walletMasterSnap.exists()) masterWalletKey = safeKey(walletMasterSnap.val() || masterWalletKey);
+    } catch (_) {}
+
+    if (!masterWalletKey) masterWalletKey = safeWalletKey;
+
+    const ref = db.ref("loginSessions/" + masterWalletKey);
+    const snap = await ref.once("value");
+    const data = snap.val() || {};
+
+    if (data.sessionId && data.sessionId === sessionId) {
+        await ref.update({
+            lastAction: "release",
+            updatedAt: Date.now()
+        });
+    }
+
+    return res.status(200).json({
+        ok: true,
+        walletKey: masterWalletKey
+    });
+}
     return res.status(400).json({ ok: false, error: "Hành động không hợp lệ." });
 
   } catch (err) {
