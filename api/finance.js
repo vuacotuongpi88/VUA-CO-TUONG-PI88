@@ -2334,7 +2334,14 @@ if (action === "request_pi_browser_action") {
             error: "Loại yêu cầu không hợp lệ."
         });
     }
+    const amountPi = Number(body.amountPi || body.amount || 0);
 
+    if (requestType === "deposit" && (!Number.isFinite(amountPi) || amountPi <= 0)) {
+        return res.status(400).json({
+            ok: false,
+            error: "Thiếu số Pi muốn nạp."
+        });
+    }
     let masterWalletKey = safeWalletKey;
 
     const mySnap = await db.ref("wallets/" + safeWalletKey).once("value");
@@ -2394,6 +2401,8 @@ if (action === "request_pi_browser_action") {
         masterWalletKey,
         piWalletKey,
         fromWalletKey: safeWalletKey,
+        amountPi,
+        amount: amountPi,
         createdAt: now,
         expiresAt: now + 15 * 60 * 1000
     };

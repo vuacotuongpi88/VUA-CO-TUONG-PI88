@@ -33067,8 +33067,8 @@ let currentRoomBucket = null;
 let isJoiningStakeRoom = false;
 
 function isPiBrowserRuntime() {
-    const ua = String(navigator.userAgent || "");
-    return !!window.Pi || /PiBrowser|Pi Browser|PiNetwork|MinePi/i.test(ua);
+    const ua = String(navigator.userAgent || "").toLowerCase();
+    return /pibrowser|pi browser|minepi|pinetwork/.test(ua);
 }
 
 function getAccountKey() {
@@ -33159,9 +33159,9 @@ async function financePost(action, body = {}, walletKeyOverride = "") {
     return data;
 }
 function isPiBrowserRuntime() {
-    return !!window.Pi || /PiBrowser|Pi Browser|PiNetwork|MinePi/i.test(navigator.userAgent || "");
+    const ua = String(navigator.userAgent || "").toLowerCase();
+    return /pibrowser|pi browser|minepi|pinetwork/.test(ua);
 }
-
 async function requestPiBrowserMoneyAction(type) {
     try {
         // Ở Pi Browser thì cho chạy nạp/rút bình thường, không gửi vòng lại
@@ -35551,6 +35551,10 @@ async function syncPiPendingBeforeWithdraw() {
   return;
 }
 async function processWithdraw() {
+        if (!isPiBrowserRuntime()) {
+        alert("Rút Pi chỉ xử lý trong Pi Browser. Tài khoản Google sẽ gửi yêu cầu qua Pi Browser để xác nhận.");
+        return;
+    }
     const state = getWithdrawState();
     if (state.count >= MAX_WITHDRAW_PER_DAY) {
         alert("Hôm nay đã rút đủ 5 lần rồi. Mai quay lại nhé!");
@@ -40418,6 +40422,10 @@ async function onIncompletePaymentFound(payment) {
 
 async function startPiDeposit(amount = 1) {
   try {
+        if (!isPiBrowserRuntime()) {
+        alert("Nạp Pi chỉ xử lý trong Pi Browser. Tài khoản Google sẽ gửi yêu cầu qua Pi Browser để xác nhận.");
+        return;
+    }
     console.log("0. Bắt đầu nạp Pi...");
     if (!window.Pi) { 
         alert("Lỗi: Không tìm thấy window.Pi. Nhớ mở bằng Pi Browser!"); 
