@@ -46037,9 +46037,13 @@ setTimeout(forceAccountLinkButtonLobbyOnly, 2500);
 
     // Pi login hoặc login xong nhưng auth callback chạy trước
     setTimeout(bootOneDeviceLock, 2500);
-    setInterval(function () {
-        if (!isKickedByOtherDevice) window.claimOneDeviceSession();
-    }, 15000);
+   // Không tự claim lại nữa, chỉ heartbeat kiểm tra phiên.
+// Máy nào bị thiết bị khác chiếm thì heartbeat sẽ tự bật popup văng.
+setInterval(function () {
+    if (!isKickedByOtherDevice && typeof heartbeatOneDeviceSession === "function") {
+        heartbeatOneDeviceSession();
+    }
+}, 7000);
 
     window.addEventListener("beforeunload", function () {
         try {
