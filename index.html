@@ -33067,6 +33067,37 @@ let currentRoomBucket = null;
 let isJoiningStakeRoom = false;
 
 function isPiBrowserRuntime() {
+    try {
+        // Ưu tiên mode đã khóa khi bấm Đăng nhập GG / Đăng nhập Pi
+        if (typeof getAccountLinkModeStable === "function") {
+            return getAccountLinkModeStable() === "pi";
+        }
+    } catch (_) {}
+
+    const mode = String(localStorage.getItem("mc_login_mode") || "").toLowerCase();
+    if (mode === "pi") return true;
+    if (mode === "google") return false;
+
+    const rawWalletKey = String(
+        typeof getRawWalletDbKey === "function"
+            ? getRawWalletDbKey()
+            : (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "")
+    ).replace(/[.#$\[\]\/]/g, "_");
+
+    // Tài khoản Google ngoài web thì không được tính là Pi Browser
+    if (rawWalletKey.startsWith("google_")) return false;
+
+    // Pi Browser thật thường đã có Pi info lưu local
+    const hasPiInfo =
+        !!localStorage.getItem("pi-user-name") ||
+        !!localStorage.getItem("pi-username") ||
+        !!localStorage.getItem("piUsername") ||
+        !!localStorage.getItem("pi-user-uid") ||
+        !!localStorage.getItem("pi-uid") ||
+        !!localStorage.getItem("piUid");
+
+    if (hasPiInfo) return true;
+
     const ua = String(navigator.userAgent || "").toLowerCase();
     return /pibrowser|pi browser|minepi|pinetwork/.test(ua);
 }
@@ -35551,10 +35582,6 @@ async function syncPiPendingBeforeWithdraw() {
   return;
 }
 async function processWithdraw() {
-        if (!isPiBrowserRuntime()) {
-        alert("Rút Pi chỉ xử lý trong Pi Browser. Tài khoản Google sẽ gửi yêu cầu qua Pi Browser để xác nhận.");
-        return;
-    }
     const state = getWithdrawState();
     if (state.count >= MAX_WITHDRAW_PER_DAY) {
         alert("Hôm nay đã rút đủ 5 lần rồi. Mai quay lại nhé!");
@@ -40422,10 +40449,6 @@ async function onIncompletePaymentFound(payment) {
 
 async function startPiDeposit(amount = 1) {
   try {
-        if (!isPiBrowserRuntime()) {
-        alert("Nạp Pi chỉ xử lý trong Pi Browser. Tài khoản Google sẽ gửi yêu cầu qua Pi Browser để xác nhận.");
-        return;
-    }
     console.log("0. Bắt đầu nạp Pi...");
     if (!window.Pi) { 
         alert("Lỗi: Không tìm thấy window.Pi. Nhớ mở bằng Pi Browser!"); 
