@@ -8056,6 +8056,11 @@ provider.setCustomParameters({
 async function applyLoggedInUI(displayName, photoURL) {
     const user = auth.currentUser;
     if (!user) return;
+
+    if (typeof resolveMasterWalletNow === "function") {
+        await resolveMasterWalletNow().catch(() => {});
+    }
+
     const walletKey = makeWalletDbKey();
 
     // 🔥 LỆNH QUAN TRỌNG: Ghi UID vào ví để "thông quan" bộ Rules
@@ -33187,9 +33192,20 @@ function setScopedMasterWallet(masterWalletKey, rawWalletKey = "") {
 
 function makeWalletDbKey() {
     const rawWalletKey = getRawWalletDbKey();
-    const master = localStorage.getItem(getScopedMasterKey(rawWalletKey)) || "";
 
-    if (master) return master.replace(/[.#$\[\]\/]/g, "_");
+    const scopedMaster = localStorage.getItem(getScopedMasterKey(rawWalletKey)) || "";
+    if (scopedMaster) {
+        return scopedMaster.replace(/[.#$\[\]\/]/g, "_");
+    }
+
+    // Chỉ Pi Browser mới được ăn key master cũ.
+    // Google thì không ăn bừa, tránh đăng nhập Google acc khác bị dính master cũ.
+    if (!rawWalletKey.startsWith("google_")) {
+        const legacyMaster = localStorage.getItem("mc_master_wallet_key") || "";
+        if (legacyMaster) {
+            return legacyMaster.replace(/[.#$\[\]\/]/g, "_");
+        }
+    }
 
     return rawWalletKey;
 }
@@ -33527,11 +33543,15 @@ window.resolveMasterWalletNow = async function() {
             piUid
         }, rawWalletKey);
 
-        if (data.masterWalletKey && data.masterWalletKey !== rawWalletKey) {
-            localStorage.setItem("mc_master_wallet_key", data.masterWalletKey);
+        const master = String(data.masterWalletKey || rawWalletKey)
+            .replace(/[.#$\[\]\/]/g, "_");
+
+        if (master && master !== rawWalletKey) {
+            setScopedMasterWallet(master, rawWalletKey);
+            localStorage.setItem("mc_master_wallet_key", master);
         }
 
-        return data.masterWalletKey || rawWalletKey;
+        return master || rawWalletKey;
     } catch (err) {
         console.warn("resolveMasterWalletNow lỗi:", err);
         return makeWalletDbKey();
