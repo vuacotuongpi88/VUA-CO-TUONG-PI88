@@ -45524,5 +45524,138 @@ setTimeout(forceAccountLinkButtonLobbyOnly, 300);
 setTimeout(forceAccountLinkButtonLobbyOnly, 1000);
 setTimeout(forceAccountLinkButtonLobbyOnly, 2500);
 </script>
+<style>
+/* ===== NÚT LIÊN KẾT PI: CHO KÉO TỰ DO ===== */
+#account-link-open-btn.account-link-btn {
+    position: fixed !important;
+    left: 10px;
+    top: 170px;
+    right: auto !important;
+    bottom: auto !important;
+    z-index: 99999 !important;
+    touch-action: none !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+}
+
+#account-link-open-btn.account-link-dragging {
+    opacity: 0.75 !important;
+    transform: scale(0.96);
+}
+</style>
+
+<script>
+/* ===== KÉO NÚT LIÊN KẾT PI ĐI ĐÂU CŨNG ĐƯỢC ===== */
+(function () {
+    const POS_KEY = "account_link_btn_pos_v3";
+
+    function clamp(n, min, max) {
+        return Math.max(min, Math.min(max, n));
+    }
+
+    function applySavedAccountLinkBtnPos() {
+        const btn = document.getElementById("account-link-open-btn");
+        if (!btn) return;
+
+        try {
+            const saved = JSON.parse(localStorage.getItem(POS_KEY) || "null");
+            if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
+                const maxX = window.innerWidth - btn.offsetWidth - 4;
+                const maxY = window.innerHeight - btn.offsetHeight - 4;
+
+                btn.style.left = clamp(saved.x, 4, maxX) + "px";
+                btn.style.top = clamp(saved.y, 4, maxY) + "px";
+                btn.style.right = "auto";
+                btn.style.bottom = "auto";
+            }
+        } catch (e) {}
+    }
+
+    function enableDragAccountLinkBtn() {
+        const btn = document.getElementById("account-link-open-btn");
+        if (!btn || btn.__dragReady) return;
+        btn.__dragReady = true;
+
+        applySavedAccountLinkBtnPos();
+
+        let startX = 0;
+        let startY = 0;
+        let btnX = 0;
+        let btnY = 0;
+        let moved = false;
+        let lastDragAt = 0;
+
+        btn.addEventListener("pointerdown", function (e) {
+            if (e.button !== undefined && e.button !== 0) return;
+
+            startX = e.clientX;
+            startY = e.clientY;
+            btnX = btn.offsetLeft;
+            btnY = btn.offsetTop;
+            moved = false;
+
+            btn.classList.add("account-link-dragging");
+
+            try {
+                btn.setPointerCapture(e.pointerId);
+            } catch (_) {}
+        });
+
+        btn.addEventListener("pointermove", function (e) {
+            if (!btn.classList.contains("account-link-dragging")) return;
+
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+
+            if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
+
+            const maxX = window.innerWidth - btn.offsetWidth - 4;
+            const maxY = window.innerHeight - btn.offsetHeight - 4;
+
+            const x = clamp(btnX + dx, 4, maxX);
+            const y = clamp(btnY + dy, 4, maxY);
+
+            btn.style.left = x + "px";
+            btn.style.top = y + "px";
+            btn.style.right = "auto";
+            btn.style.bottom = "auto";
+
+            e.preventDefault();
+        });
+
+        function endDrag() {
+            if (!btn.classList.contains("account-link-dragging")) return;
+
+            btn.classList.remove("account-link-dragging");
+
+            if (moved) {
+                lastDragAt = Date.now();
+                localStorage.setItem(POS_KEY, JSON.stringify({
+                    x: btn.offsetLeft,
+                    y: btn.offsetTop
+                }));
+            }
+        }
+
+        btn.addEventListener("pointerup", endDrag);
+        btn.addEventListener("pointercancel", endDrag);
+
+        // Nếu vừa kéo xong thì chặn click, tránh kéo xong nó tự bật popup
+        btn.addEventListener("click", function (e) {
+            if (Date.now() - lastDragAt < 350) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                return false;
+            }
+        }, true);
+
+        window.addEventListener("resize", applySavedAccountLinkBtnPos);
+    }
+
+    setTimeout(enableDragAccountLinkBtn, 300);
+    setTimeout(enableDragAccountLinkBtn, 1000);
+    setInterval(enableDragAccountLinkBtn, 2000);
+})();
+</script>
 </body>
 </html>
