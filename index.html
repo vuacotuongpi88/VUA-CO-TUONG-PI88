@@ -34660,16 +34660,20 @@ async function chargeStakeForReady(roomId, side) {
 
         const sidePlayer = room?.players?.[side] || {};
 
-        const realMyWalletKey = typeof makeWalletDbKey === "function"
-            ? String(makeWalletDbKey() || "").trim()
-            : "";
+        const rawWalletKey = typeof getRawWalletDbKey === "function"
+    ? String(getRawWalletDbKey() || "").trim()
+    : "";
 
-        const targetWalletKey = String(
-            realMyWalletKey ||
-            localProfile.walletKey ||
-            sidePlayer.walletKey ||
-            ""
-        ).trim();
+const realMyWalletKey = typeof makeWalletDbKey === "function"
+    ? String(makeWalletDbKey() || "").trim()
+    : "";
+
+const targetWalletKey = String(
+    realMyWalletKey ||
+    localProfile.walletKey ||
+    sidePlayer.walletKey ||
+    ""
+).trim();
 
         console.log("READY_WALLET_DEBUG", {
             roomId,
@@ -34730,16 +34734,20 @@ async function chargeStakeForReady(roomId, side) {
                 headers: {
     "Content-Type": "application/json",
     "Authorization": "Bearer " + token,
-    "x-wallet-key": targetWalletKey
+    "x-wallet-key": targetWalletKey,
+    "x-raw-wallet-key": rawWalletKey,
+    "x-master-wallet-key": targetWalletKey
 },
                 body: JSON.stringify({
-                    roomId,
-                    side,
-                    walletKey: targetWalletKey,
-                    useTicket: !!wantUseTicket,
-                    name: localProfile.name || localProfile.username || "Người chơi",
-                    photo: localProfile.photo || "images/do_tuong.png"
-                })
+    roomId,
+    side,
+    walletKey: targetWalletKey,
+    rawWalletKey,
+    masterWalletKey: targetWalletKey,
+    useTicket: !!wantUseTicket,
+    name: localProfile.name || localProfile.username || "Người chơi",
+    photo: localProfile.photo || "images/do_tuong.png"
+})
             });
 
             const rawText = await res.text();

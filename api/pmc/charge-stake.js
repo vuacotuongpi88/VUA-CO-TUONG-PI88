@@ -57,10 +57,21 @@ module.exports = async function handler(req, res) {
     const decoded = await getAuth(adminApp).verifyIdToken(token);
     const uid = decoded.uid;
 
-    const roomId = safeKey(body.roomId);
-    const side = String(body.side || "").trim();
-    const walletKey = safeKey(body.walletKey);
-    const useTicket = !!body.useTicket;
+   const roomId = safeKey(body.roomId);
+const side = String(body.side || "").trim();
+
+// walletKey là ví sẽ bị trừ tiền, thường là ví Google master
+const walletKey = safeKey(body.walletKey);
+
+// rawWalletKey là ví thật đang đăng nhập hiện tại, ví dụ Pi Browser là pi_098...
+const rawWalletKey = safeKey(
+  req.headers["x-raw-wallet-key"] ||
+  body.rawWalletKey ||
+  body.piWalletKey ||
+  ""
+);
+
+const useTicket = !!body.useTicket;
 
     if (!roomId || !["do", "den"].includes(side)) {
       return res.status(400).json({ ok: false, error: "Thiếu roomId hoặc side" });
@@ -91,15 +102,50 @@ module.exports = async function handler(req, res) {
     }
 
     const walletRef = db.ref(`wallets/${walletKey}`);
-    const walletSnap = await walletRef.once("value");
-    const wallet = walletSnap.val() || {};
+const rawWalletRef = rawWalletKey ? db.ref(`wallets/${rawWalletKey}`) : walletRef;
 
-    if (String(wallet.uid || "") !== uid) {
-      return res.status(403).json({
-        ok: false,
-        error: "Ví này không thuộc tài khoản đang đăng nhập"
-      });
-    }
+const [walletSnap, rawWalletSnap] = await Promise.all([
+  walletRef.once("value"),
+  rawWalletRef.once("value")
+]);
+
+const wallet = walletSnap.val() || {};
+const rawWallet = rawWalletSnap.val() || {};
+
+function sameKey(a, b) {
+  const aa = safeKey(a);
+  const bb = safeKey(b);
+  return !!aa && !!bb && aa === bb;
+}
+
+function canUseChargeWallet(baseWallet = wallet) {
+  const baseUid = String(baseWallet.uid || "");
+  const rawUid = String(rawWallet.uid || "");
+
+  // Trường hợp bình thường: ví thuộc đúng tài khoản đang đăng nhập
+  if (baseUid === uid) return true;
+
+  // Trường hợp Pi Browser đang đăng nhập ví Pi, nhưng được phép xài ví Google master đã liên kết
+  if (rawWalletKey && rawUid === uid) {
+    return (
+      sameKey(rawWallet.masterWalletKey, walletKey) ||
+      sameKey(rawWallet.linkedMasterWalletKey, walletKey) ||
+      sameKey(rawWallet.linkedGoogleWalletKey, walletKey) ||
+      sameKey(baseWallet.linkedPiWalletKey, rawWalletKey) ||
+      sameKey(baseWallet.piWalletKey, rawWalletKey) ||
+      sameKey(baseWallet.linkedPiWalletKey, rawWallet.walletKey)
+    );
+  }
+
+  return false;
+}
+
+if (!canUseChargeWallet(wallet)) {
+  return res.status(403).json({
+    ok: false,
+    error: "Ví này không thuộc tài khoản đang đăng nhập"
+  });
+}
 
     // FIX QUAN TRỌNG:
     // Không dùng Math.floor ở đây nữa.
@@ -161,15 +207,16 @@ module.exports = async function handler(req, res) {
 
         if (!base) return;
 
-        if (String(base.uid || "") !== uid) {
-          console.log("CHARGE_TICKET_UID_MISMATCH_TX", {
-            walletKey,
-            uid,
-            walletUid: base.uid
-          });
-          return;
-        }
-
+if (!canUseChargeWallet(base)) {
+  console.log("CHARGE_TICKET_UID_MISMATCH_TX", {
+    walletKey,
+    rawWalletKey,
+    uid,
+    walletUid: base.uid,
+    rawWalletUid: rawWallet.uid
+  });
+  return;
+}
         beforeTickets = Math.max(0, Math.floor(Number(base.freeTickets || 0) || 0));
 
         console.log("CHARGE_TICKET_TX_WALLET", {
@@ -285,14 +332,16 @@ module.exports = async function handler(req, res) {
 
       if (!base) return;
 
-      if (String(base.uid || "") !== uid) {
-        console.log("CHARGE_STAKE_UID_MISMATCH_TX", {
-          walletKey,
-          uid,
-          walletUid: base.uid
-        });
-        return;
-      }
+if (!canUseChargeWallet(base)) {
+  console.log("CHARGE_STAKE_UID_MISMATCH_TX", {
+    walletKey,
+    rawWalletKey,
+    uid,
+    walletUid: base.uid,
+    rawWalletUid: rawWallet.uid
+  });
+  return;
+}
 
       beforePmc = normalizePmc(base.pmcBalance || 0);
 
