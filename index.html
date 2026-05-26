@@ -45995,15 +45995,37 @@ setTimeout(forceAccountLinkButtonLobbyOnly, 2500);
     };
 
     window.reconnectOneDeviceSession = async function reconnectOneDeviceSession() {
-        const overlay = document.getElementById("single-device-kick-overlay");
-        if (overlay) overlay.classList.remove("show");
+    const overlay = document.getElementById("single-device-kick-overlay");
+    if (overlay) overlay.classList.remove("show");
 
-        isKickedByOtherDevice = false;
-        await window.claimOneDeviceSession();
+    isKickedByOtherDevice = false;
 
-        alert("Đã kết nối lại. Nếu thiết bị kia còn mở, bên kia sẽ bị văng.");
-    };
+    stopOneDeviceWatcher();
 
+    const walletKey = await getOneDeviceSessionKey();
+    if (!walletKey) {
+        alert("Chưa lấy được tài khoản, tải lại game thử.");
+        return;
+    }
+
+    const deviceId = getOneDeviceId();
+    currentSessionKey = walletKey;
+    sessionRef = db.ref(SESSION_ROOT + "/" + walletKey);
+
+    await sessionRef.set({
+        deviceId,
+        uid: String(window.auth?.currentUser?.uid || ""),
+        name: getOneDevicePlayerName(),
+        deviceName: getDeviceName(),
+        rawWalletKey: getRawOneDeviceWalletKey(),
+        updatedAt: firebase.database.ServerValue.TIMESTAMP,
+        lastAction: "reconnect"
+    });
+
+    await claimOneDeviceSession();
+
+    alert("Đã kết nối lại. Thiết bị khác sẽ bị văng.");
+};
     window.releaseOneDeviceSession = async function releaseOneDeviceSession() {
         try {
             if (!sessionRef) return;
@@ -46013,11 +46035,8 @@ setTimeout(forceAccountLinkButtonLobbyOnly, 2500);
             const data = snap.val() || {};
 
             if (data.deviceId === deviceId) {
-                await sessionRef.update({
-                    lastAction: "logout",
-                    updatedAt: firebase.database.ServerValue.TIMESTAMP
-                });
-            }
+    await sessionRef.remove();
+}
         } catch (_) {}
 
         stopOneDeviceWatcher();
@@ -46048,10 +46067,12 @@ setInterval(function () {
     window.addEventListener("beforeunload", function () {
         try {
             if (sessionRef && !isKickedByOtherDevice) {
-                sessionRef.update({
-                    lastAction: "close_tab",
-                    updatedAt: firebase.database.ServerValue.TIMESTAMP
-                });
+                sessionRef.once("value").then(function(snap) {
+    const data = snap.val() || {};
+    if (data.deviceId === getOneDeviceId()) {
+        sessionRef.remove();
+    }
+}).catch(function(){});
             }
         } catch (_) {}
     });
