@@ -9430,7 +9430,11 @@ async function isPlayerAwayFromThisRoomByPresence(roomId, player = {}) {
     const stateRoomId = String(state.roomId || "").trim();
     const updatedAt = Number(state.updatedAt || 0) || 0;
     const now = Date.now();
-
+// Nếu thiết bị đã ngắt/tab đóng thì coi là rời sau 2.5s.
+// Tránh đá nhầm lúc reload cực nhanh.
+if (state.online === false && updatedAt && now - updatedAt > 2500) {
+    return true;
+}
     // Không có dữ liệu thì đừng đoán bậy.
     if (!stateName && !updatedAt) return false;
 
@@ -9681,7 +9685,62 @@ if (typeof isBotPlayerObj === "function" && isBotPlayerObj(p)) {
     console.log("Đã tự dọn người rời phòng theo presence:", leavingSides);
     return true;
 }
+let playingLeaveCleanupLock = "";
 
+async function cleanupOpponentWhoLeftPlayingRoom(room = {}, roomId = currentRoomId) {
+    if (!roomId || !room) return false;
+    if (room.status !== "playing" || room.winner) return false;
+    if (!mySide || !["do", "den"].includes(mySide)) return false;
+
+    const oppSide = mySide === "do" ? "den" : "do";
+    const opp = room.players?.[oppSide];
+
+    if (!opp) return false;
+
+    // Bot không xử bằng presence, bot có hàm dọn riêng
+    if (typeof isBotPlayerObj === "function" && isBotPlayerObj(opp)) return false;
+
+    const away = await isPlayerAwayFromThisRoomByPresence(roomId, opp);
+    if (!away) return false;
+
+    const lockKey = [
+        roomId,
+        mySide,
+        oppSide,
+        room.updatedAt || "",
+        Math.floor(Date.now() / 2500)
+    ].join("|");
+
+    if (playingLeaveCleanupLock === lockKey) return false;
+    playingLeaveCleanupLock = lockKey;
+
+    const mode = room.mode || currentRoomMode || "co-tuong";
+    const stake = Math.max(0, Math.floor(Number(room.stakePMC || currentRoomStakePMC || 0) || 0));
+    const bucket = room.roomBucket || currentRoomBucket || makeStakeBucket(mode, stake);
+
+    const updates = {};
+
+    updates[`matches/${roomId}/winner`] = mySide;
+    updates[`matches/${roomId}/winReason`] = "bochay";
+    updates[`matches/${roomId}/status`] = "finished";
+    updates[`matches/${roomId}/finishedAt`] = firebase.database.ServerValue.TIMESTAMP;
+    updates[`matches/${roomId}/quitSide`] = oppSide;
+    updates[`matches/${roomId}/quitUid`] = opp.uid || "";
+    updates[`matches/${roomId}/quitAt`] = firebase.database.ServerValue.TIMESTAMP;
+    updates[`matches/${roomId}/players/${oppSide}/leaving`] = true;
+    updates[`matches/${roomId}/players/${oppSide}/leftAt`] = firebase.database.ServerValue.TIMESTAMP;
+    updates[`matches/${roomId}/ready/${oppSide}`] = false;
+    updates[`matches/${roomId}/stakeLocked/${oppSide}`] = false;
+    updates[`matches/${roomId}/lobbyOpen`] = false;
+    updates[`matches/${roomId}/updatedAt`] = firebase.database.ServerValue.TIMESTAMP;
+
+    if (bucket) {
+        updates[`waitingRooms/${bucket}/${roomId}`] = null;
+    }
+
+    await db.ref().update(updates);
+    return true;
+}
 async function preloadNextMatchData() {
     const roomId = currentRoomId;
     if (!roomId) return;
@@ -30689,7 +30748,7 @@ async function forceCleanupFinishedBotRoomAfterPaid(room = {}, roomId = currentR
         };
 
         await db.ref().update(updates);
-
+resetBotLocalStateAfterMatch();
         const myWalletNow =
             typeof makeWalletDbKey === "function"
                 ? String(makeWalletDbKey() || "")
@@ -31871,15 +31930,16 @@ function ensureBotWorkerHtml() {
         const humanSide = botSide === "do" ? "den" : "do";
 
         if (!result.move) {
-            await db.ref("matches/" + roomId).update({
-                winner: humanSide,
-                winReason: "checkmate",
-                finishedAt: firebase.database.ServerValue.TIMESTAMP,
-                updatedAt: firebase.database.ServerValue.TIMESTAMP
-            });
-            return;
-        }
-
+    await db.ref("matches/" + roomId).update({
+        winner: humanSide,
+        winReason: "checkmate",
+        status: "finished",
+        lobbyOpen: false,
+        finishedAt: firebase.database.ServerValue.TIMESTAMP,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+    });
+    return;
+}
         if (typeof botMoveHistory !== "undefined") {
             botMoveHistory.push({
                 hash: result.move.hash,
@@ -31925,7 +31985,18 @@ window.botWorker.onerror = function(err) {
 };
     return window.botWorker;
 }
+function resetBotLocalStateAfterMatch() {
+    try {
+        if (typeof cancelBotWaiting === "function") cancelBotWaiting();
+        window.__isBotThinking = false;
+        window.__botThinkRoomId = "";
+        window.__botThinkSide = "";
 
+        if (typeof botMoveHistory !== "undefined") {
+            botMoveHistory = [];
+        }
+    } catch (_) {}
+}
 function runBotThinkNow(room, delayMs = 80, source = "") {
     try {
         if (!room || room.status !== "playing" || room.winner) return;
@@ -32120,7 +32191,14 @@ if (typeof applyBoardPerspective === "function") {
         currentRoomStatus = room.status || null;
         readyDo = !!room.ready?.do;
         readyDen = !!room.ready?.den;
-
+if (
+    room.status === "playing" &&
+    !room.winner &&
+    typeof cleanupOpponentWhoLeftPlayingRoom === "function"
+) {
+    cleanupOpponentWhoLeftPlayingRoom(room, listeningRoomId)
+        .catch(err => console.error("Dọn đối thủ thoát ngang khi đang đánh lỗi:", err));
+}
         if (mySide) {
             saveActiveMatchSnapshot({
                 roomId: listeningRoomId,
@@ -38725,7 +38803,7 @@ let lobbyCleanupInFlight = false;
 
 // HOTFIX PHÒNG ẢO: phòng chờ phải có heartbeat sống.
 // Nếu host tắt app / rớt mạng / tạo nhiều phòng rồi bỏ đó, phòng sẽ tự ẩn và bị đóng lobby.
-const LOBBY_WAITING_STALE_MS = 90 * 1000;
+const LOBBY_WAITING_STALE_MS = 15000;
 const LOBBY_PLAYING_STALE_MS = 2 * 60 * 60 * 1000;
 const LOBBY_CLEAN_SCAN_LIMIT = 30;
 
@@ -38924,7 +39002,7 @@ function isFreshOpenWaitingRoom(room = {}) {
 
     if (!t) return true;
 
-    return Date.now() - t < 30000; // phòng mới tạo 30s đầu tuyệt đối không dọn
+    return Date.now() - t < 8000;
 }
 
 function shouldCheckOpenWaitingRoomByPresence(room = {}) {
@@ -38941,7 +39019,7 @@ function shouldCheckOpenWaitingRoomByPresence(room = {}) {
     const aliveAge = aliveAt ? Date.now() - aliveAt : 999999999;
 
     // Chỉ check presence khi tim lobby chết lâu rồi
-    return aliveAge > 45000;
+    return aliveAge > 9000;
 }
 async function cleanupGhostLobbyRoom(roomId, room = {}) {
     try {
@@ -39017,41 +39095,50 @@ if (
 }
 
 let lobbyPollTimer = null;
-function bindLobbyRoomList() {
-    if (typeof window.lobbyBound !== "undefined" && window.lobbyBound) return;
-    window.lobbyBound = true;
 
-    // Rút sạch cái ống hút trực tiếp cũ ra
+function bindLobbyRoomList() {
+    // Gỡ listener cũ rồi gắn lại, tránh bị kẹt window.lobbyBound cũ
     if (lobbyRoomListRef) {
         lobbyRoomListRef.off();
+        lobbyRoomListRef = null;
     }
 
-    const fetchLobby = async () => {
-        try {
-            // Chỉ kéo 1 lần (once), không cắm cọc (on) nữa. Giảm xuống 20 phòng mới nhất.
-            await cleanupGhostLobbyRoomsOnce().catch(() => {});
-            const snap = await db.ref("matches").orderByChild("createdAt").limitToLast(20).once("value");
-            const roomList = [];
+    clearInterval(lobbyPollTimer);
+    window.lobbyBound = true;
 
-            snap.forEach(child => {
-                const room = child.val();
-                if (!room) return;
-                room.id = child.key;
-                if (shouldShowLobbyRoom(room)) {
-                    roomList.push(room);
-                }
-            });
+    lobbyRoomListRef = db.ref("matches")
+        .orderByChild("createdAt")
+        .limitToLast(40);
 
-            renderLobbyRoomList(roomList);
-        } catch (err) {
-            console.error("Lỗi kéo sảnh:", err);
-        }
+    const renderFromSnap = (snap) => {
+        const roomList = [];
+
+        snap.forEach(child => {
+            const room = child.val();
+            if (!room) return;
+
+            room.id = child.key;
+
+            if (shouldShowLobbyRoom(room)) {
+                roomList.push(room);
+            }
+        });
+
+        roomList.sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+        renderLobbyRoomList(roomList);
+
+        // Dọn rác chạy sau, không chặn render sảnh
+        cleanupGhostLobbyRoomsOnce().catch(() => {});
     };
 
-    fetchLobby(); // Kéo ngay lúc mới vào sảnh
+    lobbyRoomListRef.on("value", renderFromSnap, err => {
+        console.error("Lỗi realtime lobby:", err);
+    });
 
-    // Cứ 15 giây mới kéo danh sách 1 lần thay vì tải cả đống mỗi giây
-    lobbyPollTimer = setInterval(fetchLobby, 15000); 
+    // Dọn phòng ảo nền nhẹ
+    lobbyPollTimer = setInterval(() => {
+        cleanupGhostLobbyRoomsOnce().catch(() => {});
+    }, 5000);
 }
 let friendListRef = null;
 let friendRequestRef = null;
@@ -39872,7 +39959,7 @@ function startPresenceHeartbeat() {
     };
 
     beat();
-    presenceHeartbeatTimer = setInterval(beat, 15000);
+    presenceHeartbeatTimer = setInterval(beat, 5000);
 }
 
 window.addEventListener("beforeunload", () => {
