@@ -41435,6 +41435,662 @@ document.addEventListener("click", function(e) {
         width: 100%;
     }
 }
+
+
+/* =========================================================
+   MISSION HUB MODERN FULLSCREEN - 2026-05-27
+   Giao diện nhiệm vụ thoáng hơn: full màn hình, summary ngang,
+   tab sticky, nút nhận tất cả cố định, tab cấp độ dạng dây rương.
+========================================================= */
+#mission-hub-modal {
+    padding: 0 !important;
+    background: rgba(0,0,0,0.86) !important;
+    backdrop-filter: blur(6px);
+}
+
+#mission-hub-modal.show {
+    display: flex !important;
+}
+
+#mission-hub-modal .mission-hub-box,
+#mission-hub-modal .mission-modern-box {
+    position: relative !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    border-radius: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    border: 0 !important;
+    background:
+        radial-gradient(circle at top left, rgba(123,47,247,0.32), transparent 32%),
+        radial-gradient(circle at top right, rgba(85,239,196,0.16), transparent 28%),
+        linear-gradient(180deg, rgba(10,5,21,0.98), rgba(4,13,10,0.98)) !important;
+    box-shadow: none !important;
+}
+
+.mission-modern-header {
+    flex: 0 0 auto !important;
+    padding: max(12px, env(safe-area-inset-top, 0px) + 10px) 14px 10px !important;
+    min-height: auto !important;
+    background:
+        linear-gradient(90deg, rgba(84, 16, 154, 0.98), rgba(20, 99, 83, 0.96)) !important;
+    border-bottom: 1px solid rgba(244,197,66,0.28);
+}
+
+.mission-modern-title-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.mission-modern-title-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 10px;
+    background: rgba(0,0,0,0.34);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: inset 0 0 14px rgba(255,255,255,0.05), 0 0 12px rgba(244,197,66,0.18);
+}
+
+.mission-modern-header .mission-hub-title {
+    font-size: clamp(18px, 5.1vw, 26px) !important;
+    line-height: 1.05 !important;
+    letter-spacing: 0.5px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mission-modern-header .mission-hub-sub {
+    font-size: 11px !important;
+    color: rgba(255, 248, 214, 0.86) !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mission-modern-header .mission-hub-close {
+    width: 38px;
+    height: 38px;
+    border-radius: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.32);
+    border: 1px solid rgba(255,255,255,0.16);
+    color: #fff8d6;
+    box-shadow: 0 0 12px rgba(0,0,0,0.25);
+}
+
+.mission-modern-body {
+    position: relative !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow-y: auto !important;
+    padding: 0 10px 96px !important;
+    -webkit-overflow-scrolling: touch;
+}
+
+.mission-sticky-zone {
+    position: sticky;
+    top: 0;
+    z-index: 80;
+    padding: 10px 0 9px;
+    background:
+        linear-gradient(180deg, rgba(8, 8, 18, 0.98), rgba(8, 8, 18, 0.93) 76%, rgba(8, 8, 18, 0.68));
+    box-shadow: 0 14px 18px -18px rgba(0,0,0,0.92);
+    backdrop-filter: blur(8px);
+}
+
+.mission-summary-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 7px !important;
+    margin: 0 0 8px !important;
+}
+
+.mission-summary-card {
+    min-height: 62px;
+    border-radius: 14px !important;
+    padding: 9px 8px !important;
+    background:
+        linear-gradient(180deg, rgba(13, 31, 29, 0.88), rgba(10, 10, 20, 0.94)) !important;
+    border: 1px solid rgba(85, 239, 196, 0.30) !important;
+    box-shadow: inset 0 0 14px rgba(255,255,255,0.035), 0 0 12px rgba(85,239,196,0.08) !important;
+}
+
+.mission-summary-card strong {
+    margin: 0 0 5px !important;
+    font-size: 9.5px !important;
+    color: rgba(255, 248, 214, 0.82) !important;
+    letter-spacing: 0.1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mission-summary-value {
+    font-size: clamp(13px, 3.4vw, 22px) !important;
+    color: #65ffc4 !important;
+    line-height: 1.05 !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 0 0 10px rgba(85,239,196,0.22);
+}
+
+.mission-summary-note {
+    display: none !important;
+}
+
+.mission-top-tabs {
+    position: relative !important;
+    top: auto !important;
+    z-index: 82 !important;
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 0 !important;
+    margin: 0 !important;
+    padding: 3px !important;
+    border-radius: 16px !important;
+    background: rgba(0,0,0,0.38) !important;
+    border: 1px solid rgba(244,197,66,0.20);
+    box-shadow: inset 0 0 18px rgba(0,0,0,0.28) !important;
+}
+
+.mission-top-tab {
+    position: relative;
+    min-width: 0;
+    height: 38px;
+    padding: 0 4px !important;
+    border-radius: 13px !important;
+    border: 0 !important;
+    background: transparent !important;
+    color: #d9c9ff !important;
+    font-size: clamp(9px, 2.7vw, 12px) !important;
+    font-weight: 900 !important;
+    box-shadow: none !important;
+    white-space: nowrap;
+}
+
+.mission-top-tab.active {
+    background: linear-gradient(180deg, #8d38ff, #4d1d95) !important;
+    color: #fff8d6 !important;
+    box-shadow: 0 0 14px rgba(123,47,247,0.38), inset 0 0 10px rgba(255,255,255,0.08) !important;
+}
+
+.dot-red-small {
+    position: absolute;
+    top: 3px;
+    right: 5px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ff2d55;
+    box-shadow: 0 0 10px rgba(255,45,85,0.75);
+}
+
+.mission-pane {
+    display: none !important;
+    padding-top: 10px;
+}
+
+.mission-pane.show {
+    display: block !important;
+}
+
+.mission-pane-grid {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 9px !important;
+}
+
+.mission-card {
+    position: relative !important;
+    border-radius: 16px !important;
+    padding: 11px !important;
+    background:
+        linear-gradient(180deg, rgba(13, 27, 25, 0.95), rgba(8, 11, 18, 0.96)) !important;
+    border: 1px solid rgba(85, 239, 196, 0.22) !important;
+    box-shadow: 0 0 12px rgba(85,239,196,0.055) !important;
+}
+
+.mission-card.ready {
+    border-color: rgba(244,197,66,0.72) !important;
+    box-shadow: 0 0 16px rgba(244,197,66,0.15), inset 0 0 16px rgba(244,197,66,0.04) !important;
+}
+
+.mission-card.claimed {
+    opacity: 0.72;
+}
+
+.mission-card-head {
+    display: grid !important;
+    grid-template-columns: 1fr auto !important;
+    align-items: start !important;
+    gap: 8px !important;
+    margin-bottom: 8px;
+}
+
+.mission-card-title {
+    font-size: 13px !important;
+    color: #fff8d6 !important;
+    line-height: 1.2 !important;
+}
+
+.mission-card-desc {
+    margin-top: 3px !important;
+    font-size: 10px !important;
+    color: rgba(223,230,233,0.76) !important;
+    line-height: 1.35 !important;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.mission-card-badge {
+    border-radius: 999px !important;
+    padding: 6px 8px !important;
+    font-size: 9px !important;
+    font-weight: 900;
+    white-space: nowrap;
+    background: rgba(99,110,114,0.28) !important;
+    color: #dfe6e9 !important;
+    border: 1px solid rgba(255,255,255,0.10) !important;
+}
+
+.mission-card-badge.ready {
+    background: rgba(244,197,66,0.18) !important;
+    color: #ffeaa7 !important;
+    border-color: rgba(244,197,66,0.48) !important;
+    animation: missionReadyGlow 0.9s infinite alternate;
+}
+
+.mission-card-badge.claimed {
+    background: rgba(0,184,148,0.16) !important;
+    color: #7dffb3 !important;
+    border-color: rgba(85,239,196,0.35) !important;
+}
+
+@keyframes missionReadyGlow {
+    from { box-shadow: 0 0 5px rgba(244,197,66,0.16); }
+    to { box-shadow: 0 0 14px rgba(244,197,66,0.38); }
+}
+
+.mission-card-progress-line {
+    display: flex !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+    font-size: 10px !important;
+    color: rgba(255,255,255,0.72) !important;
+    margin: 4px 0 5px !important;
+}
+
+.mission-card-progress-bar {
+    height: 7px !important;
+    border-radius: 999px !important;
+    overflow: hidden !important;
+    background: rgba(255,255,255,0.09) !important;
+}
+
+.mission-card-progress-fill {
+    height: 100% !important;
+    border-radius: 999px !important;
+    background: linear-gradient(90deg, #8d38ff, #55efc4, #f4c542) !important;
+    transition: width 0.25s ease;
+}
+
+.mission-card-footer {
+    display: grid !important;
+    grid-template-columns: 1fr auto !important;
+    align-items: center !important;
+    gap: 8px !important;
+    margin-top: 9px !important;
+}
+
+.mission-reward-box {
+    min-width: 0;
+    border-radius: 12px !important;
+    padding: 7px 9px !important;
+    background: rgba(0,0,0,0.22) !important;
+    border: 1px solid rgba(85,239,196,0.13) !important;
+}
+
+.mission-reward-box strong {
+    display: none !important;
+}
+
+.mission-reward-value {
+    font-size: 12px !important;
+    color: #65ffc4 !important;
+    font-weight: 900;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mission-reward-note {
+    display: none !important;
+}
+
+.mission-claim-btn {
+    min-width: 92px !important;
+    height: 38px !important;
+    padding: 0 12px !important;
+    border-radius: 13px !important;
+    font-size: 10.5px !important;
+    background: linear-gradient(180deg, #00d4a3, #008f67) !important;
+    color: #fff !important;
+    border: 0 !important;
+    box-shadow: 0 0 12px rgba(0,184,148,0.20) !important;
+}
+
+.mission-claim-btn:disabled {
+    background: linear-gradient(180deg, #394448, #161d20) !important;
+    color: rgba(255,255,255,0.55) !important;
+    box-shadow: none !important;
+    cursor: default !important;
+}
+
+.mission-claim-btn.ready:not(:disabled) {
+    background: linear-gradient(180deg, #f4c542, #e17000) !important;
+    color: #1b1200 !important;
+    animation: missionClaimPulse 0.8s infinite alternate;
+}
+
+@keyframes missionClaimPulse {
+    from { transform: translateY(0); }
+    to { transform: translateY(-1px); }
+}
+
+.mission-empty {
+    grid-column: 1/-1;
+    padding: 34px 14px;
+    text-align: center;
+    color: #d8c7ff;
+    border: 1px dashed rgba(85,239,196,0.30);
+    border-radius: 18px;
+    background: rgba(0,0,0,0.22);
+}
+
+.mission-marketing-note {
+    display: none !important;
+}
+
+#mission-hub-toast {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+    z-index: 140;
+    min-height: 0;
+    text-align: center;
+    color: #ffeaa7;
+    font-size: 11px;
+    line-height: 1.35;
+    pointer-events: none;
+    text-shadow: 0 2px 5px #000;
+}
+
+.mission-claim-all-float {
+    position: absolute !important;
+    right: 14px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    z-index: 130;
+    min-width: 142px;
+    height: 46px;
+    padding: 0 15px !important;
+    border-radius: 999px !important;
+    background: linear-gradient(180deg, #ffdd57, #f39c12) !important;
+    color: #1c1200 !important;
+    font-size: 12px !important;
+    font-weight: 900 !important;
+    box-shadow: 0 0 18px rgba(244,197,66,0.36), 0 8px 20px rgba(0,0,0,0.38) !important;
+    border: 1px solid rgba(255,255,255,0.32) !important;
+}
+
+.mission-claim-all-float:disabled {
+    background: linear-gradient(180deg, #465155, #1b2022) !important;
+    color: rgba(255,255,255,0.42) !important;
+    box-shadow: 0 7px 14px rgba(0,0,0,0.26) !important;
+}
+
+/* ===== TAB CẤP ĐỘ: DÂY RƯƠNG NGANG ===== */
+.level-modern-wrap {
+    display: grid;
+    gap: 12px;
+}
+
+.level-rail-card {
+    position: relative;
+    border-radius: 18px;
+    padding: 14px 10px 12px;
+    background:
+        radial-gradient(circle at top, rgba(244,197,66,0.12), transparent 34%),
+        rgba(7, 12, 16, 0.94);
+    border: 1px solid rgba(244,197,66,0.22);
+    overflow: hidden;
+}
+
+.level-rail-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 11px;
+    color: #fff8d6;
+    font-size: 12px;
+}
+
+.level-rail-title strong {
+    color: #f4c542;
+    font-size: 14px;
+}
+
+.level-rail-scroll {
+    overflow-x: auto;
+    padding: 6px 2px 2px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.level-rail {
+    position: relative;
+    min-width: 560px;
+    display: grid;
+    grid-template-columns: repeat(var(--count, 7), minmax(74px, 1fr));
+    gap: 6px;
+    align-items: start;
+}
+
+.level-rail::before {
+    content: "";
+    position: absolute;
+    left: 34px;
+    right: 34px;
+    top: 43px;
+    height: 5px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #7b2ff7, #55efc4, #f4c542, #ff4757);
+    opacity: 0.55;
+    box-shadow: 0 0 12px rgba(85,239,196,0.20);
+}
+
+.level-chest-node {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+}
+
+.level-chest-pin {
+    width: 2px;
+    height: 14px;
+    background: rgba(255,255,255,0.36);
+    box-shadow: 0 0 8px rgba(255,255,255,0.16);
+}
+
+.level-chest-imgbox {
+    width: 58px;
+    height: 58px;
+    border-radius: 17px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.42);
+    border: 1px dashed rgba(255,255,255,0.20);
+    box-shadow: inset 0 0 12px rgba(255,255,255,0.04);
+    transition: 0.18s ease;
+}
+
+.level-chest-imgbox img {
+    width: 64px;
+    height: 64px;
+    object-fit: contain;
+    transform: scale(1.12);
+}
+
+.level-chest-node.ready .level-chest-imgbox {
+    border: 2px solid #f4c542;
+    background: rgba(244,197,66,0.16);
+    box-shadow: 0 0 18px rgba(244,197,66,0.32), inset 0 0 12px rgba(244,197,66,0.06);
+    animation: chestReadyPulse 0.9s infinite alternate;
+    cursor: pointer;
+}
+
+.level-chest-node.claimed .level-chest-imgbox {
+    border: 1px solid rgba(85,239,196,0.36);
+    opacity: 0.78;
+}
+
+.level-chest-node.locked .level-chest-imgbox {
+    filter: grayscale(0.65);
+    opacity: 0.45;
+}
+
+.level-chest-name {
+    max-width: 78px;
+    color: #fff8d6;
+    font-size: 9px;
+    line-height: 1.15;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.level-chest-level {
+    color: #65ffc4;
+    font-size: 9px;
+    line-height: 1;
+}
+
+.level-stage-list {
+    display: grid;
+    gap: 9px;
+}
+
+.level-stage-card {
+    display: grid;
+    grid-template-columns: 42px 1fr auto;
+    align-items: center;
+    gap: 9px;
+    padding: 10px;
+    border-radius: 16px;
+    background: linear-gradient(180deg, rgba(14,28,26,0.95), rgba(8,11,18,0.96));
+    border: 1px solid rgba(85,239,196,0.20);
+}
+
+.level-stage-card.ready {
+    border-color: rgba(244,197,66,0.58);
+    box-shadow: 0 0 14px rgba(244,197,66,0.12);
+}
+
+.level-stage-avatar {
+    position: relative;
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    background: rgba(0,0,0,0.34);
+    border: 1px solid rgba(85,239,196,0.24);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.level-stage-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.level-stage-title {
+    color: #fff8d6;
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.level-stage-desc {
+    margin-top: 2px;
+    color: rgba(223,230,233,0.76);
+    font-size: 10px;
+    line-height: 1.25;
+}
+
+.level-stage-progress {
+    margin-top: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.09);
+    overflow: hidden;
+}
+
+.level-stage-progress > div {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #8d38ff, #55efc4, #f4c542);
+}
+
+@media (min-width: 720px) {
+    #mission-hub-modal .mission-hub-box,
+    #mission-hub-modal .mission-modern-box {
+        width: min(760px, 100vw) !important;
+        height: min(92dvh, 920px) !important;
+        border-radius: 24px !important;
+        border: 2px solid rgba(244,197,66,0.56) !important;
+        box-shadow: 0 0 34px rgba(123,47,247,0.26), 0 0 26px rgba(85,239,196,0.10) !important;
+    }
+
+    .mission-modern-body {
+        padding-left: 14px !important;
+        padding-right: 14px !important;
+    }
+
+    .mission-pane-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    .level-stage-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 380px) {
+    .mission-summary-value { font-size: 12px !important; }
+    .mission-top-tab { font-size: 8.5px !important; }
+    .mission-card-footer { grid-template-columns: 1fr !important; }
+    .mission-claim-btn { width: 100% !important; }
+}
 </style>
 
 <script id="mission-hub-script">
@@ -41487,56 +42143,59 @@ document.addEventListener("click", function(e) {
   const modal = document.createElement('div');
   modal.id = 'mission-hub-modal';
   modal.innerHTML = `
-    <div class="mission-hub-box">
-      <div class="mission-hub-header">
+    <div class="mission-hub-box mission-modern-box">
+      <div class="mission-hub-header mission-modern-header">
         <div class="mission-hub-title-wrap">
-          <div class="mission-hub-title">QUỸ THƯỞNG CAO THỦ</div>
-          <div class="mission-hub-sub">Chơi hay • mời mạnh • bấm nhận là phí nội bộ chảy ngay về ví</div>
+          <div class="mission-modern-title-line">
+            <span class="mission-modern-title-icon">🏆</span>
+            <div class="mission-hub-title">QUỸ THƯỞNG CAO THỦ</div>
+          </div>
+          <div class="mission-hub-sub">Làm nhiệm vụ • mở rương • nhận PMC nhanh gọn</div>
         </div>
         <div class="mission-hub-close" onclick="closeMissionHub()">✕</div>
       </div>
-      <div class="mission-hub-body">
-        <div class="mission-summary-grid">
-          <div class="mission-summary-card">
-  <strong>Quỹ nhiệm vụ hiện tại</strong>
-  <div class="mission-summary-value" id="mission-pool-value">0,000000 PMC</div>
-  <div class="mission-summary-note">Hoàn thành nhiệm vụ để mở khóa thưởng ngay.</div>
-</div>
-          <div class="mission-summary-card">
-            <strong>Có thể nhận ngay</strong>
-            <div class="mission-summary-value" id="mission-claimable-value">0,000000 PMC</div>
-            <div class="mission-summary-note" id="mission-claimable-note">Cày thêm chút nữa là nút nhận sáng lên.</div>
+
+      <div class="mission-hub-body mission-modern-body">
+        <div class="mission-sticky-zone">
+          <div class="mission-summary-grid">
+            <div class="mission-summary-card">
+              <strong>Số dư quỹ</strong>
+              <div class="mission-summary-value" id="mission-pool-value">0,000000 PMC</div>
+              <div class="mission-summary-note">Quỹ nhiệm vụ hiện tại</div>
+            </div>
+            <div class="mission-summary-card">
+              <strong>Có thể nhận</strong>
+              <div class="mission-summary-value" id="mission-claimable-value">0,000000 PMC</div>
+              <div class="mission-summary-note" id="mission-claimable-note">0 mốc sáng</div>
+            </div>
+            <div class="mission-summary-card">
+              <strong>Bạn đã mời</strong>
+              <div class="mission-summary-value" id="mission-ref-summary">0 bạn</div>
+              <div class="mission-summary-note" id="mission-stats-note">Mời bạn nhận thêm quỹ</div>
+            </div>
           </div>
-          <div class="mission-summary-card">
-            <strong>Mốc mời hiện tại</strong>
-            <div class="mission-summary-value" id="mission-ref-summary">0 bạn</div>
-            <div class="mission-summary-note" id="mission-stats-note">Càng đông bạn hữu, quỹ cộng đồng càng đã.</div>
+
+          <div class="mission-top-tabs" id="mission-top-tabs">
+            <button class="mission-top-tab active" data-tab="day" onclick="switchMissionTab('day')">Ngày</button>
+            <button class="mission-top-tab" data-tab="week" onclick="switchMissionTab('week')">Tuần</button>
+            <button class="mission-top-tab" data-tab="month" onclick="switchMissionTab('month')">Tháng</button>
+            <button class="mission-top-tab" data-tab="referral" onclick="switchMissionTab('referral')">Bạn bè</button>
+            <button class="mission-top-tab" data-tab="level" onclick="switchMissionTab('level')">Cấp độ</button>
           </div>
         </div>
-<!-- Dòng 15715: Thay thế cụm mission-top-tabs bằng đoạn này -->
-<div class="mission-top-tabs" id="mission-top-tabs">
-    <button class="mission-top-tab active" data-tab="day" onclick="switchMissionTab('day')">Ngày</button>
-    <button class="mission-top-tab" data-tab="week" onclick="switchMissionTab('week')">Tuần</button>
-    <button class="mission-top-tab" data-tab="month" onclick="switchMissionTab('month')">Tháng</button>
-    <button class="mission-top-tab" data-tab="referral" onclick="switchMissionTab('referral')">Mời bạn</button>
-    <!-- MỚI THÊM: Tab Cấp độ -->
-    <button class="mission-top-tab" data-tab="level" onclick="switchMissionTab('level'); renderLevelRewards();">Cấp độ</button>
-</div>
 
-<!-- Dòng 15722: Thêm cái pane cấp độ vào dưới các pane khác -->
-<div id="mission-pane-day" class="mission-pane show"><div class="mission-pane-grid"></div></div>
-<div id="mission-pane-week" class="mission-pane"><div class="mission-pane-grid"></div></div>
-<div id="mission-pane-month" class="mission-pane"><div class="mission-pane-grid"></div></div>
-<div id="mission-pane-referral" class="mission-pane"><div class="mission-pane-grid"></div></div>
-<!-- MỚI THÊM: Khu vực hiển thị Rương -->
-<div id="mission-pane-level" class="mission-pane"><div class="mission-pane-grid" id="level-reward-list"></div></div>
+        <div id="mission-pane-day" class="mission-pane show"><div class="mission-pane-grid"></div></div>
+        <div id="mission-pane-week" class="mission-pane"><div class="mission-pane-grid"></div></div>
+        <div id="mission-pane-month" class="mission-pane"><div class="mission-pane-grid"></div></div>
+        <div id="mission-pane-referral" class="mission-pane"><div class="mission-pane-grid"></div></div>
+        <div id="mission-pane-level" class="mission-pane"><div class="mission-pane-grid" id="level-reward-list"></div></div>
 
-        <div class="mission-marketing-note" id="mission-marketing-note">
-          Quỹ càng dày thì thưởng càng đậm. Đạt điều kiện là nhận thẳng vào ví PMC nội bộ, không chờ admin.
-        </div>
+        <div class="mission-marketing-note" id="mission-marketing-note"></div>
         <div id="mission-hub-toast"></div>
       </div>
-    </div>`;
+
+      <button id="mission-claim-all-btn" class="mission-claim-all-float" onclick="claimAllMissionRewards()" disabled>🎁 Nhận tất cả</button>
+    </div>    </div>`;
   modal.addEventListener('click', function (e) {
     if (e.target === modal) closeMissionHub();
   });
@@ -41609,20 +42268,24 @@ document.addEventListener("click", function(e) {
 
     pane.innerHTML = missions.map(function (mission) {
       const progressPct = Math.max(0, Math.min(100, Number(mission.progressPercent || 0)));
-      const btnText = mission.claimed ? 'Đã nhận' : (mission.ready ? 'Nhận thưởng' : 'Chưa đạt');
-      const disabled = (!mission.ready || mission.claimed || MISSION_UI_STATE.claiming) ? 'disabled' : '';
+      const ready = !!mission.ready && !mission.claimed;
+      const claimed = !!mission.claimed;
+      const btnText = claimed ? 'Đã nhận' : (ready ? 'Nhận' : 'Chưa đạt');
+      const disabled = (!ready || MISSION_UI_STATE.claiming) ? 'disabled' : '';
+      const cardClass = claimed ? 'claimed' : (ready ? 'ready' : 'locked');
+
       return `
-        <div class="mission-card">
+        <div class="mission-card ${cardClass}" data-mission-id="${escapeMissionText(mission.id)}">
           <div class="mission-card-head">
             <div>
               <div class="mission-card-title">${escapeMissionText(mission.title)}</div>
-              <div class="mission-card-desc">${escapeMissionText(mission.desc)}</div>
+              <div class="mission-card-desc">${escapeMissionText(mission.desc || mission.note || '')}</div>
             </div>
             <div class="mission-card-badge ${missionStatusClass(mission)}">${missionStatusText(mission)}</div>
           </div>
 
           <div class="mission-card-progress-line">
-            <span>Tiến độ: ${escapeMissionText(mission.progressText)}</span>
+            <span>${escapeMissionText(mission.progressText || '0/1')}</span>
             <span>${progressPct}%</span>
           </div>
           <div class="mission-card-progress-bar">
@@ -41631,11 +42294,11 @@ document.addEventListener("click", function(e) {
 
           <div class="mission-card-footer">
             <div class="mission-reward-box">
-              <strong>Thưởng dự kiến</strong>
-              <div class="mission-reward-value">${escapeMissionText(mission.rewardText)}</div>
+              <strong>Thưởng</strong>
+              <div class="mission-reward-value">🎁 ${escapeMissionText(mission.rewardText || 'PMC')}</div>
               <div class="mission-reward-note">${escapeMissionText(mission.note || '')}</div>
             </div>
-            <button class="mission-claim-btn" ${disabled} onclick="claimMissionReward('${mission.id}', this)">${btnText}</button>
+            <button class="mission-claim-btn ${ready ? 'ready' : ''}" ${disabled} onclick="claimMissionReward('${escapeMissionText(mission.id)}', this)">${btnText}</button>
           </div>
         </div>`;
     }).join('');
@@ -41645,20 +42308,21 @@ function renderMissionBoard() {
     const board = MISSION_UI_STATE.board || {};
     const tabs = board.tabs || {};
 
-    // --- ĐOẠN CHÈN MỚI ĐỂ BÁO ĐỎ CÁC TAB ---
-    ['day', 'week', 'month', 'referral'].forEach(key => {
+    ['day', 'week', 'month', 'referral'].forEach(function (key) {
         const btn = document.querySelector(`.mission-top-tab[data-tab="${key}"]`);
         if (!btn) return;
-        const oldDot = btn.querySelector(".dot-red-small");
+        const oldDot = btn.querySelector('.dot-red-small');
         if (oldDot) oldDot.remove();
-        if ((tabs[key] || []).some(m => m.ready && !m.claimed)) {
-            const dot = document.createElement("div");
-            dot.className = "dot-red-small show";
+        if ((tabs[key] || []).some(function (m) { return m.ready && !m.claimed; })) {
+            const dot = document.createElement('div');
+            dot.className = 'dot-red-small show';
             btn.appendChild(dot);
         }
     });
-    checkLevelRewardNotification(); // Kiểm tra mục Cấp độ
-    // --- KẾT THÚC ĐOẠN CHÈN ---
+
+    if (typeof checkLevelRewardNotification === 'function') {
+        checkLevelRewardNotification({ silent: true }).catch(function () {});
+    }
 
     const poolEl = document.getElementById('mission-pool-value');
     const claimableEl = document.getElementById('mission-claimable-value');
@@ -41668,34 +42332,34 @@ function renderMissionBoard() {
     const marketingEl = document.getElementById('mission-marketing-note');
 
     if (poolEl) {
-    const pool = Math.max(0, Number(board.treasury?.missionPoolPmc || 0) || 0);
-    poolEl.innerText = pool.toLocaleString('vi-VN', {
-        minimumFractionDigits: 6,
-        maximumFractionDigits: 6
-    }) + ' PMC';
-}
+        const pool = Math.max(0, Number(board.treasury?.missionPoolPmc || 0) || 0);
+        poolEl.innerText = pool.toLocaleString('vi-VN', {
+            minimumFractionDigits: 6,
+            maximumFractionDigits: 6
+        }) + ' PMC';
+    }
+
     if (claimableEl) claimableEl.innerText = formatPmc(board.claimableTotalPmc || 0);
     if (claimableNoteEl) {
-      claimableNoteEl.innerText = (board.claimableCount || 0) > 0
-        ? `Đang có ${board.claimableCount} nhiệm vụ sáng nút nhận.`
-        : 'Còn thiếu vài bước nữa để mở khóa thưởng.';
+        claimableNoteEl.innerText = (board.claimableCount || 0) > 0
+            ? `${board.claimableCount} mốc sáng nút nhận.`
+            : 'Chưa có mốc nào sáng.';
     }
     if (refEl) refEl.innerText = `${Number(board.metrics?.friendCount || 0).toLocaleString('vi-VN')} bạn`;
     if (statsEl) {
-      const metrics = board.metrics || {};
-      statsEl.innerText = `Hôm nay ${metrics.dayMatches || 0} ván • tuần này ${metrics.weekMatches || 0} ván • tháng này ${metrics.monthWins || 0} trận thắng.`;
+        const metrics = board.metrics || {};
+        statsEl.innerText = `Hôm nay ${metrics.dayMatches || 0} ván • tuần ${metrics.weekMatches || 0} ván • tháng ${metrics.monthWins || 0} thắng.`;
     }
-    if (marketingEl) {
-  marketingEl.innerHTML = `
-    Hoàn thành nhiệm vụ là nhận thưởng ngay, tiền thưởng chảy thẳng vào ví PMC nội bộ của người chơi.`;
-}
+    if (marketingEl) marketingEl.innerHTML = '';
 
     renderMissionCards('day', tabs.day || []);
-renderMissionCards('week', tabs.week || []);
-renderMissionCards('month', tabs.month || []);
-renderMissionCards('referral', tabs.referral || []);
-updateMissionLobbyBadge(board);
-switchMissionTab(MISSION_UI_STATE.activeTab || 'day');
+    renderMissionCards('week', tabs.week || []);
+    renderMissionCards('month', tabs.month || []);
+    renderMissionCards('referral', tabs.referral || []);
+
+    updateMissionLobbyBadge(board);
+    switchMissionTab(MISSION_UI_STATE.activeTab || 'day');
+    updateMissionClaimAllButton();
   }
 
   function missionToast(text) {
@@ -41723,6 +42387,137 @@ switchMissionTab(MISSION_UI_STATE.activeTab || 'day');
     document.querySelectorAll('.mission-pane').forEach(function (pane) {
       pane.classList.toggle('show', pane.id === 'mission-pane-' + tab);
     });
+
+    if (tab === 'level' && typeof renderLevelRewards === 'function') {
+      renderLevelRewards().catch(function (err) {
+        console.warn('renderLevelRewards fail:', err);
+      });
+    }
+
+    updateMissionClaimAllButton();
+  };
+
+  function getActiveMissionList() {
+    const board = MISSION_UI_STATE.board || {};
+    const tabs = board.tabs || {};
+    const tab = MISSION_UI_STATE.activeTab || 'day';
+    if (tab === 'level') return [];
+    return Array.isArray(tabs[tab]) ? tabs[tab] : [];
+  }
+
+  window.updateMissionClaimAllButton = function () {
+    const btn = document.getElementById('mission-claim-all-btn');
+    if (!btn) return;
+
+    const tab = MISSION_UI_STATE.activeTab || 'day';
+
+    if (tab === 'level') {
+      const readyChests = document.querySelectorAll('.level-chest-node.ready[data-level]');
+      const count = readyChests ? readyChests.length : 0;
+      btn.innerText = count > 0 ? `🎁 Mở rương (${count})` : '🎁 Chưa có rương';
+      btn.disabled = count <= 0 || MISSION_UI_STATE.claiming;
+      return;
+    }
+
+    const readyMissions = getActiveMissionList().filter(function (m) {
+      return m && m.ready && !m.claimed;
+    });
+
+    btn.innerText = readyMissions.length > 0
+      ? `🎁 Nhận tất cả (${readyMissions.length})`
+      : '🎁 Nhận tất cả';
+    btn.disabled = readyMissions.length <= 0 || MISSION_UI_STATE.claiming;
+  };
+
+  window.claimAllMissionRewards = async function () {
+    if (MISSION_UI_STATE.claiming) return;
+
+    const tab = MISSION_UI_STATE.activeTab || 'day';
+
+    if (tab === 'level') {
+      const firstReady = document.querySelector('.level-chest-node.ready[data-level]');
+      if (!firstReady) {
+        missionToast('Chưa có rương cấp độ nào sẵn sàng.');
+        updateMissionClaimAllButton();
+        return;
+      }
+      const level = Number(firstReady.getAttribute('data-level') || 0);
+      const btn = firstReady.querySelector('.level-open-btn');
+      if (level && typeof claimLevelChest === 'function') {
+        claimLevelChest(level, btn || null);
+      }
+      return;
+    }
+
+    const walletKey = missionWalletKey();
+    if (!walletKey) {
+      missionToast('❌ Lỗi: thiếu walletKey.');
+      return;
+    }
+
+    const readyMissions = getActiveMissionList().filter(function (m) {
+      return m && m.ready && !m.claimed;
+    });
+
+    if (!readyMissions.length) {
+      missionToast('Chưa có mốc nào có thể nhận trong tab này.');
+      updateMissionClaimAllButton();
+      return;
+    }
+
+    MISSION_UI_STATE.claiming = true;
+    updateMissionClaimAllButton();
+    missionToast(`Đang nhận ${readyMissions.length} phần thưởng...`);
+
+    let okCount = 0;
+    let totalReward = 0;
+    let lastPmcBalance = null;
+
+    try {
+      for (const mission of readyMissions) {
+        const res = await fetch('/api/missions-v1?v=' + Date.now(), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-wallet-key': walletKey
+          },
+          body: JSON.stringify({
+            action: 'claim',
+            missionId: mission.id,
+            walletKey
+          })
+        });
+
+        const data = await res.json().catch(function () { return {}; });
+        if (!res.ok || !data.ok) {
+          console.warn('CLAIM_ALL_ONE_FAIL', mission.id, data.error || res.status);
+          continue;
+        }
+
+        okCount += 1;
+        totalReward += Number(data.amountPmc || 0) || 0;
+        if (typeof data.newPmcBalance === 'number') lastPmcBalance = data.newPmcBalance;
+      }
+
+      if (typeof lastPmcBalance === 'number' && typeof setPmcBalance === 'function') {
+        setPmcBalance(lastPmcBalance);
+      }
+
+      if (okCount > 0 && typeof playSnd === 'function') playSnd('win');
+      missionToast(okCount > 0
+        ? `✅ Đã nhận ${okCount}/${readyMissions.length} mốc: +${formatPmc(totalReward)}.`
+        : '❌ Chưa nhận được mốc nào, thử lại sau.');
+
+      setTimeout(function () {
+        fetchMissionBoard(true);
+      }, 900);
+    } catch (err) {
+      console.error('MISSION_CLAIM_ALL_FAIL:', err);
+      missionToast('❌ ' + (err?.message || 'Lỗi nhận tất cả.'));
+    } finally {
+      MISSION_UI_STATE.claiming = false;
+      updateMissionClaimAllButton();
+    }
   };
 
   window.claimMissionReward = function (missionId, btnElement) {
@@ -42044,78 +42839,96 @@ async function renderLevelRewards() {
     const listEl = document.getElementById("level-reward-list");
     if (!listEl) return;
 
-    listEl.innerHTML = '<div style="color:#55efc4; text-align:center; grid-column: 1/-1;">Đang tải rương...</div>';
+    listEl.innerHTML = '<div class="mission-empty">Đang tải rương cấp độ...</div>';
 
-    const walletKey = makeWalletDbKey();
-    const snap = await db.ref("wallets/" + walletKey).once("value");
-    const userData = snap.val() || {};
-    const currentLevel = userData.level || 1;
-    const claimedLevels = userData.claimedLevels || {}; 
+    try {
+        const walletKey = typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "";
+        if (!walletKey) throw new Error("Chưa xác định được ví người chơi");
 
-    listEl.innerHTML = LEVEL_MILESTONES.map(m => {
-        const isClaimed = !!claimedLevels[m.level];
-        const isReady = currentLevel >= m.level && !isClaimed;
-        const isLocked = currentLevel < m.level;
+        const snap = await db.ref("wallets/" + walletKey).once("value");
+        const userData = snap.val() || {};
+        const currentLevel = Math.max(1, Math.floor(Number(userData.level || 0) || 1));
+        const claimedLevels = userData.claimedLevels || {};
+        const milestones = Array.isArray(LEVEL_MILESTONES) ? LEVEL_MILESTONES : [];
 
-        let btnClass = "mission-claim-btn";
-        let btnText = "CHƯA ĐẠT";
-        let badgeClass = "locked";
-        let badgeText = "Cần Cấp " + m.level;
-        let onclick = "";
+        const readyCount = milestones.filter(function (m) {
+            return currentLevel >= Number(m.level || 0) && !claimedLevels[m.level];
+        }).length;
 
-        if (isClaimed) {
-            btnText = "ĐÃ MỞ";
-            btnClass += " claimed";
-            badgeClass = "claimed";
-            badgeText = "Đã nhận";
-        } else if (isReady) {
-            btnText = "MỞ RƯƠNG";
-            btnClass += " ready";
-            badgeClass = "ready";
-            badgeText = "Sẵn sàng";
-            onclick = `onclick="claimLevelChest(${m.level}, this)"`;
+        const nextMilestone = milestones.find(function (m) {
+            return currentLevel < Number(m.level || 0);
+        });
+
+        const railHtml = milestones.map(function (m) {
+            const isClaimed = !!claimedLevels[m.level];
+            const isReady = currentLevel >= Number(m.level || 0) && !isClaimed;
+            const stateClass = isClaimed ? "claimed" : (isReady ? "ready" : "locked");
+            const clickAttr = isReady ? `onclick="claimLevelChest(${m.level}, this.querySelector('.level-open-btn'))"` : "";
+
+            return `
+                <div class="level-chest-node ${stateClass}" data-level="${m.level}" ${clickAttr}>
+                    <div class="level-chest-pin"></div>
+                    <div class="level-chest-imgbox">
+                        <img src="${m.chestImage}" alt="${m.name}" onerror="this.src='images/do_tuong.png'">
+                    </div>
+                    <div class="level-chest-name">${m.name.replace(' + Skin', '')}</div>
+                    <div class="level-chest-level">Cấp ${m.level}</div>
+                    <button class="level-open-btn" style="display:none" ${isReady ? "" : "disabled"}>MỞ</button>
+                </div>`;
+        }).join("");
+
+        const stageHtml = milestones.map(function (m) {
+            const isClaimed = !!claimedLevels[m.level];
+            const isReady = currentLevel >= Number(m.level || 0) && !isClaimed;
+            const isLocked = currentLevel < Number(m.level || 0);
+            let progressPct = Math.min(100, (currentLevel / Number(m.level || 1)) * 100);
+            if (isClaimed) progressPct = 100;
+
+            const btnText = isClaimed ? "ĐÃ NHẬN" : (isReady ? "MỞ" : "KHÓA");
+            const btnClass = "mission-claim-btn" + (isReady ? " ready" : "") + (isClaimed ? " claimed" : "");
+            const disabled = isReady ? "" : "disabled";
+            const onclick = isReady ? `onclick="claimLevelChest(${m.level}, this)"` : "";
+
+            return `
+                <div class="level-stage-card ${isReady ? 'ready' : ''} ${isClaimed ? 'claimed' : ''}">
+                    <div class="level-stage-avatar">
+                        <img src="${m.icon || 'images/do_tuong.png'}" alt="avatar" onerror="this.src='images/do_tuong.png'">
+                    </div>
+                    <div>
+                        <div class="level-stage-title">${m.name} · Cấp ${m.level}</div>
+                        <div class="level-stage-desc">${m.desc || 'Mở rương nhận thưởng.'}</div>
+                        <div class="level-stage-progress"><div style="width:${progressPct.toFixed(0)}%"></div></div>
+                    </div>
+                    <button class="${btnClass}" ${onclick} ${disabled}>${btnText}</button>
+                </div>`;
+        }).join("");
+
+        listEl.innerHTML = `
+            <div class="level-modern-wrap">
+                <div class="level-rail-card">
+                    <div class="level-rail-title">
+                        <strong>🎁 Rương cấp độ</strong>
+                        <span>${readyCount > 0 ? readyCount + ' rương sẵn sàng' : (nextMilestone ? 'Còn ' + Math.max(0, nextMilestone.level - currentLevel) + ' cấp tới ' + nextMilestone.name : 'Đã mở hết mốc')}</span>
+                    </div>
+                    <div class="level-rail-scroll">
+                        <div class="level-rail" style="--count:${Math.max(1, milestones.length)}">
+                            ${railHtml}
+                        </div>
+                    </div>
+                </div>
+                <div class="level-stage-list">
+                    ${stageHtml || '<div class="mission-empty">Chưa có mốc cấp độ.</div>'}
+                </div>
+            </div>`;
+
+        if (typeof updateMissionClaimAllButton === "function") {
+            updateMissionClaimAllButton();
         }
-
-        let progressPct = Math.min(100, (currentLevel / m.level) * 100).toFixed(0);
-        if (isClaimed) progressPct = 100;
-        return `
-        <div class="mission-card">
-            <div class="mission-card-head" style="display: flex; align-items: center; gap: 12px;">
-                <!-- Icon Avatar/Skin trên góc -->
-                <div style="width: 45px; height: 45px; flex-shrink: 0; background: rgba(0,0,0,0.5); border-radius: 12px; border: 1px solid #55efc4; display: flex; align-items: center; justify-content: center; overflow: hidden; box-shadow: 0 0 10px rgba(85, 239, 196, 0.2);">
-                    <img src="${m.icon}" alt="reward" style="width: 100%; height: 100%; object-fit: contain; transform: scale(1.1);" onerror="this.src='images/do_tuong.png'">
-                </div>
-
-                <div style="flex: 1;">
-                    <div class="mission-card-title" style="color:${isReady ? '#f4c542' : '#fff8d6'}">${m.name}</div>
-                    <div class="mission-card-desc">${m.desc}</div>
-                </div>
-                
-                <div class="mission-card-badge ${badgeClass}" style="flex-shrink: 0;">${badgeText}</div>
-            </div>
-
-            <div class="mission-card-progress-line">
-                <span>Tiến độ: Cấp ${currentLevel}/${m.level}</span>
-                <span>${progressPct}%</span>
-            </div>
-            <div class="mission-card-progress-bar">
-                <div class="mission-card-progress-fill" style="width:${progressPct}%; background:${isReady ? 'linear-gradient(90deg, #f1c40f, #e67e22)' : ''}"></div>
-            </div>
-            
-            <!-- ÉP HIỂN THỊ NẰM NGANG VÀ ĐƯA NÚT LÊN TRƯỚC, RƯƠNG RA SAU -->
-            <div style="display: flex; flex-direction: row; gap: 12px; align-items: stretch; margin-top: 14px;">
-                
-                <!-- Ô BÊN TRÁI BÂY GIỜ LÀ NÚT NHẬN -->
-                <button class="${btnClass}" ${onclick} ${isLocked || isClaimed ? "disabled" : ""} style="flex: 1; margin: 0; min-height: 48px; border-radius: 12px;">${btnText}</button>
-
-                <!-- Ô BÊN PHẢI LÀ RƯƠNG: ô giữ nguyên, chỉ căn giữa hình rương -->
-<div style="flex-shrink: 0; width: 64px; height: 64px; align-self: center; position: relative; display: flex; align-items: center; justify-content: center; border-radius: 12px; overflow: hidden; ${isReady ? 'background: rgba(241, 196, 15, 0.15); border: 2px solid #f1c40f; animation: chestReadyPulse 0.8s infinite alternate;' : 'background: rgba(0,0,0,0.3); border: 1px dashed rgba(85, 239, 196, 0.3); opacity: ' + (isClaimed ? '0.4' : '1')};">
-    <img src="${m.chestImage}" style="position: absolute; left: 50%; top: 65%; width: 56px; height: 56px; object-fit: contain; object-position: center; transform: translate(-50%, -50%) scale(1.36); transform-origin: center center; filter: drop-shadow(0 0 ${isReady ? '15px' : '8px'} ${m.shadow}) ${isReady ? 'brightness(1.2)' : ''};" onerror="this.src='images/do_tuong.png'">
-</div>
-            </div>
-
-        </div>`;
-    }).join("");
+    } catch (err) {
+        console.error("renderLevelRewards lỗi:", err);
+        listEl.innerHTML = '<div class="mission-empty">Không tải được rương cấp độ: ' + String(err.message || err) + '</div>';
+        if (typeof updateMissionClaimAllButton === "function") updateMissionClaimAllButton();
+    }
 }
 async function claimLevelChest(targetLevel, btnElement) {
     if (btnElement) {
@@ -42207,6 +43020,7 @@ const res = await fetch("/api/level-system?v=" + Date.now(), {
              overlay.style.display = "flex";
              loadWalletBalance();
              renderLevelRewards();
+             if (typeof updateMissionClaimAllButton === "function") updateMissionClaimAllButton();
          });
 
     } catch (err) {
