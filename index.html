@@ -34716,7 +34716,48 @@ list.innerHTML = expPackages.map(pkg => {
             </div>`;
     }).join("");
 };
+async function levelSystemPost(action, payload = {}) {
+    if (typeof resolveMasterWalletNow === "function") {
+        await resolveMasterWalletNow(true).catch(() => {});
+    }
 
+    const rawWalletKey = typeof getRawWalletDbKey === "function"
+        ? getRawWalletDbKey()
+        : makeWalletDbKey();
+
+    const walletKey = typeof makeWalletDbKey === "function"
+        ? makeWalletDbKey()
+        : rawWalletKey;
+
+    const user = firebase.auth().currentUser;
+    if (!user) throw new Error("Chưa đăng nhập Firebase");
+
+    const token = await user.getIdToken(true);
+
+    const res = await fetch("/api/level-system?v=" + Date.now(), {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + token,
+            "x-wallet-key": walletKey,
+            "x-raw-wallet-key": rawWalletKey
+        },
+        body: JSON.stringify({
+            action,
+            walletKey,
+            rawWalletKey,
+            ...payload
+        })
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Level API lỗi.");
+    }
+
+    return data;
+}
 window.buyExpDirectly = async function(pkgId, expAmount, pmcCost, bonusTickets) {
     if (window.isBuyingExp) return;
 
@@ -34737,32 +34778,7 @@ window.buyExpDirectly = async function(pkgId, expAmount, pmcCost, bonusTickets) 
     window.isBuyingExp = true;
 
     try {
-        const walletKey = makeWalletDbKey();
-
-        const user = firebase.auth().currentUser;
-        if (!user) throw new Error("Chưa đăng nhập Firebase");
-
-        const token = await user.getIdToken(true);
-
-        const res = await fetch("/api/level-system?v=" + Date.now(), {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": "Bearer " + token,
-                "x-wallet-key": walletKey
-            },
-            body: JSON.stringify({
-                action: "buy_exp_direct",
-                walletKey,
-                pkgId
-            })
-        });
-
-        const data = await res.json();
-        if (!res.ok || !data.ok) {
-            throw new Error(data.error || "Giao dịch thất bại");
-        }
-
+        const data = await levelSystemPost("buy_exp_direct", { pkgId });
         if (typeof setPmcBalance === "function") {
             setPmcBalance(data.newPmc);
         }

@@ -115,9 +115,14 @@ async function verifyUser(req) {
 
   return await getAuth(adminApp).verifyIdToken(token);
 }
-
-async function loadOwnedWallet(db, walletKey, uid) {
+function sameKey(a, b) {
+  const aa = safeKey(a);
+  const bb = safeKey(b);
+  return !!aa && !!bb && aa === bb;
+}
+async function loadOwnedWallet(db, walletKey, uid, rawWalletKey = "") {
   const safeWalletKey = safeKey(walletKey);
+  const safeRawWalletKey = safeKey(rawWalletKey);
 
   if (!safeWalletKey) {
     const err = new Error("Thiếu ví người dùng");
@@ -135,13 +140,54 @@ async function loadOwnedWallet(db, walletKey, uid) {
     throw err;
   }
 
-  if (String(wallet.uid || "") !== String(uid || "")) {
+  let rawWallet = {};
+  if (safeRawWalletKey) {
+    const rawSnap = await db.ref(`wallets/${safeRawWalletKey}`).once("value");
+    rawWallet = rawSnap.val() || {};
+  }
+
+  function canUseWallet(baseWallet = wallet) {
+    const baseUid = String(baseWallet.uid || "");
+    const rawUid = String(rawWallet.uid || "");
+    const loginUid = String(uid || "");
+
+    // Google thường: ví master thuộc đúng uid Google
+    if (baseUid && baseUid === loginUid) return true;
+
+    // Pi Browser: token là uid Pi, nhưng đang thao tác ví Google master đã liên kết
+    if (safeRawWalletKey && rawUid && rawUid === loginUid) {
+      return (
+        sameKey(rawWallet.masterWalletKey, safeWalletKey) ||
+        sameKey(rawWallet.linkedMasterWalletKey, safeWalletKey) ||
+        sameKey(rawWallet.linkedGoogleWalletKey, safeWalletKey) ||
+        sameKey(baseWallet.linkedPiWalletKey, safeRawWalletKey) ||
+        sameKey(baseWallet.piWalletKey, safeRawWalletKey) ||
+        sameKey(baseWallet.linkedPiWalletKey, rawWallet.walletKey) ||
+        (
+          String(baseWallet.piUid || "") &&
+          String(rawWallet.piUid || "") &&
+          String(baseWallet.piUid || "") === String(rawWallet.piUid || "")
+        )
+      );
+    }
+
+    return false;
+  }
+
+  if (!canUseWallet(wallet)) {
     const err = new Error("Ví này không thuộc tài khoản đang đăng nhập");
     err.statusCode = 403;
     throw err;
   }
 
-  return { safeWalletKey, userRef, wallet };
+  return {
+    safeWalletKey,
+    safeRawWalletKey,
+    userRef,
+    wallet,
+    rawWallet,
+    canUseWallet
+  };
 }
 
 module.exports = async function handler(req, res) {
@@ -166,8 +212,20 @@ module.exports = async function handler(req, res) {
     const action = String(body.action || "").trim();
     const walletKey = safeKey(body.walletKey);
 
-    const db = getDatabase(adminApp);
-    const { safeWalletKey, userRef } = await loadOwnedWallet(db, walletKey, uid);
+  const rawWalletKey = safeKey(
+  req.headers["x-raw-wallet-key"] ||
+  body.rawWalletKey ||
+  body.piWalletKey ||
+  ""
+);
+
+const db = getDatabase(adminApp);
+
+const {
+  safeWalletKey,
+  userRef,
+  canUseWallet
+} = await loadOwnedWallet(db, walletKey, uid, rawWalletKey);
 
     // =====================================================
     // 1. MỞ RƯƠNG CẤP ĐỘ
@@ -190,7 +248,7 @@ module.exports = async function handler(req, res) {
 
         const curLevel = Math.max(1, Math.floor(Number(current.level || 1)));
 
-        if (String(current.uid || "") !== String(uid)) return;
+        if (!canUseWallet(current)) return;
         if (curLevel < targetLevel) return;
 
         current.claimedLevels = current.claimedLevels || {};
@@ -273,7 +331,7 @@ module.exports = async function handler(req, res) {
 
   const txResult = await runTransaction(userRef, (current) => {
     if (!current) return current;
-    if (String(current.uid || "") !== String(uid)) return;
+    if (!canUseWallet(current)) return;
 
     const livePmc = Math.max(
       0,
@@ -383,7 +441,7 @@ await db.ref("adminLedgerV1").push({
 
       const txResult = await runTransaction(userRef, (current) => {
         if (!current) return current;
-        if (String(current.uid || "") !== String(uid)) return;
+        if (!canUseWallet(current)) return;
 
         const livePmc = Math.max(
           0,
