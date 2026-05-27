@@ -11032,9 +11032,16 @@ movingPiece.style.top = rows[newViewPos.r] + "%";
     }
 refreshTimerRings();
 
-    selectedPiece = null;
+selectedPiece = null;
 clearMoveHints();
 drawLastMoveMarks();
+
+// FIX: người vừa đi nước chiếu cũng thấy hiệu ứng ngay trên máy mình
+setTimeout(() => {
+    if (!isGameOver && typeof updateCheckEffectFromBoard === "function") {
+        updateCheckEffectFromBoard();
+    }
+}, 80);
 
 if (isActivePuzzleGame()) {
     clearTimeout(puzzleMoveCheckTimer);
