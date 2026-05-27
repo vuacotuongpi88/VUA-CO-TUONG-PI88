@@ -6848,6 +6848,103 @@ margin-bottom: 14px;
     opacity: 0.45;
     filter: grayscale(1);
 }
+/* ===== ICON PNG CUSTOM: MENU 64 / BALANCE 64 / LOBBY 128 ===== */
+
+/* Icon menu trái */
+.menu-icon {
+    width: 24px !important;
+    min-width: 24px !important;
+    height: 24px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: transparent !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+}
+
+.menu-icon img {
+    width: 24px !important;
+    height: 24px !important;
+    object-fit: contain !important;
+    display: block !important;
+}
+
+/* Cho dòng đăng xuất cũng giống các dòng menu khác */
+.menu-item-danger {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+}
+
+/* Icon số dư Pi / PMC góc trái */
+.balance-chip {
+    position: relative !important;
+    padding-left: 28px !important;
+    min-height: 22px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+}
+
+#user-balance::before,
+#user-pmc-balance::before {
+    content: "";
+    position: absolute;
+    left: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+#user-balance::before {
+    background-image: url("images/balance-64/pi-balance.png");
+}
+
+#user-pmc-balance::before {
+    background-image: url("images/balance-64/pmc-balance.png");
+}
+
+/* Icon ngoài sảnh góc phải */
+.lobby-icon-img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+    display: block !important;
+    pointer-events: none !important;
+}
+
+/* Xóa nền emoji cũ, chỉ lấy hình PNG mới */
+#arena-friend-btn,
+#mobile-friend-toggle,
+#arena-referral-btn,
+#arena-mission-btn,
+#arena-skin-btn,
+#arena-top-btn {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    overflow: visible !important;
+}
+
+/* Banner quảng cáo bằng ảnh */
+.ad-slide {
+    padding: 0 !important;
+    background: transparent !important;
+}
+
+.ad-banner-img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
+    border-radius: 16px;
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
@@ -7065,8 +7162,8 @@ console.log("Đang chạy trên môi trường:", currentNetwork.toUpperCase());
 
 <div class="user-meta" onclick="toggleProfileMenu(event)">
 <div id="user-name-display" style="font-weight: bold; color: #55efc4;">core team</div>
-<div id="user-balance" class="pi-balance-box">0.00 π</div>
-<div id="user-pmc-balance" class="pi-balance-box pmc-balance-box">0 PMC</div>
+<div id="user-balance" class="pi-balance-box balance-chip">0.00 π</div>
+<div id="user-pmc-balance" class="pi-balance-box pmc-balance-box balance-chip">0 PMC</div>
 </div>
 
 <div id="profile-dropdown" class="profile-menu">
@@ -7078,53 +7175,57 @@ console.log("Đang chạy trên môi trường:", currentNetwork.toUpperCase());
     <hr style="border: 0.5px solid #444; margin: 5px 0;">
 
 <div class="menu-item" onclick="openEditProfile()">
-    <span class="menu-icon">⚙️</span>
+    <span class="menu-icon"><img src="images/menu-64/profile.png" alt=""></span>
     <span>HỒ SƠ</span>
 </div>
 
 <div class="menu-item" onclick="openWallet('nap')">
-    <span class="menu-icon">🪙</span>
+    <span class="menu-icon"><img src="images/menu-64/deposit-pi.png" alt=""></span>
     <span>NẠP PI</span>
 </div>
 <div class="menu-item" onclick="openExchangeModal()">
-    <span class="menu-icon">🔁</span>
+    <span class="menu-icon"><img src="images/menu-64/swap-pi-pmc.png" alt=""></span>
     <span>ĐỔI PI → PMC</span>
 </div>
 <div class="menu-item" onclick="openPmcToPiModal()">
-    <span class="menu-icon">💱</span>
+    <span class="menu-icon"><img src="images/menu-64/swap-pmc-pi.png" alt=""></span>
     <span>ĐỔI PMC → PI</span>
 </div>
 <div class="menu-item" onclick="openWallet('rut')">
-    <span class="menu-icon">💸</span>
+    <span class="menu-icon"><img src="images/menu-64/withdraw-pi.png" alt=""></span>
     <span>RÚT PI</span>
 </div>
 
 <div class="menu-item" onclick="openPlayerHistoryModal()">
-    <span class="menu-icon">📜</span>
+    <span class="menu-icon"><img src="images/menu-64/match-history.png" alt=""></span>
     <span>LỊCH SỬ ĐẤU</span>
 </div>
 
 <div id="menu-admin-ledger" class="menu-item" onclick="openAdminLedgerModal()" style="display:none;">
-    <span class="menu-icon">📊</span>
+    <span class="menu-icon"><img src="images/menu-64/system-ledger.png" alt=""></span>
     <span>SAO KÊ HỆ THỐNG</span>
 </div>
 
+
 <div id="menu-admin-fee-wallet" class="menu-item" onclick="openAdminFeeTreasuryModal()" style="display:none;">
-    <span class="menu-icon">🏦</span>
+    <span class="menu-icon"><img src="images/menu-64/system-wallet.png" alt=""></span>
     <span>VÍ PHÍ HỆ THỐNG</span>
 </div>
 
 <div id="menu-testnet-gate" class="menu-item" onclick="openTestnetAdminPanel()" style="display:none;">
-    <span class="menu-icon">🔐</span>
+    <span class="menu-icon"><img src="images/menu-64/testnet-lock.png" alt=""></span>
     <span>KHÓA TESTNET</span>
 </div>
 
 <div class="menu-item" onclick="switchAccount()">
-    <span class="menu-icon">🔄</span>
+    <span class="menu-icon"><img src="images/menu-64/switch-account.png" alt=""></span>
     <span>ĐỔI TÀI KHOẢN</span>
 </div>
 
-<div class="menu-item menu-item-danger" onclick="logout()">🚪 ĐĂNG XUẤT</div>
+<div class="menu-item menu-item-danger" onclick="logout()">
+    <span class="menu-icon"><img src="images/menu-64/logout.png" alt=""></span>
+    <span>ĐĂNG XUẤT</span>
+</div>
 
     <hr style="border: 0.5px solid #444; margin: 5px 0;">
 
@@ -7224,9 +7325,9 @@ console.log("Đang chạy trên môi trường:", currentNetwork.toUpperCase());
     <div class="mobile-home-wrap">
     <div id="mobile-friend-wrap">
     <div id="mobile-friend-toggle" onclick="toggleFriendBox(event)">
-        👥
-        <span id="mobile-friend-badge" class="friend-badge-dot">0</span>
-    </div>
+    <img class="lobby-icon-img" src="images/lobby-icons-128/friends.png" alt="">
+    <span id="mobile-friend-badge" class="friend-badge-dot">0</span>
+</div>
 
     <div id="mobile-friend-box">
       <div class="friend-box-inner"> <div class="friend-box-header">
@@ -7267,38 +7368,31 @@ console.log("Đang chạy trên môi trường:", currentNetwork.toUpperCase());
         
         <!-- BẮT ĐẦU SLIDER QUẢNG CÁO NẰM BÊN TRONG BANNER -->
         <div class="ad-slider-container">
-            <div class="ad-slider-track" id="ad-slider-track">
-                <div class="ad-slide ad-bg-1" onclick="handleAdClick(1)">
-                    <h3 style="color: #ff7675;">🔥 KHUYẾN MÃI NẠP PI</h3>
-                    <p>1 Pi = 500 PMC! Nạp ngay để sắm Skin xịn và tham gia các trận cược lớn!</p>
-                    <div class="ad-btn">NẠP NGAY ➔</div>
-                </div>
-                <div class="ad-slide ad-bg-2" onclick="handleAdClick(2)">
-                    <h3 style="color: #a29bfe;">🐉 RA MẮT LONG VƯƠNG</h3>
-                    <p>Khẳng định đẳng cấp Đại Gia với Skin Long Vương & Phượng Hoàng chớp sáng!</p>
-                    <div class="ad-btn">VÀO SHOP ➔</div>
-                </div>
-                <div class="ad-slide ad-bg-3" onclick="handleAdClick(3)">
-                    <h3 style="color: #55efc4;">🎯 CÀY NHIỆM VỤ NHẬN PMC</h3>
-                    <p>Hoàn thành nhiệm vụ hàng ngày, nhận ngay PMC miễn phí chảy thẳng vào ví!</p>
-                    <div class="ad-btn">NHẬN THƯỞNG ➔</div>
-                </div>
-                <div class="ad-slide ad-bg-4" onclick="handleAdClick(4)">
-                    <h3 style="color: #f1c40f;">🏆 ĐUA TOP CAO THỦ</h3>
-                    <p>Ghi danh lên Bảng Vàng! Đánh bại các Kỳ Vương khác để giành vinh quang!</p>
-                    <div class="ad-btn">XEM BẢNG TOP ➔</div>
-                </div>
-                <div class="ad-slide ad-bg-5" onclick="handleAdClick(5)">
-                    <h3 style="color: #fd79a8;">👥 THÊM BẠN THÊM VUI</h3>
-                    <p>Mời hảo hữu cùng tham gia, lập phòng kín solo riêng tư cực gắt!</p>
-                    <div class="ad-btn">MỜI BẠN NGAY ➔</div>
-                </div>
-                <div class="ad-slide ad-bg-6" onclick="handleAdClick(6)">
-                    <h3 style="color: #74b9ff;">🎁 MỞ RƯƠNG THĂNG CẤP</h3>
-                    <p>Thắng là có EXP! Lên cấp mở rương nhận PMC và Lượt đánh Miễn Phí!</p>
-                    <div class="ad-btn">XEM TIẾN ĐỘ ➔</div>
-                </div>
-            </div>
+<div class="ad-slider-track" id="ad-slider-track">
+    <div class="ad-slide ad-bg-1" onclick="handleAdClick(1)">
+        <img class="ad-banner-img" src="images/lobby-128/imagesad_1.png" alt="">
+    </div>
+
+    <div class="ad-slide ad-bg-2" onclick="handleAdClick(2)">
+        <img class="ad-banner-img" src="images/lobby-128/imagesad_2.png" alt="">
+    </div>
+
+    <div class="ad-slide ad-bg-3" onclick="handleAdClick(3)">
+        <img class="ad-banner-img" src="images/lobby-128/imagesad_3.png" alt="">
+    </div>
+
+    <div class="ad-slide ad-bg-4" onclick="handleAdClick(4)">
+        <img class="ad-banner-img" src="images/lobby-128/imagesad_4.png" alt="">
+    </div>
+
+    <div class="ad-slide ad-bg-5" onclick="handleAdClick(5)">
+        <img class="ad-banner-img" src="images/lobby-128/imagesad_5.png" alt="">
+    </div>
+
+    <div class="ad-slide ad-bg-6" onclick="handleAdClick(6)">
+        <img class="ad-banner-img" src="images/lobby-128/imagesad_6.png" alt="">
+    </div>
+</div>
             
             <div class="ad-dots">
                 <div class="ad-dot active" onclick="goToAdSlide(0)"></div>
@@ -7615,11 +7709,17 @@ console.log("Đang chạy trên môi trường:", currentNetwork.toUpperCase());
 <div id="match-chat-btn" onclick="toggleMatchChat()">💬</div>
 
 <div id="arena-friend-btn" onclick="toggleArenaFriendBox(event)">
-    👥
+    <img class="lobby-icon-img" src="images/lobby-icons-128/friends.png" alt="">
     <span id="arena-friend-badge" class="friend-badge-dot">0</span>
 </div>
-<div id="arena-skin-btn" onclick="openAvatarSkinShop()">🛒</div>
-<div id="arena-top-btn" onclick="openArenaTopModal(event)">🏆</div>
+
+<div id="arena-skin-btn" onclick="openAvatarSkinShop()">
+    <img class="lobby-icon-img" src="images/lobby-icons-128/shop.png" alt="">
+</div>
+
+<div id="arena-top-btn" onclick="openArenaTopModal(event)">
+    <img class="lobby-icon-img" src="images/lobby-icons-128/leaderboard.png" alt="">
+</div>
 
 <div id="arena-friend-box">
     <div class="arena-friend-header">
@@ -41077,7 +41177,7 @@ document.addEventListener("click", function(e) {
     btn.id = 'arena-mission-btn';
     btn.setAttribute('onclick', 'openMissionHub()');
     btn.innerHTML = `
-      <span>🎯</span>
+      <img class="lobby-icon-img" src="images/lobby-icons-128/mission.png" alt="">
       <span id="arena-mission-badge" class="mission-badge-dot">0</span>
     `;
     document.body.appendChild(btn);
@@ -43222,7 +43322,7 @@ async function submitReferralCode() {
 </style>
 <!-- Nút ngoài sảnh -->
 <div id="arena-referral-btn" onclick="openReferralModal()" title="Mời bạn kiếm tiền">
-    🎁
+    <img class="lobby-icon-img" src="images/lobby-icons-128/invite.png" alt="">
     <div id="my-referral-count-badge" style="position: absolute; bottom: -14px; background: rgba(0,0,0,0.9); border: 1px solid #f4c542; color: #f4c542; font-size: 9px; padding: 2px 5px; border-radius: 12px; font-weight: 900; white-space: nowrap; line-height: 1.2; letter-spacing: 0;">0/100</div>
 </div>
 
