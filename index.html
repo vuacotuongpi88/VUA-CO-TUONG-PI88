@@ -5027,7 +5027,29 @@ margin-bottom: 14px;
     object-fit: cover;
     background: #111;
 }
+.avatar-shop-icon {
+    width: 54px;
+    height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
 
+.avatar-shop-icon img {
+    width: 54px;
+    height: 54px;
+    object-fit: contain;
+    display: block;
+    filter: drop-shadow(0 0 8px rgba(255, 209, 102, 0.45));
+}
+
+@media (max-width: 600px) {
+    .avatar-shop-icon,
+    .avatar-shop-icon img {
+        width: 50px;
+        height: 50px;
+    }
+}
 .avatar-shop-name {
     color: #fff;
     font-size: 13px;
@@ -34678,13 +34700,61 @@ window.renderAvatarSkinShop = function() {
 
         // 6 GÓI EXP ĐỂ CÀY LÊN MAX CẤP 180 - TỔNG ĐÚNG 60 VÉ
         const expPackages = [
-            { id: "exp1", name: "Gói Tân Binh", exp: 1000, price: 1000, desc: "+1.000 EXP <br><b style='color:#00c38a'>+2 Lượt Miễn Phí</b>", tickets: 2, icon: "🌱" },
-            { id: "exp2", name: "Gói Thương Gia", exp: 5000, price: 4800, desc: "+5.000 EXP <br><b style='color:#00c38a'>+4 Lượt Miễn Phí</b>", tickets: 4, icon: "💰" },
-            { id: "exp3", name: "Gói Tinh Nhuệ", exp: 20000, price: 18500, desc: "+20.000 EXP <br><b style='color:#00c38a'>+8 Lượt Miễn Phí</b>", tickets: 8, icon: "⚔️" },
-            { id: "exp4", name: "Gói Đại Cao Thủ", exp: 100000, price: 85000, desc: "+100.000 EXP <br><b style='color:#00c38a'>+12 Lượt Miễn Phí</b>", tickets: 12, icon: "🐉" },
-            { id: "exp5", name: "Gói Tông Sư", exp: 500000, price: 400000, desc: "+500.000 EXP <br><b style='color:#00c38a'>+16 Lượt Miễn Phí</b>", tickets: 16, icon: "👑" },
-            { id: "exp6", name: "Gói Thiên Vương", exp: 1650000, price: 1200000, desc: "LÊN THẲNG MAX CẤP 180<br><b style='color:#ff7675'>+18 Lượt Miễn Phí (Miễn Trảm)</b>", tickets: 18, icon: "🏆" }
-        ];
+    {
+        id: "exp1",
+        name: "Gói Tân Binh",
+        exp: 1000,
+        price: 1000,
+        desc: "+1.000 EXP <br><b style='color:#00c38a'>+2 Lượt Miễn Phí</b>",
+        tickets: 2,
+        icon: "images/exp-packages/exp-tan-binh.png"
+    },
+    {
+        id: "exp2",
+        name: "Gói Thương Gia",
+        exp: 5000,
+        price: 4800,
+        desc: "+5.000 EXP <br><b style='color:#00c38a'>+4 Lượt Miễn Phí</b>",
+        tickets: 4,
+        icon: "images/exp-packages/exp-thuong-gia.png"
+    },
+    {
+        id: "exp3",
+        name: "Gói Tinh Nhuệ",
+        exp: 20000,
+        price: 18500,
+        desc: "+20.000 EXP <br><b style='color:#00c38a'>+8 Lượt Miễn Phí</b>",
+        tickets: 8,
+        icon: "images/exp-packages/exp-tinh-nhue.png"
+    },
+    {
+        id: "exp4",
+        name: "Gói Đại Cao Thủ",
+        exp: 100000,
+        price: 85000,
+        desc: "+100.000 EXP <br><b style='color:#00c38a'>+12 Lượt Miễn Phí</b>",
+        tickets: 12,
+        icon: "images/exp-packages/exp-dai-cao-thu.png"
+    },
+    {
+        id: "exp5",
+        name: "Gói Tông Sư",
+        exp: 500000,
+        price: 400000,
+        desc: "+500.000 EXP <br><b style='color:#00c38a'>+16 Lượt Miễn Phí</b>",
+        tickets: 16,
+        icon: "images/exp-packages/exp-tong-su.png"
+    },
+    {
+        id: "exp6",
+        name: "Gói Thiên Vương",
+        exp: 1650000,
+        price: 1200000,
+        desc: "LÊN THẲNG MAX CẤP 180<br><b style='color:#ff7675'>+18 Lượt Miễn Phí (Miễn Trảm)</b>",
+        tickets: 18,
+        icon: "images/exp-packages/exp-thien-vuong.png"
+    }
+];
 
         const expPackageOrder = expPackages.map(p => p.id);
 const expPackageRank = {};
@@ -34732,7 +34802,9 @@ list.innerHTML = expPackages.map(pkg => {
 
     return `
         <div class="avatar-shop-card" style="${reachedByHigherPackage ? "opacity:0.45; filter:grayscale(1);" : ""}">
-            <div class="avatar-shop-icon">${pkg.icon}</div>
+            <div class="avatar-shop-icon">
+    <img src="${pkg.icon}" alt="${avatarShopEscape(pkg.name)}" loading="lazy">
+</div>
             <div>
                 <div class="avatar-shop-name">${avatarShopEscape(pkg.name)}</div>
                 <div class="avatar-shop-desc">${pkg.desc}</div>
