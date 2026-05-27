@@ -162,6 +162,79 @@ clip-path: circle(60%);
 object-fit: cover;
 filter: drop-shadow(2px 4px 3px rgba(0, 0, 0, 0.5));
 }
+
+/* ===== KHAY QUÂN BỊ ĂN 2 BÊN ===== */
+.captured-tray {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 96%;
+    min-height: 34px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    box-sizing: border-box;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.58);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    box-shadow: 0 0 10px rgba(0,0,0,0.35);
+    z-index: 45;
+    pointer-events: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+}
+.captured-tray::-webkit-scrollbar {
+    display: none;
+}
+.captured-tray-top {
+    top: -43px;
+}
+.captured-tray-bottom {
+    bottom: -43px;
+}
+.captured-tray-label {
+    flex: 0 0 auto;
+    color: #ffeaa7;
+    font-size: 10px;
+    font-weight: 900;
+    margin-right: 3px;
+    text-shadow: 0 0 6px rgba(0,0,0,0.9);
+}
+.captured-piece-img {
+    flex: 0 0 auto;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    object-fit: cover;
+    clip-path: circle(60%);
+    filter: drop-shadow(1px 2px 2px rgba(0,0,0,0.58));
+    opacity: 0.96;
+}
+.captured-piece-img.captured-hidden {
+    filter: drop-shadow(1px 2px 2px rgba(0,0,0,0.7)) brightness(0.92);
+}
+
+@media (max-width: 600px) {
+    .captured-tray {
+        min-height: 30px;
+        padding: 3px 7px;
+    }
+    .captured-tray-top {
+        top: -36px;
+    }
+    .captured-tray-bottom {
+        bottom: -36px;
+    }
+    .captured-piece-img {
+        width: 22px;
+        height: 22px;
+    }
+    .captured-tray-label {
+        font-size: 9px;
+    }
+}
 .move-ghost {
     position: fixed !important;
     border-radius: 60% !important;
@@ -9114,6 +9187,143 @@ let currentViewerCountRef = null;
 let currentViewerWalletKey = "";
 let presenceHeartbeatTimer = null;
 
+// ===== KHAY QUÂN BỊ ĂN 2 BÊN =====
+const PIECE_IMAGE_NAMES = {
+    '車': 'xe', '馬': 'ma', '象': 'tuong', '士': 'si', '將': 'tuong_soai', '砲': 'phao', '卒': 'tot',
+    '俥': 'xe', '傌': 'ma', '相': 'tuong', '仕': 'si', '帥': 'tuong_soai', '炮': 'phao', '兵': 'tot'
+};
+
+function getPieceImageSrc(side, type, forceFaceDown = false) {
+    if (forceFaceDown) return "images/up_mat_trang.png";
+    const name = PIECE_IMAGE_NAMES[type] || "tuong_soai";
+    return `images/${side}_${name}.png`;
+}
+
+function getOppositeSide(side) {
+    return side === "do" ? "den" : "do";
+}
+
+function ensureCapturedTrays() {
+    if (!board) return null;
+
+    let top = document.getElementById("captured-tray-top");
+    let bottom = document.getElementById("captured-tray-bottom");
+
+    if (!top) {
+        top = document.createElement("div");
+        top.id = "captured-tray-top";
+        top.className = "captured-tray captured-tray-top";
+        board.appendChild(top);
+    }
+
+    if (!bottom) {
+        bottom = document.createElement("div");
+        bottom.id = "captured-tray-bottom";
+        bottom.className = "captured-tray captured-tray-bottom";
+        board.appendChild(bottom);
+    }
+
+    return { top, bottom };
+}
+
+function normalizeCaptureList(raw) {
+    if (!raw) return [];
+    const arr = Array.isArray(raw) ? raw.filter(Boolean) : Object.values(raw || {}).filter(Boolean);
+    return arr.sort((a, b) => Number(a.at || a.clientAt || 0) - Number(b.at || b.clientAt || 0));
+}
+
+function canSeeCapturedPiece(cap) {
+    if (!cap) return false;
+    if (cap.publicKnown !== false) return true;
+
+    // Cờ úp: quân úp bị ăn thì chỉ bên ăn quân đó thấy mặt thật.
+    if (mySide && cap.secretFor && cap.secretFor === mySide) return true;
+
+    // Khi chơi máy/offline không có mySide rõ, cho người đang ngồi máy thấy.
+    if (!mySide && cap.secretFor && cap.secretFor === cap.capturedBy) return true;
+
+    return false;
+}
+
+function renderCapturedTray(tray, side, rawList) {
+    if (!tray) return;
+    const list = normalizeCaptureList(rawList);
+    tray.innerHTML = "";
+
+    const label = document.createElement("span");
+    label.className = "captured-tray-label";
+    label.textContent = `${side === "do" ? "ĐỎ" : "ĐEN"} ĂN`;
+    tray.appendChild(label);
+
+    list.forEach(cap => {
+        const img = document.createElement("img");
+        img.className = "captured-piece-img";
+        const visible = canSeeCapturedPiece(cap);
+        img.src = visible
+            ? (cap.src || getPieceImageSrc(cap.side, cap.type, false))
+            : "images/up_mat_trang.png";
+        img.title = visible
+            ? `${cap.side === "do" ? "Đỏ" : "Đen"} mất ${cap.type || "quân"}`
+            : "Quân úp bị ăn - đối thủ chưa biết mặt";
+        if (!visible) img.classList.add("captured-hidden");
+        img.onerror = function () {
+            this.onerror = null;
+            this.src = "images/up_mat_trang.png";
+        };
+        tray.appendChild(img);
+    });
+}
+
+function renderCapturedPiecesFromRoom(room = {}) {
+    const trays = ensureCapturedTrays();
+    if (!trays) return;
+
+    const captures = room.captures || {};
+    const bottomSide = mySide === "den" ? "den" : "do";
+    const topSide = getOppositeSide(bottomSide);
+
+    renderCapturedTray(trays.bottom, bottomSide, captures[bottomSide]);
+    renderCapturedTray(trays.top, topSide, captures[topSide]);
+}
+
+function clearCapturedPiecesUI() {
+    const top = document.getElementById("captured-tray-top");
+    const bottom = document.getElementById("captured-tray-bottom");
+    if (top) top.innerHTML = "";
+    if (bottom) bottom.innerHTML = "";
+}
+
+function buildCaptureUpdateFromItem(item, capturedBySide) {
+    if (!item || !capturedBySide) return {};
+
+    const capturedSide = item.side || getOppositeSide(capturedBySide);
+    const wasUp = item.isUp === true || item.isUp === "true";
+    const hiddenCapture = !!isCoUp && wasUp;
+    const id = `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
+    return {
+        [`captures/${capturedBySide}/${id}`]: {
+            capturedBy: capturedBySide,
+            side: capturedSide,
+            type: item.type || "",
+            wasUp,
+            publicKnown: !hiddenCapture,
+            secretFor: hiddenCapture ? capturedBySide : "",
+            src: getPieceImageSrc(capturedSide, item.type || "", false),
+            clientAt: Date.now(),
+            at: firebase.database.ServerValue.TIMESTAMP
+        }
+    };
+}
+
+function buildCaptureUpdateFromElement(targetEl, capturedBySide) {
+    if (!targetEl) return {};
+    return buildCaptureUpdateFromItem({
+        side: targetEl.dataset.side,
+        type: targetEl.dataset.type,
+        isUp: targetEl.dataset.isUp === "true"
+    }, capturedBySide);
+}
 
 function updateViewerCountBadge(count = 0) {
     const badge = document.getElementById("viewer-count-badge");
@@ -9151,6 +9361,7 @@ async function startSpectatorPresence(roomId) {
 
 function renderSpectatorRoomSnapshot(room = {}, roomId = "") {
     currentRoomMode = room.mode || currentRoomMode || "co-tuong";
+    renderCapturedPiecesFromRoom(room);
     currentRoomStatus = room.status || null;
     mySide = null;
     viewSide = "do";
@@ -9603,6 +9814,7 @@ function buildLeavingPlayersCleanupUpdates(roomId, room = {}) {
     // Dọn sạch ván cũ/chờ ván mới.
     updates[`matches/${roomId}/turn`] = "do";
     updates[`matches/${roomId}/board`] = null;
+    updates[`matches/${roomId}/captures`] = null;
     updates[`matches/${roomId}/moveCount`] = 0;
     updates[`matches/${roomId}/startedAt`] = null;
     updates[`matches/${roomId}/finishedAt`] = null;
@@ -11032,6 +11244,9 @@ if (haiTuongDoiMat(mt)) {
 if (isActivePuzzleGame()) {
     puzzleBoardBeforeMove = clonePuzzleBoardState(exportBoardState());
 }
+const captureUpdate = target
+    ? buildCaptureUpdateFromElement(target, selectedPiece ? selectedPiece.dataset.side : luotDi)
+    : {};
     if (target) {
     target.remove();
     try {
@@ -11125,7 +11340,7 @@ if (isActivePuzzleGame()) {
     window.__localMoveBoardHash = JSON.stringify(exportBoardState());
     window.__localMoveVisualUntil = Date.now() + Number(window.CHESS_MOVE_ANIM_MS || 1200) + 300;
 
-    syncRoomFromBoard();
+    syncRoomFromBoard(captureUpdate || {});
         
         const movedRoomForBot = {
     ...(window.__lastBoundRoom || {}),
@@ -30527,6 +30742,7 @@ function clearRealtimeBoardVisualOnly() {
     document.querySelectorAll(".piece").forEach(p => p.remove());
     clearMoveHints();
     clearLastMoveMarks();
+    clearCapturedPiecesUI();
 
     selectedPiece = null;
     lastMoveFrom = null;
@@ -32136,6 +32352,7 @@ await waitingRoomRef.remove().catch(() => {});
          turnStartedAt: firebase.database.ServerValue.TIMESTAMP, // Bùa ghim mốc thời gian bắt đầu
          lastMoveFrom: null,
         lastMoveTo: null,
+        captures: null,
         winner: null,
         winReason: null,
         drawRequest: null,
@@ -32220,6 +32437,15 @@ function ensureBotWorkerHtml() {
             if (botMoveHistory.length > 10) botMoveHistory.shift();
         }
 
+        const botCaptureUpdate = buildCaptureUpdateFromItem(
+            (Array.isArray(room.board) ? room.board : []).find(item =>
+                Number(item.c) === Number(result.move?.to?.c) &&
+                Number(item.r) === Number(result.move?.to?.r) &&
+                item.side !== botSide
+            ),
+            botSide
+        );
+
         await db.ref("matches/" + roomId).update({
             board: result.move.newBoard,
             turn: humanSide,
@@ -32229,6 +32455,7 @@ function ensureBotWorkerHtml() {
             lastMoveFrom: result.move.from,
             lastMoveTo: result.move.to,
             moveCount: firebase.database.ServerValue.increment(1),
+            ...botCaptureUpdate,
             updatedAt: firebase.database.ServerValue.TIMESTAMP
         });
 
@@ -32388,6 +32615,7 @@ roomChatRef = db.ref("matches/" + listeningRoomId + "/chat");
         if (!room) return;
         window.__lastBoundRoom = room;
         window.__lastBoundRoomId = listeningRoomId;
+        renderCapturedPiecesFromRoom(room);
 
 if (isSpectatorMode) {
     renderSpectatorRoomSnapshot(room, listeningRoomId);
