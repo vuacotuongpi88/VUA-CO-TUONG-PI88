@@ -8194,8 +8194,16 @@ if (menuAvatarPhoto) menuAvatarPhoto.src = safePhoto;
     localStorage.setItem("user-name-display", safeName);
     localStorage.setItem("user-photo", safePhoto);
 
-    // Tải ví và rình thông báo sau khi đã có thẻ căn cước
-    await loadWalletBalance().catch(() => {});
+// Tải ví và rình thông báo sau khi đã có thẻ căn cước
+if (typeof resolveMasterWalletNow === "function") {
+    await resolveMasterWalletNow(true).catch(() => {});
+}
+
+await loadWalletBalance().catch(() => {});
+
+if (typeof startWalletRealtimeSync === "function") {
+    await startWalletRealtimeSync();
+}
     if (typeof loadAvatarSkinState === 'function') loadAvatarSkinState();
     if (typeof listenForNotifications === 'function') listenForNotifications();
     if (typeof bindAdminNotification === 'function') bindAdminNotification();
@@ -8409,9 +8417,31 @@ function loginGuest() {
     );
 }
 
-function savePiUser(userName) {
-    localStorage.setItem("pi-user-name", userName || "Pi User");
+function savePiUser(userName, authData = null) {
+    const u = authData?.user || authData || {};
+
+    const piName = String(
+        userName ||
+        u.username ||
+        localStorage.getItem("pi-user-name") ||
+        "Pi User"
+    ).trim();
+
+    const piUid = String(
+        u.uid ||
+        authData?.uid ||
+        ""
+    ).trim();
+
+    localStorage.setItem("pi-user-name", piName);
     localStorage.setItem("pi-user-photo", "images/do_tuong.png");
+
+    // Quan trọng: lưu UID Pi để resolve master wallet chuẩn hơn
+    if (piUid) {
+        localStorage.setItem("pi-user-uid", piUid);
+        localStorage.setItem("pi-uid", piUid);
+        localStorage.setItem("piUid", piUid);
+    }
 }
 function isRealPiBrowser() {
     const ua = navigator.userAgent || "";
@@ -33812,9 +33842,19 @@ if (typeof markAccountLinkedDone === "function") {
     }
 };
 
-window.resolveMasterWalletNow = async function() {
+window.resolveMasterWalletNow = async function(force = false) {
+    const rawWalletKey = String(
+        typeof getRawWalletDbKey === "function" ? getRawWalletDbKey() : ""
+    ).replace(/[.#$\[\]\/]/g, "_");
+
+    if (!rawWalletKey) return "";
+
     try {
-        const rawWalletKey = getRawWalletDbKey();
+        const scopedMaster = localStorage.getItem(getScopedMasterKey(rawWalletKey)) || "";
+
+        if (!force && scopedMaster) {
+            return scopedMaster.replace(/[.#$\[\]\/]/g, "_");
+        }
 
         const piUid =
             localStorage.getItem("pi-user-uid") ||
@@ -33822,22 +33862,51 @@ window.resolveMasterWalletNow = async function() {
             localStorage.getItem("piUid") ||
             "";
 
-        const data = await financePost("resolve_master_wallet", {
-            piUid
-        }, rawWalletKey);
+        // Hỏi API trước
+        try {
+            const data = await financePost("resolve_master_wallet", {
+                piUid,
+                rawWalletKey
+            }, rawWalletKey);
 
-        const master = String(data.masterWalletKey || rawWalletKey)
-            .replace(/[.#$\[\]\/]/g, "_");
+            const master = String(
+                data.masterWalletKey ||
+                data.linkedMasterWalletKey ||
+                data.linkedGoogleWalletKey ||
+                rawWalletKey
+            ).replace(/[.#$\[\]\/]/g, "_");
+
+            if (master && master !== rawWalletKey) {
+                setScopedMasterWallet(master, rawWalletKey);
+                localStorage.setItem("mc_master_wallet_key", master);
+                return master;
+            }
+        } catch (apiErr) {
+            console.warn("resolve_master_wallet API lỗi, fallback Firebase:", apiErr);
+        }
+
+        // Fallback: đọc thẳng ví raw pi_xxx để lấy master/link Google
+        const snap = await db.ref("wallets/" + rawWalletKey).once("value");
+        const w = snap.val() || {};
+
+        const master = String(
+            w.masterWalletKey ||
+            w.linkedMasterWalletKey ||
+            w.linkedGoogleWalletKey ||
+            w.googleWalletKey ||
+            ""
+        ).replace(/[.#$\[\]\/]/g, "_");
 
         if (master && master !== rawWalletKey) {
             setScopedMasterWallet(master, rawWalletKey);
             localStorage.setItem("mc_master_wallet_key", master);
+            return master;
         }
 
-        return master || rawWalletKey;
+        return rawWalletKey;
     } catch (err) {
         console.warn("resolveMasterWalletNow lỗi:", err);
-        return makeWalletDbKey();
+        return rawWalletKey;
     }
 };
 function scopedKey(base) {
@@ -33965,16 +34034,27 @@ if (data.photo) {
         // Cập nhật UI với số tiền CHUẨN 100% TỪ FIREBASE
         updateBalanceUI(currentWalletBalance);
         updatePmcUI(currentPmcBalance);
+// EXP/LEVEL phải cập nhật mỗi lần load ví, không được chỉ 1 lần
+const currentExp = Math.max(0, Number(data.exp || 0) || 0);
+const currentLevel = Math.max(
+    1,
+    Number(data.level || (typeof getLevelFromExp === "function" ? getLevelFromExp(currentExp) : 1)) || 1
+);
 
-        // Tải EXP đúng 1 lần lúc mới vào game
-        if (typeof window.updateExpBarUI === 'function') {
-            if (!window.__expBarInitialized) {
-                window.updateExpBarUI(data.exp || 0);
-                window.__expBarInitialized = true;
-            }
-        }
+if (typeof window.updateExpBarUI === "function") {
+    window.updateExpBarUI(currentExp);
+    window.__expBarInitialized = true;
+}
 
-        return { pi: currentWalletBalance, pmc: currentPmcBalance };
+localStorage.setItem("exp_cache", String(currentExp));
+localStorage.setItem("level_cache", String(currentLevel));
+
+return {
+    pi: currentWalletBalance,
+    pmc: currentPmcBalance,
+    exp: currentExp,
+    level: currentLevel
+};
     } catch (err) {
         console.error("Lỗi load ví:", err);
         // CHỈ KHI NÀO MẤT MẠNG, ĐÉO GỌI ĐƯỢC FIREBASE THÌ MỚI ĐƯỢC XÀI CACHE
@@ -33984,6 +34064,90 @@ if (data.photo) {
         updateBalanceUI(currentWalletBalance);
         updatePmcUI(currentPmcBalance);
         return { pi: currentWalletBalance, pmc: currentPmcBalance };
+    }
+}
+let walletRealtimeRef = null;
+let walletRealtimeCb = null;
+let walletRealtimeKey = "";
+
+function stopWalletRealtimeSync() {
+    try {
+        if (walletRealtimeRef && walletRealtimeCb) {
+            walletRealtimeRef.off("value", walletRealtimeCb);
+        }
+    } catch (_) {}
+
+    walletRealtimeRef = null;
+    walletRealtimeCb = null;
+    walletRealtimeKey = "";
+}
+
+async function startWalletRealtimeSync() {
+    try {
+        if (typeof resolveMasterWalletNow === "function") {
+            await resolveMasterWalletNow(true);
+        }
+
+        const walletKey = makeWalletDbKey();
+        if (!walletKey) return;
+
+        if (walletRealtimeKey === walletKey && walletRealtimeRef) return;
+
+        stopWalletRealtimeSync();
+
+        walletRealtimeKey = walletKey;
+        walletRealtimeRef = db.ref("wallets/" + walletKey);
+
+        walletRealtimeCb = function(snap) {
+            const data = snap.val() || {};
+
+            const piAmount = Math.max(0, Number(data.balance || data.piBalance || 0) || 0);
+            const pmcAmount = Math.max(0, Number(data.pmcBalance || 0) || 0);
+            const expAmount = Math.max(0, Number(data.exp || 0) || 0);
+            const levelAmount = Math.max(
+                1,
+                Number(data.level || (typeof getLevelFromExp === "function" ? getLevelFromExp(expAmount) : 1)) || 1
+            );
+
+            currentWalletBalance = piAmount;
+            currentPmcBalance = pmcAmount;
+
+            localStorage.setItem(getBalanceCacheKey(), String(piAmount));
+            localStorage.setItem(getPmcCacheKey(), String(pmcAmount));
+            localStorage.setItem("exp_cache", String(expAmount));
+            localStorage.setItem("level_cache", String(levelAmount));
+
+            updateBalanceUI(piAmount);
+            updatePmcUI(pmcAmount);
+
+            if (typeof window.updateExpBarUI === "function") {
+                window.updateExpBarUI(expAmount);
+                window.__expBarInitialized = true;
+            }
+
+            if (typeof updateTicketUI === "function") {
+                updateTicketUI(Math.max(0, Math.floor(Number(data.freeTickets || 0) || 0)));
+            }
+
+            if (typeof refreshMyMatchBalanceBoxesNow === "function") {
+                refreshMyMatchBalanceBoxesNow(piAmount, pmcAmount);
+            }
+
+            // Nếu đang mở bảng nhiệm vụ/cấp độ thì refresh lại rương
+            const missionModal = document.getElementById("mission-hub-modal");
+            if (missionModal && missionModal.classList.contains("show")) {
+                if (typeof checkLevelRewardNotification === "function") {
+                    checkLevelRewardNotification({ silent: true }).catch(() => {});
+                }
+                if (typeof renderLevelRewards === "function") {
+                    renderLevelRewards().catch(() => {});
+                }
+            }
+        };
+
+        walletRealtimeRef.on("value", walletRealtimeCb);
+    } catch (err) {
+        console.warn("startWalletRealtimeSync lỗi:", err);
     }
 }
 function getPiBalance() {
@@ -40735,9 +40899,11 @@ async function loginPi() {
         // Dùng cái Pi vừa được đảm bảo ở trên để đăng nhập
         piAuth = await Pi.authenticate(scopes, onIncompletePaymentFound);
 
-        const piName = piAuth?.user?.username || "Pi User";
-        savePiUser(piName);
-        applyLoggedInUI(piName, "images/do_tuong.png");
+const piName = piAuth?.user?.username || "Pi User";
+savePiUser(piName, piAuth);
+
+// Phải await để nó resolve master wallet xong rồi mới load ví
+await applyLoggedInUI(piName, "images/do_tuong.png");
         
         ensureFriendProfileSynced()
             .then(() => bindFriendSystem())
@@ -41795,6 +41961,11 @@ function getExpByResult(result) {
 
 async function applyPendingExpToDatabase() {
     if (pendingSessionEXP === 0) return;
+
+    if (typeof resolveMasterWalletNow === "function") {
+        await resolveMasterWalletNow(true).catch(() => {});
+    }
+
     const walletKey = makeWalletDbKey();
     const userRef = db.ref("wallets/" + walletKey);
     
