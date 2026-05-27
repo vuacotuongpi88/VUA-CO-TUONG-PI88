@@ -43224,131 +43224,75 @@ window.applyPendingExpToDatabase = async function() {
     window.__applyingMatchExp = true;
 
     try {
-        if (typeof resolveMasterWalletNow === "function") {
-            await resolveMasterWalletNow(true).catch(() => {});
-        }
+        const roomKey =
+            (typeof currentRoomId !== "undefined" && currentRoomId)
+                ? currentRoomId
+                : (window.currentRoomId || "");
 
-        const walletKey = typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "";
-        if (!walletKey) throw new Error("Không xác định được ví để cộng EXP");
+        const sideKey =
+            (typeof mySide !== "undefined" && mySide)
+                ? mySide
+                : (window.mySide || "");
 
-        const userRef = db.ref("wallets/" + walletKey);
+        // Một mã chống cộng/trừ 2 lần trong cùng lượt xử lý
+        const claimKey = [
+            roomKey || "no_room",
+            sideKey || "no_side",
+            deltaExp > 0 ? "win" : "lose",
+            Date.now()
+        ].join("_");
 
-        let oldExp = 0;
-        let oldLevel = 1;
-        let finalExp = 0;
-        let finalLevel = 1;
-        let ticketsGained = 0;
-
-        const tx = await userRef.transaction((current) => {
-            current = current && typeof current === "object" ? current : {};
-
-            const meta = current.levelMeta && typeof current.levelMeta === "object"
-                ? current.levelMeta
-                : {};
-
-            oldExp = Math.max(
-                0,
-                Math.floor(Number(
-                    current.exp ??
-                    meta.exp ??
-                    current.xp ??
-                    meta.xp ??
-                    0
-                ) || 0)
-            );
-
-            oldLevel = Math.max(
-                1,
-                Math.floor(Number(
-                    current.level ??
-                    meta.level ??
-                    (typeof window.getLevelFromExp === "function" ? window.getLevelFromExp(oldExp) : 1)
-                ) || 1)
-            );
-
-            finalExp = Math.max(0, oldExp + deltaExp);
-            finalLevel = typeof window.getLevelFromExp === "function"
-                ? window.getLevelFromExp(finalExp)
-                : oldLevel;
-
-            ticketsGained = deltaExp > 0 ? Math.max(0, finalLevel - oldLevel) : 0;
-
-            current.exp = finalExp;
-            current.level = finalLevel;
-
-            current.levelMeta = {
-                ...meta,
-                exp: finalExp,
-                level: finalLevel,
-                title: typeof getSimpleLevelTitle === "function"
-                    ? getSimpleLevelTitle(finalLevel)
-                    : (meta.title || ""),
-                updatedAt: Date.now()
-            };
-
-            if (ticketsGained > 0) {
-                current.freeTickets = Math.max(0, Math.floor(Number(current.freeTickets || 0) || 0)) + ticketsGained;
-            }
-
-            current.updatedAt = Date.now();
-            return current;
+        const data = await levelSystemPost("apply_match_exp", {
+            deltaExp,
+            roomId: roomKey,
+            side: sideKey,
+            claimKey
         });
 
-        if (!tx || tx.committed === false) {
-            throw new Error("Firebase không commit EXP");
-        }
-
-        const fresh = tx.snapshot && tx.snapshot.val ? (tx.snapshot.val() || {}) : {};
-        const freshMeta = fresh.levelMeta && typeof fresh.levelMeta === "object" ? fresh.levelMeta : {};
-
-        finalExp = Math.max(0, Math.floor(Number(fresh.exp ?? freshMeta.exp ?? finalExp) || 0));
-        finalLevel = Math.max(1, Math.floor(Number(
-            fresh.level ??
-            freshMeta.level ??
-            (typeof window.getLevelFromExp === "function" ? window.getLevelFromExp(finalExp) : finalLevel)
-        ) || 1));
+        const finalExp = Math.max(0, Math.floor(Number(data.newExp || 0) || 0));
+        const finalLevel = Math.max(1, Math.floor(Number(data.newLevel || 1) || 1));
 
         localStorage.setItem("exp_cache", String(finalExp));
         localStorage.setItem("level_cache", String(finalLevel));
 
         window.finalNewExpToAnimate = finalExp;
-window.__matchExpCommitLock = {
-    walletKey,
-    targetExp: finalExp,
-    targetLevel: finalLevel,
-    until: Date.now() + 10000
-};
+
+        // Khóa UI tạm để realtime/load ví không kéo ngược trong lúc Firebase trả snapshot
+        window.__matchExpCommitLock = {
+            walletKey: typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "",
+            targetExp: finalExp,
+            targetLevel: finalLevel,
+            until: Date.now() + 20000
+        };
+
         if (typeof window.updateExpBarUI === "function") {
             window.updateExpBarUI(finalExp);
         }
 
-        if (ticketsGained > 0) {
+        if (data.ticketsGained > 0) {
             setTimeout(() => {
-                alert(`🎉 LÊN CẤP ${finalLevel}!\nĐược hệ thống thưởng ${ticketsGained} Lượt Đánh Miễn Phí!`);
+                alert(`🎉 LÊN CẤP ${finalLevel}!\nĐược hệ thống thưởng ${data.ticketsGained} Lượt Đánh Miễn Phí!`);
             }, 500);
         }
 
         window.showExpSummary(finalLevel);
 
+        // Không loadWalletBalance ngay 300ms nữa.
+        // Đợi sau khi popup đóng hoặc realtime tự về đúng số.
         setTimeout(() => {
-            loadWalletBalance().catch(() => {});
             if (typeof safeFetchAndRenderTop === "function") {
                 safeFetchAndRenderTop().catch(() => {});
             }
-        }, 300);
+        }, 1200);
 
     } catch (err) {
-        console.error("Lỗi đồng bộ EXP từ Fire:", err);
+        console.error("Lỗi chốt EXP server:", err);
+        alert("Lỗi chốt EXP server: " + (err.message || err));
 
-        const fallbackExp = Math.max(
-            0,
-            Number(localStorage.getItem("exp_cache") || 0) + deltaExp
-        );
-
-        window.finalNewExpToAnimate = fallbackExp;
+        // Không giả cộng UI nữa, vì giả cộng xong lại bị kéo về làm rối.
         window.showExpSummary(
             typeof window.getLevelFromExp === "function"
-                ? window.getLevelFromExp(fallbackExp)
+                ? window.getLevelFromExp(Number(localStorage.getItem("exp_cache") || 0))
                 : 1
         );
     } finally {

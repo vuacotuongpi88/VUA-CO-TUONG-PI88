@@ -226,7 +226,153 @@ const {
   userRef,
   canUseWallet
 } = await loadOwnedWallet(db, walletKey, uid, rawWalletKey);
+// =====================================================
+// CHỐT EXP SAU TRẬN - SERVER GHI, NÉ RULES CLIENT
+// =====================================================
+if (action === "apply_match_exp") {
+  const deltaExp = Math.floor(Number(body.deltaExp || 0));
+  const roomId = safeKey(body.roomId || "");
+  const side = String(body.side || "").trim();
+  const claimKey = safeKey(body.claimKey || `${roomId}_${side}_${deltaExp}`);
 
+  if (!Number.isFinite(deltaExp) || deltaExp === 0) {
+    return res.status(400).json({
+      ok: false,
+      error: "EXP trận không hợp lệ"
+    });
+  }
+
+  // Game mày hiện thắng tối đa khoảng +30, thua -5.
+  // Chặn số điên để F12 không bơm EXP.
+  if (deltaExp < -100 || deltaExp > 100) {
+    return res.status(400).json({
+      ok: false,
+      error: "EXP trận vượt giới hạn"
+    });
+  }
+
+  let finalExp = 0;
+  let finalLevel = 1;
+  let oldLevel = 1;
+  let ticketsGained = 0;
+  let alreadyApplied = false;
+
+  const txResult = await runTransaction(userRef, (current) => {
+    if (!current) return current;
+    if (!canUseWallet(current)) return;
+
+    current.matchExpClaimsV1 = current.matchExpClaimsV1 || {};
+
+    // Chống cùng 1 trận bị cộng/trừ 2 lần
+    if (claimKey && current.matchExpClaimsV1[claimKey]) {
+      alreadyApplied = true;
+      finalExp = Math.max(0, Math.floor(Number(current.exp || current.levelMeta?.exp || 0)));
+      finalLevel = Math.max(1, Math.floor(Number(current.level || current.levelMeta?.level || calcLevel(finalExp))));
+      return current;
+    }
+
+    const meta = current.levelMeta && typeof current.levelMeta === "object"
+      ? current.levelMeta
+      : {};
+
+    const oldExp = Math.max(
+      0,
+      Math.floor(Number(
+        current.exp ??
+        meta.exp ??
+        current.xp ??
+        meta.xp ??
+        0
+      ) || 0)
+    );
+
+    oldLevel = Math.max(
+      1,
+      Math.floor(Number(
+        current.level ??
+        meta.level ??
+        calcLevel(oldExp)
+      ) || 1)
+    );
+
+    finalExp = Math.max(0, oldExp + deltaExp);
+    finalLevel = calcLevel(finalExp);
+
+    ticketsGained = deltaExp > 0
+      ? Math.max(0, finalLevel - oldLevel)
+      : 0;
+
+    current.exp = finalExp;
+    current.level = finalLevel;
+
+    // Quan trọng: update cả levelMeta để bảng top/nhiệm vụ không đọc số cũ
+    current.levelMeta = {
+      ...meta,
+      exp: finalExp,
+      level: finalLevel,
+      title: `Cấp ${finalLevel}`,
+      updatedAt: Date.now()
+    };
+
+    if (ticketsGained > 0) {
+      current.freeTickets =
+        Math.max(0, Math.floor(Number(current.freeTickets || 0))) + ticketsGained;
+    }
+
+    if (claimKey) {
+      current.matchExpClaimsV1[claimKey] = {
+        deltaExp,
+        roomId,
+        side,
+        at: Date.now()
+      };
+    }
+
+    current.updatedAt = Date.now();
+    return current;
+  });
+
+  if (!txResult.committed) {
+    return res.status(400).json({
+      ok: false,
+      error: "Không chốt được EXP trận"
+    });
+  }
+
+  const snapData = txResult.snapshot.val() || {};
+  const meta = snapData.levelMeta && typeof snapData.levelMeta === "object"
+    ? snapData.levelMeta
+    : {};
+
+  finalExp = Math.max(0, Math.floor(Number(snapData.exp ?? meta.exp ?? finalExp) || 0));
+  finalLevel = Math.max(1, Math.floor(Number(snapData.level ?? meta.level ?? calcLevel(finalExp)) || 1));
+
+  await db.ref("walletTransactions").push({
+    type: "match_exp",
+    uid,
+    walletKey: safeWalletKey,
+    roomId,
+    side,
+    deltaExp,
+    finalExp,
+    finalLevel,
+    ticketsGained,
+    alreadyApplied,
+    createdAt: Date.now(),
+    status: "done"
+  }).catch(() => {});
+
+  return res.status(200).json({
+    ok: true,
+    action,
+    deltaExp,
+    newExp: finalExp,
+    newLevel: finalLevel,
+    newTickets: Math.max(0, Math.floor(Number(snapData.freeTickets || 0))),
+    ticketsGained,
+    alreadyApplied
+  });
+}
     // =====================================================
     // 1. MỞ RƯƠNG CẤP ĐỘ
     // =====================================================
