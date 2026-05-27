@@ -42940,7 +42940,15 @@ async function claimLevelChest(targetLevel, btnElement) {
     if (!milestone) return;
 
     try {
-        const walletKey = typeof makeWalletDbKey === 'function' ? makeWalletDbKey() : "";
+const rawWalletKey = typeof getRawWalletDbKey === "function"
+    ? String(getRawWalletDbKey() || "").trim()
+    : "";
+
+const masterWalletKey = typeof makeWalletDbKey === "function"
+    ? String(makeWalletDbKey() || "").trim()
+    : "";
+
+const walletKey = masterWalletKey;
 
 const user = firebase.auth().currentUser;
 if (!user) throw new Error("Chưa đăng nhập Firebase");
@@ -42951,9 +42959,17 @@ const res = await fetch("/api/level-system?v=" + Date.now(), {
     headers: {
         "Content-Type": "application/json",
         "Authorization": "Bearer " + token,
-        "x-wallet-key": walletKey
+        "x-wallet-key": walletKey,
+        "x-raw-wallet-key": rawWalletKey,
+        "x-master-wallet-key": masterWalletKey
     },
-    body: JSON.stringify({ action: "claim_chest", walletKey, targetLevel })
+    body: JSON.stringify({
+        action: "claim_chest",
+        walletKey,
+        rawWalletKey,
+        masterWalletKey,
+        targetLevel
+    })
 });
         const data = await res.json();
         if (!res.ok || !data.ok) throw new Error(data.error || "Mở rương thất bại");
