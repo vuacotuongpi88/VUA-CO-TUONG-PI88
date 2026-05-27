@@ -8023,6 +8023,7 @@ let roomChatRef = null;
 let lastRoomBoardHash = "";
 let lastDrawRequestAt = 0;
 const ACTIVE_MATCH_KEY = "co_tuong_active_match_v1";
+const RECONNECT_GRACE_MS = 90000; // Cho người chơi 90s mở lại app để hồi trận, không xử thua ngay khi mất mạng/reset.
 let matchChatPeekTimer = null;
 
 function escapeChatPeekText(value = "") {
@@ -8131,8 +8132,9 @@ async function tryResumeRealtimeMatch(preferredMode = null) {
         return false;
     }
 
-    const isDo = room.players?.do?.uid === me.uid;
-    const isDen = room.players?.den?.uid === me.uid;
+    const myWalletKey = String(me.walletKey || (typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "") || "").trim();
+    const isDo = room.players?.do?.uid === me.uid || (!!myWalletKey && room.players?.do?.walletKey === myWalletKey);
+    const isDen = room.players?.den?.uid === me.uid || (!!myWalletKey && room.players?.den?.walletKey === myWalletKey);
     const isEmptyWaitingRoom =
     room.status === "waiting" &&
     !room.winner &&
@@ -8700,6 +8702,9 @@ auth.onAuthStateChanged(async user => {
     } else if (user.isAnonymous === false) {
         // Đăng nhập Google thật
         await applyLoggedInUI(user.displayName, user.photoURL);
+        await ensureFriendProfileSynced().catch(() => {});
+        await bindFriendSystem().catch(() => {});
+        await tryResumeRealtimeMatch();
     } else {
         // NGƯỜI MỚI HOÀN TOÀN
         document.getElementById("login-screen").style.display = "flex";
@@ -9673,12 +9678,24 @@ async function isPlayerAwayFromThisRoomByPresence(roomId, player = {}) {
     const stateName = String(state.state || "").trim();
     const stateRoomId = String(state.roomId || "").trim();
     const updatedAt = Number(state.updatedAt || 0) || 0;
+    const reconnectUntil = Number(state.reconnectUntil || 0) || 0;
     const now = Date.now();
-// Nếu thiết bị đã ngắt/tab đóng thì coi là rời sau 2.5s.
-// Tránh đá nhầm lúc reload cực nhanh.
-if (state.online === false && updatedAt && now - updatedAt > 2500) {
-    return true;
-}
+
+    // Mất mạng/reset app: nếu vẫn giữ đúng roomId và còn trong thời gian hồi trận thì chưa xử thua.
+    if (
+        state.online === false &&
+        stateName === "arena" &&
+        stateRoomId === roomId &&
+        reconnectUntil &&
+        now < reconnectUntil
+    ) {
+        return false;
+    }
+
+    // Hết thời gian hồi trận mới coi là bỏ chạy.
+    if (state.online === false && updatedAt && now - updatedAt > RECONNECT_GRACE_MS) {
+        return true;
+    }
     // Không có dữ liệu thì đừng đoán bậy.
     if (!stateName && !updatedAt) return false;
 
@@ -9853,6 +9870,17 @@ if (typeof isBotPlayerObj === "function" && isBotPlayerObj(p)) {
 
         // Không có dữ liệu state thì bỏ qua, tránh đá nhầm người đang chơi bản cũ.
         if (!stateName && !updatedAt) continue;
+
+        const reconnectUntil = Number(state.reconnectUntil || 0) || 0;
+        if (
+            state.online === false &&
+            stateName === "arena" &&
+            stateRoomId === roomId &&
+            reconnectUntil &&
+            now < reconnectUntil
+        ) {
+            continue;
+        }
 
         const isStillInThisRoom =
             stateName === "arena" &&
@@ -40494,6 +40522,7 @@ function isHomeVisible() {
 }
 
 let isDisconnectHooked = false; // Bùa chống spam ngầm
+let lastPresenceDisconnectKey = "";
 
 async function setPlayerPresence(state = "home") {
     try {
@@ -40515,17 +40544,28 @@ async function setPlayerPresence(state = "home") {
             roomId: finalKeepRoom ? (currentRoomId || null) : null,
             mode: finalKeepRoom ? (currentRoomMode || null) : null,
             online: true,
+            reconnectUntil: null,
             updatedAt: Date.now()
         });
 
-        if (!isDisconnectHooked) {
+        // Quan trọng: onDisconnect phải giữ roomId nếu đang trong trận, để reset app/mất mạng còn hồi trận được.
+        // Nếu không, Firebase sẽ đổi state về home + roomId null và máy kia xử mình thua bỏ chạy.
+        const disconnectState = finalKeepRoom ? cleanState : "home";
+        const disconnectRoomId = finalKeepRoom ? (currentRoomId || null) : null;
+        const disconnectMode = finalKeepRoom ? (currentRoomMode || null) : null;
+        const disconnectKey = [disconnectState, disconnectRoomId || "", disconnectMode || ""].join("|");
+
+        if (lastPresenceDisconnectKey !== disconnectKey) {
+            await stateRef.onDisconnect().cancel().catch(() => {});
             stateRef.onDisconnect().update({
-                state: "home",
-                roomId: null,
-                mode: null,
+                state: disconnectState,
+                roomId: disconnectRoomId,
+                mode: disconnectMode,
                 online: false,
+                reconnectUntil: disconnectRoomId ? (Date.now() + RECONNECT_GRACE_MS) : null,
                 updatedAt: firebase.database.ServerValue.TIMESTAMP
             });
+            lastPresenceDisconnectKey = disconnectKey;
             isDisconnectHooked = true;
         }
     } catch (err) {
@@ -40549,8 +40589,13 @@ window.addEventListener("beforeunload", () => {
     try {
         const me = getCurrentFriendProfile();
         if (me?.walletKey) {
+            const keepRoom = !!currentRoomId;
             db.ref("social/playerState/" + me.walletKey).update({
+                state: keepRoom ? (isSpectatorMode ? "spectating" : "arena") : "home",
+                roomId: keepRoom ? currentRoomId : null,
+                mode: keepRoom ? (currentRoomMode || null) : null,
                 online: false,
+                reconnectUntil: keepRoom ? (Date.now() + RECONNECT_GRACE_MS) : null,
                 updatedAt: Date.now()
             });
         }
