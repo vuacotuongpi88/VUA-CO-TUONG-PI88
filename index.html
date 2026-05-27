@@ -34809,7 +34809,12 @@ localStorage.setItem('bought_exp_pkgs', JSON.stringify(pkgs));
         }
 
         await loadWalletBalance();
-
+if (
+    typeof safeFetchAndRenderTop === "function" &&
+    document.getElementById("arena-top-modal")?.classList.contains("show")
+) {
+    await safeFetchAndRenderTop();
+}
         if (typeof window.spawnExpEffect === "function") {
             for (let i = 0; i < 3; i++) {
                 setTimeout(() => window.spawnExpEffect(true), i * 300);
@@ -38066,16 +38071,41 @@ function countOwnedTopSkins(wallet = {}) {
 }
 
 function normalizeTopWallet(walletKey, wallet = {}) {
-    const levelMeta = wallet.levelMeta || {};
-    const level = Math.max(1, Math.floor(readTopNumber(
-        levelMeta.level ?? wallet.level ?? wallet.lever ?? 1,
-        1
+    const levelMeta = wallet.levelMeta && typeof wallet.levelMeta === "object"
+        ? wallet.levelMeta
+        : {};
+
+    function calcTopLevelFromExp(totalExp) {
+        const n = Math.max(0, Math.floor(Number(totalExp || 0)));
+        const lv = Math.floor((1 + Math.sqrt(1 + (8 * n) / 100)) / 2);
+        return Math.max(1, Math.min(180, lv));
+    }
+
+    // FIX: lấy số lớn nhất, không cho levelMeta cũ kéo tụt TOP về cấp 1
+    const exp = Math.max(0, Math.floor(Math.max(
+        readTopNumber(wallet.exp, 0),
+        readTopNumber(wallet.xp, 0),
+        readTopNumber(wallet.totalExp, 0),
+        readTopNumber(wallet.totalXP, 0),
+        readTopNumber(levelMeta.exp, 0),
+        readTopNumber(levelMeta.xp, 0)
     )));
 
-    const exp = Math.max(0, Math.floor(readTopNumber(
-        levelMeta.exp ?? levelMeta.xp ?? wallet.exp ?? wallet.xp ?? 0,
-        0
+    const level = Math.max(1, Math.floor(Math.max(
+        readTopNumber(wallet.level, 0),
+        readTopNumber(wallet.lever, 0),
+        readTopNumber(wallet.currentLevel, 0),
+        readTopNumber(levelMeta.level, 0),
+        calcTopLevelFromExp(exp)
     )));
+
+    const metaLevel = Math.max(0, Math.floor(readTopNumber(levelMeta.level, 0)));
+
+    // Nếu levelMeta cũ thì không lấy title cũ nữa
+    const title =
+        (metaLevel === level && levelMeta.title)
+            ? levelMeta.title
+            : (wallet.levelTitle || wallet.title || getSimpleLevelTitle(level));
 
     // TOP thắng/thua chỉ đọc statsV2, không đọc wins/losses cũ bị rác.
     const recordV2 = readStatsV2Record(wallet);
@@ -38099,7 +38129,7 @@ function normalizeTopWallet(walletKey, wallet = {}) {
         walletKey,
         name: wallet.name || wallet.displayName || wallet.username || walletKey || "Người chơi",
         photo: wallet.photo || wallet.avatar || "images/do_tuong.png",
-        title: levelMeta.title || wallet.levelTitle || getSimpleLevelTitle(level),
+        title,
         level,
         exp,
         wins,
@@ -38120,7 +38150,6 @@ function normalizeTopWallet(walletKey, wallet = {}) {
         equippedSkin: wallet.avatarSkin || "none"
     };
 }
-
 function isSystemTopWallet(walletKey = "", wallet = {}) {
     const key = String(walletKey || "").toLowerCase();
     const name = String(wallet.name || wallet.username || "").toLowerCase();
@@ -38895,7 +38924,7 @@ async function openArenaTopModal(e) {
             clearInterval(arenaTopUpdateTimer);
             arenaTopUpdateTimer = null;
         }
-    }, 300000);
+    }, 30000);
 }
 
 function closeArenaTopModal() {
@@ -38911,12 +38940,18 @@ function closeArenaTopModal() {
 
 function switchArenaTopTab(tab) {
     arenaTopActiveTab = ["level", "skin", "record", "pi", "pmc", "puzzle-level"].includes(tab) ? tab : "level";
-    renderArenaTopList();
-    if ((arenaTopActiveTab === "puzzle-level") && typeof safeFetchAndRenderTop === "function") {
+
+    const listEl = document.getElementById("arena-top-list");
+    if (listEl) {
+        listEl.innerHTML = '<div class="top-empty">Đang tải bảng Top...</div>';
+    }
+
+    if (typeof safeFetchAndRenderTop === "function") {
         safeFetchAndRenderTop();
+    } else {
+        renderArenaTopList();
     }
 }
-
 function openRankingModal(e) {
     if (e) e.stopPropagation();
     const modal = document.getElementById("ranking-modal");
