@@ -240,7 +240,54 @@ transform: translate(-50%, -50%) scale(1.15);
     pointer-events: none;
     animation: radar-xoay 3s linear infinite;
 }
+.check-lightning-ring {
+    position: absolute;
+    width: 12%;
+    height: 12%;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 998;
+    pointer-events: none;
+    border: 3px dashed #ff0000;
+    box-shadow:
+        0 0 10px rgba(255, 0, 0, 0.9),
+        0 0 24px rgba(255, 0, 0, 0.75),
+        inset 0 0 14px rgba(255, 0, 0, 0.65);
+    animation: checkRingSpin 0.45s linear infinite, checkRingPulse 0.45s ease-in-out infinite alternate;
+}
 
+@keyframes checkRingSpin {
+    from { transform: translate(-50%, -50%) rotate(0deg) scale(1); }
+    to { transform: translate(-50%, -50%) rotate(360deg) scale(1); }
+}
+
+@keyframes checkRingPulse {
+    from {
+        opacity: 0.75;
+        filter: brightness(1);
+    }
+    to {
+        opacity: 1;
+        filter: brightness(1.8);
+    }
+}
+
+.is-chieu {
+    animation: dien-giat 0.22s infinite alternate !important;
+    z-index: 999 !important;
+}
+
+@keyframes dien-giat {
+    0% {
+        filter: drop-shadow(0 0 5px #ff0000) drop-shadow(0 0 14px #ff0000) brightness(1.15);
+        transform: translate(-50%, -50%) scale(1);
+    }
+
+    100% {
+        filter: drop-shadow(0 0 12px #ff0000) drop-shadow(0 0 34px #ff0000) brightness(1.9);
+        transform: translate(-50%, -50%) scale(1.12);
+    }
+}
 @keyframes radar-xoay {
     from { transform: translate(-50%, -50%) rotate(0deg); }
     to { transform: translate(-50%, -50%) rotate(360deg); }
@@ -11036,12 +11083,15 @@ selectedPiece = null;
 clearMoveHints();
 drawLastMoveMarks();
 
-// FIX: người vừa đi nước chiếu cũng thấy hiệu ứng ngay trên máy mình
-setTimeout(() => {
+// FIX mạnh: gọi 2 lần, 1 lần ngay sau nước đi, 1 lần sau animation/Firebase render lại
+const runLocalCheckEffect = () => {
     if (!isGameOver && typeof updateCheckEffectFromBoard === "function") {
         updateCheckEffectFromBoard();
     }
-}, 80);
+};
+
+setTimeout(runLocalCheckEffect, 120);
+setTimeout(runLocalCheckEffect, Number(window.CHESS_MOVE_ANIM_MS || 700) + 180);
 
 if (isActivePuzzleGame()) {
     clearTimeout(puzzleMoveCheckTimer);
@@ -31042,43 +31092,73 @@ resetBotLocalStateAfterMatch();
 }
 // BẢN FIX VIP: TẬP TRUNG XỬ LÝ HIỆU ỨNG CHIẾU TƯỚNG CHO CẢ 2 BÊN CÙNG LÚC
 function updateCheckEffectFromBoard() {
-    document.querySelectorAll('.piece').forEach(p => {
-        p.classList.remove('is-chieu', 'lightning-chieu');
+    const boardNode = document.getElementById("board");
+    if (!boardNode) return;
+
+    document.querySelectorAll(".piece").forEach(p => {
+        p.classList.remove("is-chieu", "lightning-chieu");
     });
 
-    const mt = taoMaTran();
-    let aiBiChieu = null;
+    document.querySelectorAll(".check-lightning-ring").forEach(el => el.remove());
 
-    ['do', 'den'].forEach(side => {
+    const mt = taoMaTran();
+    const sidesInCheck = [];
+
+    ["do", "den"].forEach(side => {
         if (laBiChieu(side, mt)) {
-            aiBiChieu = side;
+            sidesInCheck.push(side);
         }
     });
 
-    if (aiBiChieu) {
-        document.querySelectorAll('.piece').forEach(p => {
-            const type = p.dataset.type;
-            if (p.dataset.side === aiBiChieu && (type === '帥' || type === '將')) {
-                // Áp hiệu ứng điện xẹt đỏ
-                p.classList.add('is-chieu', 'lightning-chieu');
-                
-                // KIỂM TRA: Nếu trước đó chưa bị chiếu, bây giờ mới bị -> Lôi rồng ra khè!
-                if (window.dangBiChieu !== aiBiChieu) {
-                    playSnd('check');
-                    playSnd('heartbeat');
-                    
-                    // Triệu hồi rồng thẳng trên đỉnh đầu con Tướng này
-                    spawnDragonAttack(p); 
-                }
-            }
-        });
-    } else {
-        // Hết bị chiếu rồi thì tắt tiếng tim đập bùm bụp đi
-        if (sounds.heartbeat) sounds.heartbeat.pause();
+    if (!sidesInCheck.length) {
+        if (sounds?.heartbeat) {
+            sounds.heartbeat.pause();
+            sounds.heartbeat.currentTime = 0;
+        }
+        window.dangBiChieu = null;
+        window.__lastCheckEffectKey = "";
+        return;
     }
 
-    // Lưu lại trạng thái để ván sau biết
-    window.dangBiChieu = aiBiChieu;
+    sidesInCheck.forEach(side => {
+        const king = Array.from(boardNode.querySelectorAll(":scope > .piece")).find(p => {
+            const type = p.dataset.type;
+            return p.dataset.side === side && (type === "帥" || type === "將");
+        });
+
+        if (!king) return;
+
+        king.classList.add("is-chieu");
+
+        const ring = document.createElement("div");
+        ring.className = "check-lightning-ring";
+        ring.style.left = king.style.left;
+        ring.style.top = king.style.top;
+        boardNode.appendChild(ring);
+
+        const effectKey = [
+            side,
+            king.style.left,
+            king.style.top,
+            lastMoveTo ? lastMoveTo.c : "",
+            lastMoveTo ? lastMoveTo.r : ""
+        ].join("|");
+
+        if (window.__lastCheckEffectKey !== effectKey) {
+            if (typeof playSnd === "function") {
+                playSnd("check");
+                playSnd("heartbeat");
+            }
+
+            if (typeof spawnDragonAttack === "function") {
+                spawnDragonAttack(king);
+            }
+
+            window.__lastCheckEffectKey = effectKey;
+        }
+    });
+
+    window.dangBiChieu = sidesInCheck.join("|");
 }
 function getLocalUidSafe() {
     return String(
