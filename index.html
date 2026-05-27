@@ -8892,7 +8892,40 @@ async function acceptBotMatch() {
         // Đọc lại phòng ngay, tránh chờ snapshot chậm.
         const freshSnap = await db.ref("matches/" + roomId).once("value");
         const freshRoom = freshSnap.val() || {};
+        // 🔥 BOT VỪA JOIN: xóa sạch cờ rời phòng cũ để cleanup không hiểu nhầm.
+        if (
+            freshRoom.status === "waiting" &&
+            freshRoom.players?.do &&
+            freshRoom.players?.den &&
+            !freshRoom.winner
+        ) {
+            const newDeadline = (typeof readyNowMs === "function" ? readyNowMs() : Date.now()) + 30000;
 
+            await db.ref().update({
+                [`matches/${roomId}/players/do/leaving`]: null,
+                [`matches/${roomId}/players/do/leftAt`]: null,
+                [`matches/${roomId}/players/den/leaving`]: null,
+                [`matches/${roomId}/players/den/leftAt`]: null,
+                [`matches/${roomId}/leaveRequests`]: null,
+                [`matches/${roomId}/exitRequests`]: null,
+                [`matches/${roomId}/readyDeadlineAt`]: freshRoom.readyDeadlineAt || newDeadline,
+                [`matches/${roomId}/lobbyOpen`]: false,
+                [`matches/${roomId}/updatedAt`]: firebase.database.ServerValue.TIMESTAMP
+            });
+
+            freshRoom.readyDeadlineAt = freshRoom.readyDeadlineAt || newDeadline;
+            freshRoom.lobbyOpen = false;
+            if (freshRoom.players.do) {
+                freshRoom.players.do.leaving = null;
+                freshRoom.players.do.leftAt = null;
+            }
+            if (freshRoom.players.den) {
+                freshRoom.players.den.leaving = null;
+                freshRoom.players.den.leftAt = null;
+            }
+            freshRoom.leaveRequests = null;
+            freshRoom.exitRequests = null;
+        }
         window.__lastBoundRoom = freshRoom;
         window.__lastBoundRoomId = roomId;
 
@@ -9360,7 +9393,44 @@ function isRoomSideMarkedLeaving(room = {}, side = "") {
 function getLeavingSidesFromRoom(room = {}) {
     return ["do", "den"].filter(side => !!room.players?.[side] && isRoomSideMarkedLeaving(room, side));
 }
+function roomHasBotPlayer(room = {}) {
+    return !!(
+        (typeof isBotPlayerObj === "function" && isBotPlayerObj(room.players?.do)) ||
+        (typeof isBotPlayerObj === "function" && isBotPlayerObj(room.players?.den))
+    );
+}
 
+function isRoomInActiveReadyCountdown(room = {}) {
+    if (!room) return false;
+
+    const hasBothPlayers =
+        !!room.players?.do &&
+        !!room.players?.den;
+
+    if (!hasBothPlayers) return false;
+    if (room.status !== "waiting") return false;
+    if (room.winner) return false;
+
+    const now = typeof readyNowMs === "function" ? readyNowMs() : Date.now();
+    const deadline = Number(room.readyDeadlineAt || 0);
+
+    // Đang còn thời gian SS / countdown thì tuyệt đối không dọn.
+    if (deadline && deadline > now - 2000) return true;
+
+    // Vừa mới join bot/người, Firebase timestamp còn trễ thì cũng đừng dọn vội.
+    const freshJoinAt =
+        typeof readRoomTimeValue === "function"
+            ? (
+                readRoomTimeValue(room.lobbyUpdatedAt) ||
+                readRoomTimeValue(room.updatedAt) ||
+                readRoomTimeValue(room.createdAt)
+            )
+            : 0;
+
+    if (freshJoinAt && now - freshJoinAt < 12000) return true;
+
+    return false;
+}
 async function markLeavingRoomNow(roomId, side) {
     if (!roomId || !side) return false;
 
@@ -9399,7 +9469,29 @@ async function markLeavingRoomNow(roomId, side) {
 
 function buildLeavingPlayersCleanupUpdates(roomId, room = {}) {
     if (!roomId || !room) return null;
+    // 🔒 KHÓA DỌN NHẦM:
+    // Đang SS/countdown hoặc đang đánh thì KHÔNG được reset/xóa room ở hàm cleanup này.
+    // Đang đánh mà có người thoát thì để cleanupOpponentWhoLeftPlayingRoom xử thắng/thua.
+    if (!room.winner) {
+        if (room.status === "playing") return null;
 
+        if (
+            typeof isRoomInActiveReadyCountdown === "function" &&
+            isRoomInActiveReadyCountdown(room)
+        ) {
+            return null;
+        }
+
+        // Bot vừa vào phòng chờ SS thì không được coi là ghế rác.
+        if (
+            room.status === "waiting" &&
+            roomHasBotPlayer(room) &&
+            room.players?.do &&
+            room.players?.den
+        ) {
+            return null;
+        }
+    }
     const leavingSides = getLeavingSidesFromRoom(room);
     if (!leavingSides.length) return null;
 
@@ -32439,25 +32531,38 @@ if (
 }
 
 // Nếu có người đã bấm thoát mà Firebase vẫn còn ghế, chủ phòng/máy đang nghe sẽ tự dọn.
+// Nhưng đang đủ 2 người + đang countdown SS thì tuyệt đối không dọn.
+const roomHasBotWaiting =
+    typeof roomHasBotPlayer === "function"
+        ? roomHasBotPlayer(room)
+        : (
+            typeof isBotPlayerObj === "function" &&
+            (
+                isBotPlayerObj(room.players?.do) ||
+                isBotPlayerObj(room.players?.den)
+            )
+        );
+
+const roomIsInReadyCountdown =
+    typeof isRoomInActiveReadyCountdown === "function" &&
+    isRoomInActiveReadyCountdown(room);
+
 if (
     room.status === "waiting" &&
     !room.winner &&
+    !roomIsInReadyCountdown &&
+    !roomHasBotWaiting &&
     typeof cleanupLeavingPlayersFromWaitingRoom === "function" &&
     getLeavingSidesFromRoom(room).length > 0
 ) {
     cleanupLeavingPlayersFromWaitingRoom(room, listeningRoomId)
         .catch(err => console.error("Dọn ghế người đã thoát lỗi:", err));
 }
-const roomHasBotWaiting =
-    typeof isBotPlayerObj === "function" &&
-    (
-        isBotPlayerObj(room.players?.do) ||
-        isBotPlayerObj(room.players?.den)
-    );
 
 if (
     room.status === "waiting" &&
     !room.winner &&
+    !roomIsInReadyCountdown &&
     !roomHasBotWaiting &&
     typeof cleanupOpponentWhoLeftHomeFromReadyRoom === "function"
 ) {
@@ -36828,21 +36933,33 @@ if (liveDeadline && liveDeadline > readyNowMs()) {
         readyTime = getReadySecondsLeft(readyDeadlineAt);
 
         // Nếu đối thủ đã về sảnh/offline nhưng Firebase vẫn còn ghế,
-        // máy còn lại tự dọn phòng và lên làm chủ phòng.
-        if (
-            currentRoomId &&
-            window.__lastBoundRoom &&
-            typeof cleanupOpponentWhoLeftHomeFromReadyRoom === "function"
-        ) {
-            window.__readyPresenceSweepAt = window.__readyPresenceSweepAt || 0;
+// máy còn lại tự dọn phòng và lên làm chủ phòng.
+// Nhưng đang countdown đủ 2 người hoặc có bot thì KHÔNG dọn.
+const readySweepRoom = window.__lastBoundRoom || {};
+const readyRoomHasBot =
+    typeof roomHasBotPlayer === "function" &&
+    roomHasBotPlayer(readySweepRoom);
 
-            if (Date.now() - window.__readyPresenceSweepAt > 2500) {
-                window.__readyPresenceSweepAt = Date.now();
+const readyRoomIsProtected =
+    typeof isRoomInActiveReadyCountdown === "function" &&
+    isRoomInActiveReadyCountdown(readySweepRoom);
 
-                cleanupOpponentWhoLeftHomeFromReadyRoom(window.__lastBoundRoom, currentRoomId)
-                    .catch(err => console.error("READY_PRESENCE_CLEANUP_FAIL:", err));
-            }
-        }
+if (
+    currentRoomId &&
+    window.__lastBoundRoom &&
+    !readyRoomHasBot &&
+    !readyRoomIsProtected &&
+    typeof cleanupOpponentWhoLeftHomeFromReadyRoom === "function"
+) {
+    window.__readyPresenceSweepAt = window.__readyPresenceSweepAt || 0;
+
+    if (Date.now() - window.__readyPresenceSweepAt > 2500) {
+        window.__readyPresenceSweepAt = Date.now();
+
+        cleanupOpponentWhoLeftHomeFromReadyRoom(window.__lastBoundRoom, currentRoomId)
+            .catch(err => console.error("READY_PRESENCE_CLEANUP_FAIL:", err));
+    }
+}
 
         updateReadyUI();
 
