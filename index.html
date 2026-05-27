@@ -34048,15 +34048,10 @@ const currentExp = Math.max(
     ) || 0
 );
 
-const currentLevel = Math.max(
-    1,
-    Math.floor(Number(
-        data.level ??
-        meta.level ??
-        (typeof getLevelFromExp === "function" ? getLevelFromExp(currentExp) : 1)
-    ) || 1)
-);
-
+const currentLevel =
+    typeof getLevelFromExp === "function"
+        ? getLevelFromExp(currentExp)
+        : Math.max(1, Math.floor(Number(data.level ?? meta.level ?? 1) || 1));
 const walletKeyNow = typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "";
 const guardedExp = typeof guardMatchExpSnapshot === "function"
     ? guardMatchExpSnapshot(walletKeyNow, currentExp, currentLevel)
@@ -34185,14 +34180,10 @@ const expAmount = Math.max(
     ) || 0
 );
 
-const levelAmount = Math.max(
-    1,
-    Math.floor(Number(
-        data.level ??
-        meta.level ??
-        (typeof getLevelFromExp === "function" ? getLevelFromExp(expAmount) : 1)
-    ) || 1)
-);
+const levelAmount =
+    typeof getLevelFromExp === "function"
+        ? getLevelFromExp(expAmount)
+        : Math.max(1, Math.floor(Number(data.level ?? meta.level ?? 1) || 1));
             currentWalletBalance = piAmount;
             currentPmcBalance = pmcAmount;
 
