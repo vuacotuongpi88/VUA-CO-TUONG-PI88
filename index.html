@@ -43354,20 +43354,21 @@ window.showExpSummary = function(currentLevel) {
 };
 
 window.buyBackExp = async function() {
-    clearInterval(window.expSummaryTimerInt); 
-    const costPMC = Math.abs(window.pendingSessionEXP);
-    
+    clearInterval(window.expSummaryTimerInt);
+
+    const costPMC = Math.abs(Number(window.pendingSessionEXP || 0));
+
     if (costPMC <= 0) return;
 
     const currentPmc = getPmcBalance();
     if (currentPmc < costPMC) {
         alert("Mầy không đủ PMC để mua lại EXP!");
-        window.closeExpSummary(); 
+        window.closeExpSummary();
         return;
     }
 
     const btn = document.getElementById('btn-buy-back-exp');
-    if(btn) {
+    if (btn) {
         btn.innerText = "ĐANG XỬ LÝ...";
         btn.disabled = true;
     }
@@ -43375,38 +43376,73 @@ window.buyBackExp = async function() {
     try {
         const walletKey = makeWalletDbKey();
 
-const user = firebase.auth().currentUser;
-if (!user) throw new Error("Chưa đăng nhập Firebase");
-const token = await user.getIdToken(true);
+        // QUAN TRỌNG:
+        // rawWalletKey là ví đăng nhập thật hiện tại.
+        // Pi Browser: pi_098...
+        // Google: google_...
+        const rawWalletKey =
+            typeof getRawWalletDbKey === "function"
+                ? getRawWalletDbKey()
+                : walletKey;
 
-const res = await fetch("/api/level-system?v=" + Date.now(), {
-    method: "POST",
-    headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer " + token,
-        "x-wallet-key": walletKey
-    },
-    body: JSON.stringify({ action: "buy_back_exp", walletKey, costPMC })
-});
+        console.log("BUY_BACK_EXP_DEBUG", {
+            walletKey,
+            rawWalletKey,
+            costPMC
+        });
 
-        const data = await res.json();
-        if (!res.ok || !data.ok) throw new Error(data.error || "Lỗi mua lại");
+        const user = firebase.auth().currentUser;
+        if (!user) throw new Error("Chưa đăng nhập Firebase");
 
-        // Nhận được data an toàn từ Vercel thì mới cập nhật giao diện
-        if (typeof setPmcBalance === 'function') setPmcBalance(data.newPmc);
-        
-        if (window.finalNewExpToAnimate !== undefined) {
+        const token = await user.getIdToken(true);
+
+        const res = await fetch("/api/level-system?v=" + Date.now(), {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + token,
+                "x-wallet-key": walletKey,
+                "x-raw-wallet-key": rawWalletKey
+            },
+            body: JSON.stringify({
+                action: "buy_back_exp",
+                walletKey,
+                rawWalletKey,
+                costPMC
+            })
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok || !data.ok) {
+            throw new Error(data.error || "Lỗi mua lại");
+        }
+
+        if (typeof setPmcBalance === "function") {
+            setPmcBalance(data.newPmc);
+        }
+
+        if (typeof updateExpBarUI === "function" && typeof data.newExp !== "undefined") {
+            updateExpBarUI(Number(data.newExp || 0));
+            localStorage.setItem("exp_cache", Number(data.newExp || 0));
+        } else if (window.finalNewExpToAnimate !== undefined) {
             window.finalNewExpToAnimate += costPMC;
-            localStorage.setItem('exp_cache', window.finalNewExpToAnimate);
+            localStorage.setItem("exp_cache", window.finalNewExpToAnimate);
         }
 
         alert(`Mua lại thành công! Đã trừ ${costPMC} PMC. EXP của mày được bảo toàn nguyên vẹn.`);
-        window.pendingSessionEXP = 0; 
+
+        window.pendingSessionEXP = 0;
         window.closeExpSummary();
 
     } catch (err) {
         alert("Lỗi khi mua lại EXP: " + err.message);
-        window.closeExpSummary(); 
+        window.closeExpSummary();
+    } finally {
+        if (btn) {
+            btn.innerText = "GIỮ LẠI EXP";
+            btn.disabled = false;
+        }
     }
 };
 window.closeExpSummary = function() {
