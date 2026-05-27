@@ -34057,19 +34057,24 @@ const currentLevel = Math.max(
     ) || 1)
 );
 
+const walletKeyNow = typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "";
+const guardedExp = typeof guardMatchExpSnapshot === "function"
+    ? guardMatchExpSnapshot(walletKeyNow, currentExp, currentLevel)
+    : { exp: currentExp, level: currentLevel, locked: false };
+
 if (typeof window.updateExpBarUI === "function") {
-    window.updateExpBarUI(currentExp);
+    window.updateExpBarUI(guardedExp.exp);
     window.__expBarInitialized = true;
 }
 
-localStorage.setItem("exp_cache", String(currentExp));
-localStorage.setItem("level_cache", String(currentLevel));
+localStorage.setItem("exp_cache", String(guardedExp.exp));
+localStorage.setItem("level_cache", String(guardedExp.level));
 
 return {
     pi: currentWalletBalance,
     pmc: currentPmcBalance,
-    exp: currentExp,
-    level: currentLevel
+    exp: guardedExp.exp,
+    level: guardedExp.level
 };
     } catch (err) {
         console.error("Lỗi load ví:", err);
@@ -34085,7 +34090,55 @@ return {
 let walletRealtimeRef = null;
 let walletRealtimeCb = null;
 let walletRealtimeKey = "";
+window.__matchExpCommitLock = null;
 
+function getActiveMatchExpLock(walletKey = "") {
+    const lock = window.__matchExpCommitLock;
+    if (!lock) return null;
+
+    if (Date.now() > Number(lock.until || 0)) {
+        window.__matchExpCommitLock = null;
+        return null;
+    }
+
+    if (lock.walletKey && walletKey && lock.walletKey !== walletKey) {
+        return null;
+    }
+
+    return lock;
+}
+
+function guardMatchExpSnapshot(walletKey, incomingExp, incomingLevel) {
+    const lock = getActiveMatchExpLock(walletKey);
+    if (!lock) {
+        return {
+            exp: Math.max(0, Math.floor(Number(incomingExp || 0) || 0)),
+            level: Math.max(1, Math.floor(Number(incomingLevel || 1) || 1)),
+            locked: false
+        };
+    }
+
+    const targetExp = Math.max(0, Math.floor(Number(lock.targetExp || 0) || 0));
+    const targetLevel = Math.max(1, Math.floor(Number(lock.targetLevel || 1) || 1));
+    const snapExp = Math.max(0, Math.floor(Number(incomingExp || 0) || 0));
+
+    // Firebase đã về đúng số mới rồi thì mở khóa
+    if (snapExp === targetExp) {
+        window.__matchExpCommitLock = null;
+        return {
+            exp: snapExp,
+            level: Math.max(1, Math.floor(Number(incomingLevel || targetLevel) || 1)),
+            locked: false
+        };
+    }
+
+    // Snapshot cũ tới trễ thì không cho kéo thanh EXP ngược
+    return {
+        exp: targetExp,
+        level: targetLevel,
+        locked: true
+    };
+}
 function stopWalletRealtimeSync() {
     try {
         if (walletRealtimeRef && walletRealtimeCb) {
@@ -34143,18 +34196,22 @@ const levelAmount = Math.max(
             currentWalletBalance = piAmount;
             currentPmcBalance = pmcAmount;
 
-            localStorage.setItem(getBalanceCacheKey(), String(piAmount));
-            localStorage.setItem(getPmcCacheKey(), String(pmcAmount));
-            localStorage.setItem("exp_cache", String(expAmount));
-            localStorage.setItem("level_cache", String(levelAmount));
+const guardedExp = typeof guardMatchExpSnapshot === "function"
+    ? guardMatchExpSnapshot(walletKey, expAmount, levelAmount)
+    : { exp: expAmount, level: levelAmount, locked: false };
 
-            updateBalanceUI(piAmount);
-            updatePmcUI(pmcAmount);
+localStorage.setItem(getBalanceCacheKey(), String(piAmount));
+localStorage.setItem(getPmcCacheKey(), String(pmcAmount));
+localStorage.setItem("exp_cache", String(guardedExp.exp));
+localStorage.setItem("level_cache", String(guardedExp.level));
 
-            if (typeof window.updateExpBarUI === "function") {
-                window.updateExpBarUI(expAmount);
-                window.__expBarInitialized = true;
-            }
+updateBalanceUI(piAmount);
+updatePmcUI(pmcAmount);
+
+if (typeof window.updateExpBarUI === "function") {
+    window.updateExpBarUI(guardedExp.exp);
+    window.__expBarInitialized = true;
+}
 
             if (typeof updateTicketUI === "function") {
                 updateTicketUI(Math.max(0, Math.floor(Number(data.freeTickets || 0) || 0)));
@@ -43255,7 +43312,12 @@ window.applyPendingExpToDatabase = async function() {
         localStorage.setItem("level_cache", String(finalLevel));
 
         window.finalNewExpToAnimate = finalExp;
-
+window.__matchExpCommitLock = {
+    walletKey,
+    targetExp: finalExp,
+    targetLevel: finalLevel,
+    until: Date.now() + 10000
+};
         if (typeof window.updateExpBarUI === "function") {
             window.updateExpBarUI(finalExp);
         }
@@ -43429,8 +43491,12 @@ window.closeExpSummary = function() {
         window.finalNewExpToAnimate = undefined;
     }
 
-    // CHỐT CHẶN TẢI LẠI VÍ
-    loadWalletBalance().catch(()=>{});
+// Đợi Firebase ổn định rồi mới kéo ví lại, tránh kéo snapshot cũ đè EXP mới
+setTimeout(() => {
+    if (typeof loadWalletBalance === "function") {
+        loadWalletBalance().catch(() => {});
+    }
+}, 1200);
 };
 
 window.spawnExpEffect = function(isWin) {
