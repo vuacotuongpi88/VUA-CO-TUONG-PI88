@@ -10287,7 +10287,7 @@ async function backToMenu() {
     showExitCountdown('thoat'); 
 }
 // Xử lý Giao diện tức thì khi ra sảnh
-function executeBackToMenu() {
+async function executeBackToMenu() {
     resetPuzzleModeState();
 lastPuzzleResult = null;
     document.getElementById("game-arena").style.display = "none";
@@ -10296,11 +10296,11 @@ lastPuzzleResult = null;
     renderRoomInviteOverlay();
 
     // Hiện bảng báo cáo EXP
-    if (window.pendingSessionEXP && window.pendingSessionEXP !== 0) {
-        if (typeof window.applyPendingExpToDatabase === 'function') {
-            window.applyPendingExpToDatabase();
-        }
+if (window.pendingSessionEXP && window.pendingSessionEXP !== 0) {
+    if (typeof window.applyPendingExpToDatabase === "function") {
+        await window.applyPendingExpToDatabase();
     }
+}
 
     if (isSpectatorMode) {
         cleanupRoomListeners();
@@ -34035,10 +34035,26 @@ if (data.photo) {
         updateBalanceUI(currentWalletBalance);
         updatePmcUI(currentPmcBalance);
 // EXP/LEVEL phải cập nhật mỗi lần load ví, không được chỉ 1 lần
-const currentExp = Math.max(0, Number(data.exp || 0) || 0);
+const meta = data.levelMeta && typeof data.levelMeta === "object" ? data.levelMeta : {};
+
+const currentExp = Math.max(
+    0,
+    Number(
+        data.exp ??
+        meta.exp ??
+        data.xp ??
+        meta.xp ??
+        0
+    ) || 0
+);
+
 const currentLevel = Math.max(
     1,
-    Number(data.level || (typeof getLevelFromExp === "function" ? getLevelFromExp(currentExp) : 1)) || 1
+    Math.floor(Number(
+        data.level ??
+        meta.level ??
+        (typeof getLevelFromExp === "function" ? getLevelFromExp(currentExp) : 1)
+    ) || 1)
 );
 
 if (typeof window.updateExpBarUI === "function") {
@@ -34103,12 +34119,27 @@ async function startWalletRealtimeSync() {
 
             const piAmount = Math.max(0, Number(data.balance || data.piBalance || 0) || 0);
             const pmcAmount = Math.max(0, Number(data.pmcBalance || 0) || 0);
-            const expAmount = Math.max(0, Number(data.exp || 0) || 0);
-            const levelAmount = Math.max(
-                1,
-                Number(data.level || (typeof getLevelFromExp === "function" ? getLevelFromExp(expAmount) : 1)) || 1
-            );
+const meta = data.levelMeta && typeof data.levelMeta === "object" ? data.levelMeta : {};
 
+const expAmount = Math.max(
+    0,
+    Number(
+        data.exp ??
+        meta.exp ??
+        data.xp ??
+        meta.xp ??
+        0
+    ) || 0
+);
+
+const levelAmount = Math.max(
+    1,
+    Math.floor(Number(
+        data.level ??
+        meta.level ??
+        (typeof getLevelFromExp === "function" ? getLevelFromExp(expAmount) : 1)
+    ) || 1)
+);
             currentWalletBalance = piAmount;
             currentPmcBalance = pmcAmount;
 
@@ -43124,87 +43155,142 @@ window.getExpByResult = function(result) {
 };
 
 window.applyPendingExpToDatabase = async function() {
-    // Không có EXP thì đéo làm gì cả
-    if (!window.pendingSessionEXP || window.pendingSessionEXP === 0) {
+    const deltaExp = Math.floor(Number(window.pendingSessionEXP || 0) || 0);
+
+    if (!deltaExp) {
         window.sessionWins = 0;
         window.sessionLosses = 0;
-        return; 
+        return;
     }
 
-    const walletKey = makeWalletDbKey();
-    const userRef = db.ref("wallets/" + walletKey);
-    
+    if (window.__applyingMatchExp) return;
+    window.__applyingMatchExp = true;
+
     try {
-        // 1. GỬI LỆNH CỘNG/TRỪ LÊN FIREBASE (Firebase luôn tính chuẩn 100%)
-        if (window.pendingSessionEXP > 0) {
-            // Dùng increment: Server tự cộng dồn, qua mặt mọi loại cache sai lệch, ĐÉO bao giờ ghi đè!
-            await userRef.update({
-                exp: firebase.database.ServerValue.increment(window.pendingSessionEXP),
-                updatedAt: firebase.database.ServerValue.TIMESTAMP
-            });
-        } else {
-            // Trừ điểm thì đọc cache nội bộ cho an toàn tránh bị null
-            let realExp = Number(localStorage.getItem('exp_cache') || 0);
-            await userRef.update({
-                exp: Math.max(0, realExp + window.pendingSessionEXP),
-                updatedAt: firebase.database.ServerValue.TIMESTAMP
-            });
+        if (typeof resolveMasterWalletNow === "function") {
+            await resolveMasterWalletNow(true).catch(() => {});
         }
 
-        // 2. ÉP THẰNG GAME PHẢI CHỜ FIREBASE TÍNH XONG RỒI KÉO SỐ VỀ
-        // (Chống lại cái vụ transaction Lịch Sử ván đấu chạy ngầm làm ẩn cache)
+        const walletKey = typeof makeWalletDbKey === "function" ? makeWalletDbKey() : "";
+        if (!walletKey) throw new Error("Không xác định được ví để cộng EXP");
+
+        const userRef = db.ref("wallets/" + walletKey);
+
+        let oldExp = 0;
+        let oldLevel = 1;
         let finalExp = 0;
         let finalLevel = 1;
-        let isServerSynced = false;
+        let ticketsGained = 0;
 
-        // BẪY CÀY CHAY: Lấy cấp độ cũ trước khi kéo số mới về
-        let oldExp = Number(localStorage.getItem('exp_cache') || 0);
-        let oldLevel = window.getLevelFromExp(oldExp);
+        const tx = await userRef.transaction((current) => {
+            current = current && typeof current === "object" ? current : {};
 
-        // Ping liên tục tối đa 5 giây để đợi Firebase nhả con số thật ra
-        for (let i = 0; i < 20; i++) {
-            const snap = await userRef.child('exp').once('value');
-            // snap.exists() là tấm khiên chống lại "khoảng mù" (chống null/undefined)
-            if (snap.exists() && snap.val() !== null) {
-                finalExp = Number(snap.val());
-                isServerSynced = true;
-                break; // Có số thật rồi thì thoát vòng lặp
+            const meta = current.levelMeta && typeof current.levelMeta === "object"
+                ? current.levelMeta
+                : {};
+
+            oldExp = Math.max(
+                0,
+                Math.floor(Number(
+                    current.exp ??
+                    meta.exp ??
+                    current.xp ??
+                    meta.xp ??
+                    0
+                ) || 0)
+            );
+
+            oldLevel = Math.max(
+                1,
+                Math.floor(Number(
+                    current.level ??
+                    meta.level ??
+                    (typeof window.getLevelFromExp === "function" ? window.getLevelFromExp(oldExp) : 1)
+                ) || 1)
+            );
+
+            finalExp = Math.max(0, oldExp + deltaExp);
+            finalLevel = typeof window.getLevelFromExp === "function"
+                ? window.getLevelFromExp(finalExp)
+                : oldLevel;
+
+            ticketsGained = deltaExp > 0 ? Math.max(0, finalLevel - oldLevel) : 0;
+
+            current.exp = finalExp;
+            current.level = finalLevel;
+
+            current.levelMeta = {
+                ...meta,
+                exp: finalExp,
+                level: finalLevel,
+                title: typeof getSimpleLevelTitle === "function"
+                    ? getSimpleLevelTitle(finalLevel)
+                    : (meta.title || ""),
+                updatedAt: Date.now()
+            };
+
+            if (ticketsGained > 0) {
+                current.freeTickets = Math.max(0, Math.floor(Number(current.freeTickets || 0) || 0)) + ticketsGained;
             }
-            await new Promise(r => setTimeout(r, 250)); // Đợi 0.25s rồi rình tiếp
+
+            current.updatedAt = Date.now();
+            return current;
+        });
+
+        if (!tx || tx.committed === false) {
+            throw new Error("Firebase không commit EXP");
         }
 
-        // Nếu rớt mạng quá 5 giây thì đành lấy số ảo cộng lên cho Game khỏi hiện 0
-        if (!isServerSynced) {
-            let fallbackExp = oldExp + window.pendingSessionEXP;
-            finalExp = Math.max(0, fallbackExp);
-        }
+        const fresh = tx.snapshot && tx.snapshot.val ? (tx.snapshot.val() || {}) : {};
+        const freshMeta = fresh.levelMeta && typeof fresh.levelMeta === "object" ? fresh.levelMeta : {};
 
-        finalLevel = window.getLevelFromExp(finalExp);
+        finalExp = Math.max(0, Math.floor(Number(fresh.exp ?? freshMeta.exp ?? finalExp) || 0));
+        finalLevel = Math.max(1, Math.floor(Number(
+            fresh.level ??
+            freshMeta.level ??
+            (typeof window.getLevelFromExp === "function" ? window.getLevelFromExp(finalExp) : finalLevel)
+        ) || 1));
 
-        // CHUẨN BỊ GÓI DATA ĐỂ LƯU CẤP ĐỘ (VÀ VÉ MIỄN PHÍ NẾU CÓ)
-        const finalUpdates = { level: finalLevel };
+        localStorage.setItem("exp_cache", String(finalExp));
+        localStorage.setItem("level_cache", String(finalLevel));
 
-        // Nếu cấp mới lớn hơn cấp cũ -> Tặng vé tương ứng số cấp vừa vượt qua
-        if (finalLevel > oldLevel && window.pendingSessionEXP > 0) {
-            let ticketsGained = finalLevel - oldLevel;
-            
-            // Dùng increment để cộng dồn vé cực kỳ an toàn
-            finalUpdates.freeTickets = firebase.database.ServerValue.increment(ticketsGained);
-            
-            setTimeout(() => alert(`🎉 LÊN CẤP ${finalLevel}!\nĐược hệ thống thưởng ${ticketsGained} Lượt Đánh Miễn Phí!`), 800);
-        }
-
-        await userRef.update(finalUpdates); // Đồng bộ nốt level (và vé) lên fire
-
-        // 3. GHI NHẬN SỐ THẬT TỪ FIREBASE ĐỂ VẼ LÊN GAME
-        localStorage.setItem('exp_cache', finalExp);
         window.finalNewExpToAnimate = finalExp;
+
+        if (typeof window.updateExpBarUI === "function") {
+            window.updateExpBarUI(finalExp);
+        }
+
+        if (ticketsGained > 0) {
+            setTimeout(() => {
+                alert(`🎉 LÊN CẤP ${finalLevel}!\nĐược hệ thống thưởng ${ticketsGained} Lượt Đánh Miễn Phí!`);
+            }, 500);
+        }
+
         window.showExpSummary(finalLevel);
+
+        setTimeout(() => {
+            loadWalletBalance().catch(() => {});
+            if (typeof safeFetchAndRenderTop === "function") {
+                safeFetchAndRenderTop().catch(() => {});
+            }
+        }, 300);
+
     } catch (err) {
         console.error("Lỗi đồng bộ EXP từ Fire:", err);
-        let fallbackExp = Number(localStorage.getItem('exp_cache') || 0) + window.pendingSessionEXP;
-        window.finalNewExpToAnimate = Math.max(0, fallbackExp);
-        window.showExpSummary(window.getLevelFromExp(window.finalNewExpToAnimate));
+
+        const fallbackExp = Math.max(
+            0,
+            Number(localStorage.getItem("exp_cache") || 0) + deltaExp
+        );
+
+        window.finalNewExpToAnimate = fallbackExp;
+        window.showExpSummary(
+            typeof window.getLevelFromExp === "function"
+                ? window.getLevelFromExp(fallbackExp)
+                : 1
+        );
+    } finally {
+        window.__applyingMatchExp = false;
     }
 };
 window.expSummaryTimerInt = null;
