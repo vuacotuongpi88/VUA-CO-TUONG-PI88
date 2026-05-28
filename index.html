@@ -6113,16 +6113,17 @@ margin-bottom: 14px;
     #arena-mmo-btn {
         top: 16px !important;
         right: 10px !important;
-        margin-top: 2px !important; 
-        width: 232px !important; /* Dài vừa y 5 nút cũ cộng lại */
-        height: 38px !important;
-        font-size: 13px !important;
+        margin-top: 2px !important;
+        width: 96px !important;
+        height: 34px !important;
+        padding: 0 8px !important;
+        font-size: 12px !important;
         border-radius: 10px !important;
-        letter-spacing: 0.5px;
+        letter-spacing: 0px !important;
+        white-space: nowrap !important;
         animation: mmoPulse 1.5s infinite alternate;
     }
 }
-
 /* TRÊN MÁY TÍNH (PC): Nằm bên trái hộp quà */
 @media (min-width: 601px) {
     #arena-mmo-btn {
@@ -43157,7 +43158,7 @@ function ensureArenaSkinButton() {
         btn.innerHTML = "🛒"; // <--- ĐỔI MẶT NẠ THÀNH CÁI XE ĐẨY Ở ĐÂY
         btn.onclick = openAvatarSkinShop;
     }
-
+btn.innerHTML = "🛒 MMO";
     // Đẩy ra thẳng body để khỏi bị div cha ẩn mất
     if (btn.parentElement !== document.body) {
         document.body.appendChild(btn);
@@ -45847,7 +45848,7 @@ function ensureMMOButton() {
     if (!btn) {
         btn = document.createElement("div");
         btn.id = "arena-mmo-btn";
-        btn.innerHTML = "🛒 CỬA HÀNG ACC MMO";
+        btn.innerHTML = "🛒 MMO";
         btn.onclick = openMMOShop;
     }
 
