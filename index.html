@@ -7033,6 +7033,70 @@ margin-bottom: 14px;
     display: block !important;
     border-radius: 16px;
 }
+<style id="fix-lobby-icons-down-final">
+@media (max-width: 600px) {
+    /* Ép cuối cùng: 5 icon sảnh to hơn và tụt xuống rõ ràng */
+    #mobile-friend-wrap,
+    #arena-referral-btn,
+    #arena-mission-btn,
+    #arena-skin-btn,
+    #arena-top-btn {
+        position: fixed !important;
+        top: 76px !important;
+        margin-top: 0 !important;
+        width: 46px !important;
+        height: 46px !important;
+        font-size: 20px !important;
+        z-index: 14000 !important;
+    }
+
+    /* Ruột icon bạn bè cũng phải to theo */
+    #mobile-friend-toggle {
+        width: 46px !important;
+        height: 46px !important;
+        font-size: 20px !important;
+    }
+
+    /* Dàn hàng ngang lại sau khi icon to lên */
+    #mobile-friend-wrap { right: 10px !important; }
+    #arena-referral-btn { right: 64px !important; }
+    #arena-mission-btn  { right: 118px !important; }
+    #arena-skin-btn     { right: 172px !important; }
+    #arena-top-btn      { right: 226px !important; }
+
+    /* Ảnh icon lấp đầy nút */
+    #mobile-friend-toggle img,
+    #arena-referral-btn img,
+    #arena-mission-btn img,
+    #arena-skin-btn img,
+    #arena-top-btn img,
+    .lobby-icon-img {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: contain !important;
+    }
+
+    /* Chữ dưới icon tụt theo cho đều */
+    #mobile-friend-toggle::after,
+    #arena-referral-btn::after,
+    #arena-mission-btn::after,
+    #arena-skin-btn::after,
+    #arena-top-btn::after {
+        bottom: -15px !important;
+        font-size: 9px !important;
+    }
+
+    /* Chấm đỏ to lại cho cân */
+    .friend-badge-dot,
+    .mission-badge-dot {
+        top: -3px !important;
+        right: -3px !important;
+        min-width: 18px !important;
+        height: 18px !important;
+        font-size: 10px !important;
+        padding: 0 4px !important;
+    }
+}
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
